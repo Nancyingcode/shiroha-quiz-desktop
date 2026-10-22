@@ -1,0 +1,5 @@
+/node_modules/
+/dist/
+/.reports/
+/src-tauri/target/
+/src-tauri/gen/

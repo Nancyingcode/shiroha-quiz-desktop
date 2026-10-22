@@ -1,0 +1,15 @@
+[package]
+name = "shiroha-quiz-desktop"
+version = "0.1.0"
+description = "Shiroha Quiz Windows prototype"
+edition = "2021"
+license = "GPL-3.0-only"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+
+[features]
+custom-protocol = ["tauri/custom-protocol"]
