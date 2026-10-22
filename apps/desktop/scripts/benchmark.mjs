@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { spawn, execFile } from 'node:child_process';
-import { mkdir, mkdtemp, realpath, rm, stat, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -21,6 +23,72 @@ const execute = promisify(execFile);
 
 /** @typedef {{Id: number, ProcessName: string, WorkingSet64: number, PrivateMemorySize64: number}} ProcessMemory */
 /** @typedef {{child: import('node:child_process').ChildProcess, executable: string, earliest: string, latest: string}} OwnedProcess */
+/** @typedef {{id: string, fileName: string, text: string, mode: string, questions: number}} Fixture */
+
+async function fixedFixtures() {
+  const require = createRequire(import.meta.url);
+  /** @type {{webState: () => {banks: Array<{name: string, questions: unknown[]}>}}} */
+  const dataset = require('../../../test/dual-platform/fixtures/dataset.cjs');
+  const { banks } = dataset.webState();
+  assert.equal(banks.length, 2, '固定题库 fixture 结构已改变，应先更新测量协议');
+  assert.equal(banks[0].questions.length, 7);
+  assert.equal(banks[1].questions.length, 1);
+  return [
+    { id: 'small-json', fileName: 'small-bank.json', text: JSON.stringify(banks[1]), mode: 'json', questions: 1 },
+    { id: 'image-json', fileName: 'image-bank.json', text: JSON.stringify(banks[0]), mode: 'json', questions: 7 },
+    { id: 'material-text', fileName: 'material.txt', text: await readFile(new URL('../../../test/dual-platform/fixtures/material.txt', import.meta.url), 'utf8'), mode: 'normal', questions: 2 },
+  ];
+}
+
+/** @param {Fixture} fixture */
+function fixtureMetadata(fixture) {
+  return { id: fixture.id, fileName: fixture.fileName, sha256: createHash('sha256').update(fixture.text).digest('hex'),
+    bytes: Buffer.byteLength(fixture.text), expectedQuestions: fixture.questions };
+}
+
+/** @param {import('playwright-core').Page} page @param {Fixture} fixture @param {string} storageKey */
+async function measureFixture(page, fixture, storageKey) {
+  const bankName = `阶段A性能-${fixture.id}`;
+  await page.locator('.nav[data-view="import"]').click();
+  await page.locator('#import-mode').selectOption(fixture.mode);
+  await page.locator('#import-save-mode-v59').selectOption('new');
+  const parseStart = performance.now();
+  await page.locator('#import-file').setInputFiles({ name: fixture.fileName,
+    mimeType: fixture.mode === 'json' ? 'application/json' : 'text/plain', buffer: Buffer.from(fixture.text) });
+  await page.waitForFunction(text => (/** @type {HTMLTextAreaElement | null} */ (document.querySelector('#import-text')))?.value === text, fixture.text);
+  await page.locator('#parse-import-btn').click();
+  await page.waitForFunction(expected => document.querySelectorAll('#import-preview tbody tr').length === expected, fixture.questions);
+  assert.equal(await page.locator('#confirm-import-btn').isEnabled(), true, '解析后不能确认导入');
+  const parseMs = performance.now() - parseStart;
+  await page.locator('#import-bank-name').fill(bankName);
+  const commitStart = performance.now();
+  await page.locator('#confirm-import-btn').click();
+  await page.locator('#active-bank-select option').filter({ hasText: bankName }).waitFor({ state: 'attached' });
+  const importCommitMs = performance.now() - commitStart;
+  const saveStart = performance.now();
+  await page.locator('#save-all-btn').click();
+  await page.locator('#app-toast .toast-item.ok').getByText('已保存到浏览器本地。', { exact: true }).waitFor({ state: 'visible' });
+  const manualSaveMs = performance.now() - saveStart;
+  const raw = await page.evaluate(key => localStorage.getItem(key), storageKey);
+  assert(raw, '确认导入和手动保存后没有主状态');
+  /** @type {{banks?: Array<{name: string, questions?: unknown[]}>}} */
+  const saved = JSON.parse(raw);
+  const matching = saved.banks?.filter(bank => bank.name === bankName) ?? [];
+  assert.equal(matching.length, 1, '样本导入数量不一致');
+  assert.equal(matching[0].questions?.length, fixture.questions, '持久化题数不一致');
+  // 先完成可练习断言再采样，避免把只出现“成功”提示但数据不可用的运行记为有效样本。
+  await page.locator('.nav[data-view="practice"]').click();
+  await page.locator('#practice-source').selectOption('all');
+  await page.locator('#practice-type').selectOption('all');
+  await page.locator('#practice-limit').selectOption('all');
+  await page.locator('#practice-order').selectOption('sequence');
+  await page.locator('#practice-start-mode-v58916').selectOption('from_start');
+  await page.locator('#start-practice-btn').click();
+  await page.locator('#practice-card .question-title').first().waitFor({ state: 'visible' });
+  assert.match(await page.locator('#practice-progress').innerText(), new RegExp(`1\\s*/\\s*${fixture.questions}`));
+  return { ...fixtureMetadata(fixture), parseMs: Math.round(parseMs), importCommitMs: Math.round(importCommitMs),
+    manualSaveMs: Math.round(manualSaveMs), persistedQuestions: matching[0].questions?.length, storedBytes: Buffer.byteLength(raw) };
+}
 
 async function availablePort() {
   const server = createServer();
@@ -109,8 +177,8 @@ async function stopOwned(owned) {
   assert(!running(owned.child), '测试进程仍在运行，保留临时目录');
 }
 
-/** @param {string} executable @param {string} profile @param {number} index */
-async function measure(executable, profile, index) {
+/** @param {string} executable @param {string} profile @param {number} index @param {Fixture | undefined} [fixture] @param {string} [storageKey] */
+async function measure(executable, profile, index, fixture, storageKey = '') {
   const port = await availablePort();
   const earliest = new Date().toISOString();
   const start = performance.now();
@@ -161,12 +229,23 @@ async function measure(executable, profile, index) {
     const session = await page.context().newCDPSession(page);
     const heap = await session.send('Runtime.getHeapUsage');
     await session.detach();
+    let fixtureResult;
+    if (fixture) {
+      const timings = await measureFixture(page, fixture, storageKey);
+      await delay(IDLE_MS);
+      const afterProcesses = await sampleMemory(owned);
+      fixtureResult = { ...timings,
+        workingSetMiB: +(afterProcesses.reduce((sum, item) => sum + item.WorkingSet64, 0) / MIB_BYTES).toFixed(1),
+        privateMiB: +(afterProcesses.reduce((sum, item) => sum + item.PrivateMemorySize64, 0) / MIB_BYTES).toFixed(1),
+        processes: afterProcesses };
+    }
     return {
-      run: index + 1, profile: index === 0 ? 'fresh' : 'reused',
+      run: index + 1, profile: fixture || index === 0 ? 'fresh' : 'reused',
       domMs: Math.round(domMs), visibleMs: Math.round(visibleMs),
       workingSetMiB: +(processes.reduce((sum, item) => sum + item.WorkingSet64, 0) / MIB_BYTES).toFixed(1),
       privateMiB: +(processes.reduce((sum, item) => sum + item.PrivateMemorySize64, 0) / MIB_BYTES).toFixed(1),
       processes, diagnostics: { ...diagnostics, jsHeapUsedMiB: +(heap.usedSize / MIB_BYTES).toFixed(2) },
+      ...(fixtureResult ? { fixture: fixtureResult } : {}),
     };
   } finally {
     try { await stopOwned(owned); }
@@ -175,27 +254,49 @@ async function measure(executable, profile, index) {
 }
 
 assert(process.platform === 'win32', '该测量脚本仅支持 Windows');
-const executable = await realpath(path.resolve(process.argv[2] ?? fileURLToPath(new URL('../src-tauri/target/release/shiroha-quiz-desktop.exe', import.meta.url))));
+const argumentsList = process.argv.slice(2);
+const fixturesMode = argumentsList.includes('--fixtures');
+const positional = argumentsList.filter(value => value !== '--fixtures');
+assert(positional.length <= 2 && !positional.some(value => value.startsWith('--')), '参数：benchmark.mjs [EXE] [报告路径] [--fixtures]');
+const executable = await realpath(path.resolve(positional[0] ?? fileURLToPath(new URL('../src-tauri/target/release/shiroha-quiz-desktop.exe', import.meta.url))));
 assert((await stat(executable)).isFile() && path.extname(executable).toLowerCase() === '.exe', '必须提供 EXE 文件');
-const output = path.resolve(process.argv[3] ?? fileURLToPath(new URL('../.reports/performance.json', import.meta.url)));
+const output = path.resolve(positional[1] ?? fileURLToPath(new URL(fixturesMode ? '../.reports/performance-fixtures.json' : '../.reports/performance.json', import.meta.url)));
+const fixtures = fixturesMode ? await fixedFixtures() : [];
+const appSource = fixturesMode ? await readFile(new URL('../../web/app.js', import.meta.url), 'utf8') : '';
+const storageKey = appSource.match(/const KEY='([^']+)'/)?.[1] ?? '';
+assert(!fixturesMode || storageKey, '找不到基线主状态键，拒绝猜测读取位置');
 const temporaryRoot = await realpath(tmpdir());
 const profile = await mkdtemp(path.join(temporaryRoot, PROFILE_PREFIX));
+const profiles = [profile];
 const results = [];
 let complete = false;
 try {
   for (let index = 0; index < RUN_COUNT; index += 1) {
-    const result = await measure(executable, profile, index);
-    results.push(result);
-    console.log(JSON.stringify(result));
+    for (const fixture of fixturesMode ? fixtures : [undefined]) {
+      let runProfile = profile;
+      if (fixture && results.length > 0) {
+        runProfile = await mkdtemp(path.join(temporaryRoot, PROFILE_PREFIX));
+        profiles.push(runProfile);
+      }
+      const result = await measure(executable, runProfile, index, fixture, storageKey);
+      results.push(result);
+      console.log(JSON.stringify(result));
+    }
   }
   complete = true;
 } finally {
   await mkdir(path.dirname(output), { recursive: true });
-  await writeFile(output, JSON.stringify({ executable, profile, measuredAt: new Date().toISOString(), complete, protocol: { runs: RUN_COUNT, idleMs: IDLE_MS, firstProfile: 'fresh', followingProfiles: 'reused', debugging: 'CDP', memory: 'entire process tree' }, results }, null, 2));
+  await writeFile(output, JSON.stringify({ executable, profile, measuredAt: new Date().toISOString(), complete,
+    protocol: { runs: RUN_COUNT, idleMs: IDLE_MS, firstProfile: 'fresh', followingProfiles: fixturesMode ? 'fresh per fixture' : 'reused', debugging: 'CDP', memory: 'entire process tree' },
+    ...(fixturesMode ? { fixtures: fixtures.map(fixtureMetadata), profiles,
+      executableSha256: createHash('sha256').update(await readFile(executable)).digest('hex'),
+      sourceSha256: createHash('sha256').update(appSource).digest('hex') } : {}), results }, null, 2));
   // 失败时保留隔离目录供排查；只删除成功完成且路径验证通过的本次临时目录。
   if (complete) {
-    const resolved = await realpath(profile);
-    assert(path.dirname(resolved).toLowerCase() === temporaryRoot.toLowerCase() && path.basename(resolved).startsWith(PROFILE_PREFIX), '临时目录越界');
-    await rm(resolved, { recursive: true, force: true, maxRetries: 10, retryDelay: 500 });
+    for (const item of profiles) {
+      const resolved = await realpath(item);
+      assert(path.dirname(resolved).toLowerCase() === temporaryRoot.toLowerCase() && path.basename(resolved).startsWith(PROFILE_PREFIX), '临时目录越界');
+      await rm(resolved, { recursive: true, force: true, maxRetries: 10, retryDelay: 500 });
+    }
   }
 }

@@ -6,6 +6,15 @@ import path from 'node:path';
 import test from 'node:test';
 
 const ruleDocuments = ['AGENTS.md', 'rules/rust-style-guide.md', 'docs/AGENTS-适配说明.md'];
+const platformDocuments = [
+  'docs/superpowers/specs/2026-10-23-web-desktop-dual-platform-design.md',
+  'docs/superpowers/plans/2026-10-23-web-desktop-dual-platform.md',
+  'test/dual-platform/README.md',
+  'test/dual-platform/baseline-inventory.md',
+  'test/dual-platform/contracts.md',
+  'test/dual-platform/dependencies.md',
+  'test/dual-platform/fixtures/README.md',
+];
 
 /** @param {import('node:test').TestContext} t */
 async function fixture(t) {
@@ -19,6 +28,8 @@ async function fixture(t) {
     'docs/superpowers/specs/2026-10-23-tauri-prototype.md',
     'docs/superpowers/plans/2026-10-23-tauri-prototype.md',
     ...ruleDocuments,
+    ...platformDocuments,
+    'docs/README.md',
   ]) {
     const file = path.join(root, relative);
     await mkdir(path.dirname(file), { recursive: true });
@@ -37,7 +48,7 @@ test('checks valid project and rule documents independently of the working direc
   assert.equal(result.status, 0, result.stderr);
 });
 
-for (const relative of ruleDocuments) {
+for (const relative of [...ruleDocuments, ...platformDocuments]) {
   test(`rejects invalid encoding, fences and local links in ${relative}`, async (t) => {
     const f = await fixture(t);
     for (const { content, error } of [

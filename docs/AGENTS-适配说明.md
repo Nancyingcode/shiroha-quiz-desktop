@@ -29,7 +29,7 @@
 | src/renderer/utils/formatters.ts 等格式化路径 | 替换 | 路径不存在；复用各模块已有格式化，并保护导入/导出格式兼容 |
 | rules/style-guide.md、annotation-guide.md、file-header.md | 删除失效入口 | 当前仓库不存在；保留必要的注释与代码原则，只链接真实存在的补充指南 |
 | 默认已有 Prettier、lint-staged 与提交阶段文档检查 | 删除不实描述 | 当前无相关配置；说明真实工具与检查覆盖范围，不把规则文字当作已实现的自动化 |
-| lint:docs 被当作全仓 Markdown 检查 | 澄清并后续扩展 | 首次适配时只列 3 份桌面文档；后续加入根规范、Rust 指南和本说明，共 6 份，仍未覆盖全仓 Markdown；未列入的文档另做等价检查 |
+| lint:docs 被当作全仓 Markdown 检查 | 澄清并后续扩展 | 首次适配时只列 3 份桌面文档；后续扩至 6 份，双端阶段 A 再扩至 14 份，仍未覆盖全仓 Markdown；未列入的文档另做等价检查 |
 | 设计确认、先回归后修复、失败如实报告 | 保留并精简 | 保留既有开发流程及无法稳定自动化时的人工验证替代条件 |
 | 注释说明原因、删除注释前确认、缓存生命周期 | 保留 | 不因适配项目放宽已有注释约束 |
 | 最小改动、保留用户修改、不主动 commit/push | 保留 | 补充包管理器、依赖进程归属与 SSH 远程等用户已有要求 |
@@ -55,7 +55,7 @@
 - [桌面 package.json](../apps/desktop/package.json)、[TypeScript 配置](../apps/desktop/tsconfig.json)、[ESLint 配置](../apps/desktop/eslint.config.mjs)：真实脚本与检查范围。
 - [Cargo.toml](../apps/desktop/src-tauri/Cargo.toml)、[Tauri 配置](../apps/desktop/src-tauri/tauri.conf.json)：edition、依赖、应用标识、权限与 CSP。
 - [资源准备脚本](../apps/desktop/scripts/prepare-web.mjs)：生成目录、路径校验与许可证保留。
-- [文档检查脚本](../apps/desktop/scripts/check-docs.mjs)：检查名单包含原有桌面说明、原型设计与计划，以及后续加入的根 AGENTS.md、Rust 指南和本说明，共 6 份；`npm run lint` 已包含 `lint:docs`。
+- [文档检查脚本](../apps/desktop/scripts/check-docs.mjs)：检查名单包含原有桌面说明、原型设计与计划、根 AGENTS.md、Rust 指南和本说明，以及双端设计/计划、索引与阶段说明，共 14 份；`npm run lint` 已包含 `lint:docs`。
 - [Android 构建配置](../apps/android/app/build.gradle.kts)：native/web flavor 与测试配置。
 - [WebDAV 回归说明](../test/web-webdav/README.md)、[Web AI 回归说明](../test/web-ai-practice/README.md)、[原生解析器回归说明](../test/native-parser-regression/README.md)：平台测试入口与隔离要求。
 - [贡献指南](../CONTRIBUTING.md)：凭据不得进入备份或日志，不提交个人题库与构建产物。
@@ -67,3 +67,5 @@
 首次规范适配未修改应用代码、锁文件、测试与检查脚本，不以文档检查结果宣称 npm、Cargo、Android 或 WebView2 业务验证通过。规则中新增的按需检查要求也不等于已部署 CI 或 Git Hook。
 
 后续按用户要求扩展现有文档检查脚本，将根 `AGENTS.md`、`rules/rust-style-guide.md` 和本说明纳入 `lint:docs`，并补充覆盖范围回归测试。检查总数由 3 份增至 6 份，沿用 UTF-8、代码围栏及本地链接检查；`npm run lint` 已包含此命令，无需另设入口。本次后续变更包含脚本与测试，应按根规范执行桌面测试、类型检查和 lint，并据实际结果报告验证状态。
+
+双端阶段 A 将同一检查扩展至 14 份，并对新增范围补充坏编码、未闭合围栏和失效链接的失败测试。平台 JavaScript 的浏览器类型/lint 与桌面 Node 脚本环境分开；真实执行结果见[阶段 A 记录](../test/dual-platform/README.md)。

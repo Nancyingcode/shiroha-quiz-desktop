@@ -10,6 +10,14 @@ const documents = [
   '../../docs/AGENTS-适配说明.md',
   '../../docs/superpowers/specs/2026-10-23-tauri-prototype.md',
   '../../docs/superpowers/plans/2026-10-23-tauri-prototype.md',
+  '../../docs/README.md',
+  '../../docs/superpowers/specs/2026-10-23-web-desktop-dual-platform-design.md',
+  '../../docs/superpowers/plans/2026-10-23-web-desktop-dual-platform.md',
+  '../../test/dual-platform/README.md',
+  '../../test/dual-platform/baseline-inventory.md',
+  '../../test/dual-platform/contracts.md',
+  '../../test/dual-platform/dependencies.md',
+  '../../test/dual-platform/fixtures/README.md',
 ];
 
 for (const relative of documents) {

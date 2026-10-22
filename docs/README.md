@@ -43,6 +43,9 @@
 
 ## 工程与发布
 
+- [Web 与 Windows 桌面双端设计](./superpowers/specs/2026-10-23-web-desktop-dual-platform-design.md)
+- [双端详细实施计划](./superpowers/plans/2026-10-23-web-desktop-dual-platform.md)
+- [阶段 A 基线、测试入口与执行记录](../test/dual-platform/README.md)
 - [架构说明](./universal/架构说明.md)
 - [WebDAV 同步实现方案](./WebDAV同步实现方案/Shiroha%20Quiz%20WebDAV%20同步实现方案.md)
 - [Git Release 操作速查](./universal/Git-Release-操作速查.md)

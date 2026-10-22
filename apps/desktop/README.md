@@ -79,6 +79,14 @@ npm run test:desktop
 
 设计范围和后续边界见[设计文档](../../docs/superpowers/specs/2026-10-23-tauri-prototype.md)与[实施计划](../../docs/superpowers/plans/2026-10-23-tauri-prototype.md)。
 
+## 双端改造阶段 A
+
+后续改造以[双端设计](../../docs/superpowers/specs/2026-10-23-web-desktop-dual-platform-design.md)和[详细实施计划](../../docs/superpowers/plans/2026-10-23-web-desktop-dual-platform.md)为准。阶段 A 新增共享业务/格式样本、异步平台类型和纯校验器，尚未接入页面；当前运行行为仍是上述原型。
+
+`npm test` 现在同时执行桌面测试与 `test:shared`；共享测试也可从仓库根目录运行 `node --test test/dual-platform/*.test.cjs`。正常特征测试与已知缺陷的执行型 TODO 分开统计，退出 0 不表示所有迁移缺口已经修复。`typecheck` 增加独立浏览器配置，`lint` 增加平台和共享测试检查，文档检查覆盖双端依据和阶段记录。
+
+环境、命令结果、失败归属、样本与性能边界见[阶段 A 验证记录](../../test/dual-platform/README.md)。依赖安装、构建与测试仍遵守前述进程核验和隔离要求。
+
 ## 启动优化与性能复测
 
 桌面资源生成器移除 Web 版固定时长的启动遮罩及其专属预加载图片，非首页插画改用浏览器原生懒加载。首页图片保持即时加载；业务脚本、题库、持久化格式、Web/Android 源码均不改变，也没有通过关闭 GPU、裁剪功能或强制回收工作集降低读数。
