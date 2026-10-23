@@ -9,7 +9,7 @@
     "frontendDist": "../dist"
   },
   "app": {
-    "withGlobalTauri": false,
+    "withGlobalTauri": true,
     "windows": [{
       "label": "main",
       "title": "Shiroha Quiz",
@@ -17,10 +17,17 @@
       "height": 860,
       "minWidth": 900,
       "minHeight": 640,
-      "dragDropEnabled": false
+      "dragDropEnabled": false,
+      "decorations": false
     }],
     "security": {
-      "capabilities": [{ "identifier": "prototype", "windows": ["main"], "permissions": [] }],
+      "capabilities": [{ "identifier": "prototype", "windows": ["main"], "permissions": [
+        "core:window:allow-start-dragging",
+        "core:window:allow-minimize",
+        "core:window:allow-toggle-maximize",
+        "core:window:allow-is-maximized",
+        "core:window:allow-close"
+      ] }],
       "csp": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; worker-src 'self' blob:; connect-src 'self' ipc: http: https:; object-src 'none'; base-uri 'none'; frame-src 'none'; form-action 'none'"
     }
   },

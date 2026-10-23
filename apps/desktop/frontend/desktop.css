@@ -1,0 +1,461 @@
+/* 桌面适配在共享样式之后加载；集中覆盖历史高优先级规则，避免改变 Web 与 Android。 */
+body.desktop-mist-blue {
+  color-scheme: light;
+  --bg: #edf3f9;
+  --card: #f8fbfe;
+  --ink: #23364e;
+  --muted: #50647a;
+  --line: #d2deeb;
+  --blue: #406ba4;
+  --blue2: #dbe7f5;
+  --blue3: #f0f5fb;
+  --blue-soft: #e5edf7;
+  --shadow: none;
+  --r: 18px;
+  --desktop-side-width: 200px;
+  --desktop-page-gap: clamp(24px, 3vw, 48px);
+  --desktop-titlebar-height: 36px;
+  padding-top: var(--desktop-titlebar-height);
+  background: radial-gradient(ellipse at 0 0, #d6e5f6, transparent 65%), var(--bg);
+  background-attachment: fixed;
+  color: var(--ink);
+  font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+body.desktop-mist-blue .app {
+  display: grid !important;
+  grid-template-columns: var(--desktop-side-width) minmax(0, 1fr) !important;
+  min-height: calc(100vh - var(--desktop-titlebar-height)) !important;
+  background: transparent !important;
+}
+
+body.desktop-mist-blue .side {
+  display: block !important;
+  white-space: normal;
+  position: fixed !important;
+  inset: var(--desktop-titlebar-height) auto 0 0 !important;
+  width: var(--desktop-side-width) !important;
+  height: calc(100vh - var(--desktop-titlebar-height)) !important;
+  padding: 24px 16px 76px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  overflow-y: auto !important;
+  scrollbar-width: thin;
+}
+
+body.desktop-mist-blue .brand {
+  position: static;
+  background: transparent;
+  gap: 10px !important;
+  margin: 0 6px 26px !important;
+}
+
+body.desktop-mist-blue .brand img {
+  flex: 0 0 auto;
+  width: 34px !important;
+  height: 34px !important;
+  border: 0;
+  border-radius: 10px !important;
+  box-shadow: none;
+}
+
+body.desktop-mist-blue .brand b {
+  font-size: 15px !important;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+body.desktop-mist-blue .brand span {
+  display: block !important;
+  font-size: 11px !important;
+  color: var(--muted);
+  line-height: 1.5 !important;
+}
+
+body.desktop-mist-blue .nav {
+  display: block;
+  width: 100%;
+  min-height: 40px;
+  margin: 3px 0 !important;
+  padding: 10px 16px !important;
+  border: 0;
+  border-radius: 10px !important;
+  background: transparent;
+  box-shadow: none;
+  color: var(--muted);
+  font-size: 14px !important;
+  font-weight: 400;
+}
+
+body.desktop-mist-blue .nav[data-view="practice"],
+body.desktop-mist-blue .nav[data-view="ai-settings"] {
+  margin-top: 19px !important;
+}
+
+body.desktop-mist-blue .nav:hover,
+body.desktop-mist-blue .nav.active {
+  background: var(--blue2);
+  color: #305c95;
+  box-shadow: none;
+  font-weight: 600;
+}
+
+body.desktop-mist-blue .main {
+  grid-column: 2;
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0;
+  padding: 24px var(--desktop-page-gap) 40px !important;
+}
+
+body.desktop-mist-blue .main > .topbar,
+body.desktop-mist-blue .main > .view.active {
+  width: 100% !important;
+  max-width: 1200px !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+
+body.desktop-mist-blue .topbar {
+  display: flex;
+  min-height: 48px !important;
+  justify-content: space-between !important;
+  padding: 0 !important;
+  margin-bottom: 28px !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  gap: 16px !important;
+}
+
+body.desktop-mist-blue .topbar > div:first-child { display: block !important; flex: 0 0 auto; }
+body.desktop-mist-blue .topbar .kicker { display: none; }
+body.desktop-mist-blue .topbar h1 { font-size: 24px; font-weight: 500; color: var(--ink); white-space: nowrap; }
+body.desktop-mist-blue .topbar .top-actions { display: flex !important; width: auto !important; min-width: 0; max-width: 72% !important; margin: 0 0 0 auto !important; }
+body.desktop-mist-blue .topbar .top-actions select { width: 280px; min-width: 0 !important; max-width: 100% !important; flex: 0 1 280px !important; }
+body.desktop-mist-blue .top-actions button { flex: 0 0 auto; }
+
+body.desktop-mist-blue.side-collapsed .side {
+  visibility: hidden;
+  transform: translateX(-100%) !important;
+}
+
+body.desktop-mist-blue .sidebar-toggle {
+  left: 24px !important;
+  bottom: 20px !important;
+  padding: 8px 14px !important;
+  border: 1px solid var(--line) !important;
+  border-radius: 10px !important;
+  background: var(--bg) !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  color: var(--muted) !important;
+  font-size: 12px !important;
+  font-weight: 400 !important;
+}
+
+body.desktop-mist-blue :is(.card, .hero-card) {
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--card);
+  box-shadow: none;
+}
+
+body.desktop-mist-blue :is(h2, h3) { color: var(--ink); font-weight: 600; }
+body.desktop-mist-blue .kicker { color: var(--blue); font-weight: 500; letter-spacing: .09em; }
+body.desktop-mist-blue :is(.primary, .ghost) { border-radius: 10px; font-weight: 500; box-shadow: none; }
+body.desktop-mist-blue .primary { background: var(--blue); color: #fff; }
+body.desktop-mist-blue .primary:hover { background: #345b8d; }
+body.desktop-mist-blue .ghost:not(.danger) { border-color: var(--line); background: var(--card); color: var(--ink); }
+body.desktop-mist-blue .ghost:not(.danger):hover { background: var(--blue-soft); }
+body.desktop-mist-blue :is(input, select, textarea) { background: #fbfdff; border-color: var(--line); border-radius: 10px; }
+body.desktop-mist-blue :is(button, input, select, textarea, summary, a):focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
+body.desktop-mist-blue :is(.table-wrap, .bank-list, .list) { border-color: var(--line); box-shadow: none; }
+
+body.desktop-mist-blue #dashboard .dashboard-home-hero {
+  grid-template-columns: minmax(0, 1fr) 210px !important;
+  gap: 24px !important;
+  min-height: 0 !important;
+  padding: 12px 0 0 !important;
+  margin-bottom: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  overflow: visible;
+  isolation: auto;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+body.desktop-mist-blue #dashboard .dashboard-home-main {
+  grid-column: 1;
+  grid-row: 1;
+  gap: 14px !important;
+  align-self: center !important;
+  height: auto !important;
+}
+
+body.desktop-mist-blue #dashboard .dashboard-home-main .kicker {
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: 12px;
+  color: var(--blue);
+}
+
+body.desktop-mist-blue #dashboard .dashboard-home-main h2 {
+  font-size: clamp(24px, 2.3vw, 32px) !important;
+  font-weight: 500;
+  line-height: 1.45 !important;
+  color: var(--ink) !important;
+}
+
+body.desktop-mist-blue #dashboard .dashboard-home-desc {
+  display: block !important;
+  font-size: 13px;
+  color: var(--muted) !important;
+  line-height: 1.8 !important;
+}
+
+body.desktop-mist-blue #dashboard .home-practice-scope-v8916 {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  font-size: 12px;
+}
+
+body.desktop-mist-blue #dashboard .dashboard-action-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 10px !important;
+  margin-top: 8px !important;
+}
+
+body.desktop-mist-blue #dashboard .dashboard-action-card {
+  min-height: 66px !important;
+  padding: 12px 10px !important;
+  gap: 4px !important;
+  border: 1px solid var(--line) !important;
+  border-radius: 10px !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--ink);
+  transform: none !important;
+}
+
+body.desktop-mist-blue #dashboard .dashboard-action-card span { font-size: 14px !important; font-weight: 500; }
+body.desktop-mist-blue #dashboard .dashboard-action-card small { font-size: 12px !important; font-weight: 400; color: var(--muted) !important; }
+body.desktop-mist-blue #dashboard .dashboard-action-card.blue { background: var(--blue) !important; border-color: var(--blue) !important; color: #fff; }
+body.desktop-mist-blue #dashboard .dashboard-action-card.blue small { color: #eef4fd !important; }
+body.desktop-mist-blue #dashboard .dashboard-action-card:hover { background: var(--blue-soft) !important; }
+body.desktop-mist-blue #dashboard .dashboard-action-card.blue:hover { background: #345b8d !important; }
+
+body.desktop-mist-blue #dashboard .dashboard-home-side { display: contents !important; z-index: auto; }
+body.desktop-mist-blue #dashboard .dashboard-character-card {
+  grid-column: 2;
+  grid-row: 1;
+  min-height: 0 !important;
+  max-height: none !important;
+  height: auto;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  isolation: auto !important;
+  mix-blend-mode: multiply;
+}
+
+/* 既有首页角色图含白底；只在浅色欢迎区混合，题目与用户图片保持原色。 */
+body.desktop-mist-blue #dashboard .dashboard-character-card .hero-mascot-main {
+  max-width: 100% !important;
+  max-height: 240px !important;
+  mix-blend-mode: multiply !important;
+  opacity: .9 !important;
+  transform: none !important;
+}
+
+body.desktop-mist-blue #dashboard :is(.dashboard-home-hero, .dashboard-character-card, .dashboard-action-card)::before,
+body.desktop-mist-blue #dashboard :is(.dashboard-home-hero, .dashboard-character-card, .dashboard-action-card)::after {
+  display: none !important;
+  content: none !important;
+}
+
+body.desktop-mist-blue #dashboard .dashboard-stat-grid {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  display: flex !important;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 12px 28px !important;
+  margin: 2px 0 0;
+}
+
+body.desktop-mist-blue #dashboard .dashboard-stat-grid > div {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-height: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+body.desktop-mist-blue #dashboard .dashboard-stat-grid b { font-size: 18px !important; color: var(--ink) !important; font-weight: 500; }
+body.desktop-mist-blue #dashboard .dashboard-stat-grid span { margin: 0; font-size: 12px !important; color: var(--muted) !important; font-weight: 400; }
+body.desktop-mist-blue #dashboard .dashboard-lower-grid { grid-template-columns: 1fr 1fr; gap: 24px 36px; margin-top: 24px; }
+body.desktop-mist-blue #dashboard .dashboard-panel {
+  min-height: 0 !important;
+  padding: 0 !important;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+body.desktop-mist-blue #dashboard .dashboard-panel:has(.learning-stats-v42) {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  padding: 20px 0 24px !important;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+}
+
+body.desktop-mist-blue #dashboard .dashboard-panel .kicker { display: none; }
+body.desktop-mist-blue #dashboard .dashboard-panel h3 { font-size: 15px; font-weight: 500; }
+body.desktop-mist-blue #dashboard .learning-stats-v42 {
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  grid-template-rows: auto !important;
+  gap: 20px !important;
+  margin-top: 16px !important;
+}
+
+body.desktop-mist-blue #dashboard .learning-stat-tile-v42 {
+  min-height: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  gap: 9px !important;
+}
+
+body.desktop-mist-blue #dashboard .learning-stat-tile-v42 span { font-size: 12px !important; color: var(--muted) !important; font-weight: 400 !important; }
+body.desktop-mist-blue #dashboard .learning-stat-tile-v42 b { text-align: left !important; font-size: 30px !important; color: var(--ink) !important; font-weight: 500 !important; font-variant-numeric: tabular-nums; }
+body.desktop-mist-blue #dashboard .dashboard-tips { color: var(--muted); font-size: 13px; font-weight: 400; line-height: 1.9; }
+body.desktop-mist-blue #dashboard .dashboard-panel > p { color: var(--muted); font-size: 13px; line-height: 1.9; }
+body.desktop-mist-blue #dashboard .dashboard-card-actions button { width: auto; min-height: 38px; }
+
+body.desktop-mist-blue :is(.import-stage-panel, .page-art-strip, .practice-art-strip, .exam-art-strip, .bank-art-strip, .wrongbook-art-strip, .records-art-strip, .settings-art-strip) {
+  background: var(--card) !important;
+  border-color: var(--line) !important;
+  box-shadow: none !important;
+}
+
+/* 专注模式仍由业务控制；临时展开导航时使用实色面，防止题目透过菜单。 */
+body.desktop-mist-blue:is(.practice-focus, .exam-focus) .app { display: block !important; }
+body.desktop-mist-blue:is(.practice-focus, .exam-focus) .main { padding: 0 !important; }
+body.desktop-mist-blue:is(.practice-focus, .exam-focus) .main > .view.active { width: 100% !important; max-width: none !important; background: transparent !important; }
+body.desktop-mist-blue.practice-focus #practice.view,
+body.desktop-mist-blue.exam-focus #exam.view { background: transparent !important; }
+body.desktop-mist-blue:is(.practice-focus, .exam-focus):not(.side-collapsed) .side {
+  inset: var(--desktop-titlebar-height) auto 0 0 !important;
+  width: var(--desktop-side-width) !important;
+  height: calc(100vh - var(--desktop-titlebar-height)) !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: var(--bg) !important;
+  border-right: 1px solid var(--line) !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+body.desktop-mist-blue.practice-focus #practice-card,
+body.desktop-mist-blue.exam-focus #exam-card {
+  background: var(--card) !important;
+  border-color: var(--line) !important;
+  box-shadow: none !important;
+  border-radius: var(--r) !important;
+}
+body.desktop-mist-blue :is(.practice-focus-head, .exam-focus-head) { background: var(--card) !important; border-color: var(--line) !important; }
+body.desktop-mist-blue :is(.practice-stat-card-v30, .exam-answer-card-v30, .practice-nav-v26) { background: var(--card) !important; border-color: var(--line) !important; box-shadow: none !important; }
+body.desktop-mist-blue.practice-focus #practice-card > .practice-side-v31 .practice-stat-card-v30,
+body.desktop-mist-blue.exam-focus #exam-card > .exam-side-v31 .exam-answer-card-v30 { background: var(--card) !important; border-color: var(--line) !important; box-shadow: none !important; }
+body.desktop-mist-blue .option { border-radius: 10px; }
+
+/* 标题栏复用视口背景坐标，滚动时保持连续底色并遮住下方内容。 */
+body.desktop-mist-blue #desktop-titlebar {
+  position: fixed;
+  inset: 0 0 auto;
+  height: var(--desktop-titlebar-height);
+  display: flex;
+  z-index: 10000;
+  background: radial-gradient(ellipse at 0 0, #d6e5f6, transparent 65%), var(--bg);
+  background-size: 100vw 100vh;
+  background-repeat: no-repeat;
+  user-select: none;
+}
+body.desktop-mist-blue #desktop-window-drag { display: flex; align-items: center; flex: 1; min-width: 0; gap: 9px; padding-left: 15px; color: var(--muted); font-size: 12px; }
+body.desktop-mist-blue #desktop-window-drag > * { pointer-events: none; }
+body.desktop-mist-blue #desktop-window-drag img { width: 18px; height: 18px; border-radius: 5px; }
+body.desktop-mist-blue .desktop-window-controls { display: flex; }
+body.desktop-mist-blue .desktop-window-controls button { width: 46px; height: 36px; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 0; border: 0; border-radius: 0; background: transparent; color: var(--ink); box-shadow: none; }
+body.desktop-mist-blue .desktop-window-controls button:hover { background: #d7e3f1; }
+body.desktop-mist-blue #desktop-window-close:hover { background: #c42b3c; color: #fff; }
+body.desktop-mist-blue .desktop-window-controls button:focus-visible { outline-offset: -4px; }
+body.desktop-mist-blue .desktop-window-controls svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1; pointer-events: none; }
+body.desktop-mist-blue #desktop-titlebar .desktop-restore-icon { display: none; }
+body.desktop-mist-blue #desktop-titlebar[data-maximized="true"] .desktop-maximize-icon { display: none; }
+body.desktop-mist-blue #desktop-titlebar[data-maximized="true"] .desktop-restore-icon { display: block; }
+body.desktop-mist-blue #desktop-window-status { position: fixed; top: 44px; right: 12px; max-width: min(400px, calc(100vw - 24px)); padding: 10px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--ink); z-index: 10001; }
+body.desktop-mist-blue.practice-focus #practice.view,
+body.desktop-mist-blue.exam-focus #exam.view { min-height: calc(100vh - var(--desktop-titlebar-height)) !important; }
+body.desktop-mist-blue.practice-focus #practice-card,
+body.desktop-mist-blue.exam-focus #exam-card { min-height: calc(100vh - var(--desktop-titlebar-height) - 36px) !important; }
+body.desktop-mist-blue.practice-focus .practice-focus-head,
+body.desktop-mist-blue.exam-focus .exam-focus-head { top: var(--desktop-titlebar-height) !important; }
+body.desktop-mist-blue .modal { top: var(--desktop-titlebar-height); }
+body.desktop-mist-blue .app-toast { top: calc(var(--desktop-titlebar-height) + 12px); }
+
+/* 宽屏统计栏固定在右侧，题目卡须为它预留空间，避免遮住退出和编辑操作。 */
+@media (min-width: 1280px) {
+  body.desktop-mist-blue.practice-focus #practice-card,
+  body.desktop-mist-blue.exam-focus #exam-card { width: min(920px, calc(100vw - 560px)) !important; }
+  body.desktop-mist-blue.practice-focus #practice-card > .practice-side-v31,
+  body.desktop-mist-blue.exam-focus #exam-card > .exam-side-v31 { top: calc(var(--desktop-titlebar-height) + 18px) !important; max-height: calc(100vh - var(--desktop-titlebar-height) - 36px) !important; }
+}
+
+@media (max-width: 1100px) {
+  body.desktop-mist-blue { --desktop-side-width: 180px; --desktop-page-gap: 24px; }
+  body.desktop-mist-blue .side { padding-left: 12px !important; padding-right: 12px !important; }
+  body.desktop-mist-blue #dashboard .dashboard-home-hero { grid-template-columns: minmax(0, 1fr) 150px !important; gap: 18px !important; }
+  body.desktop-mist-blue #dashboard .dashboard-character-card .hero-mascot-main { max-height: 190px !important; }
+  body.desktop-mist-blue #dashboard .dashboard-action-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  body.desktop-mist-blue #dashboard .learning-stats-v42 { gap: 14px !important; }
+  body.desktop-mist-blue #dashboard .dashboard-lower-grid { gap: 20px; }
+}
+
+@media (max-height: 760px) {
+  body.desktop-mist-blue .side { padding-top: 20px !important; }
+  body.desktop-mist-blue .brand { margin-bottom: 16px !important; }
+  body.desktop-mist-blue .nav { min-height: 36px; padding-top: 8px !important; padding-bottom: 8px !important; margin-top: 2px !important; margin-bottom: 2px !important; }
+  body.desktop-mist-blue .nav[data-view="practice"],
+  body.desktop-mist-blue .nav[data-view="ai-settings"] { margin-top: 14px !important; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.desktop-mist-blue *, body.desktop-mist-blue *::before, body.desktop-mist-blue *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
