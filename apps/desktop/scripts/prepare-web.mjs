@@ -39,6 +39,8 @@ export function optimizeDesktopHtml(html) {
   const withoutSplash = html.replace(/<div class="app-splash"[^>]*>[\s\S]*?<\/div>\s*<\/div>\s*(?=<div class="app">)/, '');
   if (/class="app-splash"/.test(withoutSplash)) throw new Error('Unsupported Web splash structure');
   return withoutSplash
+    .replace('在本机浏览器中记住 API Key', '使用 Windows 凭据管理器记住 API Key')
+    .replace('API Key 默认只保留在当前标签页；勾选“在本机浏览器中记住”后也不会进入 Web 完整备份。', 'API Key 默认只保留在当前进程；选择记住后保存在 Windows 凭据管理器，不会进入备份。')
     .replace(/(<aside class="side">)\s*<div class="brand">\s*<img\b[^>]*>\s*<div>[\s\S]*?<\/div>\s*<\/div>/, '$1')
     .replace(/<link\b[^>]*rel="preload"[^>]*href="\.\/media\/(?:home_welcome_avatar|import_question_bank_folder)\.webp"[^>]*>\s*/g, '')
     .replace(/<img\b(?![^>]*\bloading=)(?=[^>]*src="\.\/media\/(?!splash_mascot\.webp|peeking\.webp)[^"]+")/g, '<img loading="lazy" decoding="async"');

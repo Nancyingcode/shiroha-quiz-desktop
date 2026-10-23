@@ -12,6 +12,8 @@ fn main() {
             "local_task",
             "local_query",
             "local_commit",
+            "service_credential",
+            "service_request",
         ]),
     ))
     .expect("Unable to validate application permissions");

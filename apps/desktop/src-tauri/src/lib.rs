@@ -1,8 +1,12 @@
 pub mod changes;
 pub mod commands;
+pub mod credentials;
 pub mod error;
 pub mod files;
 pub mod media;
+pub mod network;
 pub mod paths;
+pub mod service_config;
+pub mod services;
 pub mod storage;
 pub mod tasks;

@@ -597,6 +597,13 @@ impl Store {
                 row.get(0)
             })?)
     }
+    pub fn has_legacy_migration(&self) -> Result<bool> {
+        Ok(self.connection.query_row(
+            "SELECT EXISTS(SELECT 1 FROM operations WHERE id LIKE 'migration-%')",
+            [],
+            |row| row.get(0),
+        )?)
+    }
     pub fn operation(&self, operation: &str) -> Result<Option<i64>> {
         Ok(self
             .connection

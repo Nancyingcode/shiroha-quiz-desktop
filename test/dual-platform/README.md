@@ -187,3 +187,23 @@ C8 用完整轻量索引计算统计与跨库选题，不截断为当前页。�
 桌面 Node 36 项、共享 61 项、Web 页面 8 项、AI mock 25 项、WebDAV 9 项通过；typecheck、lint（含 14 份文档）、Rust fmt/Clippy 和默认/native-test 两组各 25 项原生测试通过。正常 release 与 native-test release 均构建成功。WebView2 smoke 22 项通过，报告为忽略产物 `apps/desktop/.reports/stage-c-smoke.json`，AI 报告为 `test/web-ai-practice/reports/stage-c.jsonl`。
 
 Windows junction、快照复制和替换故障用例在沙箱中可能因权限限制产生非业务失败，采用正常权限下的隔离临时目录重跑；不跳过断言。测试不使用真实题库、凭据或收费 API。Win10、中文扫描 PDF 全链路、长时间内存、大图峰值、安装升级和真实网络服务仍归后续阶段；D2 凭据联调继续待办。
+
+## 阶段 D：原生网络、凭据及 C/D 联调（2026-10-23）
+
+### 实现与联调范围
+
+基于 C 整合提交 `4ba29fc` 实现 D1—D5。已与 C 会话核对私有绑定元数据、C3 操作回执、C7 来源清理和 C6 恢复撤销规则。网络仅提供 AI 和 WebDAV 业务枚举，凭据不经状态接口明文返回；系统写入、配置提交、旧副本清理分别记账，失败保留补偿责任。凭据 sidecar 不可用不能阻断本地题库修复。
+
+WebView2 联调覆盖原生 AI、WebDAV 列举及备份字节往返、历史上传重试不重复 PUT、latest 失败保留历史文件、取消及恢复后拒绝旧绑定、导出不含假秘密；C7 通过真实页面从同来源旧 profile 迁移假凭据，只有原生验证后清理对应旧值，原数据和未知键保留。原有分页、持久化、恢复、损坏数据库修复及关闭回归继续执行。
+
+### 验证与环境边界
+
+桌面 Node 测试 38 项、共享回归 61 项通过；typecheck、lint（含 14 份文档检查）通过。普通 Rust 测试 40 项通过，Windows provider 测试默认忽略，已另行显式执行并通过：只读写随机测试命名空间的假凭据，结束清理。WebDAV 9 项和单题 AI 25 项通过；AI 浏览器回归使用本机 Edge 与预装 Playwright，未调用收费 API。
+
+WebView2 使用隔离 SQLite、媒体和 profile，凭据为 fake provider，原生网络只开放 runner 本次回环 mock 地址。不是普通发行制品的独立用户验收。TLS 自动测试确认 HTTPS 失败不降级明文，尚未覆盖可信/不可信/过期证书的完整链路矩阵。独立 Windows 用户或 VM、Win10/Win11 系统差异、C9 人工系统对话框、中文扫描 PDF、大文件性能及真实服务仍未验收，D 总体复选框保持未勾选。
+
+首次沙箱回环测试受限，改在本机权限下使用同一隔离 mock 后通过。一次 smoke 因测试读取接口重置保存基线而失败，改用只读 IPC 后恢复；关闭回归发现官方关闭协调需要 destroy 权限，按最小主窗口范围补齐后通过。最终检查时 Rust 测试与构建的 prepare:web 同时读取/生成 dist 产生一次缺资源失败，改为串行重跑，未放宽断言。
+
+最终普通与 native-test 两种 Rust 配置均为 40 项通过、1 项需显式执行的 Windows 测试默认忽略；两种配置 Clippy（-D warnings）及 cargo fmt 检查通过。普通 build、build:test 和最终实际 WebView2 smoke 全部通过，smoke 共 23 项。日志存放于工作树 `apps/desktop/.reports/stage-d-*.log`，不提交测试产物。
+
+最终普通 EXE 为 63,860,224 字节，隔离 EXE 为 63,869,440 字节。普通 EXE SHA-256：`0D817FB36CBB7D22182E59770EBF2C349350EC8566F79B9DE622CCFE9096190D`。相较 C 记录的普通制品 62,165,504 字节增加约 1.62 MiB；这是包含本轮代码和桥接的整体差异，不单独归因于某个依赖。工作树改动未 commit、未 push。

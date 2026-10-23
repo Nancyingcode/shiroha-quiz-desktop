@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { markNativeIsolation } from './native-isolation.mjs';
+import { createNativeMock, nativeServiceSmoke } from './network-smoke.mjs';
 import { spawn, execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { mkdir, mkdtemp, realpath, rm, stat, readFile, writeFile } from 'node:fs/promises';
@@ -564,6 +565,7 @@ async function main() {
   const tempRoot = await realpath(tmpdir());
   const profile = await mkdtemp(path.join(tempRoot, PROFILE_PREFIX));
   await markNativeIsolation(profile);
+  const networkMock = await createNativeMock(profile);
   const profiles = [profile];
   /** @type {Check[]} */
   const checks = [];
@@ -576,6 +578,7 @@ async function main() {
   const cleanup = () => cleaning ??= (async () => {
     if (runtime) await stop(runtime);
     proxy.close();
+    networkMock.close();
     for (const item of profiles) {
       const actual = await realpath(item);
       assert.equal(path.dirname(actual).toLowerCase(), tempRoot.toLowerCase());
@@ -594,6 +597,12 @@ async function main() {
     const proxyPort = await listen(proxy);
     runtime = await launch(executable, profile, proxyPort);
     const { page } = runtime;
+    await check('原生 AI、WebDAV、凭据保存与取消撤销', async () => {
+      const result=await nativeServiceSmoke(page, networkMock.origin);
+      assert(networkMock.requests.some(request=>request.url==='/chat'&&request.authenticated),'原生请求未使用已保存假凭据');
+      assert.equal(networkMock.requests.filter(request=>request.method==='PUT'&&request.url?.includes('shiroha-web-backup-')).length,1,'重试重复写入历史文件');
+      return result;
+    });
     await check('原生 IPC 白名单与非法输入保全', async () => page.evaluate(async () => {
       const host = (/** @type {NativeTestWindow} */ (window)).ShirohaDesktopHost;
       if (!host) throw new Error('本地桥接缺失');
@@ -700,11 +709,11 @@ async function main() {
     profiles.push(migrationProfile); await markNativeIsolation(migrationProfile);
     runtime = await launch(executable, migrationProfile, proxyPort);
     const migrated = runtime;
-    await check('同来源旧原型迁移与旧凭据保留', async () => {
+    await check('C7/D2 同来源旧原型与凭据联合迁移', async () => {
       await migrated.page.evaluate(() => {
         const snapshot = {schemaVersion:1,banks:[{id:'legacy-bank',name:'阶段C迁移样本',questions:[{id:'legacy-q',type:'single',question:'迁移题目',options:[],answer:[],extension:{preserved:true}}]}],activeBankId:'legacy-bank',wrongBook:{},favorites:{},records:[],settings:{},crossPlatformMeta:{}};
         localStorage.setItem('shiroha_quiz_state_v28_4_c1',JSON.stringify(snapshot));
-        localStorage.setItem('shiroha_webdav_config_local_v378',JSON.stringify({endpoint:'https://fixture.invalid',username:'fixture',remoteDir:'backup'}));
+        localStorage.setItem('shiroha_webdav_config_local_v378',JSON.stringify({endpoint:'https://fixture.invalid',username:'fixture',remoteDir:'backup',rememberPassword:true}));
         localStorage.setItem('shiroha_webdav_password_local_v378','fake-migration-password');
         localStorage.setItem('unknown-legacy-key','preserve');
       });
@@ -713,14 +722,17 @@ async function main() {
       migrated.page.once('dialog',dialog=>dialog.accept());
       await migrated.page.getByText('确认迁移旧原型数据', {exact:true}).click();
       await migrated.page.locator('#active-bank-select option[value="legacy-bank"]').waitFor({state:'attached'});
+      await migrated.page.waitForFunction(()=>localStorage.getItem('shiroha_webdav_password_local_v378')===null);
       await migrated.page.evaluate(async () => {
         const host=(/** @type {NativeTestWindow} */ (window)).ShirohaDesktopHost;
         if(!host)throw new Error('本地桥接缺失');
         const data=/** @type {{banks:Array<{questions:Array<{extension:{preserved:boolean}}>}>,serviceConfigurations:{webdav:{endpoint:string}}}} */ (await host.invoke('local_read'));
         if(!data.banks[0].questions[0].extension.preserved||data.serviceConfigurations.webdav.endpoint!=='https://fixture.invalid')throw new Error('迁移丢失字段');
-        if(!localStorage.getItem('shiroha_quiz_state_v28_4_c1')||localStorage.getItem('shiroha_webdav_password_local_v378')!=='fake-migration-password'||localStorage.getItem('unknown-legacy-key')!=='preserve')throw new Error('旧来源被清理');
+        if(!localStorage.getItem('shiroha_quiz_state_v28_4_c1')||localStorage.getItem('shiroha_webdav_password_local_v378')!==null||localStorage.getItem('unknown-legacy-key')!=='preserve')throw new Error('旧来源被清理');
       });
-      return {dataMigrated:true,credentialsPending:true,legacyPreserved:true};
+      const credentialState=await migrated.page.evaluate(async()=>{const host=(/** @type {NativeTestWindow} */(window)).ShirohaDesktopHost;if(!host)throw new Error('bridge');return host.invoke('service_credential',{request:{kind:'status',config:{service:'webdav',endpoint:'https://fixture.invalid',username:'fixture',remoteDir:'backup'}}});});
+      assert.deepEqual(credentialState,{state:'remembered'});
+      return {dataMigrated:true,credentialsMigrated:true,legacyDataPreserved:true};
     });
     await stop(runtime); runtime=undefined;
     runtime=await launch(executable,migrationProfile,proxyPort);

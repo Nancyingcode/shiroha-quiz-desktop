@@ -57,7 +57,8 @@
     try { return await scope.ShirohaDesktopHost.invoke(command, args); }
     catch (error) {
       const code = error && typeof error === 'object' && 'code' in error ? String(error.code) : 'storage_unavailable';
-      throw Object.assign(new Error('本地操作未完成，原数据已保留。请检查权限、空间或重新启动。'), { code });
+      const messages = { cancelled: '请求已取消。', timeout: '请求超时，请检查服务连接。', network_unavailable: '无法连接服务，请检查地址、证书和网络。', binding_required: '服务绑定已变化，请重新输入凭据。', credential_pending: '凭据保存尚未完成，请重试保存设置。', credential_unavailable: '系统凭据不可用，未确认清除或保存成功。', configuration_not_committed: '配置尚未保存，凭据尚未生效。', result_unknown: '远端写入结果尚不确定，请先刷新远端列表核对备份。' };
+      throw Object.assign(new Error(/** @type {Record<string,string>} */ (messages)[code] || '本地操作未完成，原数据已保留。请检查权限、空间或重新启动。'), { code });
     }
   }
   /** @param {string} type */
@@ -256,6 +257,138 @@
       event.preventDefault(); void chooseImport(event.target);
     }
   }, true);
+  /** @typedef {{endpoint:string,username?:string,remoteDir?:string,rememberKey?:boolean,rememberPassword?:boolean,apiKey?:string}} ServiceConfig */
+  const MARKER = '[已保存的凭据]';
+  // 这里只缓存非敏感状态；秘密只在用户输入的单次 IPC 参数中出现，不保存页面副本。
+  const credentialStates = new Map();
+  const staged = new Map();
+  const requestContexts = new WeakMap();
+  let networkGeneration = 0;
+  /** @type {Record<string,unknown>|null} */ let davConfig = null;
+  /** @param {'ai'|'webdav'} service @param {ServiceConfig} config */
+  function nativeConfig(service, config) { return { service, endpoint: config.endpoint, username: config.username || '', remoteDir: service === 'webdav' ? config.remoteDir || 'ShirohaQuiz/Web' : '' }; }
+  /** @param {'ai'|'webdav'} service @param {ServiceConfig} config */
+  function binding(service, config) { return JSON.stringify(nativeConfig(service, config)); }
+  /** @param {Record<string,unknown>} request */
+  async function credential(request) { return invoke('service_credential', { request }); }
+  /** @param {'ai'|'webdav'} service @param {ServiceConfig} config */
+  async function refreshCredential(service, config) {
+    if (!config.endpoint) return;
+    const result = await credential({ kind: 'status', config: nativeConfig(service, config) });
+    credentialStates.set(binding(service, config), result.state);
+  }
+  /** @param {'ai'|'webdav'} service @param {ServiceConfig} config @param {string} secret @param {Record<string,unknown>} request @param {AbortSignal} [signal] */
+  async function requestService(service, config, secret, request, signal) {
+    if (!requestContexts.has(config)) requestContexts.set(config, networkGeneration);
+    if (requestContexts.get(config) !== networkGeneration) throw new Error('服务配置或任务已改变，请重新发起操作。');
+    const generation = networkGeneration;
+    if (signal?.aborted) throw Object.assign(new Error('请求已取消。'), { name: 'AbortError', code: 'cancelled' });
+    const requestId = globalThis.crypto.randomUUID();
+    const abort = () => { void credential({ kind: 'cancel', request_id: requestId }).catch(() => {}); };
+    signal?.addEventListener('abort', abort, { once: true });
+    try {
+      const response = await invoke('service_request', { requestId, config: nativeConfig(service, config), secret: secret === MARKER ? null : secret, request });
+      if (signal?.aborted || generation !== networkGeneration) throw Object.assign(new Error('请求已取消。'), { name: 'AbortError', code: 'cancelled' });
+      return new globalThis.Response([204,205,304].includes(response.status) ? null : response.body, { status: response.status, headers: { 'Content-Type': 'application/json' } });
+    } finally { signal?.removeEventListener('abort', abort); }
+  }
+  const network = {
+    async cancelAll() { networkGeneration++; await credential({ kind: 'cancel_all' }); },
+    /** @param {ServiceConfig} config @param {unknown} payload @param {AbortSignal} [signal] */
+    ai(config, payload, signal) { return requestService('ai', config, config.apiKey || '', { kind: 'ai', payload }, signal); },
+    /** @param {ServiceConfig} config @param {string} password @param {string} path @param {Parameters<import('../../web/platform/runtime').BrowserNetwork['webdav']>[3]} [options] */
+    async webdav(config, password, path, options = {}) {
+      const directory = config.remoteDir || 'ShirohaQuiz/Web';
+      const method = (options.method || 'GET').toUpperCase();
+      /** @type {Record<string,unknown>} */ let operation;
+      if (method === 'PROPFIND' && !path) operation = { kind: 'probe' };
+      else if (method === 'PROPFIND' && path === directory) operation = { kind: 'list' };
+      else if (method === 'MKCOL' && (path === directory || directory.startsWith(path + '/'))) operation = { kind: 'ensure_directory', depth: path.split('/').length };
+      else if (['GET', 'PUT'].includes(method) && path.startsWith(directory + '/') && !path.slice(directory.length + 1).includes('/')) {
+        const name = path.slice(directory.length + 1);
+        if (method === 'GET') operation = { kind: 'download', name };
+        else {
+          const body = typeof options.body === 'string' ? options.body : await new globalThis.Response(options.body).text();
+          operation = { kind: 'upload', name, body };
+        }
+      } else throw new Error('不允许的 WebDAV 操作或目录。');
+      const response = await requestService('webdav', config, password, { kind: 'webdav', operation }, options.signal);
+      if (!(options.acceptStatuses || [200,201,204,207]).includes(response.status)) throw Object.assign(new Error(`WebDAV 返回 HTTP ${response.status}。`), { code: 'http', status: response.status, method });
+      return response;
+    },
+  };
+  const credentials = {
+    ...network,
+    native: true,
+    /** @param {ServiceConfig} ai @param {Record<string,unknown>} [configurations] */
+    async initialize(ai, configurations) {
+      davConfig = configurations?.webdav && typeof configurations.webdav === 'object' ? /** @type {Record<string,unknown>} */ (configurations.webdav) : null;
+      credentialStates.clear();
+      try {
+        await credential({ kind: 'reconcile' });
+        await refreshCredential('ai', ai);
+        if (davConfig) await refreshCredential('webdav', /** @type {ServiceConfig} */ (davConfig));
+      } catch { credentialStates.clear(); }
+    },
+    async migrateLegacy() {
+      const raw = localStorage.getItem(KEY);
+      if (!raw) return;
+      const legacy = JSON.parse(raw);
+      const legacyDav = scope.ShirohaBrowserCredentials.readDav();
+      /** @type {Array<{service:'ai'|'webdav',config:ServiceConfig,local:string,session:string,remember:boolean}>} */
+      const sources = [
+        { service: 'ai', config: legacy.settings?.aiImportV99 || { endpoint: '' }, local: 'shiroha_ai_key_local_v99', session: 'shiroha_ai_key_session_v99', remember: !!legacy.settings?.aiImportV99?.rememberKey },
+        { service: 'webdav', config: /** @type {ServiceConfig} */ (legacyDav || { endpoint: '' }), local: 'shiroha_webdav_password_local_v378', session: 'shiroha_webdav_password_session_v378', remember: !!legacyDav?.rememberPassword },
+      ];
+      for (const source of sources) {
+        const store = source.remember ? localStorage : sessionStorage;
+        const key = source.remember ? source.local : source.session;
+        const secret = store.getItem(key);
+        if (!secret || !source.config.endpoint) continue;
+        const result = await credential({ kind: 'migrate', config: nativeConfig(source.service, source.config), secret, remember: source.remember });
+        // 只清理已成功迁移且尚未被用户替换的同一个旧值；清理失败保留来源供重试。
+        if (result.allowCleanup && store.getItem(key) === secret) store.removeItem(key);
+        await refreshCredential(source.service, source.config);
+      }
+    },
+    /** @param {'ai'|'webdav'} service @param {ServiceConfig} config */
+    status(service, config) { return ['remembered','session'].includes(credentialStates.get(binding(service, config))) ? MARKER : ''; },
+    /** @param {'ai'|'webdav'} service @param {ServiceConfig} config @param {string} secret @param {boolean} remember */
+    async set(service, config, secret, remember) {
+      networkGeneration++;
+      const input = secret === MARKER ? { kind: 'keep' } : secret ? { kind: 'replace', value: secret } : { kind: 'clear' };
+      const result = await credential({ kind: 'stage', config: nativeConfig(service, config), input, remember });
+      const undo = async () => { await credential({ kind: 'rollback', id: result.id }); staged.delete(undo); };
+      staged.set(undo, { id: result.id, service, config });
+      return undo;
+    },
+    /** @param {()=>void|Promise<void>} undo */
+    operationId(undo) { const pending = staged.get(undo); return pending ? `credential-${pending.id}` : undefined; },
+    /** @param {()=>void|Promise<void>} undo */
+    async finalize(undo) {
+      const pending = staged.get(undo); if (!pending) return;
+      await credential({ kind: 'commit', id: pending.id });
+      await refreshCredential(pending.service, pending.config); staged.delete(undo);
+    },
+    /** @param {ServiceConfig} _config @param {string} text */
+    redact(_config, text) { return text; },
+    /** @param {[Storage,string][]} _entries */
+    checkpoint(_entries) { return () => {}; },
+    readDav() { return davConfig; },
+    /** @param {ServiceConfig} config @param {string} password @param {boolean} storePassword */
+    async saveDav(config, password, storePassword) {
+      if (!storePassword) return;
+      const undo = await credentials.set('webdav', config, password, !!config.rememberPassword);
+      return undo;
+    },
+    async clearDav() {
+      if (!davConfig) return;
+      return credentials.set('webdav', /** @type {ServiceConfig} */ (davConfig), '', false);
+    },
+    /** @param {Record<string,unknown>|null} config */
+    updateDav(config) { davConfig = config; },
+    async reset() { networkGeneration++; await credential({ kind: 'invalidate' }); credentialStates.clear(); davConfig = null; },
+  };
   scope.ShirohaPlatform = { ...scope.ShirohaBrowser, storage, saves: scope.ShirohaSaveQueue.create(storage),
-    download, network: scope.ShirohaBrowserCredentials, credentials: scope.ShirohaBrowserCredentials };
+    download, network, credentials };
 })();
