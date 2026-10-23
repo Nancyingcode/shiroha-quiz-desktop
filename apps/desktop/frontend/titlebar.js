@@ -8,6 +8,15 @@
   const maximize = /** @type {HTMLButtonElement | null} */ (document.getElementById('desktop-window-maximize'));
   const close = /** @type {HTMLButtonElement | null} */ (document.getElementById('desktop-window-close'));
   if (!titlebar || !drag || !status || !minimize || !maximize || !close) return;
+  const captionName = drag.querySelector('span');
+  if (captionName) {
+    // 按钮保留在 body 下以沿用保存锁；本页面观察标题宽度，字体缩放后仍紧邻名称。
+    const syncNavigationPosition = () => {
+      document.body.style.setProperty('--desktop-navigation-toggle-left', `${captionName.getBoundingClientRect().right + 8}px`);
+    };
+    syncNavigationPosition();
+    new window.ResizeObserver(syncNavigationPosition).observe(captionName);
+  }
   const buttons = [minimize, maximize, close];
   const appWindow = host.ShirohaDesktopHost?.window;
   if (!appWindow) {

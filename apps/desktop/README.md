@@ -114,6 +114,8 @@ npm run prepare:web
 
 标题栏与雾蓝背景连续融合，图标和应用名仅在顶部出现，左侧导航从「首页」开始。标题空白处可拖动，双击最大化或还原；右侧保留最小化、最大化/还原、关闭按钮，支持键盘操作。Windows 原生最大化按钮的悬停贴靠面板不保证与自定义按钮等价。
 
+导航开关位于 `Shiroha Quiz` 名称右侧，使用固定的 36px 点击区和侧栏图标，展开、收起及专注模式中位置一致。悬停或键盘聚焦时显示「收起左侧导航／展开左侧导航」提示，沿用雾蓝底色与焦点轮廓。正文与导航保留 220ms 联动过渡，系统减少动态效果设置仍优先；保存期间沿用原有交互锁。位置方案及验证见[设计](../../docs/superpowers/specs/2026-10-24-desktop-navigation-toggle-position.md)和[实施计划](../../docs/superpowers/plans/2026-10-24-desktop-navigation-toggle-position.md)。
+
 标题栏模板与脚本维护于 `frontend/titlebar.html`、`frontend/titlebar.js`，由资源准备脚本注入生成页面。标题栏使用拖动、最小化、最大化切换、最大化状态读取和关闭五项权限；阶段 C 另逐项增加受控本地数据与文件业务命令，阶段 D 增加服务凭据、服务请求及关闭协调所需事件与窗口销毁权限。官方桥接打包为本地脚本，保持 `withGlobalTauri: false`，CSP 与存储来源不变。视觉设计及历史验收记录见[标题栏设计](../../docs/superpowers/specs/2026-10-23-desktop-immersive-titlebar.md)和[实施计划](../../docs/superpowers/plans/2026-10-23-desktop-immersive-titlebar.md)。
 
 修改窗口配置后，请停止并重新运行 `npm run dev`，让原生窗口和生成资源一起更新。
