@@ -227,7 +227,7 @@ C、D 总体验收继续保持未勾选：独立 Windows 用户/VM 的正常发�
 
 ### 范围、源码与环境
 
-按已确认双端实施计划执行，起点 `27ab92a50fecc7c69d44c81f01352d3ac7dd138b`，工作区起始干净。本轮没有 commit、push、PR 或发布，未增加生产依赖，npm/Cargo 锁文件不变。全局规范引用的 `global-rules/AGENTS_condition_rules.md` 在当前仓库缺失，沿用实际根规范及已确认设计。
+按已确认双端实施计划执行，起点 `27ab92a50fecc7c69d44c81f01352d3ac7dd138b`，工作区起始干净。阶段 E 初版开发验证时尚未 commit、push、PR 或发布，后续用户授权的提交与整合记录见下节；未增加生产依赖，npm/Cargo 锁文件不变。全局规范引用的 `global-rules/AGENTS_condition_rules.md` 在当前仓库缺失，沿用实际根规范及已确认设计。
 
 本次环境：Windows 11 专业版 10.0.26200 x64；Node 24.17.0、npm 11.13.0、rustc/cargo 1.99.1；Edge 与 WebView2 155.0.4283.62。测试使用自建文档、隔离浏览器/数据库目录及假凭据，原生网络使用现有隔离 mock；未读取用户题库或调用真实服务。依赖安装前在沙箱外核对当前工作区没有 Node/Electron/esbuild/应用进程，按原锁文件执行 npm ci；第一次沙箱安装异常退出，重试成功并完成门禁。
 
@@ -263,7 +263,9 @@ C、D 总体验收继续保持未勾选：独立 Windows 用户/VM 的正常发�
 
 本机故障回归只证明注入条件下的保全与恢复，不等于真实磁盘写满、断电或操作系统崩溃已验收。候选制品不应直接覆盖真实用户环境做试验；后续先在隔离用户/VM 按桌面说明逐项验证并补记录，再决定发行。没有自动更新、证书购买或发布授权。
 
-### 最终性能与制品
+### 初版性能与候选制品
+
+本节性能、哈希与安装包属于阶段 E 初版 `845318d` 的证据；后续 OCR 取消修复 `b9ba107` 未重新测量性能或打包 NSIS，不将此处安装包标记为整合后 main 的发行制品。
 
 最终独立串行运行 5 轮默认启动、三种样本各 5 轮，两个 JSON 报告均 `complete=true`。启动 DOM/可见中位数为 724/751 ms，整树工作集 499.1 MiB、私有提交 285.2 MiB。固定样本哈希与阶段 A 的三种样本一致；性能测试 EXE SHA-256 为 `227e373a0d51725eb168f2e397860082a492033189f24e131f92cf3f7d00d3d6`，共享 app.js 为 `6cc07af7835430ecc8ecd2c2820f71b0579c895dae5cf7b8f0315614e6a546e1`。
 
@@ -283,3 +285,20 @@ C、D 总体验收继续保持未勾选：独立 Windows 用户/VM 的正常发�
 | --- | ---: | --- |
 | Shiroha-Quiz-0.1.0-online-x64.exe | 53575265 | `8709e78de8e1d9c807398d6b13828f6e38be703a1d3b461e77673d29b4814b12` |
 | Shiroha-Quiz-0.1.0-offline-x64.exe | 271189987 | `b160f97df518f8810deffe5c08d024e77842065c313e16ef7bf40ccb8b2b7da9` |
+
+## 阶段 E 合并 main 的整合验证（2026-10-23）
+
+用户明确要求“合并到 main”，授权完成本次必要提交，没有授权 push。来源工作树为 `E:/Codex/worktrees/9dc6/shiroha-quiz-desktop`；阶段 E 在 `codex/dual-platform-stage-e` 独立提交为 `845318d`，从原 main `27ab92a` 建立 `codex/integrate-stage-e` 并以 `3843e3b` 合入。整合分支另保留修复提交 `b9ba107`，main 通过快进纳入上述完整历史；没有复制其他任务未提交文件，也没有改写既有 C/D 历史。
+
+合并前复核发现 Tesseract 5.1.1 终止 Worker 不会结束尚在等待的 `recognize()` Promise，识别中取消可能一直保持处理中。先补稳定失败回归，再加入每轮独立取消信号，确保清理 Canvas、恢复按钮并隔离旧结果。真实 Web 与 WebView2 回归在 Worker 报告 `recognizing text` 时触发取消，再重新完整识别中文扫描 PDF、核对并保存重载；没有以加载前取消替代识别中取消。
+
+以下检查在来源工作树的整合分支完成，最终 main 纳入相同代码树：
+
+- 桌面 Node 39 项、共享 70 项、Web 平台 9 项、Web 文档完整链路 1 项、Web 单题 AI 25 项、WebDAV 9 项通过。
+- typecheck、lint（含 14 份文档）、Rust fmt、默认配置 Clippy（`-D warnings`）通过；默认/native-test 两组 Rust 测试各 41 项通过、1 项既有系统凭据测试默认忽略。native-test Clippy 沿用阶段 E 初版已通过结果，本次 OCR 修复没有改 Rust。
+- 普通 release 和隔离 native-test release 重新构建成功；实际 WebView2 25 项全部通过，包含识别中取消重试、窗口恢复、迁移、分页及损坏数据库恢复。
+- 全部测试使用自建文档、临时数据目录和 mock 服务；没有调用收费 API 或操作真实题库。日志位于来源工作树 `apps/desktop/.reports-stage-e-merge-*.log`，不提交测试产物。
+
+修复后共享 app.js SHA-256 为 `8be6448e1f56f1adaee6adcb9927030d81340e374f6b4754b6df342ad427b607`，普通 release EXE 为 `de132ecf610f30e4e5c600928fc5bda7d862bd57f24e63cfedbfb8517543d721`。前节性能与 NSIS 候选包保留初版标识，本次不冒充已对修复后安装包进行验收。
+
+阶段 E 总体复选框保持未勾选；Win10/Win11 干净安装、升级卸载、长时间大文档与其他人工验收仍按前节待办执行。本次不 push、不发布，不清理其他来源工作树。
