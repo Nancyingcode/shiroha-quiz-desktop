@@ -7813,3 +7813,5 @@ body.practice-focus.practice-rail-collapsed-v34 #practice-card > .practice-side-
   .ai-diagnostics-actions-v375{justify-content:flex-start;margin-top:10px}
   .ai-diagnostics-grid-v375{grid-template-columns:1fr}
 }
+
+.platform-status{position:fixed;bottom:12px;left:50%;transform:translateX(-50%);z-index:99999;max-width:90vw;padding:12px 18px;border-radius:10px;background:#17364d;color:white;box-shadow:0 4px 20px #0003}.platform-status.failed{background:#793427}.platform-status button{margin-left:12px}

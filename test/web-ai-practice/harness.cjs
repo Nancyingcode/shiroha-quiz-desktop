@@ -137,7 +137,7 @@ class MockAi {
     if (body?.model !== MODEL || body?.stream !== false || !Array.isArray(body?.messages)) errors.push('Unexpected AI request shape/model.');
     if (call.headers.authorization !== `Bearer ${FAKE_KEY}`) errors.push('Only the synthetic session key may be sent.');
     if (!entry) errors.push('Unplanned AI request.');
-    if (entry?.kind === 'follow' && body?.response_format) errors.push('Follow-up must use plainText, without response_format.');
+    if (entry?.kind === 'follow' && body?.response_format?.type !== 'json_object') errors.push('Follow-up revision must request a JSON object.');
     if (entry?.kind === 'analysis' && body?.response_format?.type !== 'json_object') errors.push('Analysis must request a JSON object.');
     if (errors.length) {
       this.violations.push(...errors);
@@ -147,7 +147,13 @@ class MockAi {
     }
     entry.arrived.resolve(call);
     await entry.released.promise;
-    const content = typeof entry.content === 'string' ? entry.content : JSON.stringify(entry.content);
+    // V38.1 的追问同时返回对话与完整解析；旧字符串样本表示不改动解析的追问。
+    const requestContext = entry.kind === 'follow' && typeof entry.content === 'string' && !entry.raw ? JSON.parse(body.messages.at(-1).content) : null;
+    const originalAnalysis = this.entries.find(item => item.kind === 'analysis' && item.content?.analysis === requestContext?.currentAnalysisDraft)?.content;
+    const responseContent = entry.kind === 'follow' && typeof entry.content === 'string' && !entry.raw
+      ? { reply: entry.content, revisedAnalysis: requestContext.currentAnalysisDraft, confidence: originalAnalysis?.confidence || 'HIGH', needsReview: originalAnalysis?.needsReview || false, warning: originalAnalysis?.warning || '' }
+      : entry.content;
+    const content = typeof responseContent === 'string' ? responseContent : JSON.stringify(responseContent);
     const response = entry.raw ? content : JSON.stringify(entry.status >= 400 ? { error: { message: 'Synthetic mock failure.' } } : { choices: [{ message: { role: 'assistant', content } }] });
     try { await route.fulfill({ status: entry.status, contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: response }); }
     catch (error) {
@@ -232,7 +238,7 @@ async function setup(browser, url, keys, { configured = true, rich = false, igno
     get bridgeUsed() { return bridgeUsed; },
     async boot() {
       await page.goto(url, { waitUntil: 'load' });
-      await page.locator('#start-practice-btn').waitFor({ state: 'attached' });
+      await page.locator('body[data-storage-state="ready"]').waitFor();
       if (rich) {
         // Existing upgradeState normalizes away richContent; seed only our safe fixture after upgrade.
         const prepared = fixture({ configured, rich }).banks[0].questions[0];

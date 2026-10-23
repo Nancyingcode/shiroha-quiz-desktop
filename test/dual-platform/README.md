@@ -1,4 +1,4 @@
-# 双端阶段 A：基线与契约
+# 双端阶段 A/B：基线、契约与 Web 适配
 
 执行日期：2026-10-23。依据[双端设计](../../docs/superpowers/specs/2026-10-23-web-desktop-dual-platform-design.md)和[详细实施计划 A1—A4](../../docs/superpowers/plans/2026-10-23-web-desktop-dual-platform.md)。本轮只建立可复现基线、共享样本、类型/纯校验和检查入口；未接入平台适配器、异步保存队列、SQLite、原生文件/网络或系统凭据。
 
@@ -114,3 +114,39 @@ A2 的 5 个执行型 TODO 记录富字段/题库扩展丢失、未来版本不�
 ## 7. 未覆盖范围
 
 中文扫描 PDF 全链路、DOCX/XLSX、大文件、真实 AI/WebDAV、Win10、安装/卸载/升级、原生凭据和故障恢复尚未验收。英文 `TEST` OCR、PDF 原语、小型图片和静态格式 fixture 均不代替这些场景。性能协议在测量/优化前登记于[基线盘点](./baseline-inventory.md)，本轮不声称内存或耗时已经改善。
+
+## 8. 阶段 B 实施记录（2026-10-23）
+
+本轮按用户指定的阶段 B 实施，工作树开始时干净；没有提交、推送、增加生产依赖或修改锁文件。全局状态流转规则引用仍未在仓库找到，沿用根规范及已确认计划。
+
+平台入口为 [index.js](../../apps/web/platform/index.js)，浏览器存储/文件/媒体见 [browser.js](../../apps/web/platform/browser.js)，网络与凭据分别位于 [browser-network.js](../../apps/web/platform/browser-network.js)、[browser-credentials.js](../../apps/web/platform/browser-credentials.js)，提交队列为 [save-queue.js](../../apps/web/platform/save-queue.js)。Web 保持普通本地脚本、静态站及 file URL 入口；桌面生成器复制同一平台目录并保留明确的入口注入位置。已有标题栏窗口权限和应用来源未改变。
+
+运行时采用 [兼容门面类型](../../apps/web/platform/runtime.d.ts) 对接历史整包页面，真正提交时复用 A3 的版本、快照及敏感字段校验。此门面不等于完整原生 PlatformServices 已实现：分页/增量提交、原生文件授权、持久操作结果、SQLite、媒体文件和 IPC 仍由 C 阶段实现，浏览器原子整包写入没有原生事务的不确定结果状态。
+
+启动区分缺省、明确空库、损坏/未来版本及存储访问失败；失败锁定编辑并提供重试和原始数据导出，禁止默认库覆盖。题目富字段与题库扩展保留；默认库抑制与全量重置分别验证。
+
+31 处业务保存和保存全部均等待提交。页面写入事务期间暂停交互，避免异步回滚覆盖之后的编辑；队列入队复制载荷、串行提交、推进修订、记录操作 ID，并在失败时阻断后继写入。回滚恢复原对象及属性引用，保留练习身份、编辑草稿和 AI 会话；持久化已经成功后的界面异常不会反向回滚内存。导入、恢复、重置使用同一互斥入口；考试写入成功后才停止计时并完成交卷，失败可重试，自动提交失败不会不断自动重试。关闭提示仅辅助，未增加完整会话恢复。
+
+浏览器仍使用原 localStorage/sessionStorage 键；新增凭据端点绑定元数据不包含秘密。UI 不再回填已保存秘密，凭据读取与鉴权头生成留在浏览器服务内部；切换记住选项会清除旧副本，失败有补偿并报告。绑定到已初始化端点的旧凭据不能随恢复/改端点发给新地址。独立 WebDAV 配置、侧栏、文件读取、下载及内联图片显示也有平台归属。浏览器下载成功只代表已触发下载，不能证明用户已经将文件保存到磁盘。
+
+外部存储原值比较与 storage 事件用于拒绝已知过期写入；不提供 localStorage 跨标签原子比较交换或并发编辑保证。页面实例内的修订和操作记录在重新加载时重建。
+
+A 阶段的 5 个格式 TODO 已修复并转换为正常断言。另发现既有 AI 测试仍使用旧纯文本追问，而当前源码的 V38.1 已要求 reply/revisedAnalysis JSON，故保留当前产品行为，更新 mock 输入和请求结构断言；保留全部 25 项用例的评分、迟到结果、草稿、公式及 quota 回滚断言。测试中的富字段断言使用跨 VM 的普通 JSON 值比较，避免对象原型差异造成假失败。
+
+### 验证入口与覆盖
+
+在 apps/desktop 执行 npm test、npm run typecheck、npm run lint、npm run test:web-platform、npm run build 和 npm run test:desktop。页面测试默认使用本机 Edge；可通过 SHIROHA_BROWSER_EXECUTABLE 指定 Chrome。AI 回归继续使用阶段 A 所述 NODE_PATH 和 Edge 可执行文件参数。
+
+已验证 Edge 155.0.4283.62 与 Chrome 155.0.8059.85 的延迟启动、损坏数据保全、空库/重置、延迟保存、过期写入、quota 保留输入、考试重试/重复提交及静态 file URL 入口。新增恢复失败保留选择/重试、导出失败和重置失败用例。所有浏览器上下文与桌面 profile 隔离，网络为 mock 或本地资源，没有调用收费 API。
+
+最终验证结果如下：
+
+| 检查 | 结果 |
+| --- | --- |
+| npm test | 桌面测试通过；共享测试 59/59，无 TODO |
+| typecheck、lint、依赖完整性 | 全部通过；文档 UTF-8、围栏与本地链接检查通过 |
+| 浏览器页面回归 | Edge、Chrome 各 8/8 |
+| Web AI / WebDAV | 25/25、9/9；AI 测试框架自检 1/1 |
+| release 构建与 WebView2 冒烟 | 通过；覆盖窗口、布局、导入/练习、离线 MathJax/PDF/OCR 及重启持久化 |
+
+AI 报告为本机忽略产物 `test/web-ai-practice/reports/stage-b-final.jsonl`；桌面报告与截图位于 `apps/desktop/.reports/`。中文扫描 PDF、大文件、真实 AI/WebDAV、Win10、安装升级及完整关闭协调仍未验证，属于后续阶段；本轮未重复性能基准，不声称性能改善。
