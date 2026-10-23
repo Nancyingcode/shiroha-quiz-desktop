@@ -7,6 +7,21 @@ export interface BrowserStorage {
   revision(): number;
   invalidate():void;
   recoveryText():string;
+  checkpoint?():Promise<void>;
+  migrate?():Promise<void>;
+  reset?():Promise<void>;
+  snapshots?():Promise<string[]>;
+  restoreSnapshot?(snapshotId:string):Promise<void>;
+  recoverySnapshots?():Promise<string[]>;
+  recover?(snapshotId:string):Promise<void>;
+  recoverImport?(snapshot:Snapshot):Promise<void>;
+  readonly lazy?: boolean;
+  isQuestionLoaded?(bankId:string,questionId:string):boolean;
+  checkpointView?():()=>void;
+  ensureQuestions?(snapshot:Snapshot,refs:{bankId:string;questionId:string}[]):Promise<void>;
+  ensureRecords?(snapshot:Snapshot,ids:string[]):Promise<void>;
+  ensureAll?(snapshot:Snapshot):Promise<void>;
+  releaseView?(snapshot:Snapshot,keep:{bankId:string;questionId:string}[]):void;
 }
 export interface SaveQueue {
   save(snapshot: Snapshot): Promise<void>;
@@ -50,6 +65,6 @@ export interface BrowserGlobals {
     preferences:BrowserPreferences;
     media:BrowserMedia;
     resourceJson(url:string):Promise<unknown>;
-    download(name:string, blob:Blob):void;
+    download(name:string, blob:Blob):void|Promise<void>;
   };
 }

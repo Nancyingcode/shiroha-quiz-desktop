@@ -9,7 +9,7 @@
     "frontendDist": "../dist"
   },
   "app": {
-    "withGlobalTauri": true,
+    "withGlobalTauri": false,
     "windows": [{
       "label": "main",
       "title": "Shiroha Quiz",
@@ -22,6 +22,15 @@
     }],
     "security": {
       "capabilities": [{ "identifier": "prototype", "windows": ["main"], "permissions": [
+        "allow-local-initialize",
+        "allow-local-read",
+        "allow-local-write",
+        "allow-local-operation",
+        "allow-local-checkpoint",
+        "allow-local-migrate",
+        "allow-local-replace",
+        "allow-local-file",
+        "allow-local-task", "allow-local-query", "allow-local-commit",
         "core:window:allow-start-dragging",
         "core:window:allow-minimize",
         "core:window:allow-toggle-maximize",

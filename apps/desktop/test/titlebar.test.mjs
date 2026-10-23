@@ -40,7 +40,7 @@ function fixture() {
     close: async () => { calls.push('close'); },
     startDragging: async () => { calls.push('drag'); },
   };
-  const host = { __TAURI__: { window: { getCurrentWindow: () => api } }, addEventListener() {}, setTimeout, clearTimeout };
+  const host = { ShirohaDesktopHost: { window: api }, addEventListener() {}, setTimeout, clearTimeout };
   const start = () => vm.runInNewContext(source, { window: host, document: { getElementById: (/** @type {string} */ id) => elements.get(id) } });
   return { get, calls, api, start, host };
 }

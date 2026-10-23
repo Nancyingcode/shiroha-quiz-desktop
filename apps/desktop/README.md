@@ -53,9 +53,17 @@ npm run build
 npm run prepare:web
 ```
 
-应用标识固定为 `com.yiqiu.shirohaquiz.desktop`。本原型仍使用 localStorage，AI/WebDAV 仍由浏览器发起请求，因此原有存储容量、跨域与证书限制仍然适用；尚未引入 SQLite、原生文件/网络 IPC 或凭据存储。
+应用标识固定为 `com.yiqiu.shirohaquiz.desktop`。桌面题库与学习数据使用 Rust 独占的 SQLite，图片按内容哈希保存，普通保存通过业务增量 IPC 提交；不会在原生服务失败时回退 localStorage 写入。AI/WebDAV 请求与凭据仍沿用浏览器实现，跨域与证书限制仍然适用；尚未接入原生网络或系统凭据库。
 
-开发与生产来源不同，数据互不共享。开发数据仅用于测试，日常体验和重启持久化验证使用 release 可执行文件。迁移旧 Web 数据时，先在原浏览器导出完整备份，再在桌面窗口导入；应用不会读取用户浏览器资料目录。
+正常发行数据位于 `%LOCALAPPDATA%/com.yiqiu.shirohaquiz.desktop/local-data`，开发数据使用同级 `development`。目录内包含 `library.sqlite3`、WAL、媒体、恢复点和进程写入锁；不要在运行时只复制 SQLite 主文件充当备份。覆盖、重置及恢复前会先创建并验证包含媒体的恢复点；设置页可读取并选择恢复点。恢复点和未引用媒体目前均保守保留，不自动删除，磁盘空间不足时操作失败并保留原数据。
+
+原生打开/保存通过系统对话框选择文件，页面仅获得有时效的分块访问令牌。保存先写同目录临时文件，回读验证大小与 SHA-256 后替换目标；取消或替换失败不报告保存成功。共享 JSON/ZIP 仍是交换格式，数据库文件不是跨端导出格式。
+
+开发与生产来源不同，数据互不共享。同来源旧原型数据在空目标库启动时显示迁移确认，迁移保留旧主状态、独立配置、凭据和未知键；数据成功后 SQLite 成为活动来源。凭据迁移尚未实现，不会清理旧密码或 Key。目标已有数据时不自动覆盖；需要合并旧数据时先导出备份再主动导入。外部 Web 数据须在原浏览器导出完整备份，再在桌面窗口导入；应用不会扫描浏览器资料目录。
+
+首页读取题目索引和记录摘要，不读取全部正文与图片；题库预览、错题和收藏每页 50 条，练习/考试读取选定题目，历史记录展开时读取明细。统计和跨库选题仍覆盖全部索引；完整导出读取全部正文。离开页面释放未修改且未被练习/考试使用的题目缓存。
+
+数据库损坏时，启动恢复页提供“查找本机恢复点”和“选择兼容备份修复数据”。确认后先在 `generations/<UUID>` 建立并校验恢复副本，再原子更新 `active.json`；原数据库、WAL、媒体和旧活动代均保留。请保留完整数据目录，不要只删除主库强制初始化。设置页也提供恢复入口，健康数据库继续使用常规恢复点恢复。验证结果和发行环境边界见[阶段 C 记录](../../test/dual-platform/README.md)。
 
 ## 雾蓝一体视觉
 
@@ -69,7 +77,7 @@ npm run prepare:web
 
 标题栏与雾蓝背景连续融合，图标和应用名仅在顶部出现，左侧导航从「首页」开始。标题空白处可拖动，双击最大化或还原；右侧保留最小化、最大化/还原、关闭按钮，支持键盘操作。Windows 原生最大化按钮的悬停贴靠面板不保证与自定义按钮等价。
 
-标题栏模板与脚本维护于 `frontend/titlebar.html`、`frontend/titlebar.js`，由资源准备脚本注入生成页面。`main` 窗口仅获得拖动、最小化、最大化切换、最大化状态读取和关闭五项权限，不增加文件、网络或 shell 能力。CSP 与存储来源不变。设计及验收记录见[标题栏设计](../../docs/superpowers/specs/2026-10-23-desktop-immersive-titlebar.md)和[实施计划](../../docs/superpowers/plans/2026-10-23-desktop-immersive-titlebar.md)。
+标题栏模板与脚本维护于 `frontend/titlebar.html`、`frontend/titlebar.js`，由资源准备脚本注入生成页面。标题栏使用拖动、最小化、最大化切换、最大化状态读取和关闭五项权限；阶段 C 另逐项增加受控本地数据与文件业务命令。官方桥接打包为本地脚本，保持 `withGlobalTauri: false`，CSP 与存储来源不变。视觉设计及历史验收记录见[标题栏设计](../../docs/superpowers/specs/2026-10-23-desktop-immersive-titlebar.md)和[实施计划](../../docs/superpowers/plans/2026-10-23-desktop-immersive-titlebar.md)。
 
 修改窗口配置后，请停止并重新运行 `npm run dev`，让原生窗口和生成资源一起更新。
 
@@ -82,12 +90,13 @@ npm test
 npm run typecheck
 npm run lint
 npm run build
+npm run build:test
 npm run test:desktop
 ```
 
 `npm test` 包含资源过滤、内联事件转换和路径安全检查。其中的 Windows junction 用例可能受到沙箱创建链接权限限制，应在正常本机终端运行并记录结果，不通过跳过断言掩盖失败。`lint` 同时检查本次工程文档的 UTF-8、代码围栏和本地链接。
 
-`npm run test:desktop` 需要先成功构建 release 可执行文件。它使用隔离的临时 WebView2 数据目录和测试数据，验证离线资源与关键页面行为，不使用真实用户 profile。该命令的输出才代表当前运行结果；仅完成静态资源生成不能证明 PDF/OCR 已在 WebView2 中通过。
+`npm run test:desktop` 需要先执行 `npm run build:test`，使用 `target/native-test/release` 中带隔离 feature 的 EXE。测试根必须是 runner 本次创建且带隔离标记的临时目录，同时隔离 SQLite、媒体与 WebView2 profile，并阻止出站。正常 `npm run build` 不接受测试根覆盖，正常发行制品的运行验收须使用隔离 Windows 用户或虚拟机；本轮未执行该项。原生凭据/网络尚未接入，不访问系统凭据。仅完成静态资源生成不能证明 PDF/OCR 已在 WebView2 中通过。
 
 2026-10-23 已在本机 WebView2 155.0.4283.62 验证：7 项单元测试、类型检查、lint 及 release 构建通过；10 项实际桌面检查通过，包括启动不加载隐藏插画、进入导入页后插画正常显示、JSON 题库通过界面导入与练习、关闭重开后的题库保留、MathJax、PDF.js 真 Worker，以及本地 Tesseract 英文 OCR。OCR 样本为 Canvas 生成的 `TEST`，该结果不代表中文扫描 PDF 全流程或大文件性能已验证。测试截图生成于 `.reports/prototype.png`。
 
@@ -97,7 +106,7 @@ npm run test:desktop
 
 ## 双端改造阶段 A
 
-后续改造以[双端设计](../../docs/superpowers/specs/2026-10-23-web-desktop-dual-platform-design.md)和[详细实施计划](../../docs/superpowers/plans/2026-10-23-web-desktop-dual-platform.md)为准。阶段 A 新增共享业务/格式样本、异步平台类型和纯校验器，尚未接入页面；当前运行行为仍是上述原型。
+双端改造以[双端设计](../../docs/superpowers/specs/2026-10-23-web-desktop-dual-platform-design.md)和[详细实施计划](../../docs/superpowers/plans/2026-10-23-web-desktop-dual-platform.md)为准。此节保留阶段 A 历史记录；当前运行状态以本文“资源与数据”和阶段 C 验证记录为准。
 
 `npm test` 现在同时执行桌面测试与 `test:shared`；共享测试也可从仓库根目录运行 `node --test test/dual-platform/*.test.cjs`。正常特征测试与已知缺陷的执行型 TODO 分开统计，退出 0 不表示所有迁移缺口已经修复。`typecheck` 增加独立浏览器配置，`lint` 增加平台和共享测试检查，文档检查覆盖双端依据和阶段记录。
 
@@ -111,10 +120,10 @@ npm run test:desktop
 
 ```powershell
 npm run bench:desktop -- .reports/baseline.exe .reports/performance-baseline-retest.json
-npm run bench:desktop -- src-tauri/target/release/shiroha-quiz-desktop.exe .reports/performance-after.json
+npm run bench:desktop -- src-tauri/target/native-test/release/shiroha-quiz-desktop.exe .reports/performance-after.json
 ```
 
-旧版 EXE 需要在重新构建前另行保留。脚本每版启动 5 次，第一次创建隔离 profile、后四次复用，保留默认题库与 1280×860 窗口；记录进程启动至页面 load 完成、启动遮罩消失的耗时，随后空闲 5 秒并采集主进程及全部 WebView2 子进程。进程创建时间和路径用于排除 PID 复用；脚本只关闭自己启动的窗口。成功时清理临时 profile，报告保存在 `.reports`，失败时保留诊断数据。
+旧版 EXE 需要在重新构建前另行保留；接入原生数据后的比较制品必须均支持相同测试隔离，不要将正式原生构建直接传给 runner。脚本每版启动 5 次，第一次创建隔离 profile、后四次复用，保留默认题库与 1280×860 窗口；记录进程启动至页面 load 完成、启动遮罩消失的耗时，随后空闲 5 秒并采集主进程及全部 WebView2 子进程。进程创建时间和路径用于排除 PID 复用；脚本只关闭自己启动的窗口。成功时清理临时 profile，报告保存在 `.reports`，失败时保留诊断数据。本轮 C 未重跑性能基准，下表为原型阶段历史结果。
 
 2026-10-23，Ryzen 9 5950X、32 GB 内存、WebView2 155.0.4283.62，旧版与新版在同一轮串行复测的中位数：
 

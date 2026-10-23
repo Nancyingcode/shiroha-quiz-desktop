@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { markNativeIsolation } from './native-isolation.mjs';
 import { spawn, execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises';
@@ -18,7 +19,7 @@ const START_TIMEOUT_MS = 30_000;
 const CLOSE_TIMEOUT_MS = 8_000;
 const POLL_MS = 20;
 const MIB_BYTES = 1_048_576;
-const PROFILE_PREFIX = 'shiroha-desktop-perf-';
+const PROFILE_PREFIX = 'shiroha-native-perf-';
 const execute = promisify(execFile);
 
 /** @typedef {{Id: number, ProcessName: string, WorkingSet64: number, PrivateMemorySize64: number}} ProcessMemory */
@@ -46,8 +47,8 @@ function fixtureMetadata(fixture) {
     bytes: Buffer.byteLength(fixture.text), expectedQuestions: fixture.questions };
 }
 
-/** @param {import('playwright-core').Page} page @param {Fixture} fixture @param {string} storageKey */
-async function measureFixture(page, fixture, storageKey) {
+/** @param {import('playwright-core').Page} page @param {Fixture} fixture @param {string} _storageKey */
+async function measureFixture(page, fixture, _storageKey) {
   const bankName = `阶段A性能-${fixture.id}`;
   await page.locator('.nav[data-view="import"]').click();
   await page.locator('#import-mode').selectOption(fixture.mode);
@@ -67,9 +68,9 @@ async function measureFixture(page, fixture, storageKey) {
   const importCommitMs = performance.now() - commitStart;
   const saveStart = performance.now();
   await page.locator('#save-all-btn').click();
-  await page.locator('#app-toast .toast-item.ok').getByText('已保存到浏览器本地。', { exact: true }).waitFor({ state: 'visible' });
+  await page.locator('#app-toast .toast-item.ok').getByText('已保存到本机数据库。', { exact: true }).waitFor({ state: 'visible' });
   const manualSaveMs = performance.now() - saveStart;
-  const raw = await page.evaluate(key => localStorage.getItem(key), storageKey);
+  const raw = await page.evaluate(async () => JSON.stringify(await (/** @type {Window & {ShirohaDesktopHost:{invoke(command:string):Promise<unknown>}}} */ (/** @type {unknown} */ (window))).ShirohaDesktopHost.invoke('local_read')));
   assert(raw, '确认导入和手动保存后没有主状态');
   /** @type {{banks?: Array<{name: string, questions?: unknown[]}>}} */
   const saved = JSON.parse(raw);
@@ -186,6 +187,7 @@ async function measure(executable, profile, index, fixture, storageKey = '') {
     stdio: 'ignore', windowsHide: true,
     env: {
       ...process.env,
+      SHIROHA_TEST_ROOT: profile,
       WEBVIEW2_USER_DATA_FOLDER: profile,
       WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-address=127.0.0.1 --remote-debugging-port=${port} --disable-background-networking`,
     },
@@ -258,7 +260,7 @@ const argumentsList = process.argv.slice(2);
 const fixturesMode = argumentsList.includes('--fixtures');
 const positional = argumentsList.filter(value => value !== '--fixtures');
 assert(positional.length <= 2 && !positional.some(value => value.startsWith('--')), '参数：benchmark.mjs [EXE] [报告路径] [--fixtures]');
-const executable = await realpath(path.resolve(positional[0] ?? fileURLToPath(new URL('../src-tauri/target/release/shiroha-quiz-desktop.exe', import.meta.url))));
+const executable = await realpath(path.resolve(positional[0] ?? fileURLToPath(new URL('../src-tauri/target/native-test/release/shiroha-quiz-desktop.exe', import.meta.url))));
 assert((await stat(executable)).isFile() && path.extname(executable).toLowerCase() === '.exe', '必须提供 EXE 文件');
 const output = path.resolve(positional[1] ?? fileURLToPath(new URL(fixturesMode ? '../.reports/performance-fixtures.json' : '../.reports/performance.json', import.meta.url)));
 const fixtures = fixturesMode ? await fixedFixtures() : [];
@@ -267,6 +269,7 @@ const storageKey = appSource.match(/const KEY='([^']+)'/)?.[1] ?? '';
 assert(!fixturesMode || storageKey, '找不到基线主状态键，拒绝猜测读取位置');
 const temporaryRoot = await realpath(tmpdir());
 const profile = await mkdtemp(path.join(temporaryRoot, PROFILE_PREFIX));
+await markNativeIsolation(profile);
 const profiles = [profile];
 const results = [];
 let complete = false;
@@ -276,6 +279,7 @@ try {
       let runProfile = profile;
       if (fixture && results.length > 0) {
         runProfile = await mkdtemp(path.join(temporaryRoot, PROFILE_PREFIX));
+        await markNativeIsolation(runProfile);
         profiles.push(runProfile);
       }
       const result = await measure(executable, runProfile, index, fixture, storageKey);

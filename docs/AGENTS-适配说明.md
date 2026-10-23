@@ -51,7 +51,7 @@
 
 ## 4. 事实依据
 
-- [桌面工程说明](../apps/desktop/README.md)：Tauri/WebView2、资源复用、localStorage、网络限制与实际运行验证。
+- [桌面工程说明](../apps/desktop/README.md)：Tauri/WebView2、资源复用、SQLite/媒体与文件授权、浏览器网络/凭据边界及实际运行验证。
 - [桌面 package.json](../apps/desktop/package.json)、[TypeScript 配置](../apps/desktop/tsconfig.json)、[ESLint 配置](../apps/desktop/eslint.config.mjs)：真实脚本与检查范围。
 - [Cargo.toml](../apps/desktop/src-tauri/Cargo.toml)、[Tauri 配置](../apps/desktop/src-tauri/tauri.conf.json)：edition、依赖、应用标识、权限与 CSP。
 - [资源准备脚本](../apps/desktop/scripts/prepare-web.mjs)：生成目录、路径校验与许可证保留。
