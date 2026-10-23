@@ -17,11 +17,16 @@ const POLL_MS = 200;
 const PROFILE_PREFIX = 'shiroha-desktop-smoke-';
 const FIXTURE_QUESTION = 'TAURI PROTOTYPE 1+1 = ?';
 const SCREENSHOT_PATH = fileURLToPath(new URL('../.reports/prototype.png', import.meta.url));
+const VISUAL_WINDOW_SIZES = [
+  { name: 'default', width: 1280, height: 860 },
+  { name: 'minimum', width: 900, height: 640 },
+  { name: 'wide', width: 1600, height: 1000 },
+];
 const execute = promisify(execFile);
 
 /** @typedef {import('playwright-core').Page} Page */
 /** @typedef {{name: string, ok: boolean, detail?: unknown, error?: string}} Check */
-/** @typedef {{child: import('node:child_process').ChildProcess, browser: import('playwright-core').Browser, page: Page, errors: string[], blocked: string[], requests: string[]}} Runtime */
+/** @typedef {{child: import('node:child_process').ChildProcess, browser: import('playwright-core').Browser, page: Page, errors: string[], blocked: string[], requests: string[], nativeHandle?: number}} Runtime */
 /** @typedef {{startup?: {promise?: Promise<void>}, typesetPromise: (nodes: Element[]) => Promise<void>}} MathApi */
 /** @typedef {{recognize: (canvas: HTMLCanvasElement) => Promise<{data: {text: string, confidence: number}}>, terminate: () => Promise<void>}} OcrWorker */
 /** @typedef {{createWorker: (language: string, mode: number, options: {workerPath: string, corePath: string, langPath: string, workerBlobURL: boolean, cacheMethod: string}) => Promise<OcrWorker>}} OcrApi */
@@ -165,6 +170,255 @@ async function launch(executable, profile, proxyPort) {
     await browser?.close().catch(() => undefined);
     throw error;
   }
+}
+
+/** @param {Runtime} runtime @param {{width: number, height: number}} size */
+async function resizeTestWindow(runtime, size) {
+  assert(running(runtime.child), '测试进程已退出，拒绝调整窗口');
+  assert(Number.isInteger(size.width) && size.width > 0 && Number.isInteger(size.height) && size.height > 0, '窗口尺寸必须是正整数');
+  // CDP 的 viewport 仿真不等于原生窗口变化；仅调整本脚本持有的子进程窗口，按其 DPI 换算客户区。
+  await execute('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', `
+Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public static class SmokeWindow {
+  [StructLayout(LayoutKind.Sequential)] public struct Rect { public int Left, Top, Right, Bottom; }
+  [DllImport("user32.dll", SetLastError=true)] public static extern bool GetWindowRect(IntPtr hWnd, out Rect rect);
+  [DllImport("user32.dll", SetLastError=true)] public static extern bool GetClientRect(IntPtr hWnd, out Rect rect);
+  [DllImport("user32.dll")] public static extern uint GetDpiForWindow(IntPtr hWnd);
+  [DllImport("user32.dll")] public static extern IntPtr SetThreadDpiAwarenessContext(IntPtr context);
+  [DllImport("user32.dll", SetLastError=true)] public static extern bool SetWindowPos(IntPtr hWnd, IntPtr after, int x, int y, int width, int height, uint flags);
+}
+'@
+[void][SmokeWindow]::SetThreadDpiAwarenessContext([IntPtr](-4))
+$smokeProcess=Get-Process -Id ${runtime.child.pid} -ErrorAction Stop
+$smokeWindow=$smokeProcess.MainWindowHandle
+if($smokeWindow -eq [IntPtr]::Zero){throw '测试进程没有主窗口'}
+$smokeOuter=New-Object SmokeWindow+Rect
+$smokeClient=New-Object SmokeWindow+Rect
+if(-not [SmokeWindow]::GetWindowRect($smokeWindow,[ref]$smokeOuter)){throw '无法读取测试窗口尺寸'}
+if(-not [SmokeWindow]::GetClientRect($smokeWindow,[ref]$smokeClient)){throw '无法读取测试客户区尺寸'}
+$smokeDpi=[SmokeWindow]::GetDpiForWindow($smokeWindow)
+if($smokeDpi -eq 0){throw '无法读取测试窗口 DPI'}
+$smokeWidth=[int][Math]::Round(${size.width}*$smokeDpi/96)+($smokeOuter.Right-$smokeOuter.Left)-($smokeClient.Right-$smokeClient.Left)
+$smokeHeight=[int][Math]::Round(${size.height}*$smokeDpi/96)+($smokeOuter.Bottom-$smokeOuter.Top)-($smokeClient.Bottom-$smokeClient.Top)
+if(-not [SmokeWindow]::SetWindowPos($smokeWindow,[IntPtr]::Zero,0,0,$smokeWidth,$smokeHeight,0x0016)){throw '调整测试窗口失败'}
+`], { windowsHide: true, timeout: START_TIMEOUT_MS });
+  await runtime.page.evaluate(() => new Promise(resolve => window.requestAnimationFrame(() => window.requestAnimationFrame(resolve))));
+}
+
+/** @param {Page} page @param {string} screenshotName */
+async function visualLayout(page, screenshotName) {
+  await page.evaluate(() => Promise.all(document.getAnimations()
+    .filter(animation => animation.playState === 'running' && animation.effect?.getComputedTiming().iterations !== Infinity)
+    .map(animation => animation.finished.catch(() => undefined))));
+  const layout = await page.evaluate(() => {
+    const main = document.querySelector('.main');
+    const side = document.querySelector('.side');
+    const active = document.querySelector('.view.active');
+    if (!main || !side || !active) throw new Error('没有找到桌面布局主体');
+    const focus = document.body.classList.contains('practice-focus') || document.body.classList.contains('exam-focus');
+    const collapsed = document.body.classList.contains('side-collapsed');
+    const sideStyle = window.getComputedStyle(side);
+    const color = sideStyle.backgroundColor;
+    const backgroundAlpha = color === 'transparent' ? 0 : color.startsWith('rgba(') ? Number(color.slice(color.lastIndexOf(',') + 1, -1)) : 1;
+    const rect = active.getBoundingClientRect();
+    const caption = document.getElementById('desktop-titlebar');
+    const captionRect = caption?.getBoundingClientRect();
+    const sideRect = side.getBoundingClientRect();
+    const toggle = document.querySelector('#sidebar-toggle')?.getBoundingClientRect();
+    const navigationFits = Array.from(side.querySelectorAll('.nav')).every(item => {
+      const itemRect = item.getBoundingClientRect();
+      return itemRect.left >= sideRect.left && itemRect.right <= sideRect.right + 1
+        && itemRect.top >= 0 && itemRect.bottom <= (toggle?.top ?? window.innerHeight);
+    });
+    return {
+      view: active.id,
+      viewport: { width: window.innerWidth, height: window.innerHeight, devicePixelRatio: window.devicePixelRatio },
+      horizontalOverflow: Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) - window.innerWidth,
+      mainLeft: main.getBoundingClientRect().left,
+      navigationRight: side.getBoundingClientRect().right,
+      contentLeft: rect.left, contentRight: rect.right,
+      focus, collapsed,
+      navigationTransparent: backgroundAlpha === 0 && sideStyle.backgroundImage === 'none',
+      navigationHasShadow: sideStyle.boxShadow !== 'none',
+      navigationFits,
+      titlebarHeight: captionRect?.height ?? 0,
+      titlebarAtTop: captionRect?.top === 0,
+      navigationBrandCount: side.querySelectorAll('.brand').length,
+    };
+  });
+  const screenshot = path.join(path.dirname(SCREENSHOT_PATH), screenshotName);
+  await mkdir(path.dirname(screenshot), { recursive: true });
+  await page.screenshot({ path: screenshot, fullPage: true });
+  assert(layout.horizontalOverflow <= 1, `${layout.view} 出现页面级横向溢出：${JSON.stringify(layout)}`);
+  assert.equal(layout.titlebarHeight, 36, '沉浸标题栏高度不正确');
+  assert(layout.titlebarAtTop, '沉浸标题栏未固定在顶部');
+  assert.equal(layout.navigationBrandCount, 0, '导航不应重复显示品牌区');
+  assert(layout.contentLeft >= -1 && layout.contentRight <= layout.viewport.width + 1, `${layout.view} 正文越过可视宽度：${JSON.stringify(layout)}`);
+  if (!layout.focus && !layout.collapsed) {
+    assert(layout.navigationTransparent, '普通页面导航出现独立背景');
+    assert(!layout.navigationHasShadow, '普通页面导航出现独立阴影');
+    assert(layout.mainLeft >= layout.navigationRight - 1, `${layout.view} 导航与正文边界重叠：${JSON.stringify(layout)}`);
+  }
+  if (!layout.collapsed) assert(layout.navigationFits, '导航文字越过侧栏或与收起按钮重叠');
+  if (layout.focus && !layout.collapsed) assert(!layout.navigationTransparent, '专注模式临时导航缺少阅读底色');
+  return { ...layout, screenshot };
+}
+
+/** @param {Runtime} runtime @param {boolean} [restore] */
+async function nativeWindowState(runtime, restore = false) {
+  assert(running(runtime.child), '测试窗口已退出');
+  const { stdout } = await execute('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', `
+Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public static class CaptionWindow {
+  [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr window);
+  [DllImport("user32.dll")] public static extern bool IsZoomed(IntPtr window);
+  [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr window, int command);
+  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr window, out uint process);
+}
+'@
+$captionWindow=${runtime.nativeHandle ? `[IntPtr]${runtime.nativeHandle}` : `(Get-Process -Id ${runtime.child.pid} -ErrorAction Stop).MainWindowHandle`}
+if($captionWindow -eq [IntPtr]::Zero){throw '测试窗口不存在'}
+$captionOwner=0
+[void][CaptionWindow]::GetWindowThreadProcessId($captionWindow,[ref]$captionOwner)
+if($captionOwner -ne ${runtime.child.pid}){throw '窗口不属于测试进程'}
+${restore ? '[void][CaptionWindow]::ShowWindow($captionWindow,9)' : ''}
+@{handle=$captionWindow.ToInt64();minimized=[CaptionWindow]::IsIconic($captionWindow);maximized=[CaptionWindow]::IsZoomed($captionWindow)} | ConvertTo-Json -Compress
+`], { windowsHide: true, timeout: START_TIMEOUT_MS });
+  const state = /** @type {{handle: number, minimized: boolean, maximized: boolean}} */ (JSON.parse(stdout));
+  // 最小化后 .NET MainWindowHandle 可能选中辅助窗口；句柄仅保存在本次隔离进程生命周期内。
+  runtime.nativeHandle = state.handle;
+  return state;
+}
+
+/** @param {Runtime} runtime */
+async function titlebarSmoke(runtime) {
+  const { page } = runtime;
+  await page.locator('#desktop-window-maximize:not([disabled])').waitFor();
+  await page.locator('#desktop-window-maximize').click();
+  await page.waitForFunction(() => document.getElementById('desktop-titlebar')?.dataset.maximized === 'true');
+  assert((await nativeWindowState(runtime)).maximized, '最大化按钮未改变原生窗口状态');
+  await page.screenshot({ path: path.join(path.dirname(SCREENSHOT_PATH), 'titlebar-maximized.png') });
+  await page.locator('#desktop-window-maximize').click();
+  await page.waitForFunction(() => document.getElementById('desktop-titlebar')?.dataset.maximized === 'false');
+  assert(!(await nativeWindowState(runtime)).maximized, '还原按钮未还原原生窗口');
+  await page.locator('#desktop-window-drag').dispatchEvent('mousedown', { button: 0, detail: 2 });
+  await page.waitForFunction(() => document.getElementById('desktop-titlebar')?.dataset.maximized === 'true');
+  assert((await nativeWindowState(runtime)).maximized, '标题双击未最大化原生窗口');
+  await page.locator('#desktop-window-maximize').click();
+  await page.waitForFunction(() => document.getElementById('desktop-titlebar')?.dataset.maximized === 'false');
+  assert(!(await nativeWindowState(runtime)).maximized, '双击最大化后还原失败');
+  await page.locator('#desktop-window-minimize').click();
+  let minimized = (await nativeWindowState(runtime)).minimized;
+  const minimizeDeadline = Date.now() + CLOSE_TIMEOUT_MS;
+  while (!minimized && Date.now() < minimizeDeadline) {
+    await delay(POLL_MS);
+    minimized = (await nativeWindowState(runtime)).minimized;
+  }
+  assert(minimized, `最小化按钮未最小化原生窗口：${await page.locator('#desktop-window-status').textContent()}`);
+  await nativeWindowState(runtime, true);
+  await page.locator('#desktop-window-maximize:not([disabled])').waitFor();
+  assert(await page.locator('#desktop-window-status').isHidden(), '窗口控制报告错误');
+  assert.equal(await page.locator('.side .brand').count(), 0);
+  return { maximize: true, restore: true, doubleClickHandler: true, minimize: true, navigationBrandRemoved: true };
+}
+
+/** @param {Runtime} runtime */
+async function desktopVisualSmoke(runtime) {
+  const { page } = runtime;
+  await page.locator('body.desktop-mist-blue').waitFor({ state: 'attached' });
+  assert(await page.evaluate(() => Array.from(document.styleSheets).some(sheet => sheet.href && new URL(sheet.href).pathname.endsWith('/desktop.css') && sheet.cssRules.length > 0)), '桌面本地样式未加载');
+  const original = await page.evaluate(() => ({ width: window.innerWidth, height: window.innerHeight }));
+  const snapshots = [];
+  try {
+    for (const size of VISUAL_WINDOW_SIZES) {
+      await resizeTestWindow(runtime, size);
+      await page.locator('.nav[data-view="dashboard"]').click();
+      for (const selector of ['#home-version-label', '#stat-total', '#stat-wrong', '#stat-records', '#stat-today-count', '#stat-today-rate', '#stat-review-due', '#stat-total-practice']) {
+        const text = page.locator(selector);
+        assert(await text.isVisible() && (await text.innerText()).trim(), `首页文字不可见或为空：${selector}`);
+      }
+      const home = await visualLayout(page, `mist-blue-home-${size.name}.png`);
+      await page.locator('#sidebar-toggle').click();
+      await page.waitForFunction(() => document.body.classList.contains('side-collapsed'));
+      const collapsed = await visualLayout(page, `mist-blue-home-${size.name}-collapsed.png`);
+      assert(Math.abs(home.mainLeft - collapsed.mainLeft) <= 1, '普通页面收起导航后正文发生水平跳动');
+      await page.locator('#sidebar-toggle').click();
+      await page.waitForFunction(() => !document.body.classList.contains('side-collapsed'));
+      await page.locator('.nav[data-view="import"]').click();
+      await page.locator('#import.view.active').waitFor({ state: 'visible' });
+      const importLayout = await visualLayout(page, `mist-blue-import-${size.name}.png`);
+      snapshots.push({ requestedWindow: size, home, collapsed, import: importLayout });
+    }
+  } finally {
+    await resizeTestWindow(runtime, original);
+    if (await page.locator('body.side-collapsed').count()) await page.locator('#sidebar-toggle').click();
+    await page.locator('.nav[data-view="dashboard"]').click();
+  }
+  return { nativeWindowResized: true, snapshots };
+}
+
+/** @param {Runtime} runtime @param {'practice' | 'exam'} mode */
+async function focusVisualSmoke(runtime, mode) {
+  const { page } = runtime;
+  const original = await page.evaluate(() => ({ width: window.innerWidth, height: window.innerHeight }));
+  const snapshots = [];
+  try {
+    await page.locator(`body.${mode}-focus.side-collapsed`).waitFor({ state: 'attached' });
+    for (const size of VISUAL_WINDOW_SIZES) {
+      await resizeTestWindow(runtime, size);
+      const question = page.locator(`#${mode}-card .question-title`).first();
+      await question.scrollIntoViewIfNeeded();
+      assert.match(await question.innerText(), /TAURI PROTOTYPE 1\+1 = \?/);
+      const controls = mode === 'practice' ? ['#p-submit', '#p-exit'] : ['#exam-submit-focus', '#exam-exit-focus'];
+      for (const selector of controls) {
+        const control = page.locator(selector);
+        await control.scrollIntoViewIfNeeded();
+        assert(await control.evaluate(node => {
+          const rect = node.getBoundingClientRect();
+          return [0.25, 0.5, 0.75].every(fraction => {
+            const hit = document.elementFromPoint(rect.left + rect.width * fraction, rect.top + rect.height / 2);
+            return node === hit || node.contains(hit);
+          });
+        }), `专注模式按钮被遮挡或超出视口：${selector}`);
+      }
+      await question.scrollIntoViewIfNeeded();
+      snapshots.push({ requestedWindow: size, ...await visualLayout(page, `mist-blue-${mode}-${size.name}.png`) });
+      if (mode === 'practice') {
+        await page.locator('#sidebar-toggle').click();
+        await page.waitForFunction(() => !document.body.classList.contains('side-collapsed'));
+        await visualLayout(page, `mist-blue-${mode}-${size.name}-navigation.png`);
+        await page.locator('#sidebar-toggle').click();
+        await page.waitForFunction(() => document.body.classList.contains('side-collapsed'));
+      }
+    }
+  } finally { await resizeTestWindow(runtime, original); }
+  return snapshots;
+}
+
+/** @param {Runtime} runtime */
+async function practiceAndExamFocusSmoke(runtime) {
+  const { page } = runtime;
+  const practice = await focusVisualSmoke(runtime, 'practice');
+  page.once('dialog', dialog => dialog.accept());
+  await page.locator('#p-exit').click();
+  // 手动切换会取代自动收起状态；考试不切换导航，另行覆盖退出后的自动恢复。
+  await page.waitForFunction(() => !document.body.classList.contains('practice-focus') && document.body.classList.contains('side-collapsed'));
+  await page.locator('#sidebar-toggle').click();
+  await page.locator('.nav[data-view="exam"]').click();
+  await page.locator('#exam-count').fill('1');
+  await page.locator('#exam-minutes').fill('0');
+  await page.locator('#exam-type').selectOption('all');
+  await page.locator('#start-exam-btn').click();
+  const exam = await focusVisualSmoke(runtime, 'exam');
+  page.once('dialog', dialog => dialog.accept());
+  await page.locator('#exam-exit-focus').click();
+  await page.waitForFunction(() => !document.body.classList.contains('exam-focus') && !document.body.classList.contains('side-collapsed'));
+  await page.locator('#exam-setup').waitFor({ state: 'visible' });
+  return { practice, exam, manualNavigationRetained: true, automaticNavigationRestored: true };
 }
 
 function textPdf() {
@@ -352,10 +606,15 @@ async function main() {
       await page.locator('.nav[data-view="dashboard"]').click();
       await page.locator('.dashboard-action-card.blue').click();
       await page.locator('#practice.view.active').waitFor({ state: 'visible' });
-      await page.locator('.nav[data-view="settings"]').click();
-      await page.locator('#settings.view.active').waitFor({ state: 'visible' });
+      for (const view of ['import', 'banks', 'exam', 'wrongbook', 'favorites', 'records', 'ai-settings', 'settings']) {
+        await page.locator(`.nav[data-view="${view}"]`).click();
+        await page.locator(`#${view}.view.active`).waitFor({ state: 'visible' });
+      }
       return { title: await page.title(), origin: new URL(page.url()).origin };
     });
+    const visualRuntime = runtime;
+    await check('沉浸标题栏原生窗口操作', () => titlebarSmoke(visualRuntime));
+    await check('雾蓝首页、导入与原生窗口尺寸', () => desktopVisualSmoke(visualRuntime));
     const marker = { key: `${PROFILE_PREFIX}${randomUUID()}`, value: randomUUID() };
     const bankName = `桌面原型验证-${randomUUID().slice(0, 8)}`;
     await check('LocalStorage 写入回读', async () => page.evaluate(({ key, value }) => {
@@ -364,6 +623,7 @@ async function main() {
       return { readable: true };
     }, marker));
     await check('界面导入题库并练习', () => importAndPractice(page, bankName));
+    await check('练习与考试专注布局、进入及退出', () => practiceAndExamFocusSmoke(visualRuntime));
     await check('MathJax 本地公式', () => mathSmoke(page));
     await check('PDF.js 本地模块与 Worker', () => pdfSmoke(page));
     await check('Tesseract 本地 OCR', () => ocrSmoke(page));
@@ -374,6 +634,13 @@ async function main() {
       assert.deepEqual(violations, [], '出现 CSP 违例');
       assert.deepEqual(first.blocked, [], '应用尝试请求远程资源');
       return { localRequests: first.requests.length, remoteRequests: first.blocked.length, jsErrors: first.errors.length };
+    });
+    await check('标题栏关闭窗口', async () => {
+      await page.locator('#desktop-window-close').click();
+      const end = Date.now() + CLOSE_TIMEOUT_MS;
+      while (running(first.child) && Date.now() < end) await delay(POLL_MS);
+      assert(!running(first.child), '关闭按钮未关闭测试进程');
+      return { closed: true };
     });
     await stop(runtime); runtime = undefined;
     runtime = await launch(executable, profile, proxyPort);

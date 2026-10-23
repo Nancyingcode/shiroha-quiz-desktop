@@ -1,0 +1,19 @@
+<header id="desktop-titlebar" aria-label="窗口标题栏">
+  <div id="desktop-window-drag" title="拖动窗口，双击最大化或还原">
+    <img src="./app-icon.png" alt="" draggable="false">
+    <span>Shiroha Quiz</span>
+  </div>
+  <div class="desktop-window-controls">
+    <button id="desktop-window-minimize" type="button" aria-label="最小化" title="最小化" disabled>
+      <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M1 6.5h10"/></svg>
+    </button>
+    <button id="desktop-window-maximize" type="button" aria-label="最大化" title="最大化" disabled>
+      <svg class="desktop-maximize-icon" viewBox="0 0 12 12" aria-hidden="true"><rect x="1.5" y="1.5" width="9" height="9"/></svg>
+      <svg class="desktop-restore-icon" viewBox="0 0 12 12" aria-hidden="true"><path d="M4 3V1.5h6.5V8H9"/><rect x="1.5" y="4" width="6.5" height="6.5"/></svg>
+    </button>
+    <button id="desktop-window-close" type="button" aria-label="关闭窗口" title="关闭窗口" disabled>
+      <svg viewBox="0 0 12 12" aria-hidden="true"><path d="m1.5 1.5 9 9m0-9-9 9"/></svg>
+    </button>
+  </div>
+</header>
+<div id="desktop-window-status" role="status" aria-live="polite" hidden></div>

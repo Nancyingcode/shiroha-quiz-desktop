@@ -37,6 +37,7 @@ export function optimizeDesktopHtml(html) {
   const withoutSplash = html.replace(/<div class="app-splash"[^>]*>[\s\S]*?<\/div>\s*<\/div>\s*(?=<div class="app">)/, '');
   if (/class="app-splash"/.test(withoutSplash)) throw new Error('Unsupported Web splash structure');
   return withoutSplash
+    .replace(/(<aside class="side">)\s*<div class="brand">\s*<img\b[^>]*>\s*<div>[\s\S]*?<\/div>\s*<\/div>/, '$1')
     .replace(/<link\b[^>]*rel="preload"[^>]*href="\.\/media\/(?:home_welcome_avatar|import_question_bank_folder)\.webp"[^>]*>\s*/g, '')
     .replace(/<img\b(?![^>]*\bloading=)(?=[^>]*src="\.\/media\/(?!splash_mascot\.webp|peeking\.webp)[^"]+")/g, '<img loading="lazy" decoding="async"');
 }
@@ -65,6 +66,22 @@ export function externalizeEvents(html) {
   };
 }
 
+/** @param {string} html */
+function applyDesktopStyles(html) {
+  if (!/<head\b[^>]*>/i.test(html) || !/<\/head>/i.test(html)) throw new Error('Web entry point has no complete head');
+  if (!/<body\b[^>]*>/i.test(html) || !/<\/body>/i.test(html)) throw new Error('Web entry point has no complete body');
+  return html
+    .replace(/<\/head>/i, '  <link rel="stylesheet" href="./desktop.css">\n</head>')
+    .replace(/<body\b[^>]*>/i, (body) => {
+      const attribute = body.match(/\sclass\s*=\s*(?:(["'])([\s\S]*?)\1|([^\s"'=<>`]+))/i);
+      if (!attribute) return body.replace(/>$/, ' class="desktop-mist-blue">');
+      const classes = (attribute[2] ?? attribute[3] ?? '').split(/\s+/).filter(Boolean);
+      if (classes.includes('desktop-mist-blue')) return body;
+      const quote = attribute[1] || '"';
+      return body.replace(attribute[0], ` class=${quote}${[...classes, 'desktop-mist-blue'].join(' ')}${quote}`);
+    });
+}
+
 /** @param {string} sourceDir @param {string} projectDir */
 export async function prepareWeb(sourceDir, projectDir) {
   const source = await realpath(sourceDir);
@@ -79,7 +96,27 @@ export async function prepareWeb(sourceDir, projectDir) {
     const stat = await lstat(path.join(source, name));
     if (!stat.isFile()) throw new Error(`Missing offline asset: ${name}`);
   }
+  const frontend = path.join(project, 'frontend');
+  const stylesheet = path.join(frontend, 'desktop.css');
+  // Check both path components before reading so a frontend junction cannot bypass the asset boundary.
+  const frontendStat = await lstat(frontend);
+  if (frontendStat.isSymbolicLink()) throw new Error(`Linked assets/output are not supported: ${frontend}`);
+  if (!frontendStat.isDirectory()) throw new Error(`Missing desktop frontend directory: ${frontend}`);
+  const stylesheetStat = await lstat(stylesheet);
+  if (stylesheetStat.isSymbolicLink()) throw new Error(`Linked assets/output are not supported: ${stylesheet}`);
+  if (!stylesheetStat.isFile()) throw new Error(`Missing desktop stylesheet: ${stylesheet}`);
+  const desktopCss = await readFile(stylesheet);
+  const titlebarAssets = new Map();
+  for (const name of ['titlebar.html', 'titlebar.js']) {
+    const input = path.join(frontend, name);
+    const inputStat = await lstat(input);
+    if (inputStat.isSymbolicLink() || !inputStat.isFile()) throw new Error(`Invalid or linked titlebar asset: ${input}`);
+    titlebarAssets.set(name, await readFile(input, 'utf8'));
+  }
   const transformed = externalizeEvents(optimizeDesktopHtml(await readFile(path.join(source, 'index.html'), 'utf8')));
+  const desktopHtml = applyDesktopStyles(transformed.html)
+    .replace(/<body\b[^>]*>/i, body => `${body}\n${titlebarAssets.get('titlebar.html')}`)
+    .replace(/<\/body>/i, '  <script src="./titlebar.js"></script>\n</body>');
   // Only this fixed generated directory is removed, after overlap, link and input checks above.
   await rm(output, { recursive: true, force: true });
   await mkdir(output);
@@ -96,7 +133,9 @@ export async function prepareWeb(sourceDir, projectDir) {
         || (!/\.(?:ps1|cmd|md|map)$/i.test(file) && !/^readme(?:\.|$)/i.test(path.basename(file)) && path.basename(file) !== 'package.json'),
     });
   }
-  await writeFile(path.join(output, 'index.html'), transformed.html);
+  await writeFile(path.join(output, 'index.html'), desktopHtml);
+  await writeFile(path.join(output, 'desktop.css'), desktopCss);
+  await writeFile(path.join(output, 'titlebar.js'), titlebarAssets.get('titlebar.js') ?? '');
   await writeFile(path.join(output, 'desktop-events.js'), transformed.script);
   return output;
 }

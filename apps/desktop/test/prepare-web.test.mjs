@@ -14,13 +14,18 @@ async function fixture(t) {
   const desktop = path.join(root, 'desktop');
   await mkdir(web);
   await mkdir(desktop);
+  await mkdir(path.join(desktop, 'frontend'));
+  const desktopCss = 'body.desktop-mist-blue { background: #edf4f8; }';
+  await writeFile(path.join(desktop, 'frontend/desktop.css'), desktopCss);
+  await writeFile(path.join(desktop, 'frontend/titlebar.html'), '<header id="desktop-titlebar">Shiroha Quiz</header>');
+  await writeFile(path.join(desktop, 'frontend/titlebar.js'), '"use strict";');
   for (const name of requiredAssets) {
     await mkdir(path.dirname(path.join(web, name)), { recursive: true });
     await writeFile(path.join(web, name), 'fixture');
   }
-  const html = '<html><body><button onclick="this.textContent=&quot;done&quot;">Go</button><img onerror="this.hidden=true"><script src="./app.js"></script></body></html>';
+  const html = '<html><head><link rel="stylesheet" href="./styles.css"><meta name="theme-color" content="#ffffff"></head><body class="app-ready"><button onclick="this.textContent=&quot;done&quot;">Go</button><img onerror="this.hidden=true"><script src="./app.js"></script></body></html>';
   await writeFile(path.join(web, 'index.html'), html);
-  return { root, web, desktop, html, dist: path.join(desktop, 'dist') };
+  return { root, web, desktop, html, desktopCss, dist: path.join(desktop, 'dist') };
 }
 
 test('desktop startup omits splash resources but keeps navigation artwork available on demand', () => {
@@ -90,6 +95,123 @@ test('moves handlers to an external script while preserving click/error behavior
   events.forEach((event, i) => event.callback.call(elements[i], {}));
   assert.equal(elements[0].textContent, 'done');
   assert.equal(elements[1].hidden, true);
+});
+
+test('loads desktop styles last in the head and preserves the source and existing body classes', async (t) => {
+  const f = await fixture(t);
+  await prepareWeb(f.web, f.desktop);
+  const html = await readFile(path.join(f.dist, 'index.html'), 'utf8');
+  assert.match(html, /<link rel="stylesheet" href="\.\/desktop\.css"\s*\/?>\s*<\/head>/);
+  assert.ok(html.indexOf('./styles.css') < html.indexOf('./desktop.css'));
+  assert.match(html, /<body class="app-ready desktop-mist-blue">/);
+  assert.equal(await readFile(path.join(f.dist, 'desktop.css'), 'utf8'), f.desktopCss);
+  assert.equal(await readFile(path.join(f.web, 'index.html'), 'utf8'), f.html);
+  assert.equal(await readFile(path.join(f.web, 'styles.css'), 'utf8'), 'fixture');
+  assert.equal(await readFile(path.join(f.desktop, 'frontend/desktop.css'), 'utf8'), f.desktopCss);
+  await prepareWeb(f.web, f.desktop);
+  assert.equal(await readFile(path.join(f.dist, 'index.html'), 'utf8'), html);
+  assert.equal(await readFile(path.join(f.dist, 'desktop.css'), 'utf8'), f.desktopCss);
+});
+
+test('injects local titlebar resources and removes only the navigation brand', async t => {
+  const f = await fixture(t);
+  const source = f.html.replace('<button onclick=', '<aside class="side"><div class="brand"><img src="./app-icon.png"><div><b>Shiroha Quiz</b><span>练习</span></div></div><button class="nav">首页</button></aside><button onclick=');
+  await writeFile(path.join(f.web, 'index.html'), source);
+  await prepareWeb(f.web, f.desktop);
+  const html = await readFile(path.join(f.dist, 'index.html'), 'utf8');
+  assert.match(html, /<body[^>]*>\s*<header id="desktop-titlebar">/);
+  assert.match(html, /<script src="\.\/titlebar\.js"><\/script>/);
+  assert.doesNotMatch(html, /class="brand"/);
+  assert.match(html, /<button class="nav">首页<\/button>/);
+  assert.equal(await readFile(path.join(f.dist, 'titlebar.js'), 'utf8'), '"use strict";');
+  assert.equal(await readFile(path.join(f.web, 'index.html'), 'utf8'), source);
+  for (const file of ['titlebar.html', 'titlebar.js']) {
+    const input = path.join(f.desktop, 'frontend', file);
+    const content = await readFile(input);
+    await rm(input);
+    await assert.rejects(prepareWeb(f.web, f.desktop), /titlebar/);
+    assert.equal(await readFile(path.join(f.dist, 'index.html'), 'utf8'), html);
+    await writeFile(input, content);
+  }
+});
+
+test('adds the desktop body marker once with empty, quoted, or unquoted existing classes', async (t) => {
+  const f = await fixture(t);
+  for (const [attributes, classes] of [
+    ['', 'desktop-mist-blue'],
+    [' class=""', 'desktop-mist-blue'],
+    [" class='app-ready'", 'app-ready desktop-mist-blue'],
+    [' class=app-ready', 'app-ready desktop-mist-blue'],
+    [' class="app-ready desktop-mist-blue"', 'app-ready desktop-mist-blue'],
+  ]) {
+    await writeFile(path.join(f.web, 'index.html'), f.html.replace(' class="app-ready"', `${attributes} data-mode="study"`));
+    await prepareWeb(f.web, f.desktop);
+    const html = await readFile(path.join(f.dist, 'index.html'), 'utf8');
+    const body = html.match(/<body\b[^>]*>/)?.[0] ?? '';
+    assert.match(body, new RegExp(`class=["']${classes}["']`));
+    assert.match(body, /data-mode="study"/);
+    assert.equal((body.match(/desktop-mist-blue/g) ?? []).length, 1);
+  }
+});
+
+test('rejects missing or invalid desktop styles before replacing existing output', async (t) => {
+  const f = await fixture(t);
+  await prepareWeb(f.web, f.desktop);
+  const previous = await readFile(path.join(f.dist, 'index.html'), 'utf8');
+  const stylesheet = path.join(f.desktop, 'frontend/desktop.css');
+  await rm(stylesheet);
+  await assert.rejects(prepareWeb(f.web, f.desktop), /desktop\.css/);
+  assert.equal(await readFile(path.join(f.dist, 'index.html'), 'utf8'), previous);
+  assert.equal(await readFile(path.join(f.dist, 'desktop.css'), 'utf8'), f.desktopCss);
+  await mkdir(stylesheet);
+  await assert.rejects(prepareWeb(f.web, f.desktop), /desktop.*style|desktop\.css/i);
+  assert.equal(await readFile(path.join(f.dist, 'index.html'), 'utf8'), previous);
+  assert.equal(await readFile(path.join(f.dist, 'desktop.css'), 'utf8'), f.desktopCss);
+});
+
+test('rejects incomplete document boundaries before replacing existing output', async (t) => {
+  const f = await fixture(t);
+  await prepareWeb(f.web, f.desktop);
+  const previous = await readFile(path.join(f.dist, 'index.html'), 'utf8');
+  for (const tag of ['<head>', '</head>', '<body class="app-ready">', '</body>']) {
+    await writeFile(path.join(f.web, 'index.html'), f.html.replace(tag, ''));
+    await assert.rejects(prepareWeb(f.web, f.desktop), /head|body/i);
+    assert.equal(await readFile(path.join(f.dist, 'index.html'), 'utf8'), previous);
+    assert.equal(await readFile(path.join(f.dist, 'desktop.css'), 'utf8'), f.desktopCss);
+  }
+});
+
+test('rejects a linked frontend directory before reading desktop styles or replacing output', async (t) => {
+  const f = await fixture(t);
+  await prepareWeb(f.web, f.desktop);
+  const previous = await readFile(path.join(f.dist, 'index.html'), 'utf8');
+  const outside = path.join(f.root, 'outside');
+  await mkdir(outside);
+  await writeFile(path.join(outside, 'desktop.css'), 'outside');
+  const frontend = path.join(f.desktop, 'frontend');
+  await rm(path.join(frontend, 'desktop.css'));
+  await rm(frontend, { recursive: true });
+  await symlink(outside, frontend, process.platform === 'win32' ? 'junction' : 'dir');
+  await assert.rejects(prepareWeb(f.web, f.desktop), /link/i);
+  assert.equal(await readFile(path.join(f.dist, 'index.html'), 'utf8'), previous);
+  assert.equal(await readFile(path.join(f.dist, 'desktop.css'), 'utf8'), f.desktopCss);
+  assert.equal(await readFile(path.join(outside, 'desktop.css'), 'utf8'), 'outside');
+});
+
+test('rejects a linked desktop stylesheet before replacing existing output', async (t) => {
+  const f = await fixture(t);
+  await prepareWeb(f.web, f.desktop);
+  const previous = await readFile(path.join(f.dist, 'index.html'), 'utf8');
+  const outside = path.join(f.root, 'outside');
+  await mkdir(outside);
+  await writeFile(path.join(outside, 'keep.txt'), 'keep');
+  const stylesheet = path.join(f.desktop, 'frontend/desktop.css');
+  await rm(stylesheet);
+  await symlink(outside, stylesheet, process.platform === 'win32' ? 'junction' : 'dir');
+  await assert.rejects(prepareWeb(f.web, f.desktop), /link/i);
+  assert.equal(await readFile(path.join(f.dist, 'index.html'), 'utf8'), previous);
+  assert.equal(await readFile(path.join(f.dist, 'desktop.css'), 'utf8'), f.desktopCss);
+  assert.equal(await readFile(path.join(outside, 'keep.txt'), 'utf8'), 'keep');
 });
 
 test('rejects unsupported inline execution before replacing existing output', async (t) => {

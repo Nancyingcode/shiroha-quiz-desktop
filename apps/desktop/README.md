@@ -57,6 +57,22 @@ npm run prepare:web
 
 开发与生产来源不同，数据互不共享。开发数据仅用于测试，日常体验和重启持久化验证使用 release 可执行文件。迁移旧 Web 数据时，先在原浏览器导出完整备份，再在桌面窗口导入；应用不会读取用户浏览器资料目录。
 
+## 雾蓝一体视觉
+
+桌面使用[雾蓝一体样式](./frontend/desktop.css)：导航与正文共用连续浅蓝背景，首页以留白和细线区分版本信息、快捷入口及统计，题干与表单保留浅色阅读面。普通页面收起导航时正文位置保持稳定；练习和考试沿用既有专注模式，临时展开导航时使用实色背景。
+
+资源准备脚本在共享样式之后注入本地 `desktop.css`，并为生成页面添加桌面标识。仅维护 `frontend/desktop.css`，不要编辑 `dist/desktop.css`；Web 与 Android 的共享源码不变。生成前会检查样式文件和 HTML 入口，输入无效时保留既有输出。范围与验收记录见[视觉设计](../../docs/superpowers/specs/2026-10-23-desktop-mist-blue-design.md)和[实施计划](../../docs/superpowers/plans/2026-10-23-desktop-mist-blue.md)。
+
+桌面 smoke 会实际调整本次测试子进程的原生窗口，覆盖 1280×860、900×640 和 1600×1000 的首页、导入、练习及考试，记录实际 WebView2 视口。它检查页面溢出、菜单边界、收起时正文位置、专注模式按钮可达与退出恢复，截图写入 `.reports/mist-blue-*.png`。
+
+### 沉浸式标题栏
+
+标题栏与雾蓝背景连续融合，图标和应用名仅在顶部出现，左侧导航从「首页」开始。标题空白处可拖动，双击最大化或还原；右侧保留最小化、最大化/还原、关闭按钮，支持键盘操作。Windows 原生最大化按钮的悬停贴靠面板不保证与自定义按钮等价。
+
+标题栏模板与脚本维护于 `frontend/titlebar.html`、`frontend/titlebar.js`，由资源准备脚本注入生成页面。`main` 窗口仅获得拖动、最小化、最大化切换、最大化状态读取和关闭五项权限，不增加文件、网络或 shell 能力。CSP 与存储来源不变。设计及验收记录见[标题栏设计](../../docs/superpowers/specs/2026-10-23-desktop-immersive-titlebar.md)和[实施计划](../../docs/superpowers/plans/2026-10-23-desktop-immersive-titlebar.md)。
+
+修改窗口配置后，请停止并重新运行 `npm run dev`，让原生窗口和生成资源一起更新。
+
 ## 验证
 
 在本目录运行：
