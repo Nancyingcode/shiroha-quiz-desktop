@@ -2482,13 +2482,14 @@ function decodeXml(s){return String(s).replace(/&#x([0-9a-fA-F]+);/g,(_,n)=>Stri
 
 async function extractPdfText(file){
   const data=new Uint8Array(await ShirohaPlatform.files.readBuffer(file));
+  let loadingTask=null;
   // v6: PDF 文本层本地提取。优先尝试本地 PDF.js；如果没有打包 PDF.js，则使用内置轻量提取器。
   try{
     const loaded=await loadLocalPdfJs();
     const pdfjsLib=loaded&&loaded.lib;
     if(pdfjsLib&&pdfjsLib.getDocument){
       if(pdfjsLib.GlobalWorkerOptions)pdfjsLib.GlobalWorkerOptions.workerSrc=loaded.workerSrc;
-      const loadingTask=pdfjsLib.getDocument(pdfDocumentOptions(data,loaded));
+      loadingTask=pdfjsLib.getDocument(pdfDocumentOptions(data,loaded));
       const pdf=await loadingTask.promise;
       const pages=[];let extractedChars=0;
       for(let pageNo=1;pageNo<=pdf.numPages;pageNo++){
@@ -2505,6 +2506,7 @@ async function extractPdfText(file){
       }
     }
   }catch(err){warnDev('PDF.js 提取失败，转入内置轻量提取器。',err)}
+  finally{try{await loadingTask?.destroy()}catch(err){warnDev('PDF 资源释放失败',err)}}
   const text=await extractPdfTextLite(data);
   const chars=text.replace(/\s/g,'').length;
   if(chars<20){
@@ -2544,6 +2546,7 @@ function pdfDocumentOptions(data,loaded){
   return options;
 }
 function setOcrImportSource(file){
+  ocrImportState.cancel?.();
   const isPdf=/\.pdf$/i.test(file?.name||'');
   if(!isPdf){resetOcrImportState();return}
   ocrImportState={file,text:'',pages:[],running:false};
@@ -2554,6 +2557,7 @@ function setOcrImportSource(file){
   setOcrStatus('已选择 PDF：'+(file.name||'未命名')+'。如果文字层提取失败，可点击“尝试 OCR 识别”。','warn');
 }
 function resetOcrImportState(){
+  ocrImportState.cancel?.();
   ocrImportState={file:null,text:'',pages:[],running:false};
   const panel=$('#ocr-panel');if(panel)panel.classList.add('hidden');
   const result=$('#ocr-result');if(result)result.value='';
@@ -2565,6 +2569,7 @@ function setOcrStatus(msg,type='warn'){
 }
 function setOcrButtonsEnabled(hasText){
   const running=!!ocrImportState.running;
+  const cancel=$('#ocr-cancel-btn');if(cancel){cancel.disabled=!running;cancel.onclick=()=>{ocrImportState.cancel?.();setOcrStatus('OCR 已取消，已识别内容仍可核对。','warn')}}
   const start=$('#ocr-start-btn');if(start)start.disabled=running||!ocrImportState.file;
   const use=$('#ocr-use-text-btn');if(use)use.disabled=running||!hasText;
   const copy=$('#ocr-copy-btn');if(copy)copy.disabled=running||!hasText;
@@ -2606,30 +2611,45 @@ async function startPdfOcrImport(){
   const file=ocrImportState.file;
   if(!file){setOcrStatus('请先选择一个 PDF 文件。','warn');return}
   if(ocrImportState.running)return;
+  const run=ocrImportState;
+  run.cancelled=false;
   ocrImportState.running=true;
   ocrImportState.text='';
   ocrImportState.pages=[];
   setOcrButtonsEnabled(false);
   const resultEl=$('#ocr-result');if(resultEl)resultEl.value='';
-  let worker=null;
+  let worker=null;let loadingTask=null;let canvas=null;
+  // 每轮 OCR 归属于选择的文件；取消或换源后，迟到结果不能写入新的导入状态。
+  const cancelled=()=>run.cancelled||run!==ocrImportState;
+  run.cancel=()=>{
+    run.cancelled=true;
+    if(worker){const active=worker;worker=null;void active.terminate().catch(err=>warnDev('OCR 取消失败',err))}
+    if(loadingTask){const active=loadingTask;loadingTask=null;void active.destroy().catch(err=>warnDev('PDF 取消失败',err))}
+  };
   try{
     const lang=$('#ocr-language')?.value||'chi_sim+eng';
     const pageLimit=Math.max(1,Math.min(200,Number($('#ocr-page-limit')?.value||20)||20));
     setOcrStatus('正在加载 PDF 与 OCR 扩展资源……','warn');
     const loaded=await loadLocalPdfJs();
+    if(cancelled())return;
     if(!loaded?.lib?.getDocument)throw new Error('PDF.js 不可用，无法把 PDF 页面渲染给 OCR');
     const data=new Uint8Array(await ShirohaPlatform.files.readBuffer(file));
-    const pdf=await loaded.lib.getDocument(pdfDocumentOptions(data,loaded)).promise;
+    if(cancelled())return;
+    loadingTask=loaded.lib.getDocument(pdfDocumentOptions(data,loaded));
+    const pdf=await loadingTask.promise;
     const maxPages=Math.min(pdf.numPages,pageLimit);
     const created=await createOcrWorker(lang,m=>{
-      if(m&&m.status)setOcrStatus(`OCR ${m.status}${Number.isFinite(m.progress)?' '+Math.round(m.progress*100)+'%':''}`,'warn');
+      if(!cancelled()&&m&&m.status)setOcrStatus(`OCR ${m.status}${Number.isFinite(m.progress)?' '+Math.round(m.progress*100)+'%':''}`,'warn');
     });
     worker=created.worker;
+    if(cancelled())return;
     const pages=[];
     for(let pageNo=1;pageNo<=maxPages;pageNo++){
       setOcrStatus(`正在识别第 ${pageNo} / ${maxPages} 页（${created.mode}）……`,'warn');
-      const canvas=await renderPdfPageToCanvas(pdf,pageNo,2);
+      canvas=await renderPdfPageToCanvas(pdf,pageNo,2);
+      if(cancelled())return;
       const res=await worker.recognize(canvas);
+      if(cancelled())return;
       const text=String(res?.data?.text||'').replace(/\r/g,'').trim();
       const confidence=Number(res?.data?.confidence||0);
       pages.push({page:pageNo,text,confidence});
@@ -2645,23 +2665,31 @@ async function startPdfOcrImport(){
     setOcrStatus(`OCR 完成：识别 ${maxPages} 页。请先核对文本，再填入导入文本或下载 DOCX。`,'ok');
     toast('OCR 识别完成，可核对后继续导入或下载 DOCX。','ok','OCR 完成');
   }catch(err){
+    if(cancelled())return;
     setOcrStatus('OCR 失败：'+err.message,'danger');
     toast('OCR 失败：'+err.message,'danger','OCR 失败');
   }finally{
+    if(canvas){canvas.width=1;canvas.height=1}
     try{if(worker)await worker.terminate()}catch(e){warnDev('OCR worker 关闭失败',e)}
-    ocrImportState.running=false;
-    setOcrButtonsEnabled(!!ocrImportState.text);
+    try{await loadingTask?.destroy()}catch(e){warnDev('OCR PDF 资源释放失败',e)}
+    run.running=false;run.cancel=null;
+    if(run===ocrImportState)setOcrButtonsEnabled(!!run.text);
   }
 }
 async function renderPdfPageToCanvas(pdf,pageNo,scale=2){
   const page=await pdf.getPage(pageNo);
   const viewport=page.getViewport({scale});
+  // 单页 RGBA 像素预算为 64 MiB，防止异常页面尺寸在分配 Canvas 前耗尽内存。
+  const maxPixels=16*1024*1024;
+  const width=Math.ceil(viewport.width),height=Math.ceil(viewport.height);
+  if(!Number.isFinite(width)||!Number.isFinite(height)||width<=0||height<=0||width*height>maxPixels){page.cleanup();throw new Error('PDF 页面像素超限，请缩小扫描尺寸后重试。')}
   const canvas=document.createElement('canvas');
-  canvas.width=Math.ceil(viewport.width);
-  canvas.height=Math.ceil(viewport.height);
+  canvas.width=width;
+  canvas.height=height;
   const ctx=canvas.getContext('2d',{alpha:false});
-  await page.render({canvasContext:ctx,viewport,background:'#ffffff'}).promise;
-  return canvas;
+  try{await page.render({canvasContext:ctx,viewport,background:'#ffffff'}).promise;return canvas}
+  catch(error){canvas.width=1;canvas.height=1;throw error}
+  finally{page.cleanup()}
 }
 function formatOcrPages(pages){
   return (pages||[]).map(p=>`【OCR第${p.page}页${p.confidence?`｜置信度 ${Math.round(p.confidence)}%`:''}】\n${p.text||''}`.trim()).join('\n\n').trim();
@@ -8848,10 +8876,20 @@ async function prepareWebdavRestoreV378(fileName){
 function openWebdavRestoreModalV378(){
   const pending=webdavRuntimeV378.pendingRestore,modal=$('#webdav-restore-modal-v378'),meta=$('#webdav-restore-meta-v378');if(!pending||!modal)return;
   if(meta)meta.textContent=`文件：${pending.fileName}｜导出时间：${pending.exportedAt?fmt(pending.exportedAt):'未知'}｜${pending.normalized.banks.length} 个题库｜${pending.questionCount} 道题｜${formatBytesV376(pending.bytes)}｜SHA-256 ${pending.sha.slice(0,12)}…`;
+  modal.returnFocus=document.activeElement;
   const mode=$('#webdav-restore-mode-v378');if(mode)mode.value='merge';syncWebdavRestoreWarningV378();modal.hidden=false;
+  mode?.focus();
+  modal.onkeydown=event=>{
+    if(event.key==='Escape'&&!mutationBusy){event.preventDefault();closeWebdavRestoreModalV378();return}
+    if(event.key!=='Tab')return;
+    const controls=Array.from(modal.querySelectorAll('button:not(:disabled),select:not(:disabled)'));
+    const first=controls[0],last=controls[controls.length-1];
+    if(event.shiftKey&&document.activeElement===first){event.preventDefault();last?.focus()}
+    else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first?.focus()}
+  };
 }
 function syncWebdavRestoreWarningV378(){const overwrite=$('#webdav-restore-mode-v378')?.value==='overwrite',warning=$('#webdav-restore-warning-v378');if(warning){warning.textContent=overwrite?'覆盖恢复会替换当前全部题库、错题、收藏、记录和设置；写入失败会自动回滚。':'合并恢复会保留当前数据，并追加备份题库；同名题库会自动改名。';warning.className=overwrite?'notice warn':'muted'}}
-function closeWebdavRestoreModalV378(){const modal=$('#webdav-restore-modal-v378');if(modal)modal.hidden=true;webdavRuntimeV378.pendingRestore=null}
+function closeWebdavRestoreModalV378(){const modal=$('#webdav-restore-modal-v378');if(modal){modal.hidden=true;modal.returnFocus?.focus();modal.returnFocus=null}webdavRuntimeV378.pendingRestore=null}
 async function applyNormalizedBackupV378(normalized,mode){return runMutation(async()=>{
   let previousStateJson;try{previousStateJson=JSON.stringify(state)}catch(_){throw new Error('当前本地数据过大，无法创建恢复前回滚快照。请先导出本地完整备份。')}
   try{
@@ -9234,11 +9272,27 @@ async function startApplication(){
 }
 for(const type of ['click','change','input','keydown'])document.addEventListener(type,event=>{if(mutationBusy&&!event.target.closest?.('#platform-status,#desktop-titlebar')){event.preventDefault();event.stopImmediatePropagation()}},true);
 window.addEventListener('beforeunload',event=>{if(mutationBusy||mutationSaveError){event.preventDefault();event.returnValue=''}});
+// HTML 文件拖放只读取用户交付的 File，不接收本机路径；与选择文件共用解析和确认流程。
+for(const type of ['dragover','drop'])document.addEventListener(type,event=>{
+  if(!Array.from(event.dataTransfer?.types||[]).includes('Files'))return;
+  event.preventDefault();
+  if(type!=='drop'||!event.target.closest?.('#import')||mutationBusy)return;
+  const files=Array.from(event.dataTransfer.files||[]);
+  if(files.length!==1){toast('请每次拖入一个文件。','warn');return}
+  if(!/\.(txt|json|csv|xlsx|docx|doc|pdf)$/i.test(files[0].name)){toast('不支持此文件类型，请选择 TXT、JSON、CSV、XLSX、DOCX 或 PDF。','warn');return}
+  void readImportFile({target:{files}});
+});
+document.addEventListener('keydown',event=>{
+  if(!(event.ctrlKey||event.metaKey)||event.altKey||event.isComposing||event.repeat)return;
+  if(event.target.closest?.('input,textarea,select,[contenteditable="true"]'))return;
+  if(event.key.toLowerCase()==='s'){event.preventDefault();if(!mutationBusy)document.getElementById('save-all-btn')?.click()}
+});
 if(globalThis.ShirohaDesktopHost)globalThis.ShirohaDesktopHost.canClose=async()=>{
   if(mutationBusy){platformStatus('正在保存，请完成后再关闭。',true);return false}
   if(mutationSaveError&&!confirm('保存尚未成功。确定放弃本次未保存修改并退出？'))return false;
   if(exam.items.length&&!exam.submitted&&!confirm('当前考试尚未交卷，退出后不能续考。确定退出？'))return false;
-  if(webdavRuntimeV378.busy||aiImportRequestV99.running||aiPreviewRequestV991.running){
+  if(ocrImportState.running){if(!confirm('OCR 尚未结束。取消识别并退出？'))return false;ocrImportState.cancel?.()}
+  if(webdavRuntimeV378.busy||aiImportRequestV99.running||aiPreviewRequestV991.running||Array.from(aiSingleSessionsV613.values()).some(session=>session.loading)){
     if(!confirm('网络任务尚未结束。取消并退出？已经发送的上传可能到达远端，下次请先核对列表。'))return false;
   }
   try{await ShirohaPlatform.network.cancelAll?.();await ShirohaPlatform.saves.idle();return true}

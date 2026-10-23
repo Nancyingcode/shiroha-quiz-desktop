@@ -73,13 +73,9 @@ pub fn test_root(path: &Path, temporary: &Path) -> std::io::Result<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::time::{SystemTime, UNIX_EPOCH};
 
     fn directory() -> PathBuf {
-        let id = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
+        let id = uuid::Uuid::new_v4();
         let path = std::env::temp_dir().join(format!("shiroha-native-{}-{id}", std::process::id()));
         fs::create_dir(&path).unwrap();
         path

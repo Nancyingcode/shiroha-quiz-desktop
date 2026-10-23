@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { markNativeIsolation } from './native-isolation.mjs';
 import { createNativeMock, nativeServiceSmoke } from './network-smoke.mjs';
+import { documentSmoke } from './document-smoke.mjs';
 import { spawn, execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { mkdir, mkdtemp, realpath, rm, stat, readFile, writeFile } from 'node:fs/promises';
@@ -658,6 +659,7 @@ async function main() {
     await check('MathJax 本地公式', () => mathSmoke(page));
     await check('PDF.js 本地模块与 Worker', () => pdfSmoke(page));
     await check('Tesseract 本地 OCR', () => ocrSmoke(page));
+    await check('中文扫描 PDF、DOCX、XLSX 实际导入保存重载', () => documentSmoke(page));
     const first = runtime;
     await check('离线与脚本错误', async () => {
       const violations = await page.evaluate(() => (/** @type {TestWindow} */ (window)).__smokeCsp ?? []);
@@ -667,6 +669,7 @@ async function main() {
       return { localRequests: first.requests.length, remoteRequests: first.blocked.length, jsErrors: first.errors.length };
     });
     await check('标题栏关闭窗口', async () => {
+      await resizeTestWindow(first, { width: 1100, height: 760 });
       await page.locator('#desktop-window-close').click();
       const end = Date.now() + CLOSE_TIMEOUT_MS;
       while (running(first.child) && Date.now() < end) await delay(POLL_MS);
@@ -676,6 +679,11 @@ async function main() {
     await stop(runtime); runtime = undefined;
     runtime = await launch(executable, profile, proxyPort);
     const restarted = runtime;
+    await check('重启恢复普通窗口尺寸', async () => {
+      const size = await restarted.page.evaluate(() => ({ width: window.innerWidth, height: window.innerHeight }));
+      assert.deepEqual(size, { width: 1100, height: 760 });
+      return size;
+    });
     await check('重启后数据保留', async () => {
       await restarted.page.evaluate(({ key, value }) => {
         if (localStorage.getItem(key) !== value) throw new Error('重启后 LocalStorage 值不匹配');

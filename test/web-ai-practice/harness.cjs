@@ -54,7 +54,7 @@ function loadPlaywright() {
   catch (cause) { throw new Error(`Playwright is not already available through require('playwright') or the machine-specific bundled fallback ${DEPENDENCIES}. Provide existing Node + Playwright + Chromium; no install, network access or framework fallback was attempted.`, { cause }); }
 }
 
-const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'application/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.png': 'image/png', '.webp': 'image/webp', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.woff': 'font/woff', '.woff2': 'font/woff2', '.ico': 'image/x-icon' };
+const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'application/javascript; charset=utf-8', '.mjs': 'application/javascript; charset=utf-8', '.wasm': 'application/wasm', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.png': 'image/png', '.webp': 'image/webp', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.woff': 'font/woff', '.woff2': 'font/woff2', '.ico': 'image/x-icon' };
 
 async function startServer() {
   const root = await fsp.realpath(WEB_ROOT);

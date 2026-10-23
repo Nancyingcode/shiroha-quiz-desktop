@@ -32,6 +32,23 @@ async function pageFor(t, raw, injection = '') {
   return page;
 }
 const saved = page => page.evaluate(key => globalThis.localStorage.getItem(key), KEY);
+
+test('拖放复用导入解析并拒绝多文件和非法扩展', async t => {
+  const page = await pageFor(t, JSON.stringify(webState()));
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.locator('.nav[data-view="import"]').click();
+  const drop = async names => page.evaluate(names => {
+    const transfer = new globalThis.DataTransfer();
+    for (const name of names) transfer.items.add(new globalThis.File(['1. 拖放题目\nA. 甲\nB. 乙\n答案：A'], name));
+    globalThis.document.getElementById('import').dispatchEvent(new globalThis.DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: transfer }));
+  }, names);
+  await drop(['sample.exe']);
+  assert.equal(await page.locator('#import-text').inputValue(), '');
+  await drop(['one.txt', 'two.txt']);
+  assert.equal(await page.locator('#import-text').inputValue(), '');
+  await drop(['sample.txt']);
+  await page.waitForFunction(() => globalThis.document.getElementById('import-text').value.includes('拖放题目'));
+});
 test('延迟初始化不允许编辑，失败原值保留并提供恢复出口', async t => {
   const page = await pageFor(t, '{broken', 'const original=globalThis.ShirohaPlatform.storage.initialize;globalThis.ShirohaPlatform.storage.initialize=async()=>{await new Promise(r=>setTimeout(r,250));return original()};');
   assert.equal(await page.locator('.app').getAttribute('inert'), '');

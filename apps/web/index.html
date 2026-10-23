@@ -190,11 +190,12 @@
             </div>
             <div class="actions ocr-actions">
               <button id="ocr-start-btn" class="primary" type="button">尝试 OCR 识别</button>
+              <button id="ocr-cancel-btn" class="ghost" type="button" disabled>取消 OCR</button>
               <button id="ocr-use-text-btn" class="ghost" type="button" disabled>填入导入文本</button>
               <button id="ocr-copy-btn" class="ghost" type="button" disabled>复制 OCR 文本</button>
               <button id="ocr-download-docx-btn" class="ghost" type="button" disabled>下载 DOCX</button>
             </div>
-            <div class="notice" id="ocr-status">选择 PDF 后可使用 OCR 测试功能。首次使用会加载 OCR 扩展资源，识别速度取决于设备性能。</div>
+            <div class="notice" id="ocr-status" role="status" aria-live="polite">选择 PDF 后可使用 OCR 测试功能。首次使用会加载 OCR 扩展资源，识别速度取决于设备性能。</div>
             <textarea id="ocr-result" class="ocr-result" placeholder="OCR 识别结果会显示在这里，可核对后填入导入文本或下载 DOCX。"></textarea>
           </div>
           <div class="actions import-actions-v51"><button id="parse-import-btn" class="primary">开始识别</button><button id="ai-organize-import-btn-v99" class="ghost" type="button">AI 辅助整理</button><button id="confirm-import-btn" class="primary" disabled>确认导入</button><button id="clear-import-btn" class="ghost">清空</button><span class="import-actions-spacer-v51" aria-hidden="true"></span><button id="find-replace-import-btn" class="ghost import-find-replace-trigger-v51" type="button">查找替换</button></div>

@@ -44,6 +44,8 @@
 ## 工程与发布
 
 - [Web 与 Windows 桌面双端设计](./superpowers/specs/2026-10-23-web-desktop-dual-platform-design.md)
+- [Windows 候选安装包、人工升级和验收限制](../apps/desktop/README.md#候选安装包与人工升级)
+- [双端阶段验证记录（含阶段 E）](../test/dual-platform/README.md)
 - [双端详细实施计划](./superpowers/plans/2026-10-23-web-desktop-dual-platform.md)
 - [阶段 A 基线、测试入口与执行记录](../test/dual-platform/README.md)
 - [架构说明](./universal/架构说明.md)

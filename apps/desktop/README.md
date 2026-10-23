@@ -1,6 +1,6 @@
 # Shiroha Quiz Windows 原型
 
-本工程使用 Tauri 2 和 WebView2，在独立 Windows 窗口中运行现有 Web 版。当前产物是 release 可执行文件，不包含安装器、代码签名或自动更新。
+本工程使用 Tauri 2 和 WebView2，在独立 Windows 窗口中运行现有 Web 版。提供独立 release EXE，以及普通/离线 NSIS 候选安装包；尚未完成干净系统安装验收，不含代码签名或自动更新。
 
 ## 环境要求
 
@@ -42,6 +42,38 @@ npm run build
 ```
 
 输出路径为 `src-tauri/target/release/shiroha-quiz-desktop.exe`。构建命令使用 `tauri build --no-bundle`；首次构建需要下载 Rust 依赖并完成编译。
+
+## 候选安装包与人工升级
+
+```powershell
+npm run build:nsis
+npm run build:offline
+```
+
+两个命令均生成 x64 NSIS，目标为 `src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/Shiroha Quiz_0.1.0_x64-setup.exe`。第二次构建会覆盖同名文件，需要在构建下一种制品前另存并记录 SHA-256。普通配置缺少 WebView2 时联网下载；离线配置嵌入完整 WebView2 安装程序，构建阶段仍需联网下载运行时。不得把普通包标记为离线包。配置遵循 [Tauri Windows 安装说明](https://v2.tauri.app/distribute/windows-installer/)。
+
+默认安装到当前用户，无需为应用本身申请管理员权限。应用身份、生产数据目录和版本来源保持不变；安装配置拒绝版本降级。候选包未签名，尚不能作为已验收发行版。当前实际运行环境仅为 Windows 11 26200 x64、WebView2 155.0.4283.62；没有测得最低运行时版本，也没有验证 Win10 支持。
+
+人工升级前在应用内导出完整 JSON/ZIP，核对备份可读取，再关闭应用并安装新版本。首次启动核对题库、图片、收藏和记录，失败时保留原数据及恢复点，通过应用内恢复入口修复；不要直接用旧 EXE 打开新版数据库。原型 EXE 到安装版、旧安装版到新安装版尚待独立 Windows 用户/VM 验证。
+
+标准 NSIS 卸载界面的“删除应用数据”复选框默认不选中；要保留题库时不要勾选。系统凭据与应用数据是独立存储，移除已保存秘密应在卸载前通过设置清除并确认结果。卸载保留、改安装目录、中文用户名、无运行时断网安装和磁盘空间不足均仍需实机验收；构建成功不代表上述场景通过。
+
+## 阶段 E 交互与文档验证
+
+主窗口关闭时记录普通窗口尺寸与位置，下次只恢复位于当前显示器工作区内的有效位置；不可见位置回到默认居中。最大化/最小化状态不覆盖普通窗口位置。偏好文件为数据根下的 `window-state.json`，不属于题库交换备份。
+
+导入页可以拖入单个受支持文件，走与文件选择相同的解析、预览和确认流程；桌面保持 HTML 拖放，用户交付的 File 不授予任意路径读取能力。原生系统打开/保存仍使用受控令牌。非文本编辑区域的 Ctrl+S（或 Command+S）触发保存；已有练习快捷键保留。WebDAV 恢复框提供初始焦点、Tab 循环、Escape 取消与焦点恢复。
+
+OCR 支持取消、换源后迟到结果隔离及重新识别，完成和失败都释放 PDF/Worker/Canvas。单页渲染最多 16 Mi 像素（RGBA 约 64 MiB，不代表整个 OCR 内存上限），异常尺寸要求缩小扫描页后重试；保留原有页数限制。中文识别仍会出现题号误识别和字间空格，必须人工核对后再确认导入。
+
+```powershell
+npm run test:documents
+npm run test:web-platform
+npm run build:test
+npm run test:desktop
+```
+
+文档回归自建文字 PDF、中文扫描 PDF、DOCX、XLSX，实际选择、解析、核对、导入、保存并重载检查题数和答案；外网阻断。扫描样本在测试中明确模拟人工核对，不声称 OCR 完全准确。真实系统文件对话框、长时间高负荷、所有覆盖层无障碍和正常发行制品仍有未验收项，详见[阶段验证记录](../../test/dual-platform/README.md)。Windows CI 与 Pages 独立，不发布或上传制品；托管 CI 不替代交互式 WebView2 验收。
 
 ## 资源与数据
 

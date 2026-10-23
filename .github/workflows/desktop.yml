@@ -1,0 +1,49 @@
+name: Windows desktop checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: windows-2025
+    defaults:
+      run:
+        working-directory: apps/desktop
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.17.0'
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+      - name: Install recorded Rust toolchain
+        run: |
+          rustup toolchain install 1.99.1 --profile minimal --component rustfmt --component clippy
+          rustup default 1.99.1
+      - run: npm ci --no-audit --no-fund
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - run: npm run test:web-platform
+      - run: npm run test:documents
+      - run: node --test ../../test/web-webdav/request.test.cjs
+      - run: npm run prepare:web
+      - run: cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
+      - run: cargo clippy --manifest-path src-tauri/Cargo.toml --locked --all-targets -- -D warnings
+      - run: cargo clippy --manifest-path src-tauri/Cargo.toml --locked --all-targets --features native-test -- -D warnings
+      - run: cargo test --manifest-path src-tauri/Cargo.toml --locked
+      - run: cargo test --manifest-path src-tauri/Cargo.toml --locked --features native-test
+      - run: npm run build
+      - run: npm run build:nsis
+      - run: npm run build:offline
+      - name: GUI acceptance remains a separate release gate
+        run: |
+          '### 尚待交互式 Windows 验收' >> $env:GITHUB_STEP_SUMMARY
+          '本 job 仅验证构建和无界面测试。WebView2、中文离线 OCR、新装、升级与卸载保留必须按阶段 E 记录在隔离 Windows 环境验收；CI 通过不代表发行验收通过。' >> $env:GITHUB_STEP_SUMMARY

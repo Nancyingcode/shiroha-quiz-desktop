@@ -34,6 +34,7 @@ fn main() {
                     .map_err(|error| std::io::Error::other(error.code))?,
             ));
             app.manage(shiroha_quiz_desktop::tasks::Tasks::default());
+            shiroha_quiz_desktop::window_state::attach(app, &root)?;
             app.manage(LocalData(Arc::new(Mutex::new(None)), root));
             Ok(())
         })
