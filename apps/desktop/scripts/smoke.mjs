@@ -231,11 +231,16 @@ async function visualLayout(page, screenshotName) {
     const caption = document.getElementById('desktop-titlebar');
     const captionRect = caption?.getBoundingClientRect();
     const sideRect = side.getBoundingClientRect();
-    const toggle = document.querySelector('#sidebar-toggle')?.getBoundingClientRect();
+    const toggle = document.getElementById('sidebar-toggle');
+    const toggleRect = toggle?.getBoundingClientRect();
+    const titleRect = document.querySelector('#desktop-window-drag span')?.getBoundingClientRect();
+    const controlsRect = document.querySelector('.desktop-window-controls')?.getBoundingClientRect();
+    if (!toggle || !toggleRect || !titleRect || !captionRect || !controlsRect) throw new Error('没有找到标题文字、导航开关或窗口控制区');
+    const toggleHit = document.elementFromPoint(toggleRect.left + toggleRect.width / 2, toggleRect.top + toggleRect.height / 2);
     const navigationFits = Array.from(side.querySelectorAll('.nav')).every(item => {
       const itemRect = item.getBoundingClientRect();
       return itemRect.left >= sideRect.left && itemRect.right <= sideRect.right + 1
-        && itemRect.top >= 0 && itemRect.bottom <= (toggle?.top ?? window.innerHeight);
+        && itemRect.top >= sideRect.top - 1 && itemRect.bottom <= Math.min(sideRect.bottom, window.innerHeight) + 1;
     });
     return {
       view: active.id,
@@ -249,6 +254,13 @@ async function visualLayout(page, screenshotName) {
       navigationTransparent: backgroundAlpha === 0 && sideStyle.backgroundImage === 'none',
       navigationHasShadow: sideStyle.boxShadow !== 'none',
       navigationFits,
+      navigationToggle: {
+        left: toggleRect.left, top: toggleRect.top, width: toggleRect.width, height: toggleRect.height,
+        titleGap: toggleRect.left - titleRect.right,
+        insideTitlebar: toggleRect.top >= captionRect.top && toggleRect.bottom <= captionRect.bottom,
+        beforeWindowControls: toggleRect.right <= controlsRect.left,
+        receivesPointer: toggle === toggleHit || toggle.contains(toggleHit),
+      },
       titlebarHeight: captionRect?.height ?? 0,
       titlebarAtTop: captionRect?.top === 0,
       navigationBrandCount: side.querySelectorAll('.brand').length,
@@ -260,6 +272,9 @@ async function visualLayout(page, screenshotName) {
   assert(layout.horizontalOverflow <= 1, `${layout.view} 出现页面级横向溢出：${JSON.stringify(layout)}`);
   assert.equal(layout.titlebarHeight, 36, '沉浸标题栏高度不正确');
   assert(layout.titlebarAtTop, '沉浸标题栏未固定在顶部');
+  assert(layout.navigationToggle.titleGap >= 4 && layout.navigationToggle.titleGap <= 16, '导航开关没有紧邻标题文字右侧');
+  assert(layout.navigationToggle.insideTitlebar && layout.navigationToggle.beforeWindowControls, '导航开关越过标题栏或覆盖窗口控制区');
+  assert(layout.navigationToggle.width >= 28 && layout.navigationToggle.height >= 28 && layout.navigationToggle.receivesPointer, '导航开关点击区域不足或被标题栏遮挡');
   assert.equal(layout.navigationBrandCount, 0, '导航不应重复显示品牌区');
   assert(layout.contentLeft >= -1 && layout.contentRight <= layout.viewport.width + 1, `${layout.view} 正文越过可视宽度：${JSON.stringify(layout)}`);
   if (!layout.focus && !layout.collapsed) {
@@ -267,7 +282,7 @@ async function visualLayout(page, screenshotName) {
     assert(!layout.navigationHasShadow, '普通页面导航出现独立阴影');
     assert(layout.mainLeft >= layout.navigationRight - 1, `${layout.view} 导航与正文边界重叠：${JSON.stringify(layout)}`);
   }
-  if (!layout.collapsed) assert(layout.navigationFits, '导航文字越过侧栏或与收起按钮重叠');
+  if (!layout.collapsed) assert(layout.navigationFits, '导航文字越过侧栏可视边界');
   if (layout.focus && !layout.collapsed) assert(!layout.navigationTransparent, '专注模式临时导航缺少阅读底色');
   return { ...layout, screenshot };
 }
@@ -317,6 +332,10 @@ async function titlebarSmoke(runtime) {
   await page.locator('#desktop-window-maximize').click();
   await page.waitForFunction(() => document.getElementById('desktop-titlebar')?.dataset.maximized === 'false');
   assert(!(await nativeWindowState(runtime)).maximized, '双击最大化后还原失败');
+  const collapsedBeforeDoubleClick = await page.locator('body.side-collapsed').count();
+  await page.locator('#sidebar-toggle').dblclick();
+  assert.equal(await page.locator('body.side-collapsed').count(), collapsedBeforeDoubleClick, '双击导航开关未完成两次切换');
+  assert(!(await nativeWindowState(runtime)).maximized, '双击导航开关错误触发了窗口最大化');
   await page.locator('#desktop-window-minimize').click();
   let minimized = (await nativeWindowState(runtime)).minimized;
   const minimizeDeadline = Date.now() + CLOSE_TIMEOUT_MS;
@@ -329,7 +348,44 @@ async function titlebarSmoke(runtime) {
   await page.locator('#desktop-window-maximize:not([disabled])').waitFor();
   assert(await page.locator('#desktop-window-status').isHidden(), '窗口控制报告错误');
   assert.equal(await page.locator('.side .brand').count(), 0);
-  return { maximize: true, restore: true, doubleClickHandler: true, minimize: true, navigationBrandRemoved: true };
+  return { maximize: true, restore: true, doubleClickHandler: true, navigationDoubleClickIsolated: true, minimize: true, navigationBrandRemoved: true };
+}
+
+/** @param {Page} page @param {string} label */
+async function navigationTooltipSmoke(page, label) {
+  const toggle = page.locator('#sidebar-toggle');
+  await toggle.hover();
+  await page.waitForFunction(expected => {
+    const node = document.getElementById('sidebar-toggle');
+    if (!node) return false;
+    const tooltip = window.getComputedStyle(node, '::after');
+    return node.matches(':hover') && tooltip.content.includes(expected)
+      && Number(tooltip.opacity) >= 0.99 && tooltip.visibility !== 'hidden';
+  }, label);
+  assert.equal(await toggle.getAttribute('aria-label'), label, '导航开关的悬停提示与可访问名称不一致');
+  return { label, visible: true };
+}
+
+/** @param {Page} page */
+async function navigationKeyboardSmoke(page) {
+  const toggle = page.locator('#sidebar-toggle');
+  assert.equal(await page.locator('body.side-collapsed').count(), 0, '键盘验证应从展开导航开始');
+  await toggle.focus();
+  await toggle.press('Enter');
+  await page.waitForFunction(() => document.body.classList.contains('side-collapsed'));
+  assert.equal(await toggle.getAttribute('aria-label'), '展开左侧导航');
+  assert(await toggle.evaluate(node => node === document.activeElement && node.matches(':focus-visible')), 'Enter 切换后导航开关丢失键盘焦点');
+  await page.waitForFunction(() => {
+    const node = document.getElementById('sidebar-toggle');
+    return !!node && window.getComputedStyle(node, '::after').content.includes('展开左侧导航')
+      && Number(window.getComputedStyle(node, '::after').opacity) >= 0.99;
+  });
+  await toggle.press('Space');
+  await page.waitForFunction(() => !document.body.classList.contains('side-collapsed'));
+  assert.equal(await toggle.getAttribute('aria-label'), '收起左侧导航');
+  assert(await toggle.evaluate(node => node === document.activeElement && node.matches(':focus-visible')), 'Space 切换后导航开关丢失键盘焦点');
+  await toggle.evaluate(node => node.blur());
+  return { enterCollapsed: true, spaceExpanded: true, focusRetained: true, focusTooltipVisible: true };
 }
 
 /** @param {Page} page */
@@ -407,6 +463,8 @@ async function desktopVisualSmoke(runtime) {
   const original = await page.evaluate(() => ({ width: window.innerWidth, height: window.innerHeight }));
   const snapshots = [];
   let scrollbars;
+  let navigationKeyboard;
+  const navigationTooltips = [];
   try {
     await page.emulateMedia({ reducedMotion: 'no-preference' });
     for (const size of VISUAL_WINDOW_SIZES) {
@@ -417,9 +475,12 @@ async function desktopVisualSmoke(runtime) {
         assert(await text.isVisible() && (await text.innerText()).trim(), `首页文字不可见或为空：${selector}`);
       }
       const home = await visualLayout(page, `mist-blue-home-${size.name}.png`);
+      if (size.name === 'default') navigationTooltips.push(await navigationTooltipSmoke(page, '收起左侧导航'));
       const collapseMotion = await toggleNavigationMotion(page);
       await page.waitForFunction(() => document.body.classList.contains('side-collapsed'));
       const collapsed = await visualLayout(page, `mist-blue-home-${size.name}-collapsed.png`);
+      assert(Math.abs(home.navigationToggle.left - collapsed.navigationToggle.left) <= 1 && Math.abs(home.navigationToggle.top - collapsed.navigationToggle.top) <= 1, '收起导航导致标题栏开关位置移动');
+      if (size.name === 'default') navigationTooltips.push(await navigationTooltipSmoke(page, '展开左侧导航'));
       assert(home.mainLeft - collapsed.mainLeft > 100 && collapsed.mainWidth - home.mainWidth > 100, '普通页面收起导航后正文没有左移并扩展');
       assert(collapseMotion.completed && collapseMotion.intermediateFrames > 0, '收起导航缺少正文连续移动的动画');
       const expandMotion = await toggleNavigationMotion(page);
@@ -432,6 +493,8 @@ async function desktopVisualSmoke(runtime) {
         assert.equal(reducedMotion.navigationVisibility, 'hidden', '减少动态效果时导航未立即隐藏');
         await toggleNavigationMotion(page);
         await page.emulateMedia({ reducedMotion: 'no-preference' });
+        await page.mouse.move(home.viewport.width / 2, 80);
+        navigationKeyboard = await navigationKeyboardSmoke(page);
       }
       await page.locator('.nav[data-view="import"]').click();
       await page.locator('#import.view.active').waitFor({ state: 'visible' });
@@ -445,7 +508,7 @@ async function desktopVisualSmoke(runtime) {
     if (await page.locator('body.side-collapsed').count()) await page.locator('#sidebar-toggle').click();
     await page.locator('.nav[data-view="dashboard"]').click();
   }
-  return { nativeWindowResized: true, scrollbars, snapshots };
+  return { nativeWindowResized: true, scrollbars, navigationKeyboard, navigationTooltips, snapshots };
 }
 
 /** @param {Page} page */

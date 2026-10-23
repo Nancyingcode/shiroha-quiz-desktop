@@ -12,6 +12,9 @@ class Element {
   disabled = true;
   textContent = '';
   title = '';
+  right = 0;
+  /** @type {Element | null} */
+  label = null;
   /** @type {Record<string, string>} */
   dataset = {};
   /** @type {Map<string, string>} */
@@ -24,6 +27,9 @@ class Element {
   setAttribute(name, value) { this.attributes.set(name, value); }
   /** @param {string} name @param {EventInput} [event] */
   emit(name, event = {}) { this.listeners.get(name)?.(event); }
+  /** @param {string} selector */
+  querySelector(selector) { return selector === 'span' ? this.label : null; }
+  getBoundingClientRect() { return { right: this.right }; }
 }
 
 function fixture() {
@@ -32,6 +38,19 @@ function fixture() {
   const get = name => { const result = elements.get(`desktop-${name}`); assert(result); return result; };
   /** @type {string[]} */
   const calls = [];
+  const label = new Element(); label.right = 112;
+  get('window-drag').label = label;
+  /** @type {Map<string, string>} */
+  const properties = new Map();
+  /** @type {Element[]} */
+  const observed = [];
+  let resize = () => {};
+  class ResizeObserver {
+    /** @param {() => void} callback */
+    constructor(callback) { resize = callback; }
+    /** @param {Element} element */
+    observe(element) { observed.push(element); }
+  }
   let maximized = false;
   const api = {
     minimize: async () => { calls.push('minimize'); },
@@ -40,10 +59,23 @@ function fixture() {
     close: async () => { calls.push('close'); },
     startDragging: async () => { calls.push('drag'); },
   };
-  const host = { ShirohaDesktopHost: { window: api }, addEventListener() {}, setTimeout, clearTimeout };
-  const start = () => vm.runInNewContext(source, { window: host, document: { getElementById: (/** @type {string} */ id) => elements.get(id) } });
-  return { get, calls, api, start, host };
+  const host = { ShirohaDesktopHost: { window: api }, ResizeObserver, addEventListener() {}, setTimeout, clearTimeout };
+  const document = {
+    getElementById: (/** @type {string} */ id) => elements.get(id),
+    body: { style: { setProperty: (/** @type {string} */ name, /** @type {string} */ value) => { properties.set(name, value); } } },
+  };
+  const start = () => vm.runInNewContext(source, { window: host, document, ResizeObserver });
+  return { get, calls, api, start, host, label, properties, observed, resize: () => resize() };
 }
+
+test('navigation toggle follows the title text when its measured width changes', () => {
+  const f = fixture(); f.start();
+  assert.equal(f.properties.get('--desktop-navigation-toggle-left'), '120px');
+  assert.deepEqual(f.observed, [f.label]);
+  f.label.right = 147.5;
+  f.resize();
+  assert.equal(f.properties.get('--desktop-navigation-toggle-left'), '155.5px');
+});
 
 test('window actions use only the current window and synchronize maximize/restore labels', async () => {
   const f = fixture(); f.start(); await setImmediate();
