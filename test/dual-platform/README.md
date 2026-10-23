@@ -206,4 +206,19 @@ WebView2 使用隔离 SQLite、媒体和 profile，凭据为 fake provider，原
 
 最终普通与 native-test 两种 Rust 配置均为 40 项通过、1 项需显式执行的 Windows 测试默认忽略；两种配置 Clippy（-D warnings）及 cargo fmt 检查通过。普通 build、build:test 和最终实际 WebView2 smoke 全部通过，smoke 共 23 项。日志存放于工作树 `apps/desktop/.reports/stage-d-*.log`，不提交测试产物。
 
-最终普通 EXE 为 63,860,224 字节，隔离 EXE 为 63,869,440 字节。普通 EXE SHA-256：`0D817FB36CBB7D22182E59770EBF2C349350EC8566F79B9DE622CCFE9096190D`。相较 C 记录的普通制品 62,165,504 字节增加约 1.62 MiB；这是包含本轮代码和桥接的整体差异，不单独归因于某个依赖。工作树改动未 commit、未 push。
+最终普通 EXE 为 63,860,224 字节，隔离 EXE 为 63,869,440 字节。普通 EXE SHA-256：`0D817FB36CBB7D22182E59770EBF2C349350EC8566F79B9DE622CCFE9096190D`。相较 C 记录的普通制品 62,165,504 字节增加约 1.62 MiB；这是包含本轮代码和桥接的整体差异，不单独归因于某个依赖。阶段 D 开发验证结束时尚未提交；后续提交与合并见下节。
+
+## C/D 合并 main 后验证（2026-10-23）
+
+用户授权提交并合并 C、D，明确不 push。C 已有独立功能提交 `86fd961` 和整合提交 `4ba29fc`，原历史完整保留。D 在来源工作树 `E:/Codex/worktrees/518e/shiroha-quiz-desktop` 的 `codex/dual-platform-stage-d` 分支独立提交为 `8fe2750`，再以 `f31ffae` 无冲突合入 main；没有复制未提交文件集中整合，也没有改写 C 历史。
+
+以下检查均在合并后的 main 工作树 `E:/Projects/shiroha-quiz-desktop` 运行：
+
+- 桌面 Node 38 项、共享 61 项、WebDAV 9 项、Web 单题 AI 25 项通过。
+- typecheck、lint（含 14 份文档检查）、cargo fmt 通过。
+- Rust 普通和 native-test 配置各 40 项通过，Clippy 两种配置均以 `-D warnings` 通过；实际系统凭据单测仍默认忽略，其前一轮随机命名空间实测结果不冒充本轮重复执行。
+- 普通 release、隔离 release 构建通过，实际 WebView2 联调 23 项通过，涵盖 C7/D2 迁移、原生网络、凭据撤销、数据恢复和窗口关闭。
+
+main 旧 node_modules 缺少已在锁文件中的 API/esbuild，导致首次资源测试失败。核实无项目进程占用后按原锁文件执行 npm ci，依赖完整性检查通过，再完整重跑上述门禁；未改锁文件或放宽断言。日志保存在 main 的 `apps/desktop/.reports/merge-cd-*.log`，不提交构建及测试产物。
+
+C、D 总体验收继续保持未勾选：独立 Windows 用户/VM 的正常发行制品、完整 TLS 证书矩阵、C9 人工系统对话框，以及既有中文扫描 PDF/大文件/真实服务等未覆盖项继续保留。本次没有 push。
