@@ -45,6 +45,51 @@ test('failed OCR releases canvas, worker and PDF without losing the failure stat
   assert.match(status.at(-1), /broken recognition/);
 });
 
+test('cancelling pending recognition releases resources and permits retry without late results', async () => {
+  let finishOldRecognition; let recognitionStarted;
+  const pending = new Promise(resolve => { finishOldRecognition = resolve; });
+  const started = new Promise(resolve => { recognitionStarted = resolve; });
+  const canvases = [];
+  const buttons = [];
+  let destroyed = 0; let terminated = 0; let workers = 0;
+  const context = vm.createContext({ Uint8Array,
+    ocrImportState: { file: {}, running: false }, $: () => null,
+    setOcrStatus() {}, setOcrButtonsEnabled: enabled => buttons.push(enabled), toast() {}, warnDev() {},
+    ShirohaPlatform: { files: { readBuffer: async () => new ArrayBuffer(0) } },
+    loadLocalPdfJs: async () => ({ lib: { getDocument: () => ({ promise: Promise.resolve({ numPages: 1 }), destroy: async () => { destroyed++; } }) } }),
+    pdfDocumentOptions: x => x, formatOcrPages: pages => pages.map(page => page.text).join('\n'),
+    createOcrWorker: async () => {
+      const first = ++workers === 1;
+      return { worker: {
+        recognize: () => { recognitionStarted(); return first ? pending : Promise.resolve({ data: { text: 'new result' } }); },
+        // Tesseract 5.1.1 终止 Worker 时不会结束仍在等待的识别 Promise。
+        terminate: async () => { terminated++; },
+      } };
+    },
+    renderPdfPageToCanvas: async () => { const canvas = { width: 1000, height: 1000 }; canvases.push(canvas); return canvas; },
+  });
+  vm.runInContext(source.slice(source.indexOf('async function startPdfOcrImport()'), source.indexOf('async function renderPdfPageToCanvas')), context);
+  let completed = false;
+  const running = context.startPdfOcrImport().then(() => { completed = true; });
+  await started;
+  context.ocrImportState.cancel();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(completed, true, 'cancellation must not await the terminated Worker');
+  await running;
+  assert.equal(context.ocrImportState.running, false);
+  assert.equal(context.ocrImportState.cancel, null);
+  assert.deepEqual(canvases[0], { width: 1, height: 1 });
+  assert.equal(destroyed, 1); assert.equal(terminated, 1);
+  assert.equal(buttons.at(-1), false);
+  await context.startPdfOcrImport();
+  finishOldRecognition({ data: { text: 'late old result' } });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(context.ocrImportState.text, 'new result');
+  assert.equal(context.ocrImportState.running, false);
+  assert.equal(destroyed, 2); assert.equal(terminated, 2);
+  assert.equal(buttons.at(-1), true);
+});
+
 test('switching import source cannot receive a late OCR result', async () => {
   let finish;
   const pending = new Promise(resolve => { finish = resolve; });

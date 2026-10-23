@@ -2,6 +2,9 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 
+/** @typedef {{status?: string}} OcrProgress */
+/** @typedef {{createWorker: (language: string, mode: number, options: {logger: (progress: OcrProgress) => void}) => Promise<unknown>}} OcrApi */
+
 /** @param {Buffer[]} objects */
 function pdfFile(objects) {
   /** @type {Buffer[]} */
@@ -82,6 +85,30 @@ export async function documentSmoke(page) {
       await page.locator('#ocr-start-btn').click();
       await page.locator('#ocr-status').filter({ hasText: /OCR 完成|OCR 失败/ }).waitFor({ timeout: 120000 });
       assert.match(await page.locator('#ocr-status').innerText(), /OCR 完成/);
+      await page.evaluate(() => {
+        const api = /** @type {OcrApi} */ (Reflect.get(window, 'Tesseract'));
+        const createWorker = api.createWorker;
+        api.createWorker = (language, mode, options) => {
+          api.createWorker = createWorker;
+          let cancelled = false;
+          return createWorker(language, mode, { ...options, logger(progress) {
+            options.logger(progress);
+            // 等待真实 Worker 开始识别再取消，防止仅覆盖加载阶段而遗漏未结束的 recognize Promise。
+            if (!cancelled && progress.status === 'recognizing text') {
+              cancelled = true;
+              document.body.dataset.ocrCancellationPhase = 'recognizing';
+              document.getElementById('ocr-cancel-btn')?.click();
+            }
+          } });
+        };
+      });
+      await page.locator('#ocr-start-btn').click();
+      await page.locator('body[data-ocr-cancellation-phase="recognizing"]').waitFor({ timeout: 120000 });
+      await page.waitForFunction(() => !(/** @type {HTMLButtonElement | null} */ (document.getElementById('ocr-start-btn')))?.disabled);
+      assert.match(await page.locator('#ocr-status').innerText(), /已取消/);
+      await page.locator('#ocr-start-btn').click();
+      await page.locator('#ocr-status').filter({ hasText: /OCR 完成|OCR 失败/ }).waitFor({ timeout: 120000 });
+      assert.match(await page.locator('#ocr-status').innerText(), /OCR 完成/);
       recognized = await page.locator('#ocr-result').inputValue();
       assert.match(recognized.replace(/\s/g, ''), /北京/);
       // OCR 保留人工核对语义；记录原始输出后模拟核对题号、选项分隔和字间空格。
@@ -113,5 +140,5 @@ export async function documentSmoke(page) {
     assert.equal(bank?.questions.length, 1, `${name} 持久化题数`);
     assert.deepEqual(bank?.questions[0].answer, ['A'], `${name} 持久化答案`);
   }
-  return { importedAndReloaded: names, chineseScan: true, recognized, manualReviewSimulated: true, realDocumentPipeline: true };
+  return { importedAndReloaded: names, chineseScan: true, cancellationDuringRecognition: true, recognized, manualReviewSimulated: true, realDocumentPipeline: true };
 }

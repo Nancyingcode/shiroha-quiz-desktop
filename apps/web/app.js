@@ -2621,8 +2621,12 @@ async function startPdfOcrImport(){
   let worker=null;let loadingTask=null;let canvas=null;
   // 每轮 OCR 归属于选择的文件；取消或换源后，迟到结果不能写入新的导入状态。
   const cancelled=()=>run.cancelled||run!==ocrImportState;
+  // Tesseract 5.1.1 终止 Worker 不会结束识别 Promise；独立信号保证取消后仍能收尾，升级后若库支持中止可移除。
+  let signalCancellation;
+  const cancellation=new Promise(resolve=>{signalCancellation=resolve});
   run.cancel=()=>{
     run.cancelled=true;
+    signalCancellation();
     if(worker){const active=worker;worker=null;void active.terminate().catch(err=>warnDev('OCR 取消失败',err))}
     if(loadingTask){const active=loadingTask;loadingTask=null;void active.destroy().catch(err=>warnDev('PDF 取消失败',err))}
   };
@@ -2648,7 +2652,7 @@ async function startPdfOcrImport(){
       setOcrStatus(`正在识别第 ${pageNo} / ${maxPages} 页（${created.mode}）……`,'warn');
       canvas=await renderPdfPageToCanvas(pdf,pageNo,2);
       if(cancelled())return;
-      const res=await worker.recognize(canvas);
+      const res=await Promise.race([worker.recognize(canvas),cancellation]);
       if(cancelled())return;
       const text=String(res?.data?.text||'').replace(/\r/g,'').trim();
       const confidence=Number(res?.data?.confidence||0);
