@@ -15,6 +15,7 @@ body.desktop-mist-blue {
   --desktop-side-width: 200px;
   --desktop-page-gap: clamp(24px, 3vw, 48px);
   --desktop-titlebar-height: 36px;
+  --desktop-sidebar-duration: 220ms;
   padding-top: var(--desktop-titlebar-height);
   background: radial-gradient(ellipse at 0 0, #d6e5f6, transparent 65%), var(--bg);
   background-attachment: fixed;
@@ -24,11 +25,64 @@ body.desktop-mist-blue {
   line-height: 1.6;
 }
 
+/* 根视口与内部滚动容器共用细滑块；保留透明边缘作为拖动区域。 */
+html:has(body.desktop-mist-blue),
+body.desktop-mist-blue,
+body.desktop-mist-blue * {
+  scrollbar-width: auto !important;
+  scrollbar-color: auto;
+}
+
+html:has(body.desktop-mist-blue)::-webkit-scrollbar,
+body.desktop-mist-blue::-webkit-scrollbar,
+body.desktop-mist-blue *::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+html:has(body.desktop-mist-blue)::-webkit-scrollbar-track,
+html:has(body.desktop-mist-blue)::-webkit-scrollbar-corner,
+body.desktop-mist-blue::-webkit-scrollbar-track,
+body.desktop-mist-blue::-webkit-scrollbar-corner,
+body.desktop-mist-blue *::-webkit-scrollbar-track,
+body.desktop-mist-blue *::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+html:has(body.desktop-mist-blue)::-webkit-scrollbar-thumb,
+body.desktop-mist-blue::-webkit-scrollbar-thumb,
+body.desktop-mist-blue *::-webkit-scrollbar-thumb {
+  min-height: 32px;
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: #cbd2d1;
+  background-clip: padding-box;
+}
+
+html:has(body.desktop-mist-blue)::-webkit-scrollbar-thumb:hover,
+body.desktop-mist-blue::-webkit-scrollbar-thumb:hover,
+body.desktop-mist-blue *::-webkit-scrollbar-thumb:hover {
+  background-color: #aeb9b7;
+}
+
+html:has(body.desktop-mist-blue)::-webkit-scrollbar-button,
+body.desktop-mist-blue::-webkit-scrollbar-button,
+body.desktop-mist-blue *::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
 body.desktop-mist-blue .app {
   display: grid !important;
   grid-template-columns: var(--desktop-side-width) minmax(0, 1fr) !important;
   min-height: calc(100vh - var(--desktop-titlebar-height)) !important;
   background: transparent !important;
+  transition: grid-template-columns var(--desktop-sidebar-duration) ease !important;
+}
+
+body.desktop-mist-blue.side-collapsed .app {
+  grid-template-columns: 0px minmax(0, 1fr) !important;
 }
 
 body.desktop-mist-blue .side {
@@ -46,7 +100,8 @@ body.desktop-mist-blue .side {
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
   overflow-y: auto !important;
-  scrollbar-width: thin;
+  visibility: visible;
+  transition: transform var(--desktop-sidebar-duration) ease, opacity var(--desktop-sidebar-duration) ease, visibility 0s !important;
 }
 
 body.desktop-mist-blue .brand {
@@ -144,6 +199,7 @@ body.desktop-mist-blue .top-actions button { flex: 0 0 auto; }
 body.desktop-mist-blue.side-collapsed .side {
   visibility: hidden;
   transform: translateX(-100%) !important;
+  transition-delay: 0s, 0s, var(--desktop-sidebar-duration) !important;
 }
 
 body.desktop-mist-blue .sidebar-toggle {
@@ -416,7 +472,7 @@ body.desktop-mist-blue .desktop-window-controls svg { width: 12px; height: 12px;
 body.desktop-mist-blue #desktop-titlebar .desktop-restore-icon { display: none; }
 body.desktop-mist-blue #desktop-titlebar[data-maximized="true"] .desktop-maximize-icon { display: none; }
 body.desktop-mist-blue #desktop-titlebar[data-maximized="true"] .desktop-restore-icon { display: block; }
-body.desktop-mist-blue #desktop-window-status { position: fixed; top: 44px; right: 12px; max-width: min(400px, calc(100vw - 24px)); padding: 10px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--ink); z-index: 10001; }
+body.desktop-mist-blue #desktop-window-status { position: fixed; top: calc(var(--desktop-titlebar-height) + 16px); right: 16px; max-width: min(380px, calc(100vw - 32px)); z-index: 10001; }
 body.desktop-mist-blue.practice-focus #practice.view,
 body.desktop-mist-blue.exam-focus #exam.view { min-height: calc(100vh - var(--desktop-titlebar-height)) !important; }
 body.desktop-mist-blue.practice-focus #practice-card,
@@ -424,7 +480,79 @@ body.desktop-mist-blue.exam-focus #exam-card { min-height: calc(100vh - var(--de
 body.desktop-mist-blue.practice-focus .practice-focus-head,
 body.desktop-mist-blue.exam-focus .exam-focus-head { top: var(--desktop-titlebar-height) !important; }
 body.desktop-mist-blue .modal { top: var(--desktop-titlebar-height); }
-body.desktop-mist-blue .app-toast { top: calc(var(--desktop-titlebar-height) + 12px); }
+body.desktop-mist-blue .app-toast {
+  top: calc(var(--desktop-titlebar-height) + 16px);
+  right: 16px;
+  width: min(380px, calc(100vw - 32px));
+  max-width: none;
+  gap: 10px;
+}
+
+body.desktop-mist-blue .toast-item,
+body.desktop-mist-blue .platform-status,
+body.desktop-mist-blue #desktop-window-status {
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--blue);
+  border-radius: 14px;
+  background: var(--card);
+  box-shadow: 0 6px 18px rgba(35, 54, 78, .07);
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+
+body.desktop-mist-blue .toast-item { gap: 12px; }
+body.desktop-mist-blue .toast-item > div { flex: 1; min-width: 0; }
+body.desktop-mist-blue .toast-item b { margin-bottom: 4px; color: var(--ink); font-size: 14px; font-weight: 600; line-height: 1.5; }
+body.desktop-mist-blue .toast-item p { color: var(--muted); font-size: 13px; line-height: 1.65; }
+body.desktop-mist-blue .toast-item.ok { border-left-color: #608a80; }
+body.desktop-mist-blue .toast-item.warn { border-left-color: #b18b57; }
+body.desktop-mist-blue .toast-item.danger,
+body.desktop-mist-blue .platform-status.failed,
+body.desktop-mist-blue #desktop-window-status { border-left-color: #b36d74; }
+
+body.desktop-mist-blue .toast-item button {
+  display: grid;
+  place-items: center;
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  min-height: 28px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--muted);
+  font-size: 18px;
+  line-height: 1;
+}
+body.desktop-mist-blue .toast-item button:hover { border-color: var(--line); background: var(--blue2); color: var(--ink); }
+
+/* 错误提示承载重试与恢复控件，长内容允许滚动，不能裁掉操作入口。 */
+body.desktop-mist-blue .platform-status {
+  bottom: 20px;
+  max-width: min(640px, calc(100vw - 48px));
+  max-height: calc(100dvh - var(--desktop-titlebar-height) - 40px);
+  overflow-y: auto;
+}
+body.desktop-mist-blue .platform-status button {
+  max-width: 100%;
+  min-height: 32px;
+  margin: 4px 0 4px 10px;
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--blue-soft);
+  box-shadow: none;
+  color: var(--ink);
+  font-size: 12px;
+  white-space: normal;
+}
+body.desktop-mist-blue .platform-status button:hover:not(:disabled) { background: var(--blue2); }
+body.desktop-mist-blue .platform-status :is(select, input) { max-width: 100%; }
 
 /* 宽屏统计栏固定在右侧，题目卡须为它预留空间，避免遮住退出和编辑操作。 */
 @media (min-width: 1280px) {
@@ -453,6 +581,7 @@ body.desktop-mist-blue .app-toast { top: calc(var(--desktop-titlebar-height) + 1
 }
 
 @media (prefers-reduced-motion: reduce) {
+  body.desktop-mist-blue { --desktop-sidebar-duration: 0ms; }
   body.desktop-mist-blue *, body.desktop-mist-blue *::before, body.desktop-mist-blue *::after {
     animation: none !important;
     transition: none !important;

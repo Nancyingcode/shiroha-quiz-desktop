@@ -242,6 +242,7 @@ async function visualLayout(page, screenshotName) {
       viewport: { width: window.innerWidth, height: window.innerHeight, devicePixelRatio: window.devicePixelRatio },
       horizontalOverflow: Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) - window.innerWidth,
       mainLeft: main.getBoundingClientRect().left,
+      mainWidth: main.getBoundingClientRect().width,
       navigationRight: side.getBoundingClientRect().right,
       contentLeft: rect.left, contentRight: rect.right,
       focus, collapsed,
@@ -331,6 +332,73 @@ async function titlebarSmoke(runtime) {
   return { maximize: true, restore: true, doubleClickHandler: true, minimize: true, navigationBrandRemoved: true };
 }
 
+/** @param {Page} page */
+async function toggleNavigationMotion(page) {
+  return page.evaluate(async () => {
+    const main = document.querySelector('.main');
+    const app = document.querySelector('.app');
+    const side = document.querySelector('.side');
+    const toggle = document.getElementById('sidebar-toggle');
+    if (!main || !app || !side || !toggle) throw new Error('没有找到导航切换布局');
+    const start = main.getBoundingClientRect().left;
+    toggle.click();
+    const positions = [main.getBoundingClientRect().left];
+    const animations = [...app.getAnimations(), ...main.getAnimations()];
+    const end = window.performance.now() + 1_000;
+    do {
+      await new Promise(resolve => window.requestAnimationFrame(resolve));
+      positions.push(main.getBoundingClientRect().left);
+    } while (animations.some(animation => animation.playState === 'running') && window.performance.now() < end);
+    const finish = positions.at(-1) ?? start;
+    return {
+      start, finish,
+      intermediateFrames: positions.filter(left => left > Math.min(start, finish) + 1 && left < Math.max(start, finish) - 1).length,
+      animationCount: animations.length,
+      completed: animations.every(animation => animation.playState !== 'running'),
+      navigationVisibility: window.getComputedStyle(side).visibility,
+    };
+  });
+}
+
+/** @param {Page} page */
+async function scrollbarSmoke(page) {
+  const input = page.locator('#import-text');
+  const original = await input.inputValue();
+  const scrollTop = await page.evaluate(() => document.scrollingElement?.scrollTop ?? 0);
+  try {
+    await input.fill(Array.from({ length: 80 }, (_, index) => `滚动验证 ${index + 1}`).join('\n'));
+    await input.scrollIntoViewIfNeeded();
+    const styles = await input.evaluate(node => [document.documentElement, node].map(element => {
+      const scrollbar = window.getComputedStyle(element, '::-webkit-scrollbar');
+      const thumb = window.getComputedStyle(element, '::-webkit-scrollbar-thumb');
+      const track = window.getComputedStyle(element, '::-webkit-scrollbar-track');
+      const button = window.getComputedStyle(element, '::-webkit-scrollbar-button');
+      return { element: element.tagName, width: Number.parseFloat(scrollbar.width), color: thumb.backgroundColor, radius: Number.parseFloat(thumb.borderRadius), track: track.backgroundColor, buttonDisplay: button.display };
+    }));
+    for (const style of styles) {
+      assert(style.width > 0 && style.width <= 10, `${style.element} 滚动条过宽或被隐藏`);
+      const channels = style.color.match(/[\d.]+/g)?.map(Number).slice(0, 3) ?? [];
+      assert(channels.length === 3 && Math.min(...channels) >= 150 && Math.max(...channels) <= 230 && Math.max(...channels) - Math.min(...channels) <= 20, `${style.element} 滑块未使用浅灰色`);
+      assert(style.radius > 0, `${style.element} 滑块缺少圆角`);
+      assert(['transparent', 'rgba(0, 0, 0, 0)'].includes(style.track), `${style.element} 滚动轨道不透明`);
+      assert.equal(style.buttonDisplay, 'none', `${style.element} 滚动条仍显示箭头按钮`);
+    }
+    await input.evaluate(node => { node.scrollTop = 0; });
+    await input.hover();
+    await page.mouse.wheel(0, 360);
+    await page.waitForFunction(() => (document.getElementById('import-text')?.scrollTop ?? 0) > 0);
+    await page.evaluate(() => window.scrollTo(0, 0));
+    const viewport = page.viewportSize() ?? await page.evaluate(() => ({ width: window.innerWidth, height: window.innerHeight }));
+    await page.mouse.move(viewport.width - 30, viewport.height / 2);
+    await page.mouse.wheel(0, 360);
+    await page.waitForFunction(() => (document.scrollingElement?.scrollTop ?? 0) > 0);
+    return { styles, pageScrolled: true, textareaScrolled: true };
+  } finally {
+    await input.fill(original);
+    await page.evaluate(top => window.scrollTo(0, top), scrollTop);
+  }
+}
+
 /** @param {Runtime} runtime */
 async function desktopVisualSmoke(runtime) {
   const { page } = runtime;
@@ -338,7 +406,9 @@ async function desktopVisualSmoke(runtime) {
   assert(await page.evaluate(() => Array.from(document.styleSheets).some(sheet => sheet.href && new URL(sheet.href).pathname.endsWith('/desktop.css') && sheet.cssRules.length > 0)), '桌面本地样式未加载');
   const original = await page.evaluate(() => ({ width: window.innerWidth, height: window.innerHeight }));
   const snapshots = [];
+  let scrollbars;
   try {
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
     for (const size of VISUAL_WINDOW_SIZES) {
       await resizeTestWindow(runtime, size);
       await page.locator('.nav[data-view="dashboard"]').click();
@@ -347,23 +417,119 @@ async function desktopVisualSmoke(runtime) {
         assert(await text.isVisible() && (await text.innerText()).trim(), `首页文字不可见或为空：${selector}`);
       }
       const home = await visualLayout(page, `mist-blue-home-${size.name}.png`);
-      await page.locator('#sidebar-toggle').click();
+      const collapseMotion = await toggleNavigationMotion(page);
       await page.waitForFunction(() => document.body.classList.contains('side-collapsed'));
       const collapsed = await visualLayout(page, `mist-blue-home-${size.name}-collapsed.png`);
-      assert(Math.abs(home.mainLeft - collapsed.mainLeft) <= 1, '普通页面收起导航后正文发生水平跳动');
-      await page.locator('#sidebar-toggle').click();
+      assert(home.mainLeft - collapsed.mainLeft > 100 && collapsed.mainWidth - home.mainWidth > 100, '普通页面收起导航后正文没有左移并扩展');
+      assert(collapseMotion.completed && collapseMotion.intermediateFrames > 0, '收起导航缺少正文连续移动的动画');
+      const expandMotion = await toggleNavigationMotion(page);
       await page.waitForFunction(() => !document.body.classList.contains('side-collapsed'));
+      assert(expandMotion.completed && expandMotion.intermediateFrames > 0 && Math.abs(expandMotion.finish - home.mainLeft) <= 1, '展开导航动画未恢复正文位置');
+      if (size.name === 'default') {
+        await page.emulateMedia({ reducedMotion: 'reduce' });
+        const reducedMotion = await toggleNavigationMotion(page);
+        assert(reducedMotion.animationCount === 0 && reducedMotion.intermediateFrames === 0 && Math.abs(reducedMotion.finish - collapsed.mainLeft) <= 1, '减少动态效果时收起导航仍有动画或未完成布局');
+        assert.equal(reducedMotion.navigationVisibility, 'hidden', '减少动态效果时导航未立即隐藏');
+        await toggleNavigationMotion(page);
+        await page.emulateMedia({ reducedMotion: 'no-preference' });
+      }
       await page.locator('.nav[data-view="import"]').click();
       await page.locator('#import.view.active').waitFor({ state: 'visible' });
       const importLayout = await visualLayout(page, `mist-blue-import-${size.name}.png`);
-      snapshots.push({ requestedWindow: size, home, collapsed, import: importLayout });
+      if (size.name === 'minimum') scrollbars = await scrollbarSmoke(page);
+      snapshots.push({ requestedWindow: size, home, collapsed, collapseMotion, expandMotion, import: importLayout });
     }
   } finally {
+    await page.emulateMedia({ reducedMotion: null });
     await resizeTestWindow(runtime, original);
     if (await page.locator('body.side-collapsed').count()) await page.locator('#sidebar-toggle').click();
     await page.locator('.nav[data-view="dashboard"]').click();
   }
-  return { nativeWindowResized: true, snapshots };
+  return { nativeWindowResized: true, scrollbars, snapshots };
+}
+
+/** @param {Page} page */
+async function notificationVisualSmoke(page) {
+  const original = await page.evaluate(() => ['platform-status', 'desktop-window-status', 'import-summary'].map(id => {
+    const node = document.getElementById(id);
+    return { id, exists: !!node, hidden: node?.hidden ?? true, text: node?.textContent ?? '', className: node?.className ?? '' };
+  }));
+  const input = page.locator('#import-text'), mode = page.locator('#import-mode');
+  const importState = { text: await input.inputValue(), mode: await mode.inputValue(), view: await page.locator('.view.active').getAttribute('id') };
+  /** @param {string} type @param {string} title */
+  const markNotice = async (type, title) => page.locator(`#app-toast .toast-item.${type}:not([data-visual-smoke])`).last().evaluate((node, fixture) => {
+    node.setAttribute('data-visual-smoke', fixture.type);
+    const heading = node.querySelector('b'), paragraph = node.querySelector('p');
+    if (!heading || !paragraph) throw new Error('业务通知缺少标题或正文');
+    heading.textContent = fixture.title;
+    paragraph.textContent = `通知外观验证：${'QuizBackupFilename'.repeat(8)}.json`;
+  }, { type, title });
+  /** @param {string} selector */
+  const appearance = async selector => page.locator(selector).evaluateAll(nodes => nodes.map(node => {
+    const style = window.getComputedStyle(node), rect = node.getBoundingClientRect();
+    const paragraph = node.querySelector('p');
+    return { background: style.backgroundColor, border: Number.parseFloat(style.borderTopWidth), radius: Number.parseFloat(style.borderRadius), shadow: style.boxShadow,
+      fits: rect.left >= 0 && rect.right <= window.innerWidth + 1 && rect.top >= (document.getElementById('desktop-titlebar')?.getBoundingClientRect().bottom ?? 0) && rect.bottom <= window.innerHeight + 1 && node.scrollWidth <= node.clientWidth + 1,
+      wrapped: !paragraph || paragraph.getBoundingClientRect().height > Number.parseFloat(window.getComputedStyle(paragraph).lineHeight) * 1.5 };
+  }));
+  /** @param {Awaited<ReturnType<typeof appearance>>} styles */
+  const verify = styles => styles.forEach(style => {
+    const channels = style.background.match(/[\d.]+/g)?.map(Number).slice(0, 3) ?? [];
+    assert(channels.length === 3 && Math.min(...channels) >= 240 && channels[2] > channels[0], '通知未使用浅雾蓝底色');
+    assert(style.border > 0 && style.border <= 1 && style.radius >= 10, '通知缺少细边框或圆角');
+    assert(style.shadow === 'none' || Number(style.shadow.match(/rgba\([^)]*,\s*([\d.]+)\)/)?.[1]) <= 0.15, '通知阴影过重');
+    assert(style.fits && style.wrapped, '通知越过视口、标题栏或长文件名未换行');
+  });
+  const screenshot = path.join(path.dirname(SCREENSHOT_PATH), 'mist-blue-notifications.png');
+  try {
+    await page.locator('.nav[data-view="import"]').click();
+    await input.fill(''); await mode.selectOption('json');
+    await page.locator('#save-all-btn').click();
+    await markNotice('ok', '保存完成');
+    await page.locator('#parse-import-btn').click();
+    await markNotice('warn', '请核对内容');
+    await input.fill('{invalid-json');
+    await page.locator('#parse-import-btn').click();
+    await markNotice('danger', '识别失败');
+    await page.locator('[data-visual-smoke]').evaluateAll(nodes => Promise.all(nodes.flatMap(node => node.getAnimations().map(animation => animation.finished))));
+    const notices = await appearance('[data-visual-smoke]');
+    assert.equal(notices.length, 3); verify(notices);
+    await page.screenshot({ path: screenshot });
+    for (const type of ['ok', 'warn', 'danger']) {
+      const notice = page.locator(`[data-visual-smoke="${type}"]`), close = notice.getByRole('button', { name: '关闭', exact: true });
+      assert.match(await notice.innerText(), /通知外观验证：/);
+      await close.focus(); await close.press('Enter');
+      assert.equal(await notice.count(), 0, '通知关闭按钮无法通过键盘操作');
+    }
+    await page.evaluate(() => {
+      const platform = document.getElementById('platform-status');
+      const status = document.getElementById('desktop-window-status');
+      if (!platform || !status) throw new Error('平台或窗口状态提示缺失');
+      platform.hidden = false; platform.className = 'platform-status'; platform.textContent = '正在保存：通知外观验证';
+      status.hidden = false; status.textContent = '窗口操作提示：通知外观验证';
+    });
+    const normal = await appearance('#platform-status, #desktop-window-status'); assert.equal(normal.length, 2); verify(normal);
+    await page.evaluate(() => {
+      const platform = document.getElementById('platform-status');
+      if (!platform) throw new Error('平台状态提示缺失');
+      platform.classList.add('failed'); platform.textContent = '保存失败：通知外观验证';
+      const retry = document.createElement('button'); retry.textContent = '测试恢复';
+      retry.onclick = () => { retry.dataset.activated = 'true'; };
+      document.getElementById('platform-status')?.append(retry);
+    });
+    const failed = await appearance('#platform-status.failed'); verify(failed);
+    const retry = page.locator('#platform-status').getByRole('button', { name: '测试恢复', exact: true });
+    await retry.focus(); await retry.press('Enter');
+    assert.equal(await retry.getAttribute('data-activated'), 'true', '失败提示的恢复按钮不可用');
+    return { notices, normal, failed, keyboardClose: true, recoveryButton: true, screenshot };
+  } finally {
+    await input.fill(importState.text); await mode.selectOption(importState.mode);
+    await page.evaluate(saved => {
+      document.querySelectorAll('[data-visual-smoke]').forEach(node => node.remove());
+      saved.forEach(state => { const node = document.getElementById(state.id); if (node) { if (!state.exists) node.remove(); else { node.hidden = state.hidden; node.textContent = state.text; node.className = state.className; } } });
+    }, original);
+    if (importState.view) await page.locator(`.nav[data-view="${importState.view}"]`).click();
+  }
 }
 
 /** @param {Runtime} runtime @param {'practice' | 'exam'} mode */
@@ -647,6 +813,7 @@ async function main() {
     const visualRuntime = runtime;
     await check('沉浸标题栏原生窗口操作', () => titlebarSmoke(visualRuntime));
     await check('雾蓝首页、导入与原生窗口尺寸', () => desktopVisualSmoke(visualRuntime));
+    await check('雾蓝全局通知与键盘操作', () => notificationVisualSmoke(page));
     const marker = { key: `${PROFILE_PREFIX}${randomUUID()}`, value: randomUUID() };
     const bankName = `桌面原型验证-${randomUUID().slice(0, 8)}`;
     await check('LocalStorage 写入回读', async () => page.evaluate(({ key, value }) => {
