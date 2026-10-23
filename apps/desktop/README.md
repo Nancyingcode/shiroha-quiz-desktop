@@ -33,6 +33,9 @@ npm run dev
 ```
 
 开发命令先生成前端资源，再使用 Tauri CLI 内置开发服务启动窗口，端口为 `51736`。不需要另行启动 Web 目录中的 Python 或 PowerShell 服务。
+开发来源仅在调试构建中接受 `http://localhost:51736` 与 CLI 实际使用的 `http://127.0.0.1:51736`；发行版不接受这两个开发来源。来源仍须来自主窗口，不放行其他主机、端口或协议。
+
+运行 `npm run test:dev` 可回归实际开发启动：脚本调用 `npm run dev -- --features native-test --no-watch`，使用临时题库、假凭据、阻断外网的隔离 WebView2 profile，检查原生初始化、页面解锁、导航、保存和重载。先关闭占用 `51736` 的开发实例；脚本不会终止其他实例。结果写入 `.reports/dev-smoke.json`，成功后清理本次临时数据，失败保留目录供排查。它不替代发行版的 `npm run test:desktop`，也不验证真实用户数据或真实凭据迁移。
 
 构建 release 可执行文件：
 

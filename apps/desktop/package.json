@@ -22,6 +22,7 @@
     "build:offline": "tauri build --config src-tauri/tauri.offline.conf.json --target x86_64-pc-windows-msvc",
     "build:test": "npm run prepare:web && cargo build --manifest-path src-tauri/Cargo.toml --release --features custom-protocol,native-test --target-dir src-tauri/target/native-test",
     "test:desktop": "node scripts/smoke.mjs src-tauri/target/native-test/release/shiroha-quiz-desktop.exe",
+    "test:dev": "node scripts/dev-smoke.mjs",
     "bench:desktop": "node scripts/benchmark.mjs"
   },
   "devDependencies": {

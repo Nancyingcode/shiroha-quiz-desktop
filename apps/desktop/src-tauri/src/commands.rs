@@ -78,16 +78,21 @@ pub struct LocalData(pub Arc<Mutex<Option<Store>>>, pub PathBuf);
 
 pub(crate) fn authorize(window: &tauri::WebviewWindow) -> Result<()> {
     let url = window.url().map_err(|_| Error::new("permission_denied"))?;
+    authorize_source(window.label(), &url)
+}
+
+fn authorize_source(label: &str, url: &url::Url) -> Result<()> {
     let packaged = url.port().is_none()
         && ((url.scheme() == "tauri" && url.host_str() == Some("localhost"))
             || (matches!(url.scheme(), "http" | "https")
                 && url.host_str() == Some("tauri.localhost")));
     // CLI 开发服务使用固定端口；发行构建不能借此接受远程网页调用。
+    // 兼容 CLI 实际使用的 IPv4 回环来源；取消该开发服务时同步移除此许可。
     let development = cfg!(debug_assertions)
         && url.scheme() == "http"
-        && url.host_str() == Some("localhost")
+        && matches!(url.host_str(), Some("localhost" | "127.0.0.1"))
         && url.port() == Some(51736);
-    if window.label() != "main" || !(packaged || development) {
+    if label != "main" || !(packaged || development) {
         return Err(Error::new("permission_denied"));
     }
     Ok(())
@@ -422,4 +427,86 @@ pub async fn local_file(
     })
     .await
     .map_err(|_| Error::new("storage_unavailable"))?
+}
+
+#[cfg(test)]
+mod authorization_tests {
+    use super::*;
+
+    fn check(label: &str, source: &str) -> Result<()> {
+        authorize_source(label, &url::Url::parse(source).unwrap())
+    }
+
+    #[test]
+    fn development_origins_require_debug_build() {
+        for source in [
+            "http://localhost:51736/",
+            "http://127.0.0.1:51736/",
+            "http://127.0.0.1:51736/index.html?test=1#dashboard",
+        ] {
+            assert_eq!(
+                check("main", source).is_ok(),
+                cfg!(debug_assertions),
+                "{source}"
+            );
+        }
+    }
+
+    #[test]
+    fn packaged_origins_remain_available() {
+        for source in [
+            "tauri://localhost/",
+            "http://tauri.localhost/",
+            "https://tauri.localhost/",
+        ] {
+            assert!(check("main", source).is_ok(), "{source}");
+        }
+    }
+
+    #[test]
+    fn other_windows_cannot_call_native_commands() {
+        for label in ["", "secondary", "MAIN"] {
+            for source in [
+                "tauri://localhost/",
+                "http://tauri.localhost/",
+                "http://localhost:51736/",
+                "http://127.0.0.1:51736/",
+            ] {
+                assert_eq!(
+                    check(label, source).unwrap_err().code,
+                    "permission_denied",
+                    "{label}: {source}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn unapproved_origins_are_denied() {
+        for source in [
+            "http://127.0.0.1/",
+            "http://localhost/",
+            "http://127.0.0.1:51737/",
+            "http://localhost:51737/",
+            "https://127.0.0.1:51736/",
+            "https://localhost:51736/",
+            "http://127.0.0.2:51736/",
+            "http://[::1]:51736/",
+            "http://192.168.1.2:51736/",
+            "http://example.com:51736/",
+            "http://localhost.example.com:51736/",
+            "http://127.0.0.1.example.com:51736/",
+            "http://tauri.localhost:51736/",
+            "tauri://localhost:51736/",
+            "tauri://127.0.0.1/",
+            "file:///index.html",
+            "data:text/html,test",
+        ] {
+            assert_eq!(
+                check("main", source).unwrap_err().code,
+                "permission_denied",
+                "{source}"
+            );
+        }
+    }
 }
