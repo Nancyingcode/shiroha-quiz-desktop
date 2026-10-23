@@ -16,7 +16,7 @@
 | `test/` | Web 回归与原生解析器样例；平台单元测试另在对应工程中 |
 | `docs/` | 使用说明、设计与实施计划；历史材料位于 `docs/archive/` |
 
-当前桌面端复用 Web 业务，题库与学习数据接入 Rust/SQLite、媒体文件、受控文件 IPC 和恢复点；Web 仍使用浏览器存储。桌面通过摘要、分页和按需正文查询加载界面，损坏数据库可切换到已校验的恢复副本；桌面 AI/WebDAV 已接入受控原生网络与 Windows 凭据管理器，Web/MinerU 仍沿用浏览器实现；安装器与自动更新尚未实现。当前范围与未验收项以[桌面说明](./apps/desktop/README.md)和[双端实施计划](./docs/superpowers/plans/2026-10-23-web-desktop-dual-platform.md)为准。
+当前桌面端复用 Web 业务，题库与学习数据接入 Rust/SQLite、媒体文件、受控文件 IPC 和恢复点；Web 仍使用浏览器存储。桌面通过摘要、分页和按需正文查询加载界面，损坏数据库可切换到已校验的恢复副本；桌面 AI/WebDAV 已接入受控原生网络与 Windows 凭据管理器，Web/MinerU 仍沿用浏览器实现。已有普通/离线 NSIS 候选构建、Windows CI 配置、窗口位置恢复和中文文档回归；干净系统安装/升级、最低运行时和正式发行验收未完成，自动更新尚未实现。当前范围与未验收项以[桌面说明](./apps/desktop/README.md)和[双端实施计划](./docs/superpowers/plans/2026-10-23-web-desktop-dual-platform.md)为准。
 
 ## 2. 开发流程
 

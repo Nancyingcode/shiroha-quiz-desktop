@@ -222,3 +222,64 @@ WebView2 使用隔离 SQLite、媒体和 profile，凭据为 fake provider，原
 main 旧 node_modules 缺少已在锁文件中的 API/esbuild，导致首次资源测试失败。核实无项目进程占用后按原锁文件执行 npm ci，依赖完整性检查通过，再完整重跑上述门禁；未改锁文件或放宽断言。日志保存在 main 的 `apps/desktop/.reports/merge-cd-*.log`，不提交构建及测试产物。
 
 C、D 总体验收继续保持未勾选：独立 Windows 用户/VM 的正常发行制品、完整 TLS 证书矩阵、C9 人工系统对话框，以及既有中文扫描 PDF/大文件/真实服务等未覆盖项继续保留。本次没有 push。
+
+## 阶段 E 验证记录（2026-10-23）
+
+### 范围、源码与环境
+
+按已确认双端实施计划执行，起点 `27ab92a50fecc7c69d44c81f01352d3ac7dd138b`，工作区起始干净。本轮没有 commit、push、PR 或发布，未增加生产依赖，npm/Cargo 锁文件不变。全局规范引用的 `global-rules/AGENTS_condition_rules.md` 在当前仓库缺失，沿用实际根规范及已确认设计。
+
+本次环境：Windows 11 专业版 10.0.26200 x64；Node 24.17.0、npm 11.13.0、rustc/cargo 1.99.1；Edge 与 WebView2 155.0.4283.62。测试使用自建文档、隔离浏览器/数据库目录及假凭据，原生网络使用现有隔离 mock；未读取用户题库或调用真实服务。依赖安装前在沙箱外核对当前工作区没有 Node/Electron/esbuild/应用进程，按原锁文件执行 npm ci；第一次沙箱安装异常退出，重试成功并完成门禁。
+
+### 交付与行为证据
+
+- E1：`document-lifecycle.test.cjs` 验证 PDF 成功/失败释放、OCR 异常释放、换源迟到结果隔离与超大页面拒绝。真实页面回归自建文字 PDF、中文扫描 PDF、DOCX、XLSX；选择、解析、核对、预览、确认、保存、重载后核对每库 1 题、答案 A。扫描样本为实际 JPEG 页面 PDF，通过 PDF.js 渲染再调用本地中英文 OCR；不是直接识别英文 Canvas。显式取消后再次识别通过。
+- 原始中文 OCR 输出含“Lo 中 国 的 首 都 是 哪 里 ? / A 北 京 / B 上 海 / 答 案 : A”，置信度约 80%。测试检查实际识别文字后，在可编辑 OCR 结果框模拟人工核对题号与分隔，再点击填入/确认。不能把核对后的结果表述为 OCR 原样准确识别。
+- E2：窗口位置在 Rust 内保存，不新增 IPC 权限；只有落在现有显示器工作区内的有效大小位置才恢复。HTML 单文件拖放复用选择文件解析路径，不接受路径字符串；拒绝多文件及非法扩展。退出单元回归覆盖保存中、保存失败、未交卷、OCR、单题 AI 与原生取消失败。WebDAV 恢复框补初始焦点、Tab 循环、Escape 与焦点恢复，现有 reduced-motion 保持。
+- E3：沿用 A1 的 5 轮启动和三类固定样本各 5 轮。修复 Windows CRLF 与 textarea LF 不同导致的等待；固定文本样本在输入前统一 LF，使样本哈希可与 A1 对照。测量仍是完整进程树空闲后单点采样，不是峰值。早期并行诊断与 CRLF 失败报告保留为 `.reports/performance-concurrent-diagnostic.json`、`.reports/performance-fixtures-crlf-failure.json`，不计入有效结果。
+- E4：独立普通/离线 NSIS 配置，默认 currentUser，应用身份与版本保持，禁止降级。离线包使用 offlineInstaller，而非 bootstrapper。生成 NSIS 脚本检查到卸载仅在用户勾选删除数据时删除 AppData；此为脚本审查证据，不替代真正卸载验收。
+- E5：新增 `.github/workflows/desktop.yml`，固定已记录 Node/Rust 工具链；按锁安装、JS/浏览器/文档/Rust 两种 feature 检查、独立 EXE、普通/离线 NSIS 构建。权限仅 contents:read，无制品上传和发布；Pages 工作流保持。尚未 push，因此没有 GitHub 运行记录。
+- E6：根规范、桌面说明、设计/计划和文档索引同步当前实现；阶段 E 保持未勾选。
+
+### 自动检查与失败归属
+
+| 检查 | 本轮结果 |
+| --- | --- |
+| npm test | 桌面 39、共享 69 项通过；无 TODO/跳过 |
+| typecheck / lint | 通过；文档 UTF-8、围栏与链接覆盖 14 份 |
+| Web 平台页面 | 9 项通过，包含新增拖放回归 |
+| Web 文档页面 | 1 条完整链路通过，覆盖 4 种自建文档及取消重试 |
+| Web AI / WebDAV | 25 / 9 项通过；全部 mock |
+| Rust 默认 / native-test | 各 41 项通过、1 项既有显式系统凭据测试 ignored；未把 ignored 当通过 |
+| release EXE / native-test EXE | 构建成功；正常发行版没有用于真实用户目录运行 |
+| WebView2 | 25 项通过，包含窗口尺寸重启恢复、本地 MathJax、PDF Worker、中文扫描文档、网络隔离、迁移、分页及损坏库恢复 |
+| 普通 / 离线 NSIS | 本地构建成功；未安装、签名或发布 |
+
+首次 npm 路径安全测试因沙箱不允许 junction 失败，未删断言，在隔离临时目录提升执行后通过。Rust 文件提交测试同样在沙箱下失败，沙箱外通过。Rust 测试目录使用时间戳导致并发目录碰撞，改用现有 UUID 依赖后通过。一次 Clippy 与资源生成并行导致 dist 临时缺文件，属于执行顺序问题，最终串行复查另记。Web AI 初次因测试框架硬编码旧机器 Playwright 路径未启动，使用当前机器已有 runtime 的 NODE_PATH 和已有 Edge 后 25 项通过。测试 HTTP 服务补齐 .mjs/.wasm MIME 后才完成真实 PDF/OCR，不用缺资源降级冒充通过。
+
+### 未完成的阶段出口
+
+阶段 E 尚未整体验收：缺少独立 Win10/Win11 干净系统、无 WebView2 断网新装、旧安装版覆盖升级、卸载保留、中文用户/目录、标准用户与磁盘不足的实际安装记录；本机正常发行环境的系统对话框闭环、资源管理器真实拖入、多显示器/DPI、全部覆盖层键盘验收也未完成。长时间大文档、多轮内存峰值/释放、复杂嵌图/公式文档和各类导出仍需专项测试。当前没有测定最低 WebView2 版本，不宣称 Windows 10 已支持。
+
+本机故障回归只证明注入条件下的保全与恢复，不等于真实磁盘写满、断电或操作系统崩溃已验收。候选制品不应直接覆盖真实用户环境做试验；后续先在隔离用户/VM 按桌面说明逐项验证并补记录，再决定发行。没有自动更新、证书购买或发布授权。
+
+### 最终性能与制品
+
+最终独立串行运行 5 轮默认启动、三种样本各 5 轮，两个 JSON 报告均 `complete=true`。启动 DOM/可见中位数为 724/751 ms，整树工作集 499.1 MiB、私有提交 285.2 MiB。固定样本哈希与阶段 A 的三种样本一致；性能测试 EXE SHA-256 为 `227e373a0d51725eb168f2e397860082a492033189f24e131f92cf3f7d00d3d6`，共享 app.js 为 `6cc07af7835430ecc8ecd2c2820f71b0579c895dae5cf7b8f0315614e6a546e1`。
+
+| 样本（各 5 轮） | 解析预览 ms | 确认入库 ms | 保存提示 ms | 练习后工作集 MiB | 练习后私有提交 MiB |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| small-json | 174 | 163 | 5081 | 555.7 | 403.7 |
+| image-json | 179 | 165 | 5129 | 558.7 | 401.5 |
+| material-text | 242 | 153 | 5067 | 558.2 | 403.7 |
+
+保存提示依然包含通知排队与自动化等待，不能称为数据库耗时。本次私有提交没有相对历史阶段 A 显示下降，且未在本轮重新运行阶段 A EXE，因此不计算提升比例、不宣称达到峰值/大数据性能目标。未清 OS 缓存、未强制 GC；fresh 表示新 profile，不代表系统冷启动。原始结果为桌面 `.reports/performance.json`、`.reports/performance-fixtures.json`。
+
+最终串行 Clippy 默认 feature 与 native-test feature 均通过；此前与资源生成并发的缺文件失败不再出现。实际 Windows 系统凭据往返为既有 ignored 测试，本轮未显式执行。
+
+候选安装包保存在桌面 `.reports/candidates/`，均为未签名（NotSigned），没有安装或上传。版本 npm/Cargo/Tauri 均为 0.1.0。正常 release EXE SHA-256 为 `9728abccf916123a38d40e296094f0018b8681a2b634638f09b44eb4d254a4fe`。
+
+| 制品 | 字节数 | SHA-256 |
+| --- | ---: | --- |
+| Shiroha-Quiz-0.1.0-online-x64.exe | 53575265 | `8709e78de8e1d9c807398d6b13828f6e38be703a1d3b461e77673d29b4814b12` |
+| Shiroha-Quiz-0.1.0-offline-x64.exe | 271189987 | `b160f97df518f8810deffe5c08d024e77842065c313e16ef7bf40ccb8b2b7da9` |

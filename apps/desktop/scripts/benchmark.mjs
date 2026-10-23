@@ -37,7 +37,7 @@ async function fixedFixtures() {
   return [
     { id: 'small-json', fileName: 'small-bank.json', text: JSON.stringify(banks[1]), mode: 'json', questions: 1 },
     { id: 'image-json', fileName: 'image-bank.json', text: JSON.stringify(banks[0]), mode: 'json', questions: 7 },
-    { id: 'material-text', fileName: 'material.txt', text: await readFile(new URL('../../../test/dual-platform/fixtures/material.txt', import.meta.url), 'utf8'), mode: 'normal', questions: 2 },
+    { id: 'material-text', fileName: 'material.txt', text: (await readFile(new URL('../../../test/dual-platform/fixtures/material.txt', import.meta.url), 'utf8')).replace(/\r\n/g, '\n'), mode: 'normal', questions: 2 },
   ];
 }
 
@@ -56,7 +56,7 @@ async function measureFixture(page, fixture, _storageKey) {
   const parseStart = performance.now();
   await page.locator('#import-file').setInputFiles({ name: fixture.fileName,
     mimeType: fixture.mode === 'json' ? 'application/json' : 'text/plain', buffer: Buffer.from(fixture.text) });
-  await page.waitForFunction(text => (/** @type {HTMLTextAreaElement | null} */ (document.querySelector('#import-text')))?.value === text, fixture.text);
+  await page.waitForFunction(text => (/** @type {HTMLTextAreaElement | null} */ (document.querySelector('#import-text')))?.value === text, fixture.text.replace(/\r\n/g, '\n'));
   await page.locator('#parse-import-btn').click();
   await page.waitForFunction(expected => document.querySelectorAll('#import-preview tbody tr').length === expected, fixture.questions);
   assert.equal(await page.locator('#confirm-import-btn').isEnabled(), true, '解析后不能确认导入');
