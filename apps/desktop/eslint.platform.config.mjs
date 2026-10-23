@@ -17,6 +17,7 @@ export default [
         window: 'readonly', document: 'readonly', navigator: 'readonly', console: 'readonly',
         localStorage: 'readonly', sessionStorage: 'readonly', location: 'readonly',
         URL: 'readonly', Blob: 'readonly', File: 'readonly', FileReader: 'readonly',
+        HTMLInputElement: 'readonly', DataTransfer: 'readonly', Event: 'readonly',
         AbortController: 'readonly', AbortSignal: 'readonly', fetch: 'readonly',
         TextEncoder: 'readonly', TextDecoder: 'readonly', structuredClone: 'readonly',
         setTimeout: 'readonly', clearTimeout: 'readonly',

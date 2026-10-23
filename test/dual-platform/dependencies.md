@@ -30,3 +30,11 @@ SQLite 候选依据：[0.40.2 清单](https://raw.githubusercontent.com/rusqlite
 安装前按命令行、工作目录或可执行文件路径核对项目进程。仅停止已确认属于当前工作树的进程；不能为了 Windows 文件锁结束其他项目的 Node/WebView2。安装后检查依赖完整性、锁文件差异、类型/lint/测试/构建，原生能力还需相应隔离测试。
 
 不为阶段 A 预装 SQLite、HTTP、凭据、dialog 或打包器；不升级 Cargo edition，不调整应用标识，不新增原生 capability。安装候选的编译结果、体积、Win10 下限和实际权限验收属于其接入阶段，当前不作通过承诺。
+
+## 4. 阶段 C 实际接入
+
+本轮已在说明用途后添加 `rusqlite =0.40.2`（仅 bundled、backup）、`rfd =0.17.2`（关闭默认 feature）、serde/serde_json、sha2 0.10、base64 0.22 和 uuid v4；精确解析结果保存在 Cargo.lock。SQLite 用 C 库随 EXE 编译，无 ORM 或可加载扩展。使用 rfd 的 Rust API 直接取得系统选择结果，原因是只需内部文件选择，无需给页面安装通用 dialog/fs 插件代理；MIT 许可，Windows 使用原生对话框，不启用 Linux portal 依赖。该选择替代上表的候选 dialog 插件，仍需人工系统对话框验收。
+
+桌面构建添加 `@tauri-apps/api =2.12.4`（Apache-2.0 OR MIT）、`esbuild =0.28.2`（MIT），均固定版本；只打包官方 invoke 和当前窗口 API，Web 静态入口不新增构建要求。本地 bridge.js 为 92,490 字节，保留许可注释；esbuild 的开发二进制不作为应用后台进程分发。现有 Node 24、Rust 1.99.1/MSVC 工具链已通过编译；不据此承诺最低 Rust 或 Win10 环境验证。
+
+新增依赖会增大原生制品与开发目录。本轮正常 release EXE 为 62,165,504 字节，测试 feature 的 release EXE 为 62,144,512 字节，均包含现有离线资源；未保存同配置的旧原生制品作体积对照，因此不报告体积增量或性能收益。D 阶段 HTTP/凭据候选均未接入。

@@ -1,6 +1,6 @@
 (() => {
   /** @typedef {{minimize: () => Promise<void>, toggleMaximize: () => Promise<void>, isMaximized: () => Promise<boolean>, close: () => Promise<void>, startDragging: () => Promise<void>}} DesktopWindow */
-  const host = /** @type {Window & {__TAURI__?: {window: {getCurrentWindow: () => DesktopWindow}}}} */ (window);
+  const host = /** @type {Window & {ShirohaDesktopHost?: {window: DesktopWindow}}} */ (window);
   const titlebar = document.getElementById('desktop-titlebar');
   const drag = document.getElementById('desktop-window-drag');
   const status = document.getElementById('desktop-window-status');
@@ -9,7 +9,7 @@
   const close = /** @type {HTMLButtonElement | null} */ (document.getElementById('desktop-window-close'));
   if (!titlebar || !drag || !status || !minimize || !maximize || !close) return;
   const buttons = [minimize, maximize, close];
-  const appWindow = host.__TAURI__?.window.getCurrentWindow();
+  const appWindow = host.ShirohaDesktopHost?.window;
   if (!appWindow) {
     status.hidden = false;
     status.textContent = '窗口控制不可用，请在桌面程序中打开。';

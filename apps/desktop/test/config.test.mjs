@@ -6,8 +6,9 @@ test('the desktop allows only local main-window controls and keeps executable as
   const config = JSON.parse(await readFile(new URL('../src-tauri/tauri.conf.json', import.meta.url), 'utf8'));
   assert.equal(config.build.frontendDist, '../dist');
   assert.equal(config.build.devUrl, undefined);
-  assert.equal(config.app.withGlobalTauri, true);
+  assert.equal(config.app.withGlobalTauri, false);
   assert.deepEqual(config.app.security.capabilities, [{ identifier: 'prototype', windows: ['main'], permissions: [
+    'allow-local-initialize', 'allow-local-read', 'allow-local-write', 'allow-local-operation', 'allow-local-checkpoint', 'allow-local-migrate', 'allow-local-replace', 'allow-local-file', 'allow-local-task', 'allow-local-query', 'allow-local-commit',
     'core:window:allow-start-dragging', 'core:window:allow-minimize',
     'core:window:allow-toggle-maximize', 'core:window:allow-is-maximized', 'core:window:allow-close',
   ] }]);

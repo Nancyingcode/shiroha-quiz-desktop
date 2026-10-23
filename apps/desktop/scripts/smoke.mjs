@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
+import { markNativeIsolation } from './native-isolation.mjs';
 import { spawn, execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { mkdir, mkdtemp, realpath, rm, stat } from 'node:fs/promises';
+import { mkdir, mkdtemp, realpath, rm, stat, readFile, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -14,7 +15,7 @@ const START_TIMEOUT_MS = 30_000;
 const RESOURCE_TIMEOUT_MS = 120_000;
 const CLOSE_TIMEOUT_MS = 8_000;
 const POLL_MS = 200;
-const PROFILE_PREFIX = 'shiroha-desktop-smoke-';
+const PROFILE_PREFIX = 'shiroha-native-smoke-';
 const FIXTURE_QUESTION = 'TAURI PROTOTYPE 1+1 = ?';
 const SCREENSHOT_PATH = fileURLToPath(new URL('../.reports/prototype.png', import.meta.url));
 const VISUAL_WINDOW_SIZES = [
@@ -31,6 +32,7 @@ const execute = promisify(execFile);
 /** @typedef {{recognize: (canvas: HTMLCanvasElement) => Promise<{data: {text: string, confidence: number}}>, terminate: () => Promise<void>}} OcrWorker */
 /** @typedef {{createWorker: (language: string, mode: number, options: {workerPath: string, corePath: string, langPath: string, workerBlobURL: boolean, cacheMethod: string}) => Promise<OcrWorker>}} OcrApi */
 /** @typedef {Window & {MathJax?: MathApi, Tesseract?: OcrApi, __smokeCsp?: string[]}} TestWindow */
+/** @typedef {Window & {ShirohaDesktopHost?: {invoke(command:string,args?:Record<string,unknown>):Promise<unknown>}}} NativeTestWindow */
 /** @typedef {{getTextContent: () => Promise<{items: Array<{str?: string}>}>}} PdfPage */
 /** @typedef {{promise: Promise<void>, port: unknown, destroy: () => void}} PdfWorker */
 /** @typedef {{getPage: (page: number) => Promise<PdfPage>, destroy: () => Promise<void>}} PdfDocument */
@@ -118,6 +120,7 @@ async function launch(executable, profile, proxyPort) {
     cwd: path.dirname(executable), windowsHide: true, stdio: 'ignore',
     env: {
       ...process.env,
+      SHIROHA_TEST_ROOT: profile,
       WEBVIEW2_USER_DATA_FOLDER: profile,
       WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-address=127.0.0.1 --remote-debugging-port=${port} --proxy-server=http://127.0.0.1:${proxyPort} --proxy-bypass-list=tauri.localhost;ipc.localhost --disable-background-networking`,
     },
@@ -560,6 +563,8 @@ async function main() {
   assert(/\.exe$/i.test(executable) && (await stat(executable)).isFile(), '参数必须是现有 EXE');
   const tempRoot = await realpath(tmpdir());
   const profile = await mkdtemp(path.join(tempRoot, PROFILE_PREFIX));
+  await markNativeIsolation(profile);
+  const profiles = [profile];
   /** @type {Check[]} */
   const checks = [];
   /** @type {Runtime | undefined} */
@@ -571,10 +576,12 @@ async function main() {
   const cleanup = () => cleaning ??= (async () => {
     if (runtime) await stop(runtime);
     proxy.close();
-    const actual = await realpath(profile);
-    assert.equal(path.dirname(actual).toLowerCase(), tempRoot.toLowerCase());
-    assert(path.basename(actual).startsWith(PROFILE_PREFIX), '拒绝清理非测试目录');
-    await rm(actual, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
+    for (const item of profiles) {
+      const actual = await realpath(item);
+      assert.equal(path.dirname(actual).toLowerCase(), tempRoot.toLowerCase());
+      assert(path.basename(actual).startsWith(PROFILE_PREFIX), '拒绝清理非测试目录');
+      await rm(actual, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
+    }
   })();
   const interrupt = () => { void cleanup().then(() => process.exit(130), error => { console.error(errorText(error)); process.exit(1); }); };
   process.once('SIGINT', interrupt); process.once('SIGTERM', interrupt);
@@ -587,6 +594,21 @@ async function main() {
     const proxyPort = await listen(proxy);
     runtime = await launch(executable, profile, proxyPort);
     const { page } = runtime;
+    await check('原生 IPC 白名单与非法输入保全', async () => page.evaluate(async () => {
+      const host = (/** @type {NativeTestWindow} */ (window)).ShirohaDesktopHost;
+      if (!host) throw new Error('本地桥接缺失');
+      const before = JSON.stringify(await host.invoke('local_initialize'));
+      for (const [command, args] of /** @type {Array<[string,Record<string,unknown>]>} */ ([
+        ['unknown_native_command', {}], ['plugin:fs|read_text_file', { path: 'C:/outside' }],
+        ['local_file', { request: { kind: 'read', token: 'forged', offset: 0 } }],
+        ['local_write', { snapshot: { schemaVersion: 999 }, operationId: 'invalid', expectedRevision: 0 }],
+      ])) {
+        let rejected = false; try { await host.invoke(command,args); } catch { rejected = true; }
+        if (!rejected) throw new Error('未拒绝非法调用');
+      }
+      if (JSON.stringify(await host.invoke('local_initialize')) !== before) throw new Error('非法调用改变了数据修订');
+      return { rejected: 4, dataPreserved: true };
+    }));
     await check('启动资源与按需插画', async () => {
       assert.equal(await page.locator('.app-splash').count(), 0, '桌面不应保留启动遮罩');
       const initial = await page.evaluate(() => window.performance.getEntriesByType('resource').map(entry => entry.name));
@@ -658,6 +680,164 @@ async function main() {
       assert.deepEqual(restarted.errors, [], '重启练习出现 JS 错误');
       assert.deepEqual(restarted.blocked, [], '重启练习尝试请求远程资源');
       return { ...result, persisted: true };
+    });
+    await check('真实 IPC 覆盖快照与恢复', async () => restarted.page.evaluate(async () => {
+      const host = (/** @type {NativeTestWindow} */ (window)).ShirohaDesktopHost;
+      if (!host) throw new Error('本地桥接缺失');
+      const before = await host.invoke('local_read');
+      const state = /** @type {{revision:number}} */ (await host.invoke('local_initialize'));
+      const checkpoint = /** @type {{snapshotId:string}} */ (await host.invoke('local_checkpoint'));
+      const empty = { schemaVersion: 1, banks: [], activeBankId: '', wrongBook: {}, favorites: {}, records: [], settings: {}, crossPlatformMeta: {} };
+      const replaced = /** @type {{revision:number}} */ (await host.invoke('local_replace', {snapshot:empty, operationId:'smoke-replace', expectedRevision:state.revision}));
+      const result = /** @type {{banks:unknown[]}} */ (await host.invoke('local_read'));
+      if (result.banks.length) throw new Error('覆盖未提交');
+      await host.invoke('local_query', {query:{kind:'restore',snapshot_id:checkpoint.snapshotId,operation_id:'smoke-restore',expected_revision:replaced.revision}});
+      if (JSON.stringify(await host.invoke('local_read')) !== JSON.stringify(before)) throw new Error('恢复内容不一致');
+      return { restored: true, snapshotRetained: true };
+    }));
+    await stop(runtime); runtime = undefined;
+    const migrationProfile = await mkdtemp(path.join(tempRoot, PROFILE_PREFIX));
+    profiles.push(migrationProfile); await markNativeIsolation(migrationProfile);
+    runtime = await launch(executable, migrationProfile, proxyPort);
+    const migrated = runtime;
+    await check('同来源旧原型迁移与旧凭据保留', async () => {
+      await migrated.page.evaluate(() => {
+        const snapshot = {schemaVersion:1,banks:[{id:'legacy-bank',name:'阶段C迁移样本',questions:[{id:'legacy-q',type:'single',question:'迁移题目',options:[],answer:[],extension:{preserved:true}}]}],activeBankId:'legacy-bank',wrongBook:{},favorites:{},records:[],settings:{},crossPlatformMeta:{}};
+        localStorage.setItem('shiroha_quiz_state_v28_4_c1',JSON.stringify(snapshot));
+        localStorage.setItem('shiroha_webdav_config_local_v378',JSON.stringify({endpoint:'https://fixture.invalid',username:'fixture',remoteDir:'backup'}));
+        localStorage.setItem('shiroha_webdav_password_local_v378','fake-migration-password');
+        localStorage.setItem('unknown-legacy-key','preserve');
+      });
+      await migrated.page.reload();
+      await migrated.page.getByText('确认迁移旧原型数据', {exact:true}).waitFor();
+      migrated.page.once('dialog',dialog=>dialog.accept());
+      await migrated.page.getByText('确认迁移旧原型数据', {exact:true}).click();
+      await migrated.page.locator('#active-bank-select option[value="legacy-bank"]').waitFor({state:'attached'});
+      await migrated.page.evaluate(async () => {
+        const host=(/** @type {NativeTestWindow} */ (window)).ShirohaDesktopHost;
+        if(!host)throw new Error('本地桥接缺失');
+        const data=/** @type {{banks:Array<{questions:Array<{extension:{preserved:boolean}}>}>,serviceConfigurations:{webdav:{endpoint:string}}}} */ (await host.invoke('local_read'));
+        if(!data.banks[0].questions[0].extension.preserved||data.serviceConfigurations.webdav.endpoint!=='https://fixture.invalid')throw new Error('迁移丢失字段');
+        if(!localStorage.getItem('shiroha_quiz_state_v28_4_c1')||localStorage.getItem('shiroha_webdav_password_local_v378')!=='fake-migration-password'||localStorage.getItem('unknown-legacy-key')!=='preserve')throw new Error('旧来源被清理');
+      });
+      return {dataMigrated:true,credentialsPending:true,legacyPreserved:true};
+    });
+    await stop(runtime); runtime=undefined;
+    runtime=await launch(executable,migrationProfile,proxyPort);
+    const migratedRestart=runtime;
+    await check('迁移后重启使用 SQLite',async()=>{
+      await migratedRestart.page.locator('#active-bank-select option[value="legacy-bank"]').waitFor({state:'attached'});
+      assert.equal(await migratedRestart.page.getByText('确认迁移旧原型数据',{exact:true}).count(),0);
+      return {restarted:true};
+    });
+    await check('C8 题库分页、按需正文与完整导出',async()=>{
+      await migratedRestart.page.evaluate(async()=>{
+        const host=(/** @type {NativeTestWindow} */(window)).ShirohaDesktopHost;if(!host)throw new Error('bridge');
+        const current=/** @type {{revision:number}} */(await host.invoke('local_initialize'));
+        const banks=['lazy-a','lazy-b'].map(id=>({id,name:id,groupName:'C8',questions:Array.from({length:65},(_,i)=>({id:'q'+i,number:i+1,type:'single',question:id+' 正文 '+i,options:[{key:'A',text:'正确'},{key:'B',text:'错误'}],answer:['A'],extension:{preserved:true}}))}));
+        await host.invoke('local_replace',{operationId:'lazy-fixture',expectedRevision:current.revision,snapshot:{schemaVersion:1,banks,activeBankId:'lazy-a',wrongBook:{},favorites:{},records:[{id:'old-record',mode:'practice',name:'历史记录',bankName:'已删除题库',date:'2026-10-23T00:00:00Z',total:1,answered:1,correct:0,wrong:1,accuracy:0,duration:1,details:[{question:'已删除题目的历史正文',type:'single',chosen:['B'],answer:['A'],correct:false}]}],settings:{},crossPlatformMeta:{}}});
+      });
+      await migratedRestart.page.addInitScript(()=>{
+        const calls=/** @type {string[]} */([]);
+        Object.defineProperty(window,'__nativeCalls',{value:calls});
+        Object.defineProperty(window,'ShirohaDesktopHost',{configurable:true,set(host){
+          const original=host.invoke;host.invoke=(/** @type {string} */command,/** @type {{query?:{kind?:string}}} */args)=>{calls.push(command+':'+(args?.query?.kind||''));return original(command,args)};
+          Object.defineProperty(window,'ShirohaDesktopHost',{value:host,configurable:true});
+        }});
+      });
+      await migratedRestart.page.reload();
+      await migratedRestart.page.locator('#active-bank-select option[value="lazy-a"]').waitFor({state:'attached'});
+      const initialCalls=await migratedRestart.page.evaluate(()=>Reflect.get(window,'__nativeCalls'));
+      assert(!initialCalls.includes('local_read:')&&!initialCalls.includes('local_query:details'),'startup loaded bodies');
+      await migratedRestart.page.locator('.nav[data-view="banks"]').click();
+      await migratedRestart.page.locator('#bank-preview tbody tr').first().getByText('lazy-a 正文 0',{exact:true}).waitFor();
+      assert.equal(await migratedRestart.page.locator('#bank-preview tbody tr').count(),50);
+      await migratedRestart.page.locator('#bank-preview').locator('..').getByRole('button',{name:'下一页',exact:true}).last().click();
+      await migratedRestart.page.locator('#bank-preview tbody tr').first().getByText('lazy-a 正文 50',{exact:true}).waitFor();
+      assert.equal(await migratedRestart.page.locator('#bank-preview tbody tr').count(),15);
+      await migratedRestart.page.locator('.nav[data-view="records"]').click();
+      await migratedRestart.page.locator('#records-list details').waitFor();
+      assert.equal(await migratedRestart.page.locator('#records-list tbody tr').count(),0);
+      await migratedRestart.page.locator('#records-list summary').click();
+      await migratedRestart.page.locator('#records-list').getByText('已删除题目的历史正文',{exact:true}).waitFor();
+      await migratedRestart.page.locator('.nav[data-view="banks"]').click();
+      await migratedRestart.page.locator('[data-practice-group-v8916="C8"]').click();
+      await migratedRestart.page.locator('.nav[data-view="practice"]').click();
+      await migratedRestart.page.locator('#practice-start-mode-v58916').selectOption('custom');
+      await migratedRestart.page.locator('#practice-number-range-v58916').fill('65-66');
+      await migratedRestart.page.locator('#start-practice-btn').click();
+      await migratedRestart.page.locator('#practice-card').getByText('lazy-a 正文 64',{exact:true}).waitFor();
+      assert.match(await migratedRestart.page.locator('#practice-progress').innerText(),/1\s*\/\s*2/);
+      await migratedRestart.page.locator('#p-next').click();
+      await migratedRestart.page.locator('#practice-card').getByText('lazy-b 正文 0',{exact:true}).waitFor();
+      migratedRestart.page.once('dialog',dialog=>dialog.accept());
+      await migratedRestart.page.locator('#p-exit').click();
+      await migratedRestart.page.waitForFunction(()=>!document.body.classList.contains('practice-focus'));
+      if(await migratedRestart.page.evaluate(()=>document.body.classList.contains('side-collapsed')))await migratedRestart.page.locator('#sidebar-toggle').click();
+      await migratedRestart.page.locator('.nav[data-view="dashboard"]').click();
+      await migratedRestart.page.locator('.nav[data-view="banks"]').click();
+      const bankMenu=migratedRestart.page.locator('.bank-item').filter({has:migratedRestart.page.locator('[data-editbank-v45="lazy-a"]')});
+      await bankMenu.locator('summary').click();
+      await bankMenu.locator('[data-editbank-v45="lazy-a"]').click();
+      await migratedRestart.page.locator('#import-bank-name').fill('lazy-a edited');
+      await migratedRestart.page.locator('#bank-edit-save-v45').click();
+      await migratedRestart.page.locator('#active-bank-select option[value="lazy-a"]').filter({hasText:'lazy-a edited'}).waitFor({state:'attached'});
+      await migratedRestart.page.evaluate(async()=>{
+        const storage=/** @type {import('../../web/platform/runtime.d.ts').BrowserStorage} */(Reflect.get(window,'ShirohaPlatform').storage);
+        await storage.initialize();const data=/** @type {import('../../web/platform/contracts.d.ts').Snapshot} */(await storage.read());
+        await storage.ensureQuestions?.(data,[{bankId:'lazy-a',questionId:'q0'},{bankId:'lazy-b',questionId:'q0'}]);
+        if(data.banks[0].questions[0].question===data.banks[1].questions[0].question)throw new Error('跨库同 ID 混淆');
+        await storage.ensureAll?.(data);
+        if(data.banks.some(bank=>bank.questions.some(q=>!q.question||!q.extension)))throw new Error('完整导出缺失正文或扩展');
+      });
+      return {questions:130,pageSize:50,lastPage:15,initialBodies:0,crossBankIdentity:true};
+    });
+    const repairCheckpoint=/** @type {{snapshotId:string}} */(await migratedRestart.page.evaluate(async()=>{
+      const host=(/** @type {NativeTestWindow} */(window)).ShirohaDesktopHost;if(!host)throw new Error('bridge');return host.invoke('local_checkpoint');
+    }));
+    await stop(runtime);runtime=undefined;
+    const broken=Buffer.from('C8 synthetic corrupt database');
+    await writeFile(path.join(migrationProfile,'library.sqlite3'),broken);
+    await writeFile(path.join(migrationProfile,'library.sqlite3-wal'),Buffer.from('invalid WAL fixture'));
+    runtime=await launch(executable,migrationProfile,proxyPort);
+    const repaired=runtime;
+    await check('损坏数据库界面恢复且保留原文件',async()=>{
+      const status=repaired.page.locator('#platform-status');
+      await status.getByRole('button',{name:'查找本机恢复点',exact:true}).click();
+      await status.getByLabel('修复使用的恢复点').selectOption(repairCheckpoint.snapshotId);
+      repaired.page.once('dialog',dialog=>dialog.accept());
+      await status.getByRole('button',{name:'从恢复点修复数据',exact:true}).click();
+      await repaired.page.locator('#active-bank-select option[value="lazy-a"]').waitFor({state:'attached'});
+      assert.deepEqual(await readFile(path.join(migrationProfile,'library.sqlite3')),broken);
+      assert.match(await readFile(path.join(migrationProfile,'active.json'),'utf8'),/[a-f0-9-]{36}/);
+      return {recovered:true,originalPreserved:true};
+    });
+    await stop(runtime);runtime=undefined;
+    runtime=await launch(executable,migrationProfile,proxyPort);
+    const repairedRestart=runtime;
+    await check('修复后重启读取活动数据库',async()=>{
+      await repairedRestart.page.locator('#active-bank-select option[value="lazy-a"]').waitFor({state:'attached'});
+      assert.deepEqual(repairedRestart.errors,[]);
+      return {restarted:true};
+    });
+    const repairBackup=await repairedRestart.page.evaluate(async()=>{
+      const host=(/** @type {NativeTestWindow} */(window)).ShirohaDesktopHost;if(!host)throw new Error('bridge');return host.invoke('local_read');
+    });
+    await stop(runtime);runtime=undefined;
+    const generation=JSON.parse(await readFile(path.join(migrationProfile,'active.json'),'utf8'));
+    assert.match(generation,/^[a-f0-9-]{36}$/);
+    const damaged=path.join(migrationProfile,'generations',generation);
+    await writeFile(path.join(damaged,'library.sqlite3'),broken);
+    await writeFile(path.join(damaged,'library.sqlite3-wal'),Buffer.from('invalid WAL fixture'));
+    runtime=await launch(executable,migrationProfile,proxyPort);
+    const importedRecovery=runtime;
+    await check('损坏数据库从兼容备份修复',async()=>{
+      const input=importedRecovery.page.locator('#platform-status').getByLabel('选择兼容备份修复数据');
+      await input.waitFor();importedRecovery.page.once('dialog',dialog=>dialog.accept());
+      await input.setInputFiles({name:'synthetic-recovery.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(repairBackup))});
+      await importedRecovery.page.locator('#active-bank-select option[value="lazy-a"]').waitFor({state:'attached'});
+      assert.deepEqual(await readFile(path.join(damaged,'library.sqlite3')),broken);
+      return {imported:true,originalPreserved:true};
     });
   } catch (error) { checks.push({ name: '启动或运行', ok: false, error: errorText(error) }); }
   finally {
