@@ -18,21 +18,17 @@ const AI_REVIEW_DEFAULT_BATCH_V991=20;
 const AI_ANALYSIS_DEFAULT_BATCH_V991=10;
 const AI_PROVIDER_PRESETS_V99={ollama:{label:'Ollama',endpoint:'http://127.0.0.1:11434/v1/chat/completions'},lmstudio:{label:'LM Studio',endpoint:'http://127.0.0.1:1234/v1/chat/completions'},custom:{label:'自定义接口',endpoint:''}};
 const TYPE_LABEL={single:'单选题',multiple:'多选题',multi:'多选题',judge:'判断题',blank:'填空题',short:'简答题',short_answer:'简答题'};
-const state=loadState();
+const state=blankState();
 let importCache=[];let tableImportResultV49=null;let importWarnings=[];let importReport='';let importDiagnostics=null;let importPreviewFilter='priority';let importSelected=new Set();let importSourceMetaV376={name:'',size:0,type:''};let bankEditSessionV45=null;let practiceEditSessionV120=null;let exportBankSelectedV23=new Set();let backupImportModeV23='merge';let ocrImportState={file:null,text:'',pages:[],running:false};let practice={items:[],idx:0,answered:0,correct:0,wrong:0,start:0};let exam={items:[],answers:{},start:0,timer:null,deadline:0,submitted:false};let editBlankGroupsV58914=[];let editMultiBlankEnabledV58914=false;let importCommitBusyV5911=false;let aiImportRequestV99={running:false,controller:null};let aiImportSilentCancelV99=false;let aiConnectionStateV99='idle';let aiDiagnosticsVisibleV375=false;let aiLastDiagnosticV375=null;let aiPreviewRequestV991={running:false,mode:'',cancelled:false,controller:null};let aiPreviewPanelModeV991='review';let aiReviewSuggestionsV991=new Map();let aiAnalysisSuggestionsV991=new Map();let aiImportTextSelectionV992={start:0,end:0,text:''};let webdavRuntimeV378={busy:false,action:'',backups:[],latestFile:'',status:'',statusKind:'',diagnostic:null,pendingRestore:null,formLoaded:false};
 const $=s=>document.querySelector(s);const $$=s=>[...document.querySelectorAll(s)];
 function ensureDefaultBank(){if(!state.banks.length&&!state.settings?.suppressDefaultBank) state.banks.push(defaultBank()); if(!state.activeBankId) state.activeBankId=state.banks[0]?.id||'';}
 function blankState(){return {schemaVersion:CURRENT_SCHEMA_VERSION,banks:[],activeBankId:'',wrongBook:{},favorites:{},records:[],settings:{},crossPlatformMeta:{favoriteQuestions:{}}}}
 function warnDev(message,error){try{console.warn('[Shiroha Quiz]',message,error||'')}catch(_){}}
-function loadState(){
-  const keys=[KEY,...LEGACY_KEYS];
-  for(const key of keys){
-    const raw=localStorage.getItem(key);
-    if(!raw)continue;
-    try{return migrateState(JSON.parse(raw),key)}
-    catch(e){warnDev('读取本地数据失败，已尝试下一个存储键：'+key,e)}
-  }
-  return blankState();
+async function loadState(){
+  const result=await ShirohaPlatform.storage.initialize();
+  if(result.state!=='ready')throw result.error;
+  const snapshot=await ShirohaPlatform.storage.read();
+  return snapshot?migrateState(snapshot,KEY):blankState();
 }
 function migrateState(raw,sourceKey){
   const base=blankState();
@@ -46,8 +42,8 @@ function migrateState(raw,sourceKey){
   if(sourceKey&&sourceKey!==KEY)migrated.settings={...(migrated.settings||{}),migratedFromStorageKey:sourceKey};
   return migrated;
 }
-function clearStoredState(){[KEY,...LEGACY_KEYS,...CLEAR_STORAGE_KEYS,AI_KEY_LOCAL_V99,WEBDAV_CONFIG_LOCAL_V378,WEBDAV_PASSWORD_LOCAL_V378].forEach(k=>{try{localStorage.removeItem(k)}catch(_){}});[AI_KEY_SESSION_V99,WEBDAV_PASSWORD_SESSION_V378].forEach(k=>{try{sessionStorage.removeItem(k)}catch(_){}})}
-function saveState(){localStorage.setItem(KEY,serializeState());toast('已保存到浏览器本地。','ok')}
+function clearStoredState(){ShirohaPlatform.credentials.reset()}
+async function saveState(){return runMutation(async()=>{await saveSilent();toast('已保存到浏览器本地。','ok')});}
 function now(){return new Date().toISOString()}
 function makeId(prefix='id',...parts){
   const base=parts.filter(v=>v!=null&&String(v).trim()).map(v=>String(v).replace(/[^A-Za-z0-9_-]+/g,'_').slice(0,32)).filter(Boolean).join('_');
@@ -158,13 +154,13 @@ function bindNav(){ $$('.nav').forEach(btn=>btn.onclick=()=>{
   resetViewScrollV282();
 });}
 function bindEvents(){
-$('#active-bank-select').onchange=e=>{setPracticeBankScopeV8916(e.target.value,true);saveSilent();renderAll()};const importNameInput=$('#import-bank-name');if(importNameInput)importNameInput.addEventListener('input',()=>{importNameInput.dataset.autoName='0'});$('#save-all-btn').onclick=saveState;
+$('#active-bank-select').onchange=async e=>{return runMutation(async()=>{setPracticeBankScopeV8916(e.target.value,true);await saveSilent();renderAll()});};const importNameInput=$('#import-bank-name');if(importNameInput)importNameInput.addEventListener('input',()=>{importNameInput.dataset.autoName='0'});$('#save-all-btn').onclick=saveState;
 $('#load-sample-btn').onclick=loadSample;$('#import-file').onchange=readImportFile;$('#parse-import-btn').onclick=parseImport;$('#confirm-import-btn').onclick=confirmImport;const findReplaceBtnV51=$('#find-replace-import-btn');if(findReplaceBtnV51)findReplaceBtnV51.onclick=openImportFindReplaceV51;const dualConfirmBtn=$('#dual-confirm-import-btn');if(dualConfirmBtn)dualConfirmBtn.onclick=confirmImport;const importTextAreaV49=$('#import-text');if(importTextAreaV49)importTextAreaV49.addEventListener('input',()=>{if(importTextAreaV49.dataset.tableImportV49==='1'){tableImportResultV49=null;delete importTextAreaV49.dataset.tableImportV49;}importSourceMetaV376={name:'手动文本',size:new Blob([importTextAreaV49.value||'']).size,type:'text'};syncAiImportActionV99();});const ocrStartBtn=$('#ocr-start-btn');if(ocrStartBtn)ocrStartBtn.onclick=startPdfOcrImport;const ocrUseBtn=$('#ocr-use-text-btn');if(ocrUseBtn)ocrUseBtn.onclick=applyOcrTextToImport;const ocrCopyBtn=$('#ocr-copy-btn');if(ocrCopyBtn)ocrCopyBtn.onclick=copyOcrText;const ocrDocxBtn=$('#ocr-download-docx-btn');if(ocrDocxBtn)ocrDocxBtn.onclick=downloadOcrDocx;$('#clear-import-btn').onclick=()=>{cancelAiImportRequestV99(true);cancelAiPreviewRequestV991(true);closeAiImportPanelV99();closeAiPreviewPanelV991();resetAiSuggestionsV991();$('#import-text').value='';if($('#import-text'))delete $('#import-text').dataset.tableImportV49;tableImportResultV49=null;importCache=[];importSelected.clear();importDiagnostics=null;importSourceMetaV376={name:'',size:0,type:''};resetOcrImportState();renderImportPreview([]);syncAiImportActionV99()};
 $('#dual-question-file').onchange=e=>readDualFile(e,'question');$('#dual-answer-file').onchange=e=>readDualFile(e,'answer');$('#parse-dual-import-btn').onclick=parseDualImport;$('#clear-dual-import-btn').onclick=()=>{cancelAiPreviewRequestV991(true);resetAiSuggestionsV991();$('#dual-question-text').value='';$('#dual-answer-text').value='';importCache=[];importSelected.clear();importDiagnostics=null;importSourceMetaV376={name:'',size:0,type:''};renderImportPreview([])};$('#dual-load-sample-btn').onclick=loadDualSample;$('#revalidate-import-btn').onclick=()=>renderImportPreview(importCache);
 $('#edit-close-btn').onclick=closeEditModal;$('#edit-save-btn').onclick=saveEditQuestion;$('#edit-delete-btn').onclick=deleteEditQuestion;const pf=$('#import-preview-filter');if(pf)pf.onchange=e=>{importPreviewFilter=e.target.value;renderImportPreview(importCache)};const bid=$('#batch-delete-import-btn');if(bid)bid.onclick=batchDeleteImportSelected;const cis=$('#clear-import-selection-btn');if(cis)cis.onclick=()=>{importSelected.clear();renderImportPreview(importCache)};
 $('#dedupe-btn').onclick=dedupeActiveBank;$('#rename-bank-btn').onclick=renameActiveBank;$('#duplicate-bank-btn').onclick=duplicateActiveBank;$('#new-empty-bank-btn').onclick=newEmptyBank;$('#merge-bank-btn').onclick=mergeBankIntoActive;$('#bank-sort-mode').onchange=renderBankList;$('#start-practice-btn').onclick=startPractice;$('#reset-practice-btn').onclick=()=>{resetAiSinglePracticeV613();exitPracticeFocus();$('#practice-card').innerHTML='<div class="empty">选择条件后点击“开始练习”。</div>';practice={items:[],idx:0,answered:0,correct:0,wrong:0,start:0};$('#practice-progress').textContent='0 / 0';syncPracticeStartUiV58916(true)};
-$('#start-exam-btn').onclick=startExam;$('#submit-exam-btn').onclick=()=>submitExam(false);$('#clear-wrong-btn').onclick=()=>{if(confirm('确定清空当前题库错题本？')){state.wrongBook[activeBank().id]=[];saveSilent();renderAll()}};
-$('#clear-records-btn').onclick=()=>{if(confirm('确定清空全部练习与考试记录？')){state.records=[];saveSilent();renderAll()}};$('#export-records-btn').onclick=exportRecords;$('#record-mode-filter').onchange=renderRecords;const recordDetailFilterV385=$('#record-detail-filter-v385');if(recordDetailFilterV385)recordDetailFilterV385.onchange=renderRecords;$('#record-limit').onchange=renderRecords;$('#record-refresh-btn').onclick=renderRecords;$('#wrong-status-filter').onchange=renderWrongBook;$('#wrong-sort-mode').onchange=renderWrongBook;$('#practice-wrong-btn').onclick=startWrongPractice;const practiceFavBtnV596=$('#practice-favorites-btn-v596');if(practiceFavBtnV596)practiceFavBtnV596.onclick=()=>switchPracticeSourceV27('favorite');const clearFavBtnV596=$('#clear-favorites-btn-v596');if(clearFavBtnV596)clearFavBtnV596.onclick=clearCurrentFavoritesV596;const exportJsonBtn=$('#export-json-btn');if(exportJsonBtn)exportJsonBtn.onclick=exportCurrentBank;const exportAllBtn=$('#export-all-btn');if(exportAllBtn)exportAllBtn.onclick=exportAll;const importBackupQuickBtnV598=$('#import-backup-quick-btn-v598');if(importBackupQuickBtnV598)importBackupQuickBtnV598.onclick=()=>{backupImportModeV23=$('#settings-backup-mode-v23')?.value||'overwrite';$('#backup-json-file-v23')?.click()};$('#reset-data-btn').onclick=resetData;bindLimitControlsV60();bindPracticeStartControlsV58916();bindAiImportEventsV99();
+$('#start-exam-btn').onclick=startExam;$('#submit-exam-btn').onclick=()=>submitExam(false);$('#clear-wrong-btn').onclick=async ()=>{return runMutation(async()=>{if(confirm('确定清空当前题库错题本？')){state.wrongBook[activeBank().id]=[];await saveSilent();renderAll()}});};
+$('#clear-records-btn').onclick=async ()=>{return runMutation(async()=>{if(confirm('确定清空全部练习与考试记录？')){state.records=[];await saveSilent();renderAll()}});};$('#export-records-btn').onclick=exportRecords;$('#record-mode-filter').onchange=renderRecords;const recordDetailFilterV385=$('#record-detail-filter-v385');if(recordDetailFilterV385)recordDetailFilterV385.onchange=renderRecords;$('#record-limit').onchange=renderRecords;$('#record-refresh-btn').onclick=renderRecords;$('#wrong-status-filter').onchange=renderWrongBook;$('#wrong-sort-mode').onchange=renderWrongBook;$('#practice-wrong-btn').onclick=startWrongPractice;const practiceFavBtnV596=$('#practice-favorites-btn-v596');if(practiceFavBtnV596)practiceFavBtnV596.onclick=()=>switchPracticeSourceV27('favorite');const clearFavBtnV596=$('#clear-favorites-btn-v596');if(clearFavBtnV596)clearFavBtnV596.onclick=clearCurrentFavoritesV596;const exportJsonBtn=$('#export-json-btn');if(exportJsonBtn)exportJsonBtn.onclick=exportCurrentBank;const exportAllBtn=$('#export-all-btn');if(exportAllBtn)exportAllBtn.onclick=exportAll;const importBackupQuickBtnV598=$('#import-backup-quick-btn-v598');if(importBackupQuickBtnV598)importBackupQuickBtnV598.onclick=()=>{backupImportModeV23=$('#settings-backup-mode-v23')?.value||'overwrite';$('#backup-json-file-v23')?.click()};$('#reset-data-btn').onclick=resetData;bindLimitControlsV60();bindPracticeStartControlsV58916();bindAiImportEventsV99();
 }
 
 function cleanImportBankNameFromFile(fileName){
@@ -184,7 +180,7 @@ function setImportBankNameFromFile(fileName){
   }
 }
 
-function saveSilent(){localStorage.setItem(KEY,serializeState())}
+async function saveSilent(){try{await ShirohaPlatform.saves.save(JSON.parse(serializeState()))}catch(error){mutationSaveError=error;throw error}}
 
 /* SHIROHA_WEB_ISSUE_99_AI_IMPORT_START */
 function defaultAiConfigV99(){return {provider:'ollama',endpoint:AI_PROVIDER_PRESETS_V99.ollama.endpoint,model:'',timeoutSeconds:120,rememberKey:false}}
@@ -199,20 +195,7 @@ function ensureAiImportStateV99(){
   state.settings.aiImportV99=normalizeAiConfigV99(state.settings.aiImportV99);
   return state.settings.aiImportV99;
 }
-function safeStorageGetV99(storage,key){try{return storage.getItem(key)||''}catch(_){return''}}
-function safeStorageSetV99(storage,key,value){try{if(value)storage.setItem(key,value);else storage.removeItem(key);return true}catch(_){return false}}
-function readStoredAiKeyV99(configOverride){
-  const config=configOverride||ensureAiImportStateV99();
-  return config.rememberKey?safeStorageGetV99(localStorage,AI_KEY_LOCAL_V99):safeStorageGetV99(sessionStorage,AI_KEY_SESSION_V99);
-}
-function writeStoredAiKeyV99(key,remember){
-  const value=String(key||'');
-  const primary=remember?localStorage:sessionStorage;
-  const secondary=remember?sessionStorage:localStorage;
-  if(!safeStorageSetV99(primary,remember?AI_KEY_LOCAL_V99:AI_KEY_SESSION_V99,value))return false;
-  safeStorageSetV99(secondary,remember?AI_KEY_SESSION_V99:AI_KEY_LOCAL_V99,'');
-  return true;
-}
+function readStoredAiKeyV99(configOverride){return ShirohaPlatform.credentials.status('ai',configOverride||ensureAiImportStateV99())}
 function aiProviderLabelV99(provider){return AI_PROVIDER_PRESETS_V99[provider]?.label||'自定义接口'}
 function normalizeAiEndpointV99(value,provider){
   let text=String(value||'').trim();
@@ -236,7 +219,9 @@ function readAiFormV99(){
   const model=String($('#ai-model-v99')?.value||'').trim();
   const timeoutSeconds=Math.min(600,Math.max(10,Number($('#ai-timeout-v99')?.value||120)||120));
   const rememberKey=!!$('#ai-remember-key-v99')?.checked;
-  const apiKey=String($('#ai-api-key-v99')?.value||'').trim();
+  const typedKey=String($('#ai-api-key-v99')?.value||'').trim();
+  const previous=ensureAiImportStateV99();
+  const apiKey=typedKey||(endpoint===previous.endpoint?readStoredAiKeyV99(previous):'');
   if(!endpoint)throw new Error('请填写 AI 接口地址。');
   if(!model)throw new Error('请填写模型名称。');
   return {provider,endpoint,model,timeoutSeconds,rememberKey,apiKey};
@@ -249,8 +234,7 @@ function aiCurrentOriginV375(){try{return location.origin&&location.origin!=='nu
 function aiEndpointHostV375(endpoint){try{return new URL(endpoint).host}catch(_){return''}}
 function sanitizeAiDiagnosticDetailV375(text,config){
   let detail=String(text||'').replace(/\s+/g,' ').trim();
-  const key=config?readStoredAiKeyV99(config):'';
-  if(key)detail=detail.split(key).join('[API_KEY]');
+  if(config)detail=ShirohaPlatform.credentials.redact(config,detail);
   return detail.slice(0,520);
 }
 function aiOllamaCorsCommandV375(diag){
@@ -341,33 +325,33 @@ function renderAiSettingsV99(){
   if(model)model.value=config.model;
   if(timeout)timeout.value=String(config.timeoutSeconds);
   if(remember)remember.checked=config.rememberKey;
-  if(key)key.value=readStoredAiKeyV99(config);
+  if(key){key.value='';key.placeholder=readStoredAiKeyV99(config)?'已保存；留空保留，输入可替换':'API Key（可选）'}
   updateAiConnectionPillV99();
   renderAiDiagnosticV375();
 }
-function saveAiSettingsV99(){
+async function saveAiSettingsV99(){return runMutation(async()=>{
   const previousConfig={...ensureAiImportStateV99()};
-  const previousLocalKey=safeStorageGetV99(localStorage,AI_KEY_LOCAL_V99);
-  const previousSessionKey=safeStorageGetV99(sessionStorage,AI_KEY_SESSION_V99);
+  let undoCredential=()=>{};
+
   try{
     const config=readAiFormV99();
     state.settings.aiImportV99={provider:config.provider,endpoint:config.endpoint,model:config.model,timeoutSeconds:config.timeoutSeconds,rememberKey:config.rememberKey};
-    if(!writeStoredAiKeyV99(config.apiKey,config.rememberKey))throw new Error('浏览器拒绝保存 API Key，请检查隐私或存储设置。');
-    try{saveSilent()}catch(error){state.settings.aiImportV99=previousConfig;safeStorageSetV99(localStorage,AI_KEY_LOCAL_V99,previousLocalKey);safeStorageSetV99(sessionStorage,AI_KEY_SESSION_V99,previousSessionKey);throw error}
+    undoCredential=ShirohaPlatform.credentials.set('ai',config,config.apiKey,config.rememberKey);
+    try{await saveSilent()}catch(error){state.settings.aiImportV99=previousConfig;undoCredential();throw error}
     aiConnectionStateV99='idle';
     aiLastDiagnosticV375=buildAiDiagnosticV375(null,config,'idle');
     const endpoint=$('#ai-endpoint-v99');if(endpoint)endpoint.value=config.endpoint;
     setAiSettingsStatusV99('设置已保存。API Key 与题库状态分离存储，不会写入 Web 完整备份。','ok');
     updateAiConnectionPillV99();renderAiDiagnosticV375();syncAiImportActionV99();showNotice('AI 设置','设置已保存。','ok');
-  }catch(error){setAiSettingsStatusV99(error.message||'保存失败。','warn');updateAiConnectionPillV99('error');showNotice('AI 设置',error.message||'保存失败。','danger')}
-}
-function clearAiSettingsV99(){
+  }catch(error){mutationSaveError=error;setAiSettingsStatusV99(error.message||'保存失败。','warn');updateAiConnectionPillV99('error');showNotice('AI 设置',error.message||'保存失败。','danger')}
+});}
+async function clearAiSettingsV99(){return runMutation(async()=>{
   if(!confirm('确定清除 AI 接口配置和已保存的 API Key？'))return;
+  const undoCredential=ShirohaPlatform.credentials.set('ai',ensureAiImportStateV99(),'',false);
   state.settings.aiImportV99=defaultAiConfigV99();
-  safeStorageSetV99(localStorage,AI_KEY_LOCAL_V99,'');safeStorageSetV99(sessionStorage,AI_KEY_SESSION_V99,'');
-  try{saveSilent()}catch(error){setAiSettingsStatusV99('配置已在当前页面清空，但本地状态保存失败：'+(error.message||error),'warn');return}
+  try{await saveSilent()}catch(error){undoCredential();setAiSettingsStatusV99('清除失败，原配置已保留：'+(error.message||error),'warn');return}
   aiConnectionStateV99='idle';aiLastDiagnosticV375=null;aiDiagnosticsVisibleV375=false;renderAiSettingsV99();setAiSettingsStatusV99('AI 配置已清除。');syncAiImportActionV99();showNotice('AI 设置','配置已清除。','ok');
-}
+});}
 function bindAiImportEventsV99(){
   const provider=$('#ai-provider-v99');if(provider)provider.onchange=()=>{
     const endpoint=$('#ai-endpoint-v99');if(!endpoint)return;
@@ -531,13 +515,12 @@ function aiResponseContentV99(payload){
   return String(content??'');
 }
 async function requestAiChatV99(config,messages,{controller,maxTokens,testMode,plainText}={}){
-  const headers={'Content-Type':'application/json','Accept':'application/json'};if(config.apiKey)headers.Authorization='Bearer '+config.apiKey;
   const base={model:config.model,messages,temperature:0,stream:false};if(maxTokens)base.max_tokens=maxTokens;
   const attempts=plainText?[base]:[{...base,response_format:{type:'json_object'}},base];
   let lastError=null;
   for(let i=0;i<attempts.length;i++){
     let response;
-    try{response=await fetch(config.endpoint,{method:'POST',headers,body:JSON.stringify(attempts[i]),signal:controller?.signal,cache:'no-store',credentials:'omit',referrerPolicy:'no-referrer'})}
+    try{response=await ShirohaPlatform.network.ai(config,attempts[i],controller?.signal)}
     catch(error){if(error?.name==='AbortError')throw error;const e=new Error('无法访问 AI 接口。请检查服务是否启动、地址是否正确，以及接口是否允许浏览器跨域访问。');e.cause=error;e.network=true;e.aiStage='fetch';e.endpoint=config.endpoint;e.provider=config.provider;throw e}
     const raw=await response.text();
     if(response.ok){
@@ -1075,8 +1058,8 @@ function renderBankList(){
     return `<section class="bank-group-section-v58 ${groupActive?'practice-group-active-v8916':''}"><div class="bank-group-head-v58"><div><b>${esc(groupName)}</b><span class="bank-group-badge-v58">一级分组</span>${groupActive?'<span class="practice-scope-badge-v8916">当前练习范围</span>':''}</div><div class="bank-group-actions-v8916"><span class="muted">${items.length} 个题库｜${total} 题</span><button class="ghost mini-btn" data-practice-group-v8916="${esc(groupName)}" type="button">${groupActive?'已设为练习范围':'设为练习范围'}</button></div></div><div class="bank-group-list-v58">${body}</div></section>`;
   }).join('');
   $$('[data-bank-bulk-v23]').forEach(x=>x.onchange=()=>{if(x.checked)exportBankSelectedV23.add(x.dataset.bankBulkV23);else exportBankSelectedV23.delete(x.dataset.bankBulkV23);renderBankList()});
-  $$('[data-openbank]').forEach(x=>x.onclick=()=>{setPracticeBankScopeV8916(x.dataset.openbank,true);saveSilent();renderAll()});
-  $$('[data-practice-group-v8916]').forEach(x=>x.onclick=()=>{if(setPracticeGroupScopeV8916(x.dataset.practiceGroupV8916)){saveSilent();renderAll();toast(`已将“${x.dataset.practiceGroupV8916}”设为当前练习范围。`,'ok')}});
+  $$('[data-openbank]').forEach(x=>x.onclick=async ()=>{return runMutation(async()=>{setPracticeBankScopeV8916(x.dataset.openbank,true);await saveSilent();renderAll()});});
+  $$('[data-practice-group-v8916]').forEach(x=>x.onclick=async ()=>{return runMutation(async()=>{if(setPracticeGroupScopeV8916(x.dataset.practiceGroupV8916)){await saveSilent();renderAll();toast(`已将“${x.dataset.practiceGroupV8916}”设为当前练习范围。`,'ok')}});});
   $$('[data-editbank-v45]').forEach(x=>x.onclick=()=>editBankByIdV45(x.dataset.editbankV45));
   $$('[data-copybank]').forEach(x=>x.onclick=()=>duplicateBankById(x.dataset.copybank));
   $$('[data-exportbank]').forEach(x=>x.onclick=()=>exportBankById(x.dataset.exportbank));
@@ -1627,15 +1610,7 @@ function isUnsupportedSpreadsheetFileV49(file){
   const lower=String(file?.name||'').toLowerCase();
   return lower.endsWith('.xls')||lower.endsWith('.xlsm');
 }
-async function readPlainTextFileV49(file){
-  if(file&&typeof file.text==='function')return await file.text();
-  return await new Promise((resolve,reject)=>{
-    const reader=new FileReader();
-    reader.onload=()=>resolve(String(reader.result||''));
-    reader.onerror=()=>reject(new Error('文本读取失败'));
-    reader.readAsText(file,'UTF-8');
-  });
-}
+async function readPlainTextFileV49(file){return ShirohaPlatform.files.readText(file)}
 async function readTableImportFileV49(file){
   const lower=String(file.name||'').toLowerCase();
   let sheets=[];
@@ -1716,7 +1691,7 @@ function normalizeTableCellTextV49(s){
   return String(s??'').replace(/\u00A0/g,' ').replace(/\r\n?/g,'\n').replace(/[ \t]+\n/g,'\n').replace(/\n[ \t]+/g,'\n').trim();
 }
 async function extractXlsxSheetsV49(file){
-  const buf=await file.arrayBuffer();
+  const buf=await ShirohaPlatform.files.readBuffer(file);
   const entries=parseZipEntries(buf);
   const get=async name=>{
     const entry=entries.find(e=>e.name===name);
@@ -1929,7 +1904,7 @@ function extractTableAnswerAnalysisV49(text){
   return {answer:s,analysis:''};
 }
 async function extractDocxText(file){
-  const buf=await file.arrayBuffer();
+  const buf=await ShirohaPlatform.files.readBuffer(file);
   const entries=parseZipEntries(buf);
   const doc=entries.find(e=>e.name==='word/document.xml');
   if(!doc)throw new Error('未找到 word/document.xml，可能不是有效 .docx 文件');
@@ -2481,7 +2456,7 @@ function docxImageRefsToText(token,imageMap={}){
 function decodeXml(s){return String(s).replace(/&#x([0-9a-fA-F]+);/g,(_,n)=>String.fromCodePoint(parseInt(n,16))).replace(/&#(\d+);/g,(_,n)=>String.fromCodePoint(parseInt(n,10))).replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&').replace(/&quot;/g,'"').replace(/&apos;/g,"'")}
 
 async function extractPdfText(file){
-  const data=new Uint8Array(await file.arrayBuffer());
+  const data=new Uint8Array(await ShirohaPlatform.files.readBuffer(file));
   // v6: PDF 文本层本地提取。优先尝试本地 PDF.js；如果没有打包 PDF.js，则使用内置轻量提取器。
   try{
     const loaded=await loadLocalPdfJs();
@@ -2618,7 +2593,7 @@ async function startPdfOcrImport(){
     setOcrStatus('正在加载 PDF 与 OCR 扩展资源……','warn');
     const loaded=await loadLocalPdfJs();
     if(!loaded?.lib?.getDocument)throw new Error('PDF.js 不可用，无法把 PDF 页面渲染给 OCR');
-    const data=new Uint8Array(await file.arrayBuffer());
+    const data=new Uint8Array(await ShirohaPlatform.files.readBuffer(file));
     const pdf=await loaded.lib.getDocument(pdfDocumentOptions(data,loaded)).promise;
     const maxPages=Math.min(pdf.numPages,pageLimit);
     const created=await createOcrWorker(lang,m=>{
@@ -2683,14 +2658,14 @@ async function copyOcrText(){
   if(!text){setOcrStatus('没有可复制的 OCR 文本。','warn');return}
   await copyTextV23(text,'已复制 OCR 文本。');
 }
-async function downloadOcrDocx(){
+async function downloadOcrDocx(){try{
   const text=currentOcrText();
   if(!text){setOcrStatus('没有可下载的 OCR 文本。','warn');return}
   const name=cleanImportBankNameFromFile(ocrImportState.file?.name||'OCR识别结果')+'_OCR.docx';
   const blob=createOcrDocxBlob(text,ocrImportState.file?.name||'OCR识别结果');
   downloadBlob(name,blob);
   setOcrStatus('已生成 DOCX 下载文件。请打开后人工核对 OCR 结果。','ok');
-}
+}catch(error){platformStatus('导出失败：'+error.message,true);return false}}
 async function extractPdfTextLite(bytes){
   const raw=latin1(bytes);
   const streams=[];
@@ -6854,7 +6829,7 @@ function openPracticeEditQuestionV120(){
   setEditDeleteVisibleV120(false);fillEditQuestionFormV120(loc.bank.questions[loc.index],loc.index,'刷题中编辑：保存后会写回来源题库，并立即刷新当前题。');
   $('#edit-modal').classList.remove('hidden');$('#edit-modal').setAttribute('aria-hidden','false');
 }
-function savePracticeEditQuestionV120(){
+async function savePracticeEditQuestionV120(){return runMutation(async()=>{
   const session=practiceEditSessionV120;if(!session)return;
   const bank=(state.banks||[]).find(b=>b.id===session.bankId);
   if(!bank){$('#edit-status').textContent='来源题库不存在，无法保存。';$('#edit-status').className='notice warn';return}
@@ -6865,13 +6840,13 @@ function savePracticeEditQuestionV120(){
   const next=cleanImportedQuestion(normalizeQuestion(read.raw,index));
   bank.questions[index]=next;bank.updatedAt=now();
   (practice.items||[]).forEach(item=>{if(item&&item.bankId===bank.id&&(item.question===oldQuestion||practiceItemKeyV8916(item)===session.sessionKey))item.question=next});
-  saveSilent();
+  await saveSilent();
   const status=validateQuestion(next);
   $('#edit-status').textContent='已保存到来源题库。当前状态：'+status;
   $('#edit-status').className='notice '+(status==='正常'?'ok':'warn');
   toast('已保存题目修改。','ok');
   renderStats();renderBankList();renderBankPreview();renderWrongBook();renderFavoritesPageV596();renderRecords();renderPracticeScopeUiV8916();renderPracticeQuestion();
-}
+});}
 function setImportCommitBusyV5911(busy,label='正在保存…'){
   const buttons=[$('#confirm-import-btn'),$('#dual-confirm-import-btn')].filter(Boolean);
   buttons.forEach(btn=>{
@@ -6908,7 +6883,7 @@ function importSaveFailureTextV5911(error,action='保存'){
   const detail=String(error?.message||'').trim();
   return `浏览器未能保存${action}结果，已恢复到保存前状态。${detail?`错误信息：${detail}`:'请稍后重试。'} ${suffix}`;
 }
-async function appendImportToBankV5911(target,warnings){
+async function appendImportToBankV5911(target,warnings){return runMutation(async()=>{
   const previousQuestions=Array.isArray(target.questions)?target.questions:[];
   const previousUpdatedAt=target.updatedAt;
   const previousActiveBankId=state.activeBankId;
@@ -6924,7 +6899,7 @@ async function appendImportToBankV5911(target,warnings){
     target.questions=[...previousQuestions,...incoming];
     target.updatedAt=now();
     setPracticeBankScopeV8916(target.id,true);
-    saveSilent();
+    await saveSilent();
   }catch(error){
     target.questions=previousQuestions;
     target.updatedAt=previousUpdatedAt;
@@ -6944,9 +6919,9 @@ async function appendImportToBankV5911(target,warnings){
   renderAll();
   showNotice('追加成功',`已追加到“${bankPathLabelV58(target)}”：新增 ${incoming.length} 道题，当前共 ${target.questions.length} 道题。${warnings.length?`追加前有 ${warnings.length} 条提示，建议在题库管理中抽查。`:''}`,'ok');
   toast(`已追加 ${incoming.length} 题到：${target.name}`,'ok','追加成功');
-}
-async function confirmImport(){
-  if(bankEditSessionV45){saveBankEditSessionV45();return}
+});}
+async function confirmImport(){return runMutation(async()=>{
+  if(bankEditSessionV45){return await saveBankEditSessionV45()}
   if(importCommitBusyV5911)return;
   if(!importCache.length){showNotice('导入失败','当前没有可导入的题目。','danger');return}
   const warnings=collectImportWarnings(importCache);
@@ -6955,7 +6930,7 @@ async function confirmImport(){
     const targetId=$('#import-target-bank-v59')?.value||state.activeBankId||'';
     const target=state.banks.find(b=>b.id===targetId);
     if(!target){showNotice('追加失败','没有找到要追加的目标题库，请先选择已有题库。','danger');return}
-    appendImportToBankV5911(target,warnings);
+    await appendImportToBankV5911(target,warnings);
     return;
   }
   const name=$('#import-bank-name').value.trim()||'导入题库';
@@ -6969,7 +6944,7 @@ async function confirmImport(){
   await waitForImportCommitPaintV5911();
   try{
     bank={id:makeId('bank'),name,groupName,createdAt:now(),updatedAt:now(),questions:importCache.map((q,i)=>cleanImportedQuestion({...q,id:makeId('q',i),number:i+1}))};
-    state.banks=[...previousBanks,bank];setPracticeBankScopeV8916(bank.id,true);saveSilent();
+    state.banks=[...previousBanks,bank];setPracticeBankScopeV8916(bank.id,true);await saveSilent();
   }catch(error){
     state.banks=previousBanks;state.activeBankId=previousActiveBankId;state.settings=previousSettings;
     if(previousSettings&&typeof previousSettings==='object'){
@@ -6986,16 +6961,16 @@ async function confirmImport(){
   renderAll();
   showNotice('导入成功',`已创建题库“${name}”，共 ${bank.questions.length} 道题。${warnings.length?`导入前有 ${warnings.length} 条提示，建议在题库管理中抽查。`:''}`,'ok');
   toast(`已导入题库：${name}，共 ${bank.questions.length} 题。`,'ok','导入成功');
-}
+});}
 
-function renameActiveBank(){const b=activeBank();const val=$('#bank-rename-input').value.trim();if(!val){alert('请输入新的题库名称。');return}const oldGroup=bankGroupNameV58(b);b.name=val;b.groupName=normalizeBankGroupNameV58($('#bank-group-rename-input-v58')?.value||b.groupName);b.updatedAt=now();const scope=practiceScopeV8916();if(scope.type===PRACTICE_SCOPE_GROUP_V8916&&scope.value===oldGroup&&state.banks.every(x=>x.id===b.id||bankGroupNameV58(x)!==oldGroup)){ensurePracticeScopeV8916();toast('原练习分组已无题库，已切换为当前题库。','warn')}$('#bank-rename-input').value='';const g=$('#bank-group-rename-input-v58');if(g){g.dataset.lastBankIdV58='';}saveSilent();renderAll()}
+async function renameActiveBank(){return runMutation(async()=>{const b=activeBank();const val=$('#bank-rename-input').value.trim();if(!val){alert('请输入新的题库名称。');return}const oldGroup=bankGroupNameV58(b);b.name=val;b.groupName=normalizeBankGroupNameV58($('#bank-group-rename-input-v58')?.value||b.groupName);b.updatedAt=now();const scope=practiceScopeV8916();if(scope.type===PRACTICE_SCOPE_GROUP_V8916&&scope.value===oldGroup&&state.banks.every(x=>x.id===b.id||bankGroupNameV58(x)!==oldGroup)){ensurePracticeScopeV8916();toast('原练习分组已无题库，已切换为当前题库。','warn')}const g=$('#bank-group-rename-input-v58');if(g){g.dataset.lastBankIdV58='';}await saveSilent();renderAll()});}
 function duplicateActiveBank(){duplicateBankById(activeBank().id)}
-function duplicateBankById(id){const b=state.banks.find(x=>x.id===id);if(!b)return;const copy=JSON.parse(JSON.stringify(b));copy.id=makeId('bank');copy.name=b.name+' - 副本';copy.createdAt=now();copy.updatedAt=now();copy.questions=(copy.questions||[]).map((q,i)=>({...q,id:makeId('q',i),number:i+1}));state.banks.push(copy);setPracticeBankScopeV8916(copy.id,true);saveSilent();renderAll()}
-function newEmptyBank(){const name=prompt('请输入新题库名称：','新建空题库');if(!name)return;const groupName=normalizeBankGroupNameV58(prompt('请输入一级分组名称，可留空：','')||'');const bank={id:makeId('bank'),name:name.trim()||'新建空题库',groupName,createdAt:now(),updatedAt:now(),questions:[]};state.banks.push(bank);setPracticeBankScopeV8916(bank.id,true);saveSilent();renderAll()}
-function mergeBankIntoActive(){const sourceId=$('#merge-bank-select').value;const target=activeBank();const src=state.banks.find(b=>b.id===sourceId);if(!src){alert('没有可合并的来源题库。');return}if(!confirm(`将“${src.name}”的 ${src.questions.length} 道题合并到当前题库“${target.name}”？`))return;const before=target.questions.length;const existing=new Set(target.questions.map(q=>normalizeText(q.question)));let added=0,skipped=0;src.questions.forEach((q)=>{const k=normalizeText(q.question);if(existing.has(k)){skipped++;return}existing.add(k);target.questions.push({...JSON.parse(JSON.stringify(q)),id:makeId('q',target.questions.length+1),number:target.questions.length+1});added++});target.updatedAt=now();saveSilent();renderAll();alert(`合并完成：新增 ${added} 题，跳过重复 ${skipped} 题。合并前 ${before} 题，当前 ${target.questions.length} 题。`)}
-function exportBankById(id){const b=state.banks.find(x=>x.id===id);if(!b)return;const text=JSON.stringify(serializeBankForCrossExportV53(b),null,2);$('#export-output')&&($('#export-output').value=text);download((b.name||'题库')+'.json',text)}
+async function duplicateBankById(id){return runMutation(async()=>{const b=state.banks.find(x=>x.id===id);if(!b)return;const copy=JSON.parse(JSON.stringify(b));copy.id=makeId('bank');copy.name=b.name+' - 副本';copy.createdAt=now();copy.updatedAt=now();copy.questions=(copy.questions||[]).map((q,i)=>({...q,id:makeId('q',i),number:i+1}));state.banks.push(copy);setPracticeBankScopeV8916(copy.id,true);await saveSilent();renderAll()});}
+async function newEmptyBank(){return runMutation(async()=>{const name=prompt('请输入新题库名称：','新建空题库');if(!name)return;const groupName=normalizeBankGroupNameV58(prompt('请输入一级分组名称，可留空：','')||'');const bank={id:makeId('bank'),name:name.trim()||'新建空题库',groupName,createdAt:now(),updatedAt:now(),questions:[]};state.banks.push(bank);setPracticeBankScopeV8916(bank.id,true);await saveSilent();renderAll()});}
+async function mergeBankIntoActive(){return runMutation(async()=>{const sourceId=$('#merge-bank-select').value;const target=activeBank();const src=state.banks.find(b=>b.id===sourceId);if(!src){alert('没有可合并的来源题库。');return}if(!confirm(`将“${src.name}”的 ${src.questions.length} 道题合并到当前题库“${target.name}”？`))return;const before=target.questions.length;const existing=new Set(target.questions.map(q=>normalizeText(q.question)));let added=0,skipped=0;src.questions.forEach((q)=>{const k=normalizeText(q.question);if(existing.has(k)){skipped++;return}existing.add(k);target.questions.push({...JSON.parse(JSON.stringify(q)),id:makeId('q',target.questions.length+1),number:target.questions.length+1});added++});target.updatedAt=now();await saveSilent();renderAll();alert(`合并完成：新增 ${added} 题，跳过重复 ${skipped} 题。合并前 ${before} 题，当前 ${target.questions.length} 题。`)});}
+function exportBankById(id){try{const b=state.banks.find(x=>x.id===id);if(!b)return;const text=JSON.stringify(serializeBankForCrossExportV53(b),null,2);$('#export-output')&&($('#export-output').value=text);download((b.name||'题库')+'.json',text)}catch(error){platformStatus('导出失败：'+error.message,true);return false}}
 
-function dedupeActiveBank(){const b=activeBank();const map=new Map(),dups=[];b.questions.forEach(q=>{const k=normalizeText(q.question);if(map.has(k))dups.push(q);else map.set(k,q)});b.questions=[...map.values()].map((q,i)=>({...q,number:i+1}));saveSilent();renderAll();alert(`去重完成：删除 ${dups.length} 道重复题，剩余 ${b.questions.length} 道。`)}
+async function dedupeActiveBank(){return runMutation(async()=>{const b=activeBank();const map=new Map(),dups=[];b.questions.forEach(q=>{const k=normalizeText(q.question);if(map.has(k))dups.push(q);else map.set(k,q)});b.questions=[...map.values()].map((q,i)=>({...q,number:i+1}));await saveSilent();renderAll();alert(`去重完成：删除 ${dups.length} 道重复题，剩余 ${b.questions.length} 道。`)});}
 function shuffle(a){a=[...a];for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
 function startWrongPractice(){
   const limit=$('#wrong-practice-limit')?.value||'custom';const customCount=readCustomCountV60('#wrong-practice-custom-count',20);
@@ -7060,7 +7035,7 @@ function renderQuestionInlineRichTextV55(raw){
     out+=renderCodeAwareTextV5910(raw.slice(last,m.index));
     const alt=m[1]||'题目图片';
     const src=m[2];
-    out+=`<figure class="question-media question-rich-media"><img class="question-image" src="${esc(src)}" alt="${esc(alt)}" loading="lazy"></figure>`;
+    out+=`<figure class="question-media question-rich-media"><img class="question-image" src="${esc(ShirohaPlatform.media.display(src))}" alt="${esc(alt)}" loading="lazy"></figure>`;
     last=re.lastIndex;
   }
   out+=renderCodeAwareTextV5910(raw.slice(last));
@@ -7487,13 +7462,13 @@ function addWrong(id,bid=activeBank().id){const arr=getWrongEntries(bid);let e=a
 function markRight(id,bid=activeBank().id){const arr=getWrongEntries(bid);let e=arr.find(x=>x.id===id);if(!e)return;const ts=Date.now();e.rightCount++;e.reviewRightCount=Number(e.reviewRightCount||0)+1;e.streakCorrectCount=Number(e.streakCorrectCount||0)+1;const mastered=e.streakCorrectCount>=2;e.reviewLevel=mastered?Math.max(2,Number(e.reviewLevel||0)+1):Math.max(1,Number(e.reviewLevel||0));e.lastCorrectAt=new Date(ts).toISOString();e.lastReviewedAt=e.lastCorrectAt;e.nextReviewAt=nextWrongReviewIsoV24(e.reviewLevel,ts);e.timestamp=ts;e.status=mastered?'已掌握':'复习中';setWrongEntries(arr,bid)}
 function removeWrong(id){const bid=activeBank().id;setWrongEntries(getWrongEntries(bid).filter(x=>x.id!==id),bid)}
 function makeAnswerDetail(item,chosen,ok,score,totalScore){const q=practiceQuestionV8916(item);const values=Array.isArray(chosen)?[...chosen]:[];const detail={questionId:q.id,question:short(q.question,120),type:q.type,category:q.category||'',chosen:values,userAnswer:[...values],answer:[...q.answer],correct:!!ok,score:ok?score:0,fullScore:score,time:now(),sourceBankId:practiceItemBankIdV8916(item),sourceBankName:practiceItemBankNameV8916(item),nativeQuestion:JSON.parse(JSON.stringify(q))};if(isMultiBlankQuestionV58914(q)){detail.blankAnswers=cloneBlankAnswersV58914(q.blankAnswers);detail.userBlankAnswers=[...values]}return detail}
-function finishPractice(exited=false){
-  resetAiSinglePracticeV613();
+async function finishPractice(exited=false){return runMutation(async()=>{
   const total=practice.answered;
   const groupMode=practice.scopeType==='GROUP';const rec={id:makeId('rec','practice'),mode:'练习',bankId:groupMode?'':(practice.items[0]?.bankId||activeBank().id),bankName:groupMode?(practice.scopeName||'分组练习'):(practice.items[0]?.bankName||activeBank().name),scopeType:practice.scopeType||'BANK',scopeName:practice.scopeName||practiceItemBankNameV8916(practice.items[0]),total:practice.items.length,answered:total,correct:practice.correct,wrong:practice.wrong,accuracy:total?Math.round(practice.correct/total*100):0,score:null,date:now(),duration:Math.round((Date.now()-practice.start)/1000),details:practice.details||[]};
   if(total||exited)state.records.unshift(rec);
   updatePracticeProgressV58916();
-  saveSilent();
+  await saveSilent();
+  resetAiSinglePracticeV613();
   if(exited){
     exitPracticeFocus();
     document.body.classList.remove('practice-rail-collapsed-v34');
@@ -7509,7 +7484,7 @@ function finishPractice(exited=false){
   $('#again-practice').onclick=()=>startPractice();
   showNotice('练习完成',`已答 ${total} 道，正确率 ${rec.accuracy}%。`,'ok');
   renderAll();
-}
+});}
 
 function scoreOf(q){if(q.score)return q.score;return Number(q.type==='multiple'?$('#score-multiple').value:q.type==='judge'?$('#score-judge').value:q.type==='blank'?$('#score-blank').value:q.type==='short'?$('#score-short').value:$('#score-single').value)||0}
 function examQuestionV113(item){return practiceQuestionV8916(item)}
@@ -7547,9 +7522,9 @@ function renderRecords(){
   }).join(''):(wrongOnly?'<p class="muted">当前筛选范围内暂无含错题的练习或考试记录。</p>':'<p class="muted">暂无练习或考试记录。</p>');
 }
 /* SHIROHA_WEB_V38_5_RECORD_WRONG_ONLY_FILTER_END */
-function exportRecords(){const text=JSON.stringify(state.records||[],null,2);$('#export-output')&&($('#export-output').value=text);download('学习记录.json',text)}
+function exportRecords(){try{const text=JSON.stringify(state.records||[],null,2);$('#export-output')&&($('#export-output').value=text);download('学习记录.json',text)}catch(error){platformStatus('导出失败：'+error.message,true);return false}}
 function fmt(s){return new Date(s).toLocaleString('zh-CN',{hour12:false})}
-function exportCurrentBank(){const text=JSON.stringify(serializeBankForCrossExportV53(activeBank()),null,2);$('#export-output').value=text;download(activeBank().name+'.json',text)}
+function exportCurrentBank(){try{const text=JSON.stringify(serializeBankForCrossExportV53(activeBank()),null,2);$('#export-output').value=text;download(activeBank().name+'.json',text)}catch(error){platformStatus('导出失败：'+error.message,true);return false}}
 function exportAll(){exportAllBackupV23()}
 
 
@@ -7589,7 +7564,7 @@ function ensureBankManageExportPanelV23(){
     </div>
     <div id="export-bank-summary-v23" class="notice warn">请选择需要管理的题库。</div>
   </div>`);
-  $('#bank-current-select-v28').onchange=e=>{if(e.target.value){state.activeBankId=e.target.value;saveSilent();renderAll()}};
+  $('#bank-current-select-v28').onchange=async e=>{return runMutation(async()=>{if(e.target.value){state.activeBankId=e.target.value;await saveSilent();renderAll()}});};
   $('#export-bank-all-v23').onchange=e=>{exportBankSelectedV23=e.target.checked?new Set(state.banks.map(b=>b.id)):new Set();renderBankList()};
   $('#export-bank-invert-v23').onclick=()=>{const next=new Set();state.banks.forEach(b=>{if(!exportBankSelectedV23.has(b.id))next.add(b.id)});exportBankSelectedV23=next;renderBankList()};
   $('#export-bank-current-v23').onclick=()=>{exportBankSelectedV23=new Set([activeBank().id]);renderBankList()};
@@ -7684,7 +7659,7 @@ function renderExportBankSummaryV23(){
 }
 function selectedBanksV23(){return state.banks.filter(b=>exportBankSelectedV23.has(b.id))}
 function deleteSelectedBanksV32(){deleteBanksV32([...exportBankSelectedV23])}
-function deleteBanksV32(ids){
+async function deleteBanksV32(ids){return runMutation(async()=>{
   const unique=[...new Set((ids||[]).filter(Boolean))];
   const targets=state.banks.filter(b=>unique.includes(b.id));
   if(!targets.length){toast('请先选择要删除的题库。','warn');return}
@@ -7696,8 +7671,8 @@ function deleteBanksV32(ids){
   if(!state.banks.length){state.activeBankId='';state.settings={...(state.settings||{}),suppressDefaultBank:true};}
   else if(!state.banks.some(b=>b.id===state.activeBankId))state.activeBankId=state.banks[0]?.id||'';
   const beforeScope=normalizePracticeScopeV8916(state.settings&&state.settings.practiceScope);ensurePracticeScopeV8916();const afterScope=practiceScopeV8916();
-  saveSilent();renderAll();toast(beforeScope.type===PRACTICE_SCOPE_GROUP_V8916&&afterScope.type===PRACTICE_SCOPE_BANK_V8916?`已删除 ${targets.length} 个题库。原练习分组已无题库，已切换为当前题库。`:`已删除 ${targets.length} 个题库。`,beforeScope.type===PRACTICE_SCOPE_GROUP_V8916&&afterScope.type===PRACTICE_SCOPE_BANK_V8916?'warn':'ok');
-}
+  await saveSilent();renderAll();toast(beforeScope.type===PRACTICE_SCOPE_GROUP_V8916&&afterScope.type===PRACTICE_SCOPE_BANK_V8916?`已删除 ${targets.length} 个题库。原练习分组已无题库，已切换为当前题库。`:`已删除 ${targets.length} 个题库。`,beforeScope.type===PRACTICE_SCOPE_GROUP_V8916&&afterScope.type===PRACTICE_SCOPE_BANK_V8916?'warn':'ok');
+});}
 function cleanFileNameV23(s){return String(s||'').replace(/[\\/:*?"<>|]/g,'_').replace(/\s+/g,'_').slice(0,80)||'bank'}
 function todayV23(){return new Date().toISOString().slice(0,10)}
 function buildQuestionBanksExportPayloadV598(banks){
@@ -7705,19 +7680,19 @@ function buildQuestionBanksExportPayloadV598(banks){
   if(exported.length===1)return exported[0];
   return {app:'Shiroha Quiz',appVersion:APP_VERSION,schemaVersion:CURRENT_SCHEMA_VERSION,richContentVersion:RICH_CONTENT_VERSION_V57,richContentCapabilities:buildRichContentCapabilitiesV57(exported),exportType:'question_banks',exportedAt:now(),banks:exported,activeBankId:exported.some(b=>b.id===state.activeBankId)?state.activeBankId:(exported[0]?.id||'')};
 }
-function exportSelectedBanksV23(){
+function exportSelectedBanksV23(){try{
   const banks=selectedBanksV23();if(!banks.length){toast('请至少选择一个题库。','warn');return}
   const payload=buildQuestionBanksExportPayloadV598(banks);
   const text=JSON.stringify(payload,null,2);setBackupPreviewV23(text);
   const name=banks.length===1?`shiroha-quiz-bank-${cleanFileNameV23(banks[0].name)}-${todayV23()}.json`:`shiroha-quiz-question-banks-${todayV23()}.json`;
   download(name,text);toast(`已导出 ${banks.length} 个题库 JSON。题库管理页导出的 JSON 只包含题库内容，不包含错题、收藏、记录和设置。`,'ok');
-}
-function exportAllBackupV23(){
+}catch(error){platformStatus('导出失败：'+error.message,true);return false}}
+function exportAllBackupV23(){try{
   const payload=buildBackupPayloadV23(state.banks||[],'all_data',true);
   const text=JSON.stringify(payload,null,2);setBackupPreviewV23(text);
   download(`shiroha-quiz-all-data-${todayV23()}.json`,text);toast('已生成全部数据备份。手机端若未弹出下载，可复制文本框内容。','ok');
-}
-function exportNativeCompatibleBackupZipV611(){
+}catch(error){platformStatus('导出失败：'+error.message,true);return false}}
+function exportNativeCompatibleBackupZipV611(){try{
   try{
     const result=buildNativeCompatibleBackupZipV611();
     setBackupPreviewV23(JSON.stringify(result.payload,null,2));
@@ -7727,7 +7702,7 @@ function exportNativeCompatibleBackupZipV611(){
     warnDev('导出原生兼容 ZIP 失败',err);
     toast('导出原生兼容 ZIP 失败，请先使用完整 JSON 备份。','danger');
   }
-}
+}catch(error){platformStatus('导出失败：'+error.message,true);return false}}
 async function copySelectedBanksJsonV23(){
   const banks=selectedBanksV23();if(!banks.length){toast('请至少选择一个题库。','warn');return}
   const text=JSON.stringify(buildQuestionBanksExportPayloadV598(banks),null,2);setBackupPreviewV23(text);
@@ -7787,7 +7762,7 @@ function upgradeState(){
   state.crossPlatformMeta.favoriteQuestions=state.crossPlatformMeta.favoriteQuestions&&typeof state.crossPlatformMeta.favoriteQuestions==='object'?state.crossPlatformMeta.favoriteQuestions:{};
   for(const b of state.banks){
     b.groupName=pickBankGroupNameFromJsonV58(b);
-    b.questions=(b.questions||[]).map((q,i)=>({...normalizeQuestion(q,i),id:q.id||makeId('q',i),number:q.number||i+1}));
+    b.questions=(b.questions||[]).map((q,i)=>({...q,...normalizeQuestion(q,i),id:q.id||makeId('q',i),number:q.number||i+1}));
     b.updatedAt=b.updatedAt||b.createdAt||now();
   }
   for(const bid of Object.keys(state.wrongBook)){
@@ -7821,13 +7796,8 @@ function renderBuiltInPanelV252(){
   if(panel)panel.hidden=!!has;
   el.textContent=has?'已加载，可直接使用。':'当前未加入 C1 题库。';
 }
-async function fetchJsonLocalV252(url){
-  try{const res=await fetch(url,{cache:'no-store'});if(res.ok)return await res.json();throw new Error('HTTP '+res.status)}
-  catch(fetchError){
-    return await new Promise((resolve,reject)=>{try{const xhr=new XMLHttpRequest();xhr.open('GET',url,true);xhr.overrideMimeType('application/json;charset=utf-8');xhr.onload=()=>{try{if(xhr.status===0||xhr.status>=200&&xhr.status<300)resolve(JSON.parse(xhr.responseText));else reject(new Error('XHR '+xhr.status))}catch(e){reject(e)}};xhr.onerror=()=>reject(fetchError);xhr.send()}catch(e){reject(fetchError||e)}});
-  }
-}
-async function loadBuiltInBankV252(){
+async function fetchJsonLocalV252(url){return ShirohaPlatform.resourceJson(url)}
+async function loadBuiltInBankV252(){return runMutation(async()=>{
   try{
     let data=null;
     let item=null;
@@ -7849,9 +7819,9 @@ async function loadBuiltInBankV252(){
     const old=state.banks.findIndex(b=>b.id==='default-c1'||b.builtInLazy);
     if(old>=0)state.banks[old]=bank;else state.banks.push(bank);
     state.settings={...(state.settings||{}),suppressDefaultBank:false};
-    setPracticeBankScopeV8916(bank.id,true);saveSilent();renderAll();toast(`已加载内置题库：${bank.name}，共 ${bank.questions.length} 题。`,'ok');
+    setPracticeBankScopeV8916(bank.id,true);await saveSilent();renderAll();toast(`已加载内置题库：${bank.name}，共 ${bank.questions.length} 题。`,'ok');
   }catch(e){warnDev('加载内置题库失败',e);toast('加载内置题库失败：'+e.message,'danger')}
-}
+});}
 function readCustomCountV60(selector,fallback=20){
   const el=selector?$(selector):null;const raw=el?Number(el.value):NaN;const n=Number.isFinite(raw)?Math.floor(raw):Number(fallback||20);
   return Math.max(1,n||20);
@@ -8000,7 +7970,7 @@ function renderPracticeQuestion(done=false){
   $('#practice-card').innerHTML=`<div class="practice-focus-head"><b>${esc(groupTitle)}</b><span>${practice.idx+1} / ${practice.items.length}</span><div class="practice-tools-v26"><button class="ghost mini-btn" id="p-favorite">${fav?'取消收藏':'收藏题目'}</button><button class="ghost mini-btn" id="p-edit-v120">编辑题目</button><button class="ghost mini-btn" id="p-exit">退出练习</button></div></div>${questionHtml(q,false)}<div class="actions practice-actions-v44"><button class="ghost" id="p-prev" ${practice.idx===0?'disabled':''}>上一题</button><button class="ghost" id="p-next">${practice.idx>=practice.items.length-1?'完成练习':'下一题'}</button><button class="primary" id="p-submit" ${st.answered||st.revealed?'disabled':''}>提交答案</button><button class="ghost" id="p-reveal" ${st.answered||st.revealed?'disabled':''}>看答案</button></div><div id="p-feedback"></div><div id="p-ai-v613"></div>${renderPracticeNavV26()}<aside class="practice-side-v31">${renderPracticeStatsV30()}</aside>`;
   bindOptionSelect('#practice-card',q);applyAnswerStateV26('#practice-card',q,st.chosen||[]);bindPracticeBlankDraftV58914(q,key,st);if(st.answered||st.revealed)showAnsweredStateV26(q,st);
   $('#p-exit').onclick=()=>{if(confirm('退出本轮练习？已作答部分会保存为一条记录。'))finishPractice(true)};
-  $('#p-favorite').onclick=()=>{toggleFavoriteV27(q.id,bid);renderPracticeQuestion()};
+  $('#p-favorite').onclick=async()=>{if(await toggleFavoriteV27(q.id,bid))renderPracticeQuestion()};
   $('#p-edit-v120').onclick=()=>openPracticeEditQuestionV120();
   $('#p-prev').onclick=()=>{if(practice.idx>0){practice.idx--;renderPracticeQuestion()}};
   $('#p-submit').onclick=()=>submitPractice(item,false);$('#p-reveal').onclick=()=>submitPractice(item,true);
@@ -8019,9 +7989,9 @@ function setPracticeAnswerStateV26(id,next){practice.answerState=practice.answer
 function applyAnswerStateV26(root,q,chosen){if(isMultiBlankQuestionV58914(q)){$$(root+' .multi-blank-answer-input-v58914').forEach((input,index)=>{input.value=String((chosen||[])[index]||'')});return}if(isTextType(q.type)){const el=$(root+' .text-answer');if(el)el.value=(chosen||[]).join('；');return}$$(root+' input').forEach(input=>{input.checked=(chosen||[]).includes(input.value)});$$(root+' .option').forEach(o=>o.classList.toggle('selected',o.querySelector('input').checked))}
 function bindPracticeBlankDraftV58914(q,key,stateValue){if(!isMultiBlankQuestionV58914(q)||stateValue.answered||stateValue.revealed)return;$$('#practice-card .multi-blank-answer-input-v58914').forEach(input=>{input.oninput=()=>setPracticeAnswerStateV26(key,{chosen:multiBlankAnswerV58914('#practice-card')})})}
 function renderPracticeNavV26(){const buttons=(practice.items||[]).map((item,i)=>{const q=practiceQuestionV8916(item),st=getPracticeAnswerStateV26(practiceItemKeyV8916(item)),cls=[i===practice.idx?'current':'',st.answered?'done':'',st.correct===true?'ok':st.correct===false?'bad':'',isFavoriteV27(q.id,practiceItemBankIdV8916(item))?'favorite':''].filter(Boolean).join(' ');return `<button type="button" class="${cls}" data-practice-jump="${i}" title="第${i+1}题">${i+1}</button>`}).join('');return `<div id="practice-nav-v26" class="practice-nav-v26"><b>答题卡</b><div class="practice-nav-grid-v26">${buttons}</div></div>`}
-function submitPractice(item,reveal){const q=practiceQuestionV8916(item),key=practiceItemKeyV8916(item);const chosen=collectAnswer('#practice-card',q);if(!hasAnswerValueV58914(chosen)&&!reveal){$('#p-feedback').innerHTML='<div class="feedback warn">请先作答，再提交。</div>';return}if(q.type==='short'){showSubjectiveFeedback(item,chosen,reveal);return}const ok=!reveal&&sameAnswerForQuestion(q,chosen,q.answer);if(!reveal)recordPracticeAnswer(item,chosen,ok);else setPracticeAnswerStateV26(key,{chosen,revealed:true,correct:null});markOptions('#practice-card',q,chosen);showAnsweredStateV26(q,getPracticeAnswerStateV26(key));refreshPracticeStatsV30();saveSilent();renderStats()}
+async function submitPractice(item,reveal){return runMutation(async()=>{const q=practiceQuestionV8916(item),key=practiceItemKeyV8916(item);const chosen=collectAnswer('#practice-card',q);if(!hasAnswerValueV58914(chosen)&&!reveal){$('#p-feedback').innerHTML='<div class="feedback warn">请先作答，再提交。</div>';return}if(q.type==='short'){showSubjectiveFeedback(item,chosen,reveal);return}const ok=!reveal&&sameAnswerForQuestion(q,chosen,q.answer);if(!reveal)recordPracticeAnswer(item,chosen,ok);else setPracticeAnswerStateV26(key,{chosen,revealed:true,correct:null});await saveSilent();markOptions('#practice-card',q,chosen);showAnsweredStateV26(q,getPracticeAnswerStateV26(key));refreshPracticeStatsV30();renderStats()});}
 function showAnsweredStateV26(q,st){markOptions('#practice-card',q,st.chosen||[]);$('#p-feedback').innerHTML=`<div class="feedback ${st.revealed?'warn':st.correct?'ok':'bad'}"><b>${st.revealed?'已显示参考答案':st.correct?'✓ 回答正确':'✕ 这题要再看一遍'}</b>${isMultiBlankQuestionV58914(q)?renderMultiBlankComparisonV58914(q.blankAnswers,st.chosen||[],true):'｜'+feedbackAnswerHtmlV58914(q,st.chosen||[])}${q.analysis?'<br>解析：'+renderQuestionContent(q.analysis):''}</div>`;const sub=$('#p-submit'),rev=$('#p-reveal');if(sub)sub.disabled=true;if(rev)rev.disabled=true;renderPracticeAiPanelV613()}
-function showSubjectiveFeedback(item,chosen,reveal){const q=practiceQuestionV8916(item),key=practiceItemKeyV8916(item),user=chosen.join('；')||'未填写';setPracticeAnswerStateV26(key,{chosen,revealed:!!reveal});$('#p-feedback').innerHTML=`<div class="feedback warn"><b>你的作答：</b><div class="q-multiline-text">${renderQuestionContent(user)}</div><b>参考答案：</b><div class="q-multiline-text">${renderQuestionContent(q.answer.join('；')||'未提供')}</div>${q.analysis?'<b>解析：</b><div class="q-multiline-text">'+renderQuestionContent(q.analysis)+'</div>':''}<div class="actions"><button class="primary" id="p-self-right">判为正确</button><button class="danger" id="p-self-wrong">判为错误</button></div></div>`;$('#p-submit').disabled=true;$('#p-reveal').disabled=true;$('#p-self-right').onclick=()=>{recordPracticeAnswer(item,chosen,true);$('#p-self-right').disabled=true;$('#p-self-wrong').disabled=true;saveSilent();renderStats();renderPracticeQuestion()};$('#p-self-wrong').onclick=()=>{recordPracticeAnswer(item,chosen,false);$('#p-self-right').disabled=true;$('#p-self-wrong').disabled=true;saveSilent();renderStats();renderPracticeQuestion()};renderPracticeAiPanelV613()}
+function showSubjectiveFeedback(item,chosen,reveal){const q=practiceQuestionV8916(item),key=practiceItemKeyV8916(item),user=chosen.join('；')||'未填写';setPracticeAnswerStateV26(key,{chosen,revealed:!!reveal});$('#p-feedback').innerHTML=`<div class="feedback warn"><b>你的作答：</b><div class="q-multiline-text">${renderQuestionContent(user)}</div><b>参考答案：</b><div class="q-multiline-text">${renderQuestionContent(q.answer.join('；')||'未提供')}</div>${q.analysis?'<b>解析：</b><div class="q-multiline-text">'+renderQuestionContent(q.analysis)+'</div>':''}<div class="actions"><button class="primary" id="p-self-right">判为正确</button><button class="danger" id="p-self-wrong">判为错误</button></div></div>`;$('#p-submit').disabled=true;$('#p-reveal').disabled=true;$('#p-self-right').onclick=async ()=>{return runMutation(async()=>{recordPracticeAnswer(item,chosen,true);$('#p-self-right').disabled=true;$('#p-self-wrong').disabled=true;await saveSilent();renderStats();renderPracticeQuestion()});};$('#p-self-wrong').onclick=async ()=>{return runMutation(async()=>{recordPracticeAnswer(item,chosen,false);$('#p-self-right').disabled=true;$('#p-self-wrong').disabled=true;await saveSilent();renderStats();renderPracticeQuestion()});};renderPracticeAiPanelV613()}
 /* SHIROHA_WEB_PRACTICE_AI_SINGLE_QUESTION_V613_START
    沉浸练习页的单题 AI 解析与追问：只处理当前这一道题，结果先作为草稿展示，由用户决定是否写入题库解析。 */
 const AI_SINGLE_FOLLOW_UP_MAX_V613=12;
@@ -8215,7 +8185,7 @@ function aiSingleWithAnalysisV613(question,text){
   }
   return next;
 }
-function saveAiSingleAnalysisV613(){
+async function saveAiSingleAnalysisV613(){return runMutation(async()=>{
   const item=currentPracticeItemV8916();if(!aiSingleAllowedV613(item))return false;
   const key=practiceItemKeyV8916(item),session=aiSingleSessionV613(key),text=String(session.analysis?.analysis||'').trim();
   if(!text||session.loading)return false;
@@ -8232,23 +8202,23 @@ function saveAiSingleAnalysisV613(){
   (state.wrongBook[loc.bankId]||[]).forEach(entry=>{if(entry.id===target.id&&entry.nativeQuestion)patch(entry,'nativeQuestion',aiSingleWithAnalysisV613(entry.nativeQuestion,text))});
   const favorite=state.crossPlatformMeta?.favoriteQuestions?.[loc.bankId]?.[target.id];
   if(favorite?.question)patch(favorite,'question',aiSingleWithAnalysisV613(favorite.question,text));
-  try{saveSilent()}catch(error){for(const change of patches.reverse()){if(change.had)change.object[change.property]=change.old;else delete change.object[change.property]}session.error='保存失败，本地题库改动已回滚，AI 草稿仍保留。请检查浏览器存储空间后重试。';session.notice='';renderPracticeAiPanelV613();return false}
+  try{await saveSilent()}catch(error){for(const change of patches.reverse()){if(change.had)change.object[change.property]=change.old;else delete change.object[change.property]}session.error='保存失败，本地题库改动已回滚，AI 草稿仍保留。请检查浏览器存储空间后重试。';session.notice='';renderPracticeAiPanelV613();return false}
   session.error='';session.notice='已写入题库解析，可在题库管理与导出中看到。';
   const q=practiceQuestionV8916(item),st=getPracticeAnswerStateV26(key);if(q.type==='short'&&!st.answered)showSubjectiveFeedback(item,st.chosen||[],!!st.revealed);else if(st.answered||st.revealed)showAnsweredStateV26(q,st);else renderPracticeAiPanelV613();
   showNotice('AI 单题解析','已写入本题题库解析。','ok');
   return true;
-}
+});}
 /* SHIROHA_WEB_PRACTICE_AI_SINGLE_QUESTION_V613_END */
 
 function recordPracticeAnswer(item,chosen,ok){const q=practiceQuestionV8916(item),key=practiceItemKeyV8916(item),bid=practiceItemBankIdV8916(item);const current=getPracticeAnswerStateV26(key);if(current.answered)return;practice.answered++;if(ok){practice.correct++;markRight(q.id,bid)}else{practice.wrong++;addWrong(q.id,bid)}setPracticeAnswerStateV26(key,{chosen:[...chosen],answered:true,revealed:false,correct:!!ok,answeredAt:now()});practice.details.push(makeAnswerDetail(item,chosen,ok,scoreOf(q),scoreOf(q)))}
 function getFavoriteIdsV27(bid=activeBank().id){state.favorites=state.favorites||{};return Array.isArray(state.favorites[bid])?state.favorites[bid]:[];}
 function setFavoriteIdsV27(ids,bid=activeBank().id){state.favorites=state.favorites||{};state.crossPlatformMeta=state.crossPlatformMeta&&typeof state.crossPlatformMeta==='object'?state.crossPlatformMeta:{favoriteQuestions:{}};state.crossPlatformMeta.favoriteQuestions=state.crossPlatformMeta.favoriteQuestions&&typeof state.crossPlatformMeta.favoriteQuestions==='object'?state.crossPlatformMeta.favoriteQuestions:{};const next=[...new Set((ids||[]).filter(Boolean))];state.favorites[bid]=next;const meta=state.crossPlatformMeta.favoriteQuestions[bid]&&typeof state.crossPlatformMeta.favoriteQuestions[bid]==='object'?state.crossPlatformMeta.favoriteQuestions[bid]:{};Object.keys(meta).forEach(qid=>{if(!next.includes(qid))delete meta[qid]});next.forEach(qid=>{if(!meta[qid])meta[qid]={favoritedAt:Date.now()}});state.crossPlatformMeta.favoriteQuestions[bid]=meta;}
 function isFavoriteV27(id,bid=activeBank().id){return getFavoriteIdsV27(bid).includes(id);}
-function toggleFavoriteV27(id,bid=activeBank().id){const ids=getFavoriteIdsV27(bid);if(ids.includes(id))setFavoriteIdsV27(ids.filter(x=>x!==id),bid);else setFavoriteIdsV27([...ids,id],bid);saveSilent();toast(ids.includes(id)?'已取消收藏。':'已收藏题目。','ok');}
+async function toggleFavoriteV27(id,bid=activeBank().id){return runMutation(async()=>{const ids=getFavoriteIdsV27(bid);if(ids.includes(id))setFavoriteIdsV27(ids.filter(x=>x!==id),bid);else setFavoriteIdsV27([...ids,id],bid);await saveSilent();toast(ids.includes(id)?'已取消收藏。':'已收藏题目。','ok');});}
 function ensureFavoritePanelV27(){return;}
 function switchPracticeSourceV27(source){$$('.nav').forEach(b=>b.classList.remove('active'));document.querySelector('[data-view="practice"]').classList.add('active');$$('.view').forEach(v=>v.classList.remove('active'));$('#practice').classList.add('active');$('#page-title').textContent='刷题练习';$('#practice-source').value=source;$('#practice-order').value='random';$('#practice-limit').value='custom';if($('#practice-custom-count'))$('#practice-custom-count').value='20';syncLimitControlV60('practice');updateShellLayoutByView('practice');startPractice({type:PRACTICE_SCOPE_BANK_V8916,value:activeBank().id});}
 function favoriteRowsV596(){const ids=new Set(getFavoriteIdsV27());const map=new Map(activeBank().questions.map(q=>[q.id,q]));return [...ids].map(id=>map.get(id)).filter(Boolean);}
-function clearCurrentFavoritesV596(){const count=getFavoriteIdsV27().length;if(!count){toast('当前题库暂无收藏题。','warn');return}if(confirm(`确定清空当前题库的 ${count} 道收藏题？`)){setFavoriteIdsV27([]);saveSilent();renderAll();toast('已清空当前题库收藏。','ok')}}
+async function clearCurrentFavoritesV596(){return runMutation(async()=>{const count=getFavoriteIdsV27().length;if(!count){toast('当前题库暂无收藏题。','warn');return}if(confirm(`确定清空当前题库的 ${count} 道收藏题？`)){setFavoriteIdsV27([]);await saveSilent();renderAll();toast('已清空当前题库收藏。','ok')}});}
 function renderFavoritePanelV27(){renderFavoritesPageV596();}
 function renderFavoritesPageV596(){
   const box=$('#favorites-list-v596');if(!box)return;
@@ -8257,7 +8227,7 @@ function renderFavoritesPageV596(){
   const practiceBtn=$('#practice-favorites-btn-v596');if(practiceBtn)practiceBtn.disabled=!rows.length;
   const clearBtn=$('#clear-favorites-btn-v596');if(clearBtn)clearBtn.disabled=!rows.length;
   box.innerHTML=rows.length?rows.map((q,idx)=>`<div class="favorite-item-v596"><div class="favorite-item-main-v596"><div class="favorite-item-title-v596"><span class="pill">${idx+1}</span><b>${label(q.type)}｜${esc(short(q.question,92))}</b></div><p class="muted">答案：${esc((q.answer||[]).join('')||'未提供')}${q.analysis?'｜解析：'+esc(short(q.analysis,96)):''}</p></div><div class="row-actions favorite-actions-v596"><button class="ghost mini-btn" data-practice-one-fav-v596="${esc(q.id)}" type="button">练习本题</button><button class="ghost danger mini-btn" data-unfav-v27="${esc(q.id)}" type="button">取消收藏</button></div></div>`).join(''):'<div class="empty">当前题库暂无收藏题。刷题时点击“收藏题目”，这里会集中显示。</div>';
-  $$('[data-unfav-v27]').forEach(btn=>btn.onclick=()=>{toggleFavoriteV27(btn.dataset.unfavV27);renderAll()});
+  $$('[data-unfav-v27]').forEach(btn=>btn.onclick=async()=>{if(await toggleFavoriteV27(btn.dataset.unfavV27))renderAll()});
   $$('[data-practice-one-fav-v596]').forEach(btn=>btn.onclick=()=>startSingleFavoritePracticeV596(btn.dataset.practiceOneFavV596));
 }
 function startSingleFavoritePracticeV596(id){
@@ -8268,7 +8238,13 @@ function startSingleFavoritePracticeV596(id){
   enterPracticeFocus();prewarmMathJaxV56();showNotice('练习开始','本轮共 1 道收藏题。','ok');updateShellLayoutByView('practice');renderPracticeQuestion();
 }
 function renderWrongBook(){
-  const bid=activeBank().id;let entries=getWrongEntries(bid);const filter=$('#wrong-status-filter')?.value||'active';if(filter==='active')entries=entries.filter(e=>e.status!=='已掌握');else if(filter!=='all')entries=entries.filter(e=>e.status===filter);const sort=$('#wrong-sort-mode')?.value||'lastWrong';if(sort==='wrongCount')entries.sort((a,b)=>b.wrongCount-a.wrongCount);else if(sort==='status')entries.sort((a,b)=>String(a.status).localeCompare(String(b.status),'zh-CN'));else entries.sort((a,b)=>String(b.lastWrongAt||'').localeCompare(String(a.lastWrongAt||'')));const map=new Map(activeBank().questions.map(q=>[q.id,q]));const rows=entries.map(e=>({e,q:map.get(e.id)})).filter(x=>x.q);$('#wrongbook-list').innerHTML=rows.length?rows.map(({e,q})=>`<div class="wrong-item"><div class="section-head"><div><b>${label(q.type)}｜${esc(short(q.question,80))}</b><p class="muted">答案：${esc(q.answer.join(''))}｜状态：${esc(e.status)}｜错误 ${e.wrongCount} 次｜做对 ${e.rightCount} 次${e.lastWrongAt?'｜最近错：'+fmt(e.lastWrongAt):''}${q.analysis?'｜解析：'+esc(short(q.analysis,80)):''}</p></div><div class="row-actions"><button class="ghost mini-btn" data-toggle-master-wrong="${esc(q.id)}">${e.status==='已掌握'?'取消掌握':'标记已掌握'}</button><button class="ghost mini-btn" data-fav-wrong="${esc(q.id)}">${isFavoriteV27(q.id)?'取消收藏':'收藏'}</button><button class="ghost danger mini-btn" data-remove-wrong="${esc(q.id)}">移出</button></div></div></div>`).join(''):'<p class="muted">当前条件下暂无错题。</p>';$$('[data-remove-wrong]').forEach(b=>b.onclick=()=>{if(confirm('确定将这道题移出错题本？')){removeWrong(b.dataset.removeWrong);saveSilent();renderAll()}});$$('[data-toggle-master-wrong]').forEach(b=>b.onclick=()=>{const arr=getWrongEntries();const e=arr.find(x=>x.id===b.dataset.toggleMasterWrong);if(e){if(e.status==='已掌握'){e.status='复习中';e.rightCount=Math.min(e.rightCount||0,1)}else{e.status='已掌握';e.lastCorrectAt=now();e.rightCount=Math.max(e.rightCount||0,2)}setWrongEntries(arr);saveSilent();renderAll()}});$$('[data-fav-wrong]').forEach(b=>b.onclick=()=>{toggleFavoriteV27(b.dataset.favWrong);renderAll()});
+  const bid=activeBank().id;let entries=getWrongEntries(bid);const filter=$('#wrong-status-filter')?.value||'active';if(filter==='active')entries=entries.filter(e=>e.status!=='已掌握');else if(filter!=='all')entries=entries.filter(e=>e.status===filter);const sort=$('#wrong-sort-mode')?.value||'lastWrong';if(sort==='wrongCount')entries.sort((a,b)=>b.wrongCount-a.wrongCount);else if(sort==='status')entries.sort((a,b)=>String(a.status).localeCompare(String(b.status),'zh-CN'));else entries.sort((a,b)=>String(b.lastWrongAt||'').localeCompare(String(a.lastWrongAt||'')));const map=new Map(activeBank().questions.map(q=>[q.id,q]));const rows=entries.map(e=>({e,q:map.get(e.id)})).filter(x=>x.q);$('#wrongbook-list').innerHTML=rows.length?rows.map(({e,q})=>`<div class="wrong-item"><div class="section-head"><div><b>${label(q.type)}｜${esc(short(q.question,80))}</b><p class="muted">答案：${esc(q.answer.join(''))}｜状态：${esc(e.status)}｜错误 ${e.wrongCount} 次｜做对 ${e.rightCount} 次${e.lastWrongAt?'｜最近错：'+fmt(e.lastWrongAt):''}${q.analysis?'｜解析：'+esc(short(q.analysis,80)):''}</p></div><div class="row-actions"><button class="ghost mini-btn" data-toggle-master-wrong="${esc(q.id)}">${e.status==='已掌握'?'取消掌握':'标记已掌握'}</button><button class="ghost mini-btn" data-fav-wrong="${esc(q.id)}">${isFavoriteV27(q.id)?'取消收藏':'收藏'}</button><button class="ghost danger mini-btn" data-remove-wrong="${esc(q.id)}">移出</button></div></div></div>`).join(''):'<p class="muted">当前条件下暂无错题。</p>';$$('[data-remove-wrong]').forEach(b=>b.onclick=async ()=>{return runMutation(async()=>{if(confirm('确定将这道题移出错题本？')){removeWrong(b.dataset.removeWrong);await saveSilent();renderAll()}});});$$('[data-toggle-master-wrong]').forEach(b=>b.onclick=async ()=>{return runMutation(async()=>{const arr=getWrongEntries();const e=arr.find(x=>x.id===b.dataset.toggleMasterWrong);if(e){if(e.status==='已掌握'){e.status='复习中';e.rightCount=Math.min(e.rightCount||0,1)}else{e.status='已掌握';e.lastCorrectAt=now();e.rightCount=Math.max(e.rightCount||0,2)}setWrongEntries(arr);await saveSilent();renderAll()}});});$$('[data-fav-wrong]').forEach(b=>b.onclick=async()=>{if(await toggleFavoriteV27(b.dataset.favWrong))renderAll()});
+}
+function exportSettingsV1(settings){
+  const result={};
+  for(const key of ['suppressDefaultBank','practiceScope','practiceProgressV58916','lastMigratedFromSchema','lastMigratedAt','migratedFromStorageKey'])if(settings?.[key]!==undefined)result[key]=structuredClone(settings[key]);
+  if(settings?.aiImportV99){result.aiImportV99={};for(const key of ['provider','endpoint','model','timeoutSeconds','rememberKey'])if(settings.aiImportV99[key]!==undefined)result.aiImportV99[key]=settings.aiImportV99[key]}
+  return result;
 }
 function buildBackupPayloadV23(banks,exportType='selected_banks',includeAll=false){
   const bankIds=new Set((banks||[]).map(b=>b.id));
@@ -8276,7 +8252,7 @@ function buildBackupPayloadV23(banks,exportType='selected_banks',includeAll=fals
   const favorites={};Object.keys(state.favorites||{}).forEach(id=>{if(includeAll||bankIds.has(id))favorites[id]=state.favorites[id]});
   const exportedBanks=(banks||[]).map(serializeBankForCrossExportV53);
   const webRecords=includeAll?(state.records||[]):[];
-  const webSettings=includeAll?(state.settings||{}):{};
+  const webSettings=includeAll?exportSettingsV1(state.settings):{};
   const crossPlatform=includeAll?buildNativeInteropStateV24(exportedBanks):null;
   const payload={
     app:'Shiroha Quiz',
@@ -8294,10 +8270,11 @@ function buildBackupPayloadV23(banks,exportType='selected_banks',includeAll=fals
     favorites,
     records:webRecords,
     settings:webSettings,
-    webState:includeAll?{wrongBook,favorites,records:webRecords,settings:webSettings,crossPlatformMeta:state.crossPlatformMeta||{}}:undefined,
+    ...(includeAll?{webState:{wrongBook,favorites,records:webRecords,settings:webSettings,crossPlatformMeta:state.crossPlatformMeta||{}}}:{}),
     activeBankId:includeAll?state.activeBankId:((banks&&banks[0]&&banks[0].id)||'')
   };
   if(crossPlatform)payload.crossPlatform=crossPlatform;
+  const checked=ShirohaPlatformValidation.validateBackup(payload);if(!checked.ok)throw new Error('备份含不支持的数据或敏感字段，请先检查数据。');
   return payload;
 }
 /* SHIROHA_WEB_V24_CROSS_PLATFORM_NATIVE_INTEROP */
@@ -8317,7 +8294,7 @@ function buildNativeInteropStateV24(exportedBanks){
       const q=questionMap.get(e.id)||(e.nativeQuestion&&typeof e.nativeQuestion==='object'?e.nativeQuestion:null);if(!q)return;
       const lastWrongAt=parseCrossPlatformTimeV24(e.lastWrongAt,Date.now());
       nativeWrongBook.push({
-        bankId:bid,bankName:bank.name||bank.title||'',question:q,lastAnswer:Array.isArray(e.lastAnswer)?e.lastAnswer:[],source:e.source||'web-export',timestamp:Number(e.timestamp||lastWrongAt),
+        bankId:bid,bankName:bank.name||bank.title||'',question:structuredClone(q),lastAnswer:Array.isArray(e.lastAnswer)?e.lastAnswer:[],source:e.source||'web-export',timestamp:Number(e.timestamp||lastWrongAt),
         wrongCount:Number(e.wrongCount||1),rightCount:Number(e.rightCount||0),reviewRightCount:Number(e.reviewRightCount||0),streakCorrectCount:Number(e.streakCorrectCount||0),
         lastWrongAt,lastCorrectAt:e.lastCorrectAt?parseCrossPlatformTimeV24(e.lastCorrectAt,null):null,status:e.status||'未掌握',
         lastReviewedAt:e.lastReviewedAt?parseCrossPlatformTimeV24(e.lastReviewedAt,null):null,nextReviewAt:e.nextReviewAt?parseCrossPlatformTimeV24(e.nextReviewAt,null):null,reviewLevel:Number(e.reviewLevel||0)
@@ -8328,7 +8305,7 @@ function buildNativeInteropStateV24(exportedBanks){
   Object.entries(state.favorites||{}).forEach(([bid,ids])=>{
     const bank=bankMap.get(bid);if(!bank)return;
     const questionMap=new Map((bank.questions||[]).map(q=>[q.id,q]));
-    const favoriteMeta=state.crossPlatformMeta&&state.crossPlatformMeta.favoriteQuestions&&state.crossPlatformMeta.favoriteQuestions[bid]||{};(ids||[]).forEach(qid=>{const q=questionMap.get(qid)||(favoriteMeta[qid]&&favoriteMeta[qid].question);if(q)nativeFavorites.push({question:q,bankId:bid,bankName:bank.name||bank.title||'',favoritedAt:Number(favoriteMeta[qid]&&favoriteMeta[qid].favoritedAt||Date.now())})});
+    const favoriteMeta=state.crossPlatformMeta&&state.crossPlatformMeta.favoriteQuestions&&state.crossPlatformMeta.favoriteQuestions[bid]||{};(ids||[]).forEach(qid=>{const q=questionMap.get(qid)||(favoriteMeta[qid]&&favoriteMeta[qid].question);if(q)nativeFavorites.push({question:structuredClone(q),bankId:bid,bankName:bank.name||bank.title||'',favoritedAt:Number(favoriteMeta[qid]&&favoriteMeta[qid].favoritedAt||Date.now())})});
   });
   const nativeRecords=(state.records||[]).map(r=>{
     const bid=r.bankId||'';const bank=bid?bankMap.get(bid):null;
@@ -8426,6 +8403,7 @@ function dataUriToBytesV611(dataUri){
 }
 function normalizeBackupPayloadV23(data,fileName){
   if(!data||typeof data!=='object')throw new Error('JSON 根节点不是对象');
+  if(Number(data.crossPlatformSchemaVersion||0)>1||(String(data.kind||'').startsWith('shiroha_quiz')&&Number(data.version||0)>3)||Number(data.schemaVersion||0)>(data.kind==='shiroha_quiz_full_backup'?3:1))throw new Error('不支持此备份版本。');
   let banks=[];let wrongBook={};let favorites={};let records=[];let settings={};let activeBankId='';let hasWebSettings=false;let crossPlatformMeta={favoriteQuestions:{}};
   const webState=data.webState&&typeof data.webState==='object'?data.webState:null;
   const cross=data.crossPlatform&&typeof data.crossPlatform==='object'?data.crossPlatform:null;
@@ -8451,7 +8429,7 @@ function normalizeBackupPayloadV23(data,fileName){
   }else if(Array.isArray(data)){
     banks=[{id:makeId('bank'),name:cleanFileNameV23(fileName).replace(/\.(?:json|zip)$/i,'')||'导入题库',createdAt:now(),updatedAt:now(),questions:data}];
   }else throw new Error(nativeLike?'备份中没有 banks[] 题库数据':'不是 Shiroha Quiz 备份，也不是单题库 JSON');
-  banks=banks.map((b,i)=>({id:String(b.id||makeId('bank_import',i)),name:String(b.name||b.title||('导入题库_'+(i+1))),groupName:pickBankGroupNameFromJsonV58(b),createdAt:b.createdAt||now(),updatedAt:now(),questions:(b.questions||[]).map((q,j)=>normalizeQuestion(q,j)).filter(q=>q.question)})).filter(b=>b.questions.length||b.name);
+  banks=banks.map((b,i)=>({...b,id:String(b.id||makeId('bank_import',i)),name:String(b.name||b.title||('导入题库_'+(i+1))),groupName:pickBankGroupNameFromJsonV58(b),createdAt:b.createdAt||now(),updatedAt:now(),questions:(b.questions||[]).map((q,j)=>({...q,...normalizeQuestion(q,j)})).filter(q=>q.question)})).filter(b=>b.questions.length||b.name);
   if(!banks.some(b=>b.id===activeBankId))activeBankId=banks[0]?.id||'';
   return {banks,wrongBook,favorites,records,settings,hasWebSettings,crossPlatformMeta,activeBankId};
 }
@@ -8511,18 +8489,9 @@ function download(name,text){
   if(window.ShirohaAndroid&&typeof window.ShirohaAndroid.saveJsonFile==='function'){
     try{const ok=window.ShirohaAndroid.saveJsonFile(String(name||'shiroha-quiz.json'),String(text||''));if(ok){toast('已调用系统保存文件。若未看到文件，请检查 Downloads 或使用复制备份文本。','ok');return}}catch(e){warnDev('Android 原生保存接口调用失败',e)}
   }
-  const a=document.createElement('a');const url=URL.createObjectURL(new Blob([text],{type:'application/json;charset=utf-8'}));a.href=url;a.download=name;document.body.appendChild(a);a.click();document.body.removeChild(a);setTimeout(()=>URL.revokeObjectURL(url),1000);
+  ShirohaPlatform.download(name,new Blob([text],{type:'application/json;charset=utf-8'}));
 }
-function downloadBlob(name,blob){
-  const a=document.createElement('a');
-  const url=URL.createObjectURL(blob);
-  a.href=url;
-  a.download=name||'download.bin';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(()=>URL.revokeObjectURL(url),1000);
-}
+function downloadBlob(name,blob){ShirohaPlatform.download(name||'download.bin',blob)}
 function createOcrDocxBlob(text,sourceName){
   const title='Shiroha Quiz OCR 识别结果';
   const paragraphs=[
@@ -8590,7 +8559,7 @@ function crc32(bytes){
 function backupMimeFromPathV24(path){const ext=String(path||'').split('.').pop().toLowerCase();return ({png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',gif:'image/gif',webp:'image/webp',bmp:'image/bmp'})[ext]||'application/octet-stream'}
 function bytesToDataUriV24(bytes,mime){return new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result||''));r.onerror=()=>reject(new Error('备份图片读取失败'));r.readAsDataURL(new Blob([bytes],{type:mime}))})}
 async function readBackupFileV24(file){
-  const buf=await file.arrayBuffer();const bytes=new Uint8Array(buf);const isZip=/\.zip$/i.test(file.name)||bytes.length>=4&&(bytes[0]===0x50&&bytes[1]===0x4b);
+  const buf=await ShirohaPlatform.files.readBuffer(file);const bytes=new Uint8Array(buf);const isZip=/\.zip$/i.test(file.name)||bytes.length>=4&&(bytes[0]===0x50&&bytes[1]===0x4b);
   if(!isZip)return {text:new TextDecoder('utf-8').decode(bytes),assets:{}};
   const entries=parseZipEntries(buf);const jsonEntry=entries.find(e=>e.name==='backup.json')||entries.find(e=>/\.json$/i.test(e.name));if(!jsonEntry)throw new Error('ZIP 备份中没有 backup.json');
   const text=await unzipEntry(buf,jsonEntry);const assets={};
@@ -8608,7 +8577,7 @@ function countUnresolvedBackupImagesV24(value,seen=new Set()){if(!value||typeof 
 
 function importBackupJsonFileV23(e){
   const file=e.target.files&&e.target.files[0];if(!file)return;
-  (async()=>{
+  (async()=>{return runMutation(async()=>{
     try{
       const loaded=await readBackupFileV24(file);const text=loaded.text;
       setBackupPreviewV23(text);
@@ -8623,13 +8592,13 @@ function importBackupJsonFileV23(e){
         mergeBackupBanksV23(normalized);
       }
       upgradeState();ensureDefaultBank();
-      try{saveSilent()}catch(storageError){const previous=JSON.parse(previousStateJson);Object.keys(state).forEach(k=>delete state[k]);Object.assign(state,previous);upgradeState();throw new Error('导入内容超过浏览器本地存储容量，已恢复导入前数据。可减少图片后重试，或只导入部分题库。')}
+      try{await saveSilent()}catch(storageError){const previous=JSON.parse(previousStateJson);Object.keys(state).forEach(k=>delete state[k]);Object.assign(state,previous);upgradeState();throw new Error('导入内容超过浏览器本地存储容量，已恢复导入前数据。可减少图片后重试，或只导入部分题库。')}
       renderAll();setupEnhancedDataToolsV23();
       const total=normalized.banks.reduce((n,b)=>n+(b.questions||[]).length,0);
       toast(`导入完成：${normalized.banks.length} 个题库，${total} 道题。${unresolvedImageCount?` 另有 ${unresolvedImageCount} 张图片未包含在备份文件中，Web 端无法显示。`:''}`,unresolvedImageCount?'warn':'ok');
     }catch(err){toast('导入备份失败：'+err.message,'danger')}
-    finally{e.target.value=''}
-  })();
+    finally{if(!mutationSaveError)e.target.value=''}
+  });})();
 }
 
 /* SHIROHA_WEB_V37_8_WEBDAV_CLOUD_BACKUP_START
@@ -8637,13 +8606,10 @@ function importBackupJsonFileV23(e){
 */
 function defaultWebdavConfigV378(){return {endpoint:'',username:'',remoteDir:'ShirohaQuiz/Web',rememberPassword:false,lastUploadAt:'',lastUploadFile:'',lastUploadSize:0,lastUploadSha:''}}
 function readWebdavConfigV378(){
-  try{const parsed=JSON.parse(localStorage.getItem(WEBDAV_CONFIG_LOCAL_V378)||'null');return {...defaultWebdavConfigV378(),...(parsed&&typeof parsed==='object'?parsed:{})}}
+  try{const parsed=ShirohaPlatform.credentials.readDav();return {...defaultWebdavConfigV378(),...(parsed&&typeof parsed==='object'?parsed:{})}}
   catch(_){return defaultWebdavConfigV378()}
 }
-function readWebdavPasswordV378(config=readWebdavConfigV378()){
-  try{return config.rememberPassword?(localStorage.getItem(WEBDAV_PASSWORD_LOCAL_V378)||''):(sessionStorage.getItem(WEBDAV_PASSWORD_SESSION_V378)||'')}
-  catch(_){return ''}
-}
+function readWebdavPasswordV378(config=readWebdavConfigV378()){return ShirohaPlatform.credentials.status('webdav',config)}
 function normalizeWebdavEndpointV378(value){
   const raw=String(value||'').trim();if(!raw)throw new Error('请填写 WebDAV 地址。');
   let url;try{url=new URL(raw)}catch(_){throw new Error('WebDAV 地址格式无效。请填写完整的 http:// 或 https:// 地址。')}
@@ -8667,19 +8633,13 @@ function webdavConfigFromFormV378(){
 }
 function storeWebdavConfigV378(config,password,storePassword=true){
   const safe={...defaultWebdavConfigV378(),...config};delete safe.password;delete safe.authorization;
-  localStorage.setItem(WEBDAV_CONFIG_LOCAL_V378,JSON.stringify(safe));
-  if(!storePassword)return;
-  if(safe.rememberPassword){localStorage.setItem(WEBDAV_PASSWORD_LOCAL_V378,String(password||''));try{sessionStorage.removeItem(WEBDAV_PASSWORD_SESSION_V378)}catch(_){}}
-  else{sessionStorage.setItem(WEBDAV_PASSWORD_SESSION_V378,String(password||''));try{localStorage.removeItem(WEBDAV_PASSWORD_LOCAL_V378)}catch(_){}}
+  ShirohaPlatform.credentials.saveDav(safe,password,storePassword);
 }
-function clearWebdavStorageV378(){
-  try{localStorage.removeItem(WEBDAV_CONFIG_LOCAL_V378);localStorage.removeItem(WEBDAV_PASSWORD_LOCAL_V378)}catch(_){}
-  try{sessionStorage.removeItem(WEBDAV_PASSWORD_SESSION_V378)}catch(_){}
-}
-function webdavPasswordFromFormV378(){return String($('#webdav-password-v378')?.value||'')}
+function clearWebdavStorageV378(){ShirohaPlatform.credentials.clearDav()}
+function webdavPasswordFromFormV378(){const config=webdavConfigFromFormV378();return String($('#webdav-password-v378')?.value||'')||readWebdavPasswordV378(config)}
 function fillWebdavFormV378(){
   const config=readWebdavConfigV378();
-  const values=[['#webdav-endpoint-v378',config.endpoint],['#webdav-remote-dir-v378',config.remoteDir],['#webdav-username-v378',config.username],['#webdav-password-v378',readWebdavPasswordV378(config)]];
+  const values=[['#webdav-endpoint-v378',config.endpoint],['#webdav-remote-dir-v378',config.remoteDir],['#webdav-username-v378',config.username],['#webdav-password-v378','']];
   values.forEach(([id,value])=>{const el=$(id);if(el)el.value=value||''});const remember=$('#webdav-remember-v378');if(remember)remember.checked=!!config.rememberPassword;webdavRuntimeV378.formLoaded=true;
 }
 function webdavBasicAuthV378(username,password){
@@ -8695,21 +8655,8 @@ function webdavUrlV378(config,relativePath='',trailingSlash=false){
 function webdavPublicUrlV378(url){try{const parsed=new URL(url);return parsed.origin+parsed.pathname}catch(_){return ''}}
 function webdavErrorV378(message,meta={}){const error=new Error(message);Object.assign(error,meta);return error}
 async function webdavRequestV378(config,password,relativePath,options={}){
-  const method=String(options.method||'GET').toUpperCase();const url=webdavUrlV378(config,relativePath,!!options.trailingSlash);
-  const controller=new AbortController();const timeoutMs=Number(options.timeoutMs||30000);const timer=setTimeout(()=>controller.abort(),timeoutMs);
-  const headers={...(options.headers||{})};if(config.username||password)headers.Authorization=webdavBasicAuthV378(config.username,password);
-  let response;
-  try{response=await fetch(url,{method,headers,body:options.body,signal:controller.signal,credentials:'omit',cache:'no-store'})}
-  catch(error){
-    if(error&&error.name==='AbortError')throw webdavErrorV378(`请求超时（${Math.round(timeoutMs/1000)} 秒）。`,{code:'timeout',method,url,cause:error});
     // Fetch failures do not distinguish mixed content from CORS or network errors.
-    const possibleMixedContent=typeof location!=='undefined'&&location.protocol==='https:'&&new URL(url).protocol==='http:';
-    throw webdavErrorV378('浏览器未能连接 WebDAV 服务。',{code:possibleMixedContent?'mixed_content':'network',method,url,cause:error});
-  }
-  finally{clearTimeout(timer)}
-  const accepted=options.acceptStatuses||[200,201,204,207];
-  if(!accepted.includes(response.status))throw webdavErrorV378(`WebDAV 返回 HTTP ${response.status}。`,{code:'http',status:response.status,method,url});
-  return response;
+  return ShirohaPlatform.network.webdav(config,password,relativePath,options);
 }
 function classifyWebdavErrorV378(error){
   const status=Number(error&&error.status||0),code=String(error&&error.code||'');
@@ -8740,7 +8687,7 @@ async function runWebdavActionV378(action,task){
 function bindWebdavPanelV378(){
   const save=$('#webdav-save-v378');if(!save)return;
   save.onclick=()=>{try{const config=webdavConfigFromFormV378();storeWebdavConfigV378(config,webdavPasswordFromFormV378());setWebdavStatusV378('配置已保存。密码按当前“记住密码”选项单独存放。','ok');toast('WebDAV 配置已保存。','ok')}catch(error){setWebdavStatusV378(error.message,'danger')}};
-  $('#webdav-clear-v378').onclick=()=>{clearWebdavStorageV378();webdavRuntimeV378={busy:false,action:'',backups:[],latestFile:'',status:'配置和密码已清除。',statusKind:'ok',diagnostic:null,pendingRestore:null,formLoaded:false};fillWebdavFormV378();renderWebdavPanelV378();toast('WebDAV 配置已清除。','ok')};
+  $('#webdav-clear-v378').onclick=()=>{try{clearWebdavStorageV378()}catch(error){setWebdavStatusV378('清除失败：'+error.message,'warn');return}webdavRuntimeV378={busy:false,action:'',backups:[],latestFile:'',status:'配置和密码已清除。',statusKind:'ok',diagnostic:null,pendingRestore:null,formLoaded:false};fillWebdavFormV378();renderWebdavPanelV378();toast('WebDAV 配置已清除。','ok')};
   $('#webdav-test-v378').onclick=()=>runWebdavActionV378('测试连接',testWebdavConnectionV378);
   $('#webdav-upload-v378').onclick=()=>runWebdavActionV378('上传备份',uploadWebdavBackupV378);
   $('#webdav-refresh-v378').onclick=()=>runWebdavActionV378('刷新列表',refreshWebdavBackupsV378);
@@ -8832,18 +8779,18 @@ function openWebdavRestoreModalV378(){
 }
 function syncWebdavRestoreWarningV378(){const overwrite=$('#webdav-restore-mode-v378')?.value==='overwrite',warning=$('#webdav-restore-warning-v378');if(warning){warning.textContent=overwrite?'覆盖恢复会替换当前全部题库、错题、收藏、记录和设置；写入失败会自动回滚。':'合并恢复会保留当前数据，并追加备份题库；同名题库会自动改名。';warning.className=overwrite?'notice warn':'muted'}}
 function closeWebdavRestoreModalV378(){const modal=$('#webdav-restore-modal-v378');if(modal)modal.hidden=true;webdavRuntimeV378.pendingRestore=null}
-function applyNormalizedBackupV378(normalized,mode){
+async function applyNormalizedBackupV378(normalized,mode){return runMutation(async()=>{
   let previousStateJson;try{previousStateJson=JSON.stringify(state)}catch(_){throw new Error('当前本地数据过大，无法创建恢复前回滚快照。请先导出本地完整备份。')}
   try{
     if(mode==='overwrite'){
       const previousWebSettings=state.settings&&typeof state.settings==='object'?state.settings:{};state.schemaVersion=CURRENT_SCHEMA_VERSION;state.banks=normalized.banks.map(b=>({...b,groupName:normalizeBankGroupNameV58(b.groupName)}));state.activeBankId=normalized.activeBankId||state.banks[0]?.id||'';state.wrongBook=normalized.wrongBook||{};state.favorites=normalized.favorites||{};state.records=Array.isArray(normalized.records)?normalized.records:[];state.settings=normalized.hasWebSettings&&normalized.settings&&typeof normalized.settings==='object'?normalized.settings:previousWebSettings;state.crossPlatformMeta=normalized.crossPlatformMeta&&typeof normalized.crossPlatformMeta==='object'?normalized.crossPlatformMeta:{favoriteQuestions:{}};
     }else mergeBackupBanksV23(normalized);
-    upgradeState();ensureDefaultBank();saveSilent();
+    upgradeState();ensureDefaultBank();await saveSilent();
   }catch(error){const previous=JSON.parse(previousStateJson);Object.keys(state).forEach(k=>delete state[k]);Object.assign(state,previous);upgradeState();throw new Error('恢复内容未能写入浏览器本地存储，已回滚到恢复前数据。请检查本地存储空间，或减少备份中的大图片。')}
-}
+});}
 async function confirmWebdavRestoreV378(){
   const pending=webdavRuntimeV378.pendingRestore;if(!pending)throw new Error('没有等待恢复的远程备份。');const mode=$('#webdav-restore-mode-v378')?.value==='overwrite'?'overwrite':'merge';
-  applyNormalizedBackupV378(pending.normalized,mode);const bankCount=pending.normalized.banks.length,questionCount=pending.questionCount,fileName=pending.fileName;closeWebdavRestoreModalV378();renderAll();setupEnhancedDataToolsV23();renderWebdavPanelV378();setWebdavStatusV378(`恢复完成：${fileName}，${bankCount} 个题库、${questionCount} 道题（${mode==='overwrite'?'覆盖':'合并'}）。`,'ok');toast('WebDAV 备份恢复完成。','ok');
+  if(!await applyNormalizedBackupV378(pending.normalized,mode))return;const bankCount=pending.normalized.banks.length,questionCount=pending.questionCount,fileName=pending.fileName;closeWebdavRestoreModalV378();renderAll();setupEnhancedDataToolsV23();renderWebdavPanelV378();setWebdavStatusV378(`恢复完成：${fileName}，${bankCount} 个题库、${questionCount} 道题（${mode==='overwrite'?'覆盖':'合并'}）。`,'ok');toast('WebDAV 备份恢复完成。','ok');
 }
 /* SHIROHA_WEB_V37_8_WEBDAV_CLOUD_BACKUP_END */
 
@@ -8862,7 +8809,7 @@ function refreshSidebarToggleV47(){
 }
 function setSidebarCollapsedV47(collapsed,persist=false){
   document.body.classList.toggle('side-collapsed',!!collapsed);
-  if(persist)localStorage.setItem('shiroha-sidebar-collapsed',document.body.classList.contains('side-collapsed')?'1':'0');
+  if(persist)try{ShirohaPlatform.preferences.setSidebar(document.body.classList.contains('side-collapsed'))}catch(_){platformStatus('侧栏设置保存失败，请检查浏览器存储权限。',true)}
   refreshSidebarToggleV47();
 }
 function autoCollapseSidebarForFocusV47(){
@@ -8889,7 +8836,7 @@ function setupSidebarCollapse(){
   btn.type='button';
   btn.className='sidebar-toggle';
   document.body.appendChild(btn);
-  const stored=localStorage.getItem('shiroha-sidebar-collapsed')==='1';
+  const stored=ShirohaPlatform.preferences.sidebar();
   setSidebarCollapsedV47(stored,false);
   btn.onclick=()=>{
     delete document.body.dataset.focusAutoCollapsedV47;
@@ -8992,13 +8939,13 @@ function bindFocusRailToggleV34(){
   requestAnimationFrame(syncFocusRailTopV35);
   setTimeout(syncFocusRailTopV35,80);
 }
-function submitExam(auto){
+async function submitExam(auto){if(auto&&mutationSaveError)return false;return runMutation(async()=>{
   if(exam.submitted)return;
-  collectExamTextAnswers();exam.submitted=true;clearInterval(exam.timer);let got=0,total=0,correct=0;const details=[];const byType={};
+  collectExamTextAnswers();exam.submitted=true;let got=0,total=0,correct=0;const details=[];const byType={};
   exam.items.forEach(item=>{const q=examQuestionV113(item),key=examItemKeyV113(item);const sc=scoreOf(q);total+=sc;const ans=exam.answers[key]||[];const ok=sameAnswerForQuestion(q,ans,q.answer);if(ok){got+=sc;correct++} addWrongOnExam(item,!ok);details.push(makeAnswerDetail(item,ans,ok,sc,sc));const k=q.type||'single';byType[k]=byType[k]||{total:0,correct:0,score:0,fullScore:0};byType[k].total++;if(ok)byType[k].correct++;byType[k].score+=ok?sc:0;byType[k].fullScore+=sc;});
   const acc=Math.round(correct/exam.items.length*100);const groupMode=exam.scopeType==='GROUP';const firstItem=exam.items[0]||null;const rec={id:makeId('rec','exam'),name:exam.name||'模拟考试',mode:'考试',bankId:groupMode?'':(practiceItemBankIdV8916(firstItem)||activeBank().id),bankName:groupMode?(exam.scopeName||'分组考试'):(practiceItemBankNameV8916(firstItem)||activeBank().name),scopeType:exam.scopeType||'BANK',scopeName:exam.scopeName||practiceItemBankNameV8916(firstItem),total:exam.items.length,answered:examAnsweredCountV30(),correct,wrong:exam.items.length-correct,accuracy:acc,score:got,totalScore:total,passScore:exam.passScore,passed:got>=Number(exam.passScore||0),autoSubmitted:!!auto,date:now(),duration:Math.round((Date.now()-exam.start)/1000),details,byType};
-  state.records.unshift(rec);saveSilent();$('#submit-exam-btn').disabled=true;$('#exam-timer').textContent=auto?'已自动交卷':'已交卷';renderExamResult(rec);renderAll();
-}
+  state.records.unshift(rec);await saveSilent();clearInterval(exam.timer);$('#submit-exam-btn').disabled=true;$('#exam-timer').textContent=auto?'已自动交卷':'已交卷';renderExamResult(rec);renderAll();
+});}
 function renderExamResult(rec){
   const typeRows=Object.entries(rec.byType||{}).map(([t,v])=>`<tr><td>${label(t)}</td><td>${v.correct}/${v.total}</td><td>${Number(v.score.toFixed? v.score.toFixed(1):v.score)}/${v.fullScore}</td></tr>`).join('');
   let html=`<div class="exam-focus-head"><div><b>考试结果</b><span>${esc(rec.name||'模拟考试')}</span></div><div class="exam-head-actions"><button class="primary focus-mini-btn" id="exam-back-setup" type="button">返回考试设置</button></div></div><div class="score-card"><div class="metric"><span>得分</span><b>${rec.score}/${rec.totalScore}</b></div><div class="metric"><span>结果</span><b>${rec.passed?'合格':'未合格'}</b></div><div class="metric"><span>正确率</span><b>${rec.accuracy}%</b></div><div class="metric"><span>用时</span><b>${rec.duration}秒</b></div></div><div class="notice ${rec.passed?'ok':'warn'}">${esc(rec.name||'模拟考试')}：及格线 ${rec.passScore} 分，${rec.autoSubmitted?'系统已自动交卷。':'已交卷。'}</div>${typeRows?`<div class="table-wrap"><table><thead><tr><th>题型</th><th>正确</th><th>得分</th></tr></thead><tbody>${typeRows}</tbody></table></div>`:''}`;
@@ -9009,7 +8956,7 @@ function renderExamResult(rec){
 }
 /* SHIROHA_WEB_V28_2_LAYOUT_AND_IMMERSIVE_FIX_END */
 
-function resetData(){if(confirm('确定清除全部本地数据？默认题库也会重新初始化。')){clearStoredState();location.reload()}}
+async function resetData(){return runMutation(async()=>{if(confirm('确定清除全部本地数据？默认题库也会重新初始化。')){await ShirohaPlatform.saves.idle();clearStoredState();location.reload()}})}
 
 /* SHIROHA_WEB_V45_BANK_EDITOR_AND_FOCUS_NAV_START */
 function switchViewV45(viewId){
@@ -9078,7 +9025,7 @@ function editBankByIdV45(id){
   setTimeout(()=>{$('#bank-edit-panel-v45')?.scrollIntoView({behavior:'smooth',block:'start'});},60);
   toast('已进入题库二次编辑。','ok');
 }
-function saveBankEditSessionV45(){
+async function saveBankEditSessionV45(){return runMutation(async()=>{
   if(!bankEditSessionV45)return;
   const bank=state.banks.find(b=>b.id===bankEditSessionV45.bankId);
   if(!bank){toast('原题库不存在，无法保存。','danger');return}
@@ -9096,7 +9043,7 @@ function saveBankEditSessionV45(){
     ensurePracticeScopeV8916();
     toast('原练习分组已无题库，已切换为当前题库。','warn');
   }
-  saveSilent();
+  await saveSilent();
   bankEditSessionV45=null;
   importReport='';
   importDiagnostics=null;
@@ -9105,7 +9052,7 @@ function saveBankEditSessionV45(){
   renderAll();
   switchViewV45('banks');
   toast(`已保存题库“${name}”：${bank.questions.length} 道题${warnings.length?`，仍有 ${warnings.length} 条提示可后续再核对`:''}。`,warnings.length?'warn':'ok');
-}
+});}
 function cancelBankEditSessionV45(){
   if(!bankEditSessionV45)return;
   resetAiSuggestionsV991();
@@ -9121,8 +9068,65 @@ function cancelBankEditSessionV45(){
 }
 /* SHIROHA_WEB_V45_BANK_EDITOR_AND_FOCUS_NAV_END */
 
+// 页面拥有单个写入事务；保存期间冻结交互，避免失败回滚覆盖后续编辑。
+let mutationBusy=false,enteringMutation=false,mutationSaveError=null,applicationReady=false;
+let retryMutation=null;
+function platformStatus(message,failed=false){
+  let el=document.getElementById('platform-status');
+  if(!el){el=document.createElement('div');el.id='platform-status';el.setAttribute('role','status');el.setAttribute('aria-live','polite');document.body.appendChild(el)}
+  el.textContent=message;el.className='platform-status'+(failed?' failed':'');el.hidden=!message;
+  if(failed&&retryMutation){const retry=document.createElement('button');retry.textContent='重试';retry.onclick=()=>retryMutation();el.appendChild(retry)}
+}
+function lockApplication(locked){document.querySelector('.app')?.toggleAttribute('inert',locked);document.body.dataset.storageState=locked?'pending':'ready'}
+function mutationCheckpoint(roots){
+  const seen=new Set(),entries=[];
+  const visit=value=>{if(!value||typeof value!=='object'||seen.has(value)||(!Array.isArray(value)&&Object.getPrototypeOf(value)!==Object.prototype))return;seen.add(value);const fields=Object.entries(value);entries.push({value,fields,length:Array.isArray(value)?value.length:null});fields.forEach(([,child])=>visit(child))};
+  roots.forEach(visit);
+  return ()=>{for(const {value,fields,length} of entries){Object.keys(value).forEach(key=>delete value[key]);if(length!==null)value.length=length;for(const [key,child] of fields)value[key]=child}};
+}
+async function runMutation(action){
+  if(enteringMutation)return action();
+  if(mutationBusy||!applicationReady)return false;
+  mutationBusy=true;mutationSaveError=null;lockApplication(true);platformStatus('正在保存，请勿关闭页面…');
+  const disabledBefore=[...document.querySelectorAll('button,input,select,textarea')].map(el=>[el,el.disabled]);
+  const exportSelectionBefore=new Set(exportBankSelectedV23);
+  const rollback=mutationCheckpoint([state,practice,exam]);
+  const revisionBefore=ShirohaPlatform.storage.revision();
+  const focused=document.activeElement;
+  try{
+    ShirohaPlatform.saves.resume();
+    enteringMutation=true;let result;
+    try{result=action()}finally{enteringMutation=false}
+    const value=await result;
+    if(mutationSaveError)throw mutationSaveError;
+    retryMutation=null;platformStatus('');return value===undefined?true:value;
+  }catch(error){
+    if(ShirohaPlatform.storage.revision()!==revisionBefore){mutationSaveError=null;retryMutation=null;platformStatus('数据已保存，但界面刷新失败，请重新打开页面。',true);return false}
+    rollback();exportBankSelectedV23=exportSelectionBefore;disabledBefore.forEach(([el,disabled])=>{if(el.isConnected)el.disabled=disabled});
+    retryMutation=()=>runMutation(action);
+    platformStatus(error?.message||'保存失败，原数据与编辑内容已保留，请重试。',true);
+    return false;
+  }finally{mutationBusy=false;lockApplication(false);if(focused?.isConnected)focused.focus()}
+}
+async function startApplication(){
+  lockApplication(true);document.body.dataset.storageState='loading';platformStatus('正在读取本地数据…');
+  try{
+    Object.assign(state,await loadState());
+    ShirohaPlatform.credentials.initialize(ensureAiImportStateV99());
+    init();applicationReady=true;lockApplication(false);platformStatus('');
+  }catch(error){
+    applicationReady=false;document.body.dataset.storageState='recovery_required';
+    retryMutation=startApplication;platformStatus(error?.message||'数据加载失败，原数据已保留。',true);
+    const button=document.createElement('button');button.textContent='导出原始数据';
+    button.onclick=()=>{try{ShirohaPlatform.download('shiroha-recovery.json',new Blob([ShirohaPlatform.storage.recoveryText()],{type:'application/json'}))}catch(_){platformStatus('无法读取原始数据，请检查浏览器存储权限。',true)}};
+    document.getElementById('platform-status').appendChild(button);
+  }
+}
+for(const type of ['click','change','input','keydown'])document.addEventListener(type,event=>{if(mutationBusy&&!event.target.closest?.('#platform-status,#desktop-titlebar')){event.preventDefault();event.stopImmediatePropagation()}},true);
+window.addEventListener('beforeunload',event=>{if(mutationBusy||mutationSaveError){event.preventDefault();event.returnValue=''}});
+
 // Initialize only after every top-level lexical binding has been created.
-init();
+startApplication();
 
 })();
 

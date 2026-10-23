@@ -167,40 +167,40 @@ test('完整 JSON、单/多题库 JSON、原生 ZIP 与转换日志均排除独�
   assertNoSecrets(logs);
 });
 
-test('待 B2/C3/C6：启动归一化应无损保留合法题目扩展和富内容字段', { todo: '现有 normalizeQuestion 重建固定字段，丢失 richContent 与 extensions；阶段 A 只固定失败样例。' }, () => {
+test('启动归一化应无损保留合法题目扩展和富内容字段', () => {
   const initial = webState();
   const { api } = loadWeb({ state: initial });
   api.upgradeState();
-  const actual = api.snapshot().banks[0].questions[6];
+  const actual = plain(api.snapshot()).banks[0].questions[6];
   assert.deepEqual({ extensions: actual.extensions, richContent: actual.richContent }, {
     extensions: initial.banks[0].questions[6].extensions,
     richContent: initial.banks[0].questions[6].richContent,
   });
 });
 
-test('待 B2/C6：JSON 恢复应保留合法题库扩展', { todo: 'normalizeBackupPayloadV23 重建题库时丢失扩展。' }, () => {
+test('JSON 恢复应保留合法题库扩展', () => {
   const { api } = loadWeb();
   const initial = webState();
   const restored = api.normalizeBackupPayloadV23(initial, 'full.json');
   assert.deepEqual(plain(restored.banks[0].extensions ?? null), initial.banks[0].extensions);
 });
 
-test('待 B2/C6：明确拒绝未来不支持的交换版本', { todo: 'Web 当前尚未校验未来 schemaVersion/crossPlatformSchemaVersion。' }, () => {
+test('明确拒绝未来不支持的交换版本', () => {
   const { api } = loadWeb();
   const future = { ...androidBackup(), version: 999, schemaVersion: 999, crossPlatformSchemaVersion: 999 };
   assert.throws(() => api.normalizeBackupPayloadV23(future, 'future.json'), /版本|version|schema/i);
 });
 
-test('待 B4/C6：非敏感配置导出白名单应排除混入设置的秘密与凭据引用', { todo: '完整 JSON 直接导出 settings，未来契约需拒绝或排除敏感扩展。' }, () => {
+test('非敏感配置导出白名单应排除混入设置的秘密与凭据引用', () => {
   const state = webState();
   state.settings.legacyCredentials = FAKE_SECRETS;
   const { api } = loadWeb({ state });
   assertNoSecrets(api.buildBackupPayloadV23(api.snapshot().banks, 'all_data', true));
 });
 
-test('待 B4/C6：原生 ZIP 导出不得改写当前错题与收藏历史快照的图片引用', { todo: '已删除题目的错题/收藏回退对象未克隆，外置图片会写回当前内存。' }, () => {
+test('原生 ZIP 导出不得改写当前错题与收藏历史快照的图片引用', () => {
   const initial = webState();
   const { api } = loadWeb({ state: initial });
   api.buildNativeCompatibleBackupZipV611();
-  assert.deepEqual(api.snapshot(), initial, '导出必须保留原内存中的图片引用。');
+  assert.deepEqual(plain(api.snapshot()), initial, '导出必须保留原内存中的图片引用。');
 });

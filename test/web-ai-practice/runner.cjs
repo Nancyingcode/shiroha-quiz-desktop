@@ -58,7 +58,7 @@ async function frameworkSelfTest(browser, url, keys, timeout, ownedServer) {
       assert(bank.body.includes('suppressed') && bank.body.length < 100);
     }
     // Exercise real browser fetch and routing without loading any application/bank data.
-    await h.context.route(url, route => route.fulfill({ contentType: 'text/html', body: '<!doctype html><html><body><button id="start-practice-btn">Harness self-test</button></body></html>' }));
+    await h.context.route(url, route => route.fulfill({ contentType: 'text/html', body: '<!doctype html><html><body data-storage-state="ready"><button id="start-practice-btn">Harness self-test</button></body></html>' }));
     await h.boot();
     await assertKeys(h.page, keys);
     const payload = { model: MODEL, stream: false, messages: [{ role: 'user', content: 'Synthetic self-test.' }], response_format: { type: 'json_object' } };
@@ -72,12 +72,12 @@ async function frameworkSelfTest(browser, url, keys, timeout, ownedServer) {
     const result = await call();
     await h.waitCall(initial);
     assert.equal(JSON.parse(result.payload.choices[0].message.content).analysis, 'SELF_TEST_ANALYSIS');
-    const follow = h.mock.enqueue('follow', 'SELF_TEST_PLAIN_TEXT');
+    const follow = h.mock.enqueue('follow', { reply: 'SELF_TEST_REPLY', revisedAnalysis: 'SELF_TEST_REVISION', confidence: 'HIGH', needsReview: false, warning: '' });
     const plainBody = { ...payload };
-    delete plainBody.response_format;
+    plainBody.response_format = { type: 'json_object' };
     const plain = await call(plainBody);
     await h.waitCall(follow);
-    assert.equal(plain.payload.choices[0].message.content, 'SELF_TEST_PLAIN_TEXT');
+    assert.equal(JSON.parse(plain.payload.choices[0].message.content).revisedAnalysis, 'SELF_TEST_REVISION');
     const held = h.mock.enqueue('analysis', analysis('SELF_TEST_DELAY'), { hold: true });
     let settled = false;
     const delayed = call().then(value => { settled = true; return value; });

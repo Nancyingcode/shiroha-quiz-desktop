@@ -383,7 +383,7 @@ const cases = [
       assert.equal(current.question.analysis, FORMULA_ANALYSIS);
       assert.equal(current.practice.answered, 1);
       const call = await h.follow('FORMULA_FOLLOW_QUESTION', 'FORMULA_FOLLOW_REPLY');
-      assert(call.body.messages.some(message => message.role === 'assistant' && message.content === FORMULA_ANALYSIS), 'Saved formula/rich field invalidated or corrupted the existing AI session.');
+      assert.equal(JSON.parse(call.body.messages.at(-1).content).currentAnalysisDraft, FORMULA_ANALYSIS, 'Saved formula/rich field invalidated or corrupted the existing AI session.');
       assertPayload(call, 'SAFE_Q1', ['SAFE_Q2']);
     },
   },

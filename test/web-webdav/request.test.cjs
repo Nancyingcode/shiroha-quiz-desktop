@@ -20,6 +20,8 @@ function harness(protocol, fetch) {
     setTimeout(callback) { const timer = { callback }; timers.add(timer); return timer; },
     clearTimeout(timer) { timers.delete(timer); },
   });
+  vm.runInContext(readFileSync(path.resolve(__dirname, '../../apps/web/platform/browser-network.js'), 'utf8'), context);
+  context.ShirohaPlatform = { network: context.ShirohaBrowserNetwork };
   vm.runInContext(source.slice(start, end), context);
   return { context, timers };
 }

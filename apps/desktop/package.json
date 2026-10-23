@@ -8,6 +8,7 @@
     "dev": "tauri dev --port 51736",
     "prepare:web": "node scripts/prepare-web.mjs",
     "test": "node --test test/*.test.mjs && npm run test:shared",
+    "test:web-platform": "node --test ../../test/dual-platform/browser-page.cjs",
     "test:shared": "node --test ../../test/dual-platform/*.test.cjs",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.platform.json",
     "lint": "eslint scripts test eslint.config.mjs eslint.platform.config.mjs && npm run lint:platform && npm run lint:docs",

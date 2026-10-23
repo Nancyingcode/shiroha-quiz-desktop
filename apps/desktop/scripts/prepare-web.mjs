@@ -3,8 +3,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const desktopRoot = fileURLToPath(new URL('..', import.meta.url));
-const entries = ['index.html', 'app.js', 'styles.css', 'question-bank.js', 'app-icon.png', 'data', 'media', 'libs'];
+const entries = ['index.html', 'app.js', 'styles.css', 'question-bank.js', 'app-icon.png', 'data', 'media', 'libs', 'platform'];
 export const requiredAssets = [
+  'platform/validation.js', 'platform/browser.js', 'platform/browser-network.js', 'platform/browser-credentials.js', 'platform/save-queue.js', 'platform/index.js',
   'index.html', 'app.js', 'styles.css', 'question-bank.js', 'app-icon.png',
   'libs/pdf.min.mjs', 'libs/pdf.worker.min.mjs',
   'libs/wasm/openjpeg.wasm', 'libs/standard_fonts/LiberationSans-Regular.ttf',
