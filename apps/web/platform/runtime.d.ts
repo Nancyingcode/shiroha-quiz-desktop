@@ -24,25 +24,31 @@ export interface BrowserStorage {
   releaseView?(snapshot:Snapshot,keep:{bankId:string;questionId:string}[]):void;
 }
 export interface SaveQueue {
-  save(snapshot: Snapshot): Promise<void>;
+  save(snapshot: Snapshot,operationId?:string): Promise<void>;
   resume(): void;
   idle(): Promise<void>;
   status(): {state:string; revision:number};
 }
 export interface BrowserNetwork {
+  cancelAll?():Promise<void>;
   ai(config:{endpoint:string;apiKey?:string}, payload:unknown, signal?:AbortSignal):Promise<Response>;
   webdav(config:{endpoint:string;username?:string},password:string,path:string,options?:{method?:string;trailingSlash?:boolean;timeoutMs?:number;headers?:Record<string,string>;body?:BodyInit;acceptStatuses?:number[];signal?:AbortSignal}):Promise<Response>;
 }
 export interface BrowserCredentials extends BrowserNetwork {
-  initialize(ai:{endpoint:string}):void;
+  readonly native?:boolean;
+  migrateLegacy?():Promise<void>;
+  initialize(ai:{endpoint:string},configurations?:Record<string,unknown>):void|Promise<void>;
   status(service:'ai'|'webdav',config:{endpoint:string;username?:string;rememberKey?:boolean;rememberPassword?:boolean}):string;
-  set(service:'ai'|'webdav',config:{endpoint:string;username?:string;rememberKey?:boolean;rememberPassword?:boolean},secret:string,remember:boolean):()=>void;
+  set(service:'ai'|'webdav',config:{endpoint:string;username?:string;rememberKey?:boolean;rememberPassword?:boolean},secret:string,remember:boolean):(()=>void)|Promise<()=>Promise<void>>;
+  finalize?(undo:()=>void|Promise<void>):Promise<void>;
+  operationId?(undo:()=>void|Promise<void>):string|undefined;
+  updateDav?(config:Record<string,unknown>|null):void;
   redact(config:{endpoint:string;rememberKey?:boolean},text:string):string;
   checkpoint(entries:[Storage,string][]):()=>void;
   readDav(): Record<string,unknown>|null;
-  saveDav(config:{endpoint:string;username?:string;rememberPassword?:boolean},password:string,storePassword:boolean):void;
-  clearDav():void;
-  reset():void;
+  saveDav(config:{endpoint:string;username?:string;rememberPassword?:boolean},password:string,storePassword:boolean):void|Promise<(()=>Promise<void>)|undefined>;
+  clearDav():void|Promise<(()=>Promise<void>)|undefined>;
+  reset():void|Promise<void>;
 }
 export interface BrowserFiles {
   readBuffer(file:Blob):Promise<ArrayBuffer>;

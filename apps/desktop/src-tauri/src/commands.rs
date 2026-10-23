@@ -76,7 +76,7 @@ pub enum FileRequest {
 #[derive(Clone)]
 pub struct LocalData(pub Arc<Mutex<Option<Store>>>, pub PathBuf);
 
-fn authorize(window: &tauri::WebviewWindow) -> Result<()> {
+pub(crate) fn authorize(window: &tauri::WebviewWindow) -> Result<()> {
     let url = window.url().map_err(|_| Error::new("permission_denied"))?;
     let packaged = url.port().is_none()
         && ((url.scheme() == "tauri" && url.host_str() == Some("localhost"))
@@ -96,9 +96,16 @@ fn authorize(window: &tauri::WebviewWindow) -> Result<()> {
 pub async fn local_query(
     window: tauri::WebviewWindow,
     state: tauri::State<'_, LocalData>,
+    services: tauri::State<'_, Arc<crate::services::Services>>,
     query: Query,
 ) -> Result<Value> {
     authorize(&window)?;
+    if matches!(
+        query,
+        Query::Recover { .. } | Query::RecoverImport { .. } | Query::Restore { .. }
+    ) {
+        services.invalidate()?;
+    }
     if matches!(
         query,
         Query::RecoverySnapshots | Query::Recover { .. } | Query::RecoverImport { .. }
@@ -173,7 +180,7 @@ pub async fn local_query(
     })
     .await
 }
-async fn run<T: Send + 'static>(
+pub(crate) async fn run<T: Send + 'static>(
     state: LocalData,
     action: impl FnOnce(&mut Store) -> Result<T> + Send + 'static,
 ) -> Result<T> {
@@ -342,11 +349,13 @@ pub async fn local_migrate(
 pub async fn local_replace(
     window: tauri::WebviewWindow,
     state: tauri::State<'_, LocalData>,
+    services: tauri::State<'_, Arc<crate::services::Services>>,
     snapshot: Value,
     operation_id: String,
     expected_revision: i64,
 ) -> Result<Value> {
     authorize(&window)?;
+    services.invalidate()?;
     run(state.inner().clone(), move |store| {
         Ok(json!({"revision":store.replace(&operation_id,expected_revision,&snapshot)?}))
     })

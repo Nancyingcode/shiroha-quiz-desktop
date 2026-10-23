@@ -10,10 +10,10 @@
     let sequence = 0;
     const prefix = Date.now().toString(36) + Math.random().toString(36).slice(2);
     return {
-      /** @param {import('./contracts').Snapshot} snapshot */
-      save(snapshot) {
+      /** @param {import('./contracts').Snapshot} snapshot @param {string} [operationId] */
+      save(snapshot, operationId) {
         const frozen = structuredClone(snapshot);
-        const id = `${prefix}-${++sequence}`;
+        const id = operationId || `${prefix}-${++sequence}`;
         pending++;
         const next = tail.then(async () => {
           if (blocked) throw new Error('前一次保存失败，请先重试。');

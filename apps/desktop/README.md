@@ -53,13 +53,13 @@ npm run build
 npm run prepare:web
 ```
 
-应用标识固定为 `com.yiqiu.shirohaquiz.desktop`。桌面题库与学习数据使用 Rust 独占的 SQLite，图片按内容哈希保存，普通保存通过业务增量 IPC 提交；不会在原生服务失败时回退 localStorage 写入。AI/WebDAV 请求与凭据仍沿用浏览器实现，跨域与证书限制仍然适用；尚未接入原生网络或系统凭据库。
+应用标识固定为 `com.yiqiu.shirohaquiz.desktop`。桌面题库与学习数据使用 Rust 独占的 SQLite，图片按内容哈希保存，普通保存通过业务增量 IPC 提交；不会在原生服务失败时回退 localStorage 写入。桌面 AI/WebDAV 通过 Rust 的受控业务命令请求，HTTPS 使用系统证书校验，重定向限制来源与目录；Web 端仍保持浏览器请求及跨域限制。记住的 AI Key/WebDAV 密码写入 Windows 凭据管理器，未记住只在当前进程内存，页面只读取状态。MinerU 不属于本次迁移范围。
 
 正常发行数据位于 `%LOCALAPPDATA%/com.yiqiu.shirohaquiz.desktop/local-data`，开发数据使用同级 `development`。目录内包含 `library.sqlite3`、WAL、媒体、恢复点和进程写入锁；不要在运行时只复制 SQLite 主文件充当备份。覆盖、重置及恢复前会先创建并验证包含媒体的恢复点；设置页可读取并选择恢复点。恢复点和未引用媒体目前均保守保留，不自动删除，磁盘空间不足时操作失败并保留原数据。
 
 原生打开/保存通过系统对话框选择文件，页面仅获得有时效的分块访问令牌。保存先写同目录临时文件，回读验证大小与 SHA-256 后替换目标；取消或替换失败不报告保存成功。共享 JSON/ZIP 仍是交换格式，数据库文件不是跨端导出格式。
 
-开发与生产来源不同，数据互不共享。同来源旧原型数据在空目标库启动时显示迁移确认，迁移保留旧主状态、独立配置、凭据和未知键；数据成功后 SQLite 成为活动来源。凭据迁移尚未实现，不会清理旧密码或 Key。目标已有数据时不自动覆盖；需要合并旧数据时先导出备份再主动导入。外部 Web 数据须在原浏览器导出完整备份，再在桌面窗口导入；应用不会扫描浏览器资料目录。
+开发与生产来源不同，数据互不共享。同来源旧原型数据在空目标库启动时显示迁移确认，迁移保留旧主状态、独立配置、凭据和未知键；数据成功后 SQLite 成为活动来源。D2 接续迁移时校验已落库配置与记住选项，写入并验证对应原生凭据后才清理该旧值；失败保留旧值并提供独立重试，不重跑题库迁移。目标已有数据时不自动覆盖；需要合并旧数据时先导出备份再主动导入。外部 Web 数据须在原浏览器导出完整备份，再在桌面窗口导入；应用不会扫描浏览器资料目录。
 
 首页读取题目索引和记录摘要，不读取全部正文与图片；题库预览、错题和收藏每页 50 条，练习/考试读取选定题目，历史记录展开时读取明细。统计和跨库选题仍覆盖全部索引；完整导出读取全部正文。离开页面释放未修改且未被练习/考试使用的题目缓存。
 
@@ -77,7 +77,7 @@ npm run prepare:web
 
 标题栏与雾蓝背景连续融合，图标和应用名仅在顶部出现，左侧导航从「首页」开始。标题空白处可拖动，双击最大化或还原；右侧保留最小化、最大化/还原、关闭按钮，支持键盘操作。Windows 原生最大化按钮的悬停贴靠面板不保证与自定义按钮等价。
 
-标题栏模板与脚本维护于 `frontend/titlebar.html`、`frontend/titlebar.js`，由资源准备脚本注入生成页面。标题栏使用拖动、最小化、最大化切换、最大化状态读取和关闭五项权限；阶段 C 另逐项增加受控本地数据与文件业务命令。官方桥接打包为本地脚本，保持 `withGlobalTauri: false`，CSP 与存储来源不变。视觉设计及历史验收记录见[标题栏设计](../../docs/superpowers/specs/2026-10-23-desktop-immersive-titlebar.md)和[实施计划](../../docs/superpowers/plans/2026-10-23-desktop-immersive-titlebar.md)。
+标题栏模板与脚本维护于 `frontend/titlebar.html`、`frontend/titlebar.js`，由资源准备脚本注入生成页面。标题栏使用拖动、最小化、最大化切换、最大化状态读取和关闭五项权限；阶段 C 另逐项增加受控本地数据与文件业务命令，阶段 D 增加服务凭据、服务请求及关闭协调所需事件与窗口销毁权限。官方桥接打包为本地脚本，保持 `withGlobalTauri: false`，CSP 与存储来源不变。视觉设计及历史验收记录见[标题栏设计](../../docs/superpowers/specs/2026-10-23-desktop-immersive-titlebar.md)和[实施计划](../../docs/superpowers/plans/2026-10-23-desktop-immersive-titlebar.md)。
 
 修改窗口配置后，请停止并重新运行 `npm run dev`，让原生窗口和生成资源一起更新。
 
@@ -96,7 +96,7 @@ npm run test:desktop
 
 `npm test` 包含资源过滤、内联事件转换和路径安全检查。其中的 Windows junction 用例可能受到沙箱创建链接权限限制，应在正常本机终端运行并记录结果，不通过跳过断言掩盖失败。`lint` 同时检查本次工程文档的 UTF-8、代码围栏和本地链接。
 
-`npm run test:desktop` 需要先执行 `npm run build:test`，使用 `target/native-test/release` 中带隔离 feature 的 EXE。测试根必须是 runner 本次创建且带隔离标记的临时目录，同时隔离 SQLite、媒体与 WebView2 profile，并阻止出站。正常 `npm run build` 不接受测试根覆盖，正常发行制品的运行验收须使用隔离 Windows 用户或虚拟机；本轮未执行该项。原生凭据/网络尚未接入，不访问系统凭据。仅完成静态资源生成不能证明 PDF/OCR 已在 WebView2 中通过。
+`npm run test:desktop` 需要先执行 `npm run build:test`，使用 `target/native-test/release` 中带隔离 feature 的 EXE。测试根必须是 runner 本次创建且带隔离标记的临时目录，同时隔离 SQLite、媒体与 WebView2 profile，并默认阻止出站；网络用例仅允许 runner 创建的单一本机回环 mock 来源。正常 `npm run build` 不接受测试根覆盖，正常发行制品的运行验收须使用隔离 Windows 用户或虚拟机；本轮未执行该项。测试 feature 使用 fake 凭据，不访问系统凭据。单独的 Windows provider 测试使用随机测试命名空间和假凭据，结束删除；这不替代独立 Windows 用户验收。仅完成静态资源生成不能证明 PDF/OCR 已在 WebView2 中通过。
 
 2026-10-23 已在本机 WebView2 155.0.4283.62 验证：7 项单元测试、类型检查、lint 及 release 构建通过；10 项实际桌面检查通过，包括启动不加载隐藏插画、进入导入页后插画正常显示、JSON 题库通过界面导入与练习、关闭重开后的题库保留、MathJax、PDF.js 真 Worker，以及本地 Tesseract 英文 OCR。OCR 样本为 Canvas 生成的 `TEST`，该结果不代表中文扫描 PDF 全流程或大文件性能已验证。测试截图生成于 `.reports/prototype.png`。
 
@@ -138,3 +138,13 @@ npm run bench:desktop -- src-tauri/target/native-test/release/shiroha-quiz-deskt
 优化后 5 次可见启动耗时为 737–961 ms，工作集为 503.0–515.2 MiB，私有提交为 274.8–288.7 MiB。启动改善主要来自取消固定等待，内存改善有限。工作集含可共享页面，跨进程求和会重复计数；私有提交也不等同驻留物理内存。测量开启 CDP 调试连接、未清空操作系统文件缓存，不能视为重启电脑后的冷启动或大题库/PDF/OCR 负载结果。
 
 此前单独测得的旧版工作集中位数为 477.9 MiB，本轮为 523.6 MiB，反映进程工作集回收和系统状态的波动。本表使用同轮旧新版结果比较，不将节省量描述为所有环境下的固定值。初测、旧版复测及优化后原始记录分别为 `.reports/performance-before.json`、`.reports/performance-baseline-retest.json` 与 `.reports/performance-after.json`。
+
+## 阶段 D：服务与凭据
+
+私有 `service-bindings.sqlite3` 只记录绑定、暂存事务和迁移回执，不含秘密，也不进入题库导出或恢复点。保存配置采用暂存凭据、提交 C3 操作回执、启用绑定并清理旧副本的顺序；启动时据回执处理未完成事务。取消记住或清理失败会报错，不显示虚假的清除成功。凭据存储不可用时仍允许本地题库启动和恢复。
+
+端点、账号或目录变化必须重新输入凭据；覆盖恢复、恢复点恢复和重置撤销绑定，即使恢复的是同一端点也不能自动复用旧秘密。旧系统副本可能保守保留以便失败恢复，但撤销后不能被业务请求读取。恢复后须重新配置服务。
+
+原生 AI 保留非流式协议和共享人工确认流程，不自动重试收费请求。AI 请求/响应上限各 8 MiB，WebDAV XML 为 4 MiB、备份为 256 MiB，请求总超时 120 秒。WebDAV 仅允许探测、建目录、列举和指定备份对象读写；历史文件重试先核对远端内容，latest 更新失败保留已上传历史文件。上传中断显示结果待核对，先刷新远端再决定重试。
+
+关闭窗口先检查保存、练习/考试和网络状态；取消请求后拒绝迟到结果。完整联调与尚未完成的发行环境验收见[阶段 D 验证记录](../../test/dual-platform/README.md)。

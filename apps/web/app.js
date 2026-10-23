@@ -202,7 +202,7 @@ function setImportBankNameFromFile(fileName){
   }
 }
 
-async function saveSilent(){try{await ShirohaPlatform.saves.save(JSON.parse(serializeState()))}catch(error){mutationSaveError=error;throw error}}
+async function saveSilent(operationId){try{await ShirohaPlatform.saves.save(JSON.parse(serializeState()),operationId)}catch(error){mutationSaveError=error;throw error}}
 
 /* SHIROHA_WEB_ISSUE_99_AI_IMPORT_START */
 function defaultAiConfigV99(){return {provider:'ollama',endpoint:AI_PROVIDER_PRESETS_V99.ollama.endpoint,model:'',timeoutSeconds:120,rememberKey:false}}
@@ -358,8 +358,9 @@ async function saveAiSettingsV99(){return runMutation(async()=>{
   try{
     const config=readAiFormV99();
     state.settings.aiImportV99={provider:config.provider,endpoint:config.endpoint,model:config.model,timeoutSeconds:config.timeoutSeconds,rememberKey:config.rememberKey};
-    undoCredential=ShirohaPlatform.credentials.set('ai',config,config.apiKey,config.rememberKey);
-    try{await saveSilent()}catch(error){state.settings.aiImportV99=previousConfig;undoCredential();throw error}
+    undoCredential=await ShirohaPlatform.credentials.set('ai',config,config.apiKey,config.rememberKey);
+    try{await saveSilent(ShirohaPlatform.credentials.operationId?.(undoCredential))}catch(error){state.settings.aiImportV99=previousConfig;await undoCredential();throw error}
+    await ShirohaPlatform.credentials.finalize?.(undoCredential);
     aiConnectionStateV99='idle';
     aiLastDiagnosticV375=buildAiDiagnosticV375(null,config,'idle');
     const endpoint=$('#ai-endpoint-v99');if(endpoint)endpoint.value=config.endpoint;
@@ -369,9 +370,10 @@ async function saveAiSettingsV99(){return runMutation(async()=>{
 });}
 async function clearAiSettingsV99(){return runMutation(async()=>{
   if(!confirm('确定清除 AI 接口配置和已保存的 API Key？'))return;
-  const undoCredential=ShirohaPlatform.credentials.set('ai',ensureAiImportStateV99(),'',false);
+  const undoCredential=await ShirohaPlatform.credentials.set('ai',ensureAiImportStateV99(),'',false);
   state.settings.aiImportV99=defaultAiConfigV99();
-  try{await saveSilent()}catch(error){undoCredential();setAiSettingsStatusV99('清除失败，原配置已保留：'+(error.message||error),'warn');return}
+  try{await saveSilent(ShirohaPlatform.credentials.operationId?.(undoCredential))}catch(error){await undoCredential();setAiSettingsStatusV99('清除失败，原配置已保留：'+(error.message||error),'warn');return}
+  await ShirohaPlatform.credentials.finalize?.(undoCredential);
   aiConnectionStateV99='idle';aiLastDiagnosticV375=null;aiDiagnosticsVisibleV375=false;renderAiSettingsV99();setAiSettingsStatusV99('AI 配置已清除。');syncAiImportActionV99();showNotice('AI 设置','配置已清除。','ok');
 });}
 function bindAiImportEventsV99(){
@@ -7641,7 +7643,7 @@ function ensureSettingsBackupPanelV23(){
       <label>用户名<input id="webdav-username-v378" autocomplete="username" /></label>
       <label>密码 / 应用专用密码<input id="webdav-password-v378" type="password" autocomplete="current-password" /></label>
     </div>
-    <label class="check-line-v23 webdav-remember-v378"><input id="webdav-remember-v378" type="checkbox" />在此浏览器记住密码 <span class="muted">（默认仅保留到当前标签页会话）</span></label>
+    <label class="check-line-v23 webdav-remember-v378"><input id="webdav-remember-v378" type="checkbox" />${ShirohaPlatform.credentials.native?'使用 Windows 凭据管理器记住密码':'在此浏览器记住密码'} <span class="muted">（${ShirohaPlatform.credentials.native?'默认仅保留到当前进程退出':'默认仅保留到当前标签页会话'}）</span></label>
     <div class="actions wrap-v23 webdav-actions-v378">
       <button class="ghost" id="webdav-save-v378" type="button">保存配置</button>
       <button class="ghost" id="webdav-test-v378" type="button">测试连接</button>
@@ -8638,6 +8640,7 @@ function importBackupJsonFileV23(e){
         if(!confirm(`覆盖恢复会清空当前本地数据，并导入 ${normalized.banks.length} 个题库。确定继续？`))return;
         if(!await loadNativeAll())throw new Error('恢复前读取失败，原数据已保留。');
         await ShirohaPlatform.storage.checkpoint?.();
+        if(ShirohaPlatform.credentials.native)await ShirohaPlatform.credentials.reset();
         const previousWebSettings=state.settings&&typeof state.settings==='object'?state.settings:{};state.schemaVersion=CURRENT_SCHEMA_VERSION;state.banks=normalized.banks.map(b=>({...b,groupName:normalizeBankGroupNameV58(b.groupName)}));state.activeBankId=normalized.activeBankId||state.banks[0]?.id||'';state.wrongBook=normalized.wrongBook||{};state.favorites=normalized.favorites||{};state.records=Array.isArray(normalized.records)?normalized.records:[];state.settings=normalized.hasWebSettings&&normalized.settings&&typeof normalized.settings==='object'?normalized.settings:previousWebSettings;state.crossPlatformMeta=normalized.crossPlatformMeta&&typeof normalized.crossPlatformMeta==='object'?normalized.crossPlatformMeta:{favoriteQuestions:{}};
       }else{
         mergeBackupBanksV23(normalized);
@@ -8682,11 +8685,23 @@ function webdavConfigFromFormV378(){
   const old=readWebdavConfigV378();
   return {...old,endpoint:normalizeWebdavEndpointV378($('#webdav-endpoint-v378')?.value),username:String($('#webdav-username-v378')?.value||'').trim(),remoteDir:normalizeWebdavRemoteDirV378($('#webdav-remote-dir-v378')?.value),rememberPassword:!!$('#webdav-remember-v378')?.checked};
 }
-function storeWebdavConfigV378(config,password,storePassword=true){
+async function storeWebdavConfigV378(config,password,storePassword=true){
   const safe={...defaultWebdavConfigV378(),...config};delete safe.password;delete safe.authorization;
-  ShirohaPlatform.credentials.saveDav(safe,password,storePassword);
+  const undo=await ShirohaPlatform.credentials.saveDav(safe,password,storePassword);
+  if(ShirohaPlatform.credentials.native){
+    const previous=state.serviceConfigurations;state.serviceConfigurations={...previous,webdav:safe};
+    try{await saveSilent(ShirohaPlatform.credentials.operationId?.(undo))}catch(error){state.serviceConfigurations=previous;await undo?.();throw error}
+    if(undo)await ShirohaPlatform.credentials.finalize(undo);ShirohaPlatform.credentials.updateDav(safe);
+  }
 }
-function clearWebdavStorageV378(){ShirohaPlatform.credentials.clearDav()}
+async function clearWebdavStorageV378(){
+  const undo=await ShirohaPlatform.credentials.clearDav();
+  if(ShirohaPlatform.credentials.native){
+    const previous=state.serviceConfigurations;state.serviceConfigurations={...previous};delete state.serviceConfigurations.webdav;
+    try{await saveSilent(ShirohaPlatform.credentials.operationId?.(undo))}catch(error){state.serviceConfigurations=previous;await undo?.();throw error}
+    if(undo)await ShirohaPlatform.credentials.finalize(undo);ShirohaPlatform.credentials.updateDav(null);
+  }
+}
 function webdavPasswordFromFormV378(){const config=webdavConfigFromFormV378();return String($('#webdav-password-v378')?.value||'')||readWebdavPasswordV378(config)}
 function fillWebdavFormV378(){
   const config=readWebdavConfigV378();
@@ -8712,6 +8727,7 @@ async function webdavRequestV378(config,password,relativePath,options={}){
 function classifyWebdavErrorV378(error){
   const status=Number(error&&error.status||0),code=String(error&&error.code||'');
   if(code==='mixed_content')return {type:'可能的混合内容拦截 / 网络 / CORS',summary:'HTTPS 页面请求 HTTP WebDAV 失败，可能被浏览器拦截，也可能是网络或跨域配置问题。',suggestion:'建议使用 HTTPS WebDAV；HTTP 会明文传输账号凭据和备份。若已在浏览器中允许不安全内容，请检查服务状态、CORS 配置及浏览器控制台中的具体错误。'};
+  if(code==='result_unknown')return {type:'远端结果待核对',summary:'请求已中断，但备份可能已经到达远端。',suggestion:'先刷新远端列表，确认文件及校验值后再决定重试。'};
   if(code==='timeout')return {type:'请求超时',summary:'服务未在限定时间内响应。',suggestion:'检查网络、服务状态和反向代理超时设置。'};
   if(code==='network')return {type:'网络 / CORS / TLS',summary:'浏览器未取得 WebDAV 响应。',suggestion:'确认服务已启动、证书可信，并允许当前 Origin 以及 OPTIONS、PROPFIND、MKCOL、GET、PUT 和 Authorization、Content-Type、Depth 请求头。'};
   const map={401:['鉴权失败','用户名、密码或应用专用密码不正确。','检查账号凭据；启用双重验证时通常需要应用专用密码。'],403:['权限 / CORS 拒绝','服务器拒绝当前请求。','检查目录读写权限、Origin 白名单和反向代理规则。'],404:['路径不存在','WebDAV 地址或远端目录不存在。','核对 WebDAV 根地址；首次上传会自动创建所配置的远端目录。'],405:['方法不允许','服务器未开放当前 WebDAV 方法。','确认反向代理允许 PROPFIND、MKCOL、GET 和 PUT。'],409:['父目录不存在','服务器要求先创建上级目录。','核对 WebDAV 根地址和远端目录权限。'],412:['条件冲突','服务器拒绝覆盖或条件请求。','检查服务端文件锁定、版本或覆盖策略。'],413:['上传过大','服务器拒绝当前备份大小。','提高服务端上传限制，或减少题库中的大图片。'],423:['资源被锁定','远端文件或目录正被锁定。','稍后重试，或在 WebDAV 服务端解除锁定。'],429:['请求过多','服务端暂时限流。','稍后重试。'],507:['远端空间不足','WebDAV 存储空间不足。','清理远端旧文件或扩充配额后重试。']};
@@ -8728,7 +8744,7 @@ function webdavDiagnosticTextV378(){
   return [`Shiroha Quiz WebDAV 诊断`,`时间：${d.time}`,`操作：${d.action}`,`方法：${d.method||'—'}`,`地址：${d.url||'—'}`,`页面 Origin：${d.origin||'—'}`,`HTTP 状态：${d.status||'—'}`,`判断：${d.type}`,`摘要：${d.summary}`,`建议：${d.suggestion}`].join('\n');
 }
 function setWebdavStatusV378(message,kind=''){webdavRuntimeV378.status=message;webdavRuntimeV378.statusKind=kind;renderWebdavPanelV378()}
-function setWebdavBusyV378(action=''){webdavRuntimeV378.busy=!!action;webdavRuntimeV378.action=action;renderWebdavPanelV378()}
+function setWebdavBusyV378(action=''){webdavRuntimeV378.busy=!!action;webdavRuntimeV378.action=action;const stop=$('#webdav-stop-native');if(stop)stop.disabled=!action;renderWebdavPanelV378()}
 async function runWebdavActionV378(action,task){
   if(webdavRuntimeV378.busy)return;setWebdavBusyV378(action);setWebdavStatusV378(`${action}处理中…`,'');
   try{return await task()}
@@ -8737,11 +8753,17 @@ async function runWebdavActionV378(action,task){
 }
 function bindWebdavPanelV378(){
   const save=$('#webdav-save-v378');if(!save)return;
-  save.onclick=()=>{try{const config=webdavConfigFromFormV378();storeWebdavConfigV378(config,webdavPasswordFromFormV378());setWebdavStatusV378('配置已保存。密码按当前“记住密码”选项单独存放。','ok');toast('WebDAV 配置已保存。','ok')}catch(error){setWebdavStatusV378(error.message,'danger')}};
-  $('#webdav-clear-v378').onclick=()=>{try{clearWebdavStorageV378()}catch(error){setWebdavStatusV378('清除失败：'+error.message,'warn');return}webdavRuntimeV378={busy:false,action:'',backups:[],latestFile:'',status:'配置和密码已清除。',statusKind:'ok',diagnostic:null,pendingRestore:null,formLoaded:false};fillWebdavFormV378();renderWebdavPanelV378();toast('WebDAV 配置已清除。','ok')};
+  save.onclick=async()=>{try{const config=webdavConfigFromFormV378();await storeWebdavConfigV378(config,webdavPasswordFromFormV378());setWebdavStatusV378('配置已保存。密码按当前“记住密码”选项单独存放。','ok');toast('WebDAV 配置已保存。','ok')}catch(error){setWebdavStatusV378(error.message,'danger')}};
+  $('#webdav-clear-v378').onclick=async()=>{try{await clearWebdavStorageV378()}catch(error){setWebdavStatusV378('清除失败：'+error.message,'warn');return}webdavRuntimeV378={busy:false,action:'',backups:[],latestFile:'',status:'配置和密码已清除。',statusKind:'ok',diagnostic:null,pendingRestore:null,formLoaded:false};fillWebdavFormV378();renderWebdavPanelV378();toast('WebDAV 配置已清除。','ok')};
   $('#webdav-test-v378').onclick=()=>runWebdavActionV378('测试连接',testWebdavConnectionV378);
   $('#webdav-upload-v378').onclick=()=>runWebdavActionV378('上传备份',uploadWebdavBackupV378);
   $('#webdav-refresh-v378').onclick=()=>runWebdavActionV378('刷新列表',refreshWebdavBackupsV378);
+  if(ShirohaPlatform.network.cancelAll&&!$('#webdav-stop-native')){
+    const stop=document.createElement('button');stop.id='webdav-stop-native';stop.type='button';stop.className='ghost';stop.textContent='取消网络任务';stop.disabled=!webdavRuntimeV378.busy;
+    stop.onclick=async()=>{stop.disabled=true;try{await ShirohaPlatform.network.cancelAll();setWebdavStatusV378('已请求取消，正在确认结果；上传请核对远端列表。','warn')}catch(error){setWebdavStatusV378(error.message,'danger')}};
+    $('#webdav-refresh-v378').after(stop);
+  }
+
   $('#webdav-copy-diagnostics-v378').onclick=()=>copyTextV23(webdavDiagnosticTextV378(),'已复制 WebDAV 诊断（不含密码）。');
   $('#webdav-list-v378').onclick=e=>{const button=e.target.closest('[data-webdav-restore-v378]');if(button)runWebdavActionV378('下载备份',()=>prepareWebdavRestoreV378(button.dataset.webdavRestoreV378))};
   $('#webdav-restore-cancel-v378').onclick=closeWebdavRestoreModalV378;
@@ -8779,7 +8801,7 @@ async function uploadWebdavBackupV378(){if(!await loadNativeAll())return;
   const fileResponse=await webdavRequestV378(config,password,remoteDir+'/'+fileName,{method:'PUT',headers:{'Content-Type':'application/json; charset=utf-8'},body:bytes,timeoutMs:120000,acceptStatuses:[200,201,204]});
   const questionCount=(state.banks||[]).reduce((n,b)=>n+(b.questions||[]).length,0),manifest={kind:'shiroha_quiz_webdav_latest',version:1,app:'Shiroha Quiz',appVersion:APP_VERSION,updatedAt:now(),fileName,sha256:sha,sizeBytes:bytes.byteLength,bankCount:(state.banks||[]).length,questionCount};
   let manifestWarning='';try{await webdavRequestV378(config,password,remoteDir+'/latest.json',{method:'PUT',headers:{'Content-Type':'application/json; charset=utf-8'},body:JSON.stringify(manifest),acceptStatuses:[200,201,204]})}catch(error){manifestWarning='；备份文件已上传，但 latest.json 更新失败';setWebdavDiagnosticV378('更新 latest.json',error)}
-  const saved={...config,lastUploadAt:manifest.updatedAt,lastUploadFile:fileName,lastUploadSize:bytes.byteLength,lastUploadSha:sha};storeWebdavConfigV378(saved,password);
+  const saved={...config,lastUploadAt:manifest.updatedAt,lastUploadFile:fileName,lastUploadSize:bytes.byteLength,lastUploadSha:sha};await storeWebdavConfigV378(saved,password,false);
   try{await loadWebdavBackupListV378(config,password)}catch(error){manifestWarning+='；远程列表刷新失败';setWebdavDiagnosticV378('刷新列表',error)}
   if(!manifestWarning)setWebdavDiagnosticV378('上传备份',null,{method:'PUT',url:webdavUrlV378(config,remoteDir+'/'+fileName),status:fileResponse.status,summary:'完整备份及 latest.json 已上传。'});
   setWebdavStatusV378(`上传成功：${fileName}（${formatBytesV376(bytes.byteLength)}）${manifestWarning}` ,manifestWarning?'warn':'ok');toast(manifestWarning?'备份已上传，但索引或列表更新不完整。':'WebDAV 完整备份上传成功。',manifestWarning?'warn':'ok');
@@ -8836,6 +8858,7 @@ async function applyNormalizedBackupV378(normalized,mode){return runMutation(asy
     if(mode==='overwrite'){
       if(!await loadNativeAll())throw new Error('恢复前读取失败，原数据已保留。');
       await ShirohaPlatform.storage.checkpoint?.();
+        if(ShirohaPlatform.credentials.native)await ShirohaPlatform.credentials.reset();
         const previousWebSettings=state.settings&&typeof state.settings==='object'?state.settings:{};state.schemaVersion=CURRENT_SCHEMA_VERSION;state.banks=normalized.banks.map(b=>({...b,groupName:normalizeBankGroupNameV58(b.groupName)}));state.activeBankId=normalized.activeBankId||state.banks[0]?.id||'';state.wrongBook=normalized.wrongBook||{};state.favorites=normalized.favorites||{};state.records=Array.isArray(normalized.records)?normalized.records:[];state.settings=normalized.hasWebSettings&&normalized.settings&&typeof normalized.settings==='object'?normalized.settings:previousWebSettings;state.crossPlatformMeta=normalized.crossPlatformMeta&&typeof normalized.crossPlatformMeta==='object'?normalized.crossPlatformMeta:{favoriteQuestions:{}};
     }else mergeBackupBanksV23(normalized);
     upgradeState();ensureDefaultBank();await saveSilent();
@@ -9189,8 +9212,12 @@ async function startApplication(){
   lockApplication(true);document.body.dataset.storageState='loading';platformStatus('正在读取本地数据…');
   try{
     Object.assign(state,await loadState());
-    ShirohaPlatform.credentials.initialize(ensureAiImportStateV99());
+    await ShirohaPlatform.credentials.initialize(ensureAiImportStateV99(),state.serviceConfigurations);
     init();applicationReady=true;lockApplication(false);platformStatus('');
+    if(ShirohaPlatform.credentials.migrateLegacy){
+      const retryCredentials=async()=>{try{await ShirohaPlatform.credentials.migrateLegacy();renderAiSettingsV99();renderWebdavPanelV378(true);platformStatus('')}catch(error){platformStatus('旧凭据迁移未完成，旧值已保留，可独立重试。',true);const retry=document.createElement('button');retry.textContent='重试凭据迁移';retry.onclick=retryCredentials;document.getElementById('platform-status').appendChild(retry)}};
+      await retryCredentials();
+    }
   }catch(error){
     applicationReady=false;document.body.dataset.storageState='recovery_required';
     retryMutation=startApplication;platformStatus(error?.message||'数据加载失败，原数据已保留。',true);
@@ -9200,13 +9227,24 @@ async function startApplication(){
     if(error?.code!=='migration_required')offerNativeRecovery(document.getElementById('platform-status'));
     if(error?.code==='migration_required'&&ShirohaPlatform.storage.migrate){
       const migrate=document.createElement('button');migrate.textContent='确认迁移旧原型数据';
-      migrate.onclick=async()=>{if(!confirm('将旧题库和学习记录迁移到本机数据库，并保留原始数据。凭据迁移尚未实现，旧凭据不会清理。是否继续？'))return;migrate.disabled=true;try{await ShirohaPlatform.storage.migrate();await startApplication()}catch(error){platformStatus(error.message,true)}finally{migrate.disabled=false}};
+      migrate.onclick=async()=>{if(!confirm('将旧题库和学习记录迁移到本机数据库，并保留原始数据。凭据会单独迁移，只有保存成功才清理对应旧值；失败仍保留。是否继续？'))return;migrate.disabled=true;try{await ShirohaPlatform.storage.migrate();await startApplication()}catch(error){platformStatus(error.message,true)}finally{migrate.disabled=false}};
       document.getElementById('platform-status').appendChild(migrate);
     }
   }
 }
 for(const type of ['click','change','input','keydown'])document.addEventListener(type,event=>{if(mutationBusy&&!event.target.closest?.('#platform-status,#desktop-titlebar')){event.preventDefault();event.stopImmediatePropagation()}},true);
 window.addEventListener('beforeunload',event=>{if(mutationBusy||mutationSaveError){event.preventDefault();event.returnValue=''}});
+if(globalThis.ShirohaDesktopHost)globalThis.ShirohaDesktopHost.canClose=async()=>{
+  if(mutationBusy){platformStatus('正在保存，请完成后再关闭。',true);return false}
+  if(mutationSaveError&&!confirm('保存尚未成功。确定放弃本次未保存修改并退出？'))return false;
+  if(exam.items.length&&!exam.submitted&&!confirm('当前考试尚未交卷，退出后不能续考。确定退出？'))return false;
+  if(webdavRuntimeV378.busy||aiImportRequestV99.running||aiPreviewRequestV991.running){
+    if(!confirm('网络任务尚未结束。取消并退出？已经发送的上传可能到达远端，下次请先核对列表。'))return false;
+  }
+  try{await ShirohaPlatform.network.cancelAll?.();await ShirohaPlatform.saves.idle();return true}
+  catch(error){platformStatus(error.message||'退出前检查失败，请重试。',true);return false}
+};
+
 
 // Initialize only after every top-level lexical binding has been created.
 startApplication();

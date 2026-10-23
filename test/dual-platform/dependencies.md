@@ -38,3 +38,11 @@ SQLite 候选依据：[0.40.2 清单](https://raw.githubusercontent.com/rusqlite
 桌面构建添加 `@tauri-apps/api =2.12.4`（Apache-2.0 OR MIT）、`esbuild =0.28.2`（MIT），均固定版本；只打包官方 invoke 和当前窗口 API，Web 静态入口不新增构建要求。本地 bridge.js 为 92,490 字节，保留许可注释；esbuild 的开发二进制不作为应用后台进程分发。现有 Node 24、Rust 1.99.1/MSVC 工具链已通过编译；不据此承诺最低 Rust 或 Win10 环境验证。
 
 新增依赖会增大原生制品与开发目录。本轮正常 release EXE 为 62,165,504 字节，测试 feature 的 release EXE 为 62,144,512 字节，均包含现有离线资源；未保存同配置的旧原生制品作体积对照，因此不报告体积增量或性能收益。D 阶段 HTTP/凭据候选均未接入。
+
+## 5. 阶段 D 实际接入
+
+采用已锁定 `reqwest =0.13.5`（关闭默认功能，仅 native-tls、json）、`url =2.5.8`、`quick-xml =0.42.0`、Tokio 的 time/sync/macros，以及 Windows 专用 `windows-sys =0.61.2` 的 Credentials/Foundation API。reqwest、url、Tokio 为 MIT OR Apache-2.0，quick-xml 为 MIT，windows-sys 为 MIT OR Apache-2.0。Cargo.lock 记录新增 TLS 传递依赖；npm 锁文件不变。
+
+凭据实现用现有 windows-sys 直接封装 CredReadW/CredWriteW/CredDeleteW，替代阶段 A 的 keyring 候选，避免额外跨平台注册层。固定本机持久化，接口由 fake provider 覆盖，unsafe 边界注明内存所有权与释放要求。HTTP 使用 Windows 系统 TLS，禁用自动重定向和代理，手工校验每跳；不新增通用 HTTP capability。XML 解析拒绝 DTD 并逐项校验 href。
+
+本机 MSVC 编译和随机命名空间 Windows provider 回归通过；未据此宣称最低工具链、独立用户或 Win10/Win11 全矩阵通过。制品体积与最终检查记录见同目录 README 的阶段 D 节。

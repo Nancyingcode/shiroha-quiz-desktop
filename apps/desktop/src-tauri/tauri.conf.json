@@ -31,11 +31,13 @@
         "allow-local-replace",
         "allow-local-file",
         "allow-local-task", "allow-local-query", "allow-local-commit",
+        "allow-service-credential", "allow-service-request",
+        "core:event:allow-listen", "core:event:allow-unlisten",
         "core:window:allow-start-dragging",
         "core:window:allow-minimize",
         "core:window:allow-toggle-maximize",
         "core:window:allow-is-maximized",
-        "core:window:allow-close"
+        "core:window:allow-close", "core:window:allow-destroy"
       ] }],
       "csp": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; worker-src 'self' blob:; connect-src 'self' ipc: http: https:; object-src 'none'; base-uri 'none'; frame-src 'none'; form-action 'none'"
     }
