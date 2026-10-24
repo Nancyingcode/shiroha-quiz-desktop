@@ -55,6 +55,8 @@ const nativeReads=new Set();
 const nativePages=new Map();
 const nativeOpenRecords=new Set();
 const nativeRenderVersions=new Map();
+// 选择仅归当前题库页面会话；切库或题目集合被替换后重置，不写入备份。
+let bankQuestionSelection={bank:null,idsKey:'',selected:new Set()};
 function beginNativeRender(view){const version=(nativeRenderVersions.get(view)||0)+1;nativeRenderVersions.set(view,version);return version}
 let nativePracticeRequest=0,nativeExamRequest=0;
 async function readNative(action){const task=Promise.resolve().then(action);nativeReads.add(task);try{await task;return true}catch(error){platformStatus(error.message||'读取本地数据失败，请重试。',true);return false}finally{nativeReads.delete(task)}}
@@ -62,8 +64,8 @@ async function loadNativeItems(items){if(!ShirohaPlatform.storage.ensureQuestion
 async function loadNativeBanks(ids){return loadNativeItems(practiceSessionItemsForBanksV8916(state.banks.filter(bank=>ids.includes(bank.id))))}
 async function loadNativeAll(){if(!ShirohaPlatform.storage.ensureAll)return true;return readNative(()=>ShirohaPlatform.storage.ensureAll(state))}
 function nativeViewVisible(id){return !ShirohaPlatform.storage.lazy||(!mutationBusy&&document.getElementById(id)?.classList.contains('active'))}
-function nativePage(rows,key,target,render){
-  if(!ShirohaPlatform.storage.lazy)return rows;
+function nativePage(rows,key,target,render,alwaysPage=false){
+  if(!ShirohaPlatform.storage.lazy&&!alwaysPage)return rows;
   const size=50,pages=Math.max(1,Math.ceil(rows.length/size));const page=Math.min(nativePages.get(key)||0,pages-1);nativePages.set(key,page);
   const id=target.id+'-pager';let controls=document.getElementById(id);if(!controls){controls=document.createElement('div');controls.id=id;controls.className='actions';target.insertAdjacentElement('afterend',controls)}
   controls.replaceChildren();controls.setAttribute('aria-label','列表分页');
@@ -1122,7 +1124,59 @@ function renderBankToolbarV28(){
   sel.innerHTML=state.banks.map(b=>`<option value="${esc(b.id)}">${esc(bankPathLabelV58(b))}（${b.questions.length}题）</option>`).join('')||'<option value="">暂无题库</option>';
   sel.value=old||state.activeBankId||'';
 }
-async function renderBankPreview(){if(!nativeViewVisible('banks'))return;const renderVersion=beginNativeRender('banks');const bank=activeBank();const qs=ShirohaPlatform.storage.lazy?nativePage(bank.questions,'preview:'+bank.id,document.getElementById('bank-preview'),renderBankPreview):bank.questions.slice(0,300);if(!await loadNativeItems(practiceSessionItemsForBanksV8916([{...bank,questions:qs}])))return;if(renderVersion!==nativeRenderVersions.get('banks')||!nativeViewVisible('banks')||activeBank().id!==bank.id)return;$('#bank-preview tbody').innerHTML=qs.map((q,i)=>`<tr><td>${ShirohaPlatform.storage.lazy?bank.questions.indexOf(q)+1:i+1}</td><td>${label(q.type)}</td><td>${esc(short(q.question,80))}</td><td>${esc((q.answer||q.answerKeys||[]).join(''))}</td><td>${esc(q.category||q.topic||'')}</td><td>${esc(q.score||'默认')}</td></tr>`).join('')}
+async function renderBankPreview(){
+  const bank=activeBank(),idsKey=JSON.stringify(bank.questions.map(q=>q.id));
+  if(bankQuestionSelection.bank!==bank||bankQuestionSelection.idsKey!==idsKey)bankQuestionSelection={bank,idsKey,selected:new Set()};
+  if(!nativeViewVisible('banks'))return;
+  const renderVersion=beginNativeRender('banks');
+  const qs=nativePage(bank.questions,'preview:'+bank.id,document.getElementById('bank-preview'),renderBankPreview,true);
+  if(!await loadNativeItems(practiceSessionItemsForBanksV8916([{...bank,questions:qs}])))return;
+  if(renderVersion!==nativeRenderVersions.get('banks')||!nativeViewVisible('banks')||activeBank().id!==bank.id)return;
+  const selected=bankQuestionSelection.selected;
+  $('#bank-preview tbody').innerHTML=qs.map(q=>{const number=bank.questions.indexOf(q)+1;return `<tr><td><input type="checkbox" data-select-bank-question="${esc(q.id)}" aria-label="选择第 ${number} 道试题" ${selected.has(q.id)?'checked':''}></td><td>${number}</td><td>${label(q.type)}</td><td>${esc(short(q.question,80))}</td><td>${esc((q.answer||q.answerKeys||[]).join(''))}</td><td>${esc(q.category||q.topic||'')}</td><td>${esc(q.score||'默认')}</td><td><button class="ghost danger mini-btn" type="button" data-delete-bank-question="${esc(q.id)}" aria-label="删除第 ${number} 道试题">删除</button></td></tr>`}).join('')||'<tr><td colspan="8" class="empty">当前题库暂无试题。</td></tr>';
+  const updateSelection=()=>{
+    $('#bank-question-selection').textContent=`已选择 ${selected.size} 道试题`;
+    $('#delete-selected-questions').disabled=!selected.size;
+    $('#clear-bank-question-selection').disabled=!selected.size;
+    $('#select-bank-question-page').disabled=!qs.length;
+    $$('[data-select-bank-question]').forEach(input=>{input.checked=selected.has(input.dataset.selectBankQuestion)});
+  };
+  $$('[data-select-bank-question]').forEach(input=>input.onchange=()=>{if(input.checked)selected.add(input.dataset.selectBankQuestion);else selected.delete(input.dataset.selectBankQuestion);updateSelection()});
+  $$('[data-delete-bank-question]').forEach(button=>button.onclick=()=>deleteBankQuestions(bank.id,[button.dataset.deleteBankQuestion]));
+  $('#select-bank-question-page').onclick=()=>{qs.forEach(q=>selected.add(q.id));updateSelection()};
+  $('#clear-bank-question-selection').onclick=()=>{selected.clear();updateSelection()};
+  $('#delete-selected-questions').onclick=()=>deleteBankQuestions(bank.id,[...selected]);
+  updateSelection();
+}
+function bankQuestionDeletionBlocked(bankId,ids){
+  const contains=items=>(items||[]).some(item=>practiceItemBankIdV8916(item)===bankId&&ids.has(practiceQuestionV8916(item).id));
+  return (!practice.completed&&contains(practice.items))||(!exam.submitted&&contains(exam.items));
+}
+function confirmBankQuestionDeletion(bank,ids){
+  if(bankQuestionDeletionBlocked(bank.id,ids)){toast('这些试题正在练习或考试中，请先结束相关会话后再删除。','warn');return false}
+  return confirm(`确定从“${bank.name}”删除 ${ids.size} 道试题？对应错题和收藏会一并移除，历史成绩保留。删除后不能直接撤销。`);
+}
+function removeBankQuestionReferences(bankId,ids){
+  if(Array.isArray(state.wrongBook[bankId]))state.wrongBook[bankId]=state.wrongBook[bankId].filter(entry=>!ids.has(typeof entry==='string'?entry:entry.id));
+  if(Array.isArray(state.favorites?.[bankId]))state.favorites[bankId]=state.favorites[bankId].filter(id=>!ids.has(id));
+  const metadata=state.crossPlatformMeta?.favoriteQuestions?.[bankId];
+  if(metadata)ids.forEach(id=>delete metadata[id]);
+}
+async function deleteBankQuestions(bankId,questionIds){
+  if(mutationBusy||!applicationReady)return false;
+  if(!await loadNativeBanks([bankId]))return false;
+  return runMutation(async()=>{
+    const bank=state.banks.find(b=>b.id===bankId);if(!bank)return;
+    const requested=new Set(questionIds),ids=new Set(bank.questions.filter(q=>requested.has(q.id)).map(q=>q.id));
+    if(!ids.size){toast('请先选择要删除的试题。','warn');return}
+    if(!confirmBankQuestionDeletion(bank,ids))return;
+    bank.questions=bank.questions.filter(q=>!ids.has(q.id));bank.updatedAt=now();
+    removeBankQuestionReferences(bankId,ids);
+    await saveSilent();
+    bankQuestionSelection={bank:null,idsKey:'',selected:new Set()};
+    renderAll();toast(`已删除 ${ids.size} 道试题。`,'ok');
+  });
+}
 function countTypes(qs){return qs.reduce((a,q)=>{a[q.type]=(a[q.type]||0)+1;return a},{single:0,multiple:0,multi:0,judge:0,blank:0,short:0})}
 function label(t){return TYPE_LABEL[t]||t||'未知'}
 /* SHIROHA_WEB_V58_9_14_MULTI_BLANK_SYNC_START */
@@ -7547,6 +7601,7 @@ async function finishPractice(exited=false){return runMutation(async()=>{
   const groupMode=practice.scopeType==='GROUP';const rec={id:makeId('rec','practice'),mode:'练习',bankId:groupMode?'':(practice.items[0]?.bankId||activeBank().id),bankName:groupMode?(practice.scopeName||'分组练习'):(practice.items[0]?.bankName||activeBank().name),scopeType:practice.scopeType||'BANK',scopeName:practice.scopeName||practiceItemBankNameV8916(practice.items[0]),total:practice.items.length,answered:total,correct:practice.correct,wrong:practice.wrong,accuracy:total?Math.round(practice.correct/total*100):0,score:null,date:now(),duration:Math.round((Date.now()-practice.start)/1000),details:practice.details||[]};
   if(total||exited)state.records.unshift(rec);
   updatePracticeProgressV58916();
+  practice.completed=true;
   await saveSilent();
   resetAiSinglePracticeV613();
   if(exited){
@@ -9139,13 +9194,17 @@ function updateBankEditUiV45(count=0){
     panel.classList.remove('hidden');
     const title=$('#bank-edit-title-v45');
     if(title)title.textContent=`正在编辑：${b?.name||bankEditSessionV45.name||'题库'}｜${count||importCache.length} 题`;
-    if(confirmBtn){confirmBtn.textContent='保存回题库';confirmBtn.disabled=!importCache.length;}
-    if(dualConfirm){dualConfirm.textContent='保存回题库';dualConfirm.disabled=!importCache.length;}
+    if(confirmBtn){confirmBtn.textContent='保存回题库';confirmBtn.disabled=false;}
+    if(dualConfirm){dualConfirm.textContent='保存回题库';dualConfirm.disabled=false;}
   }else{
     panel.classList.add('hidden');
     if(confirmBtn)confirmBtn.textContent='确认导入';
     if(dualConfirm)dualConfirm.textContent='确认导入';
   }
+}
+function bankEditQuestionSnapshot(questions){
+  // 桌面分页释放、重载正文会改变属性插入顺序；冲突判断只比较实际内容与题目顺序。
+  return JSON.stringify(questions,(_key,value)=>value&&typeof value==='object'&&!Array.isArray(value)?Object.fromEntries(Object.keys(value).sort().map(key=>[key,value[key]])):value);
 }
 async function editBankByIdV45(id){if(!await loadNativeBanks([id]))return;
   cancelAiPreviewRequestV991(true);
@@ -9153,8 +9212,10 @@ async function editBankByIdV45(id){if(!await loadNativeBanks([id]))return;
   closeAiPreviewPanelV991();
   const bank=state.banks.find(b=>b.id===id);
   if(!bank){toast('没有找到该题库。','warn');return}
-  bankEditSessionV45={bankId:id,name:bank.name||'题库',startedAt:now()};
-  importCache=(bank.questions||[]).map((q,i)=>({...q,...normalizeQuestion(JSON.parse(JSON.stringify({...q,number:i+1})),i)}));
+  bankEditSessionV45={bankId:id,name:bank.name||'题库',startedAt:now(),sourceQuestions:bankEditQuestionSnapshot(bank.questions)};
+  importCache=(bank.questions||[]).map((q,i)=>({...q,...normalizeQuestion(JSON.parse(JSON.stringify(q)),i),number:q.number}));
+  // 预览需要归一化字段；未实际编辑的题目保存时使用原对象，避免删除顺带改变题意和元数据。
+  bankEditSessionV45.previewQuestions=new Map(importCache.map(q=>[q.id,JSON.stringify(q)]));
   importSelected.clear();
   importWarnings=[];
   importReport='从题库管理进入二次编辑：可逐题查看题型、答案、状态提示，并修改后保存回原题库。';
@@ -9174,7 +9235,11 @@ async function saveBankEditSessionV45(){if(bankEditSessionV45&&!await loadNative
   if(!bankEditSessionV45)return;
   const bank=state.banks.find(b=>b.id===bankEditSessionV45.bankId);
   if(!bank){toast('原题库不存在，无法保存。','danger');return}
-  if(!importCache.length){toast('当前没有可保存的题目。','warn');return}
+  if(bankEditQuestionSnapshot(bank.questions)!==bankEditSessionV45.sourceQuestions){toast('题库已变化，请退出编辑后重新打开，避免覆盖其他修改。','warn');return}
+  const keptIds=new Set(importCache.map(q=>q.id));
+  const deletedIds=new Set(bank.questions.filter(q=>!keptIds.has(q.id)).map(q=>q.id));
+  if(deletedIds.size&&!confirmBankQuestionDeletion(bank,deletedIds))return;
+  const originals=new Map(bank.questions.map(q=>[q.id,q]));
   const warnings=collectImportWarnings(importCache);
   const name=($('#import-bank-name')?.value||bank.name||'题库').trim()||bank.name||'题库';
   const groupName=readImportBankGroupV58();
@@ -9182,7 +9247,8 @@ async function saveBankEditSessionV45(){if(bankEditSessionV45&&!await loadNative
   bank.name=name;
   bank.groupName=groupName;
   bank.updatedAt=now();
-  bank.questions=importCache.map((q,i)=>cleanImportedQuestion({...q,id:q.id||makeId('q',i),number:i+1}));
+  bank.questions=importCache.map((q,i)=>bankEditSessionV45.previewQuestions.get(q.id)===JSON.stringify(q)?originals.get(q.id):cleanImportedQuestion({...q,id:q.id||makeId('q',i)}));
+  removeBankQuestionReferences(bank.id,deletedIds);
   const scopeBefore=practiceScopeV8916();
   if(scopeBefore.type===PRACTICE_SCOPE_GROUP_V8916&&scopeBefore.value===oldGroupName&&state.banks.every(x=>x.id===bank.id||bankGroupNameV58(x)!==oldGroupName)){
     ensurePracticeScopeV8916();
@@ -9190,6 +9256,7 @@ async function saveBankEditSessionV45(){if(bankEditSessionV45&&!await loadNative
   }
   await saveSilent();
   bankEditSessionV45=null;
+  bankQuestionSelection={bank:null,idsKey:'',selected:new Set()};
   importReport='';
   importDiagnostics=null;
   importSelected.clear();
