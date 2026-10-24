@@ -25,6 +25,7 @@ async function saveAndCheck(h, expected) {
 }
 
 const cases = [
+  ...require('./submit-modes.cjs').cases,
   {
     name: 'unconfigured-never-requests', options: { configured: false },
     async run(h) {

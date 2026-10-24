@@ -33,6 +33,66 @@ async function pageFor(t, raw, injection = '') {
 }
 const saved = page => page.evaluate(key => globalThis.localStorage.getItem(key), KEY);
 
+test('总提交：全题型、跨库同 ID、键盘与草稿不提前计分', async t => {
+  const initial = webState();
+  initial.settings.practiceScope = { type: 'group', value: '自建样本' };
+  initial.banks[0].questions.push({ id: 'plain-blank', type: 'blank', question: '一加一是___。', answer: ['二'], options: [], analysis: '' });
+  const page = await pageFor(t, JSON.stringify(initial));
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.locator('.nav[data-view="practice"]').click();
+  await page.locator('#practice-submit-mode').selectOption('total');
+  await page.locator('#practice-limit').selectOption('all');
+  await page.locator('#start-practice-btn').click();
+  await page.locator('#practice-card .option[data-key="A"]').click();
+  await page.locator('[data-practice-jump="1"]').click();
+  await page.locator('#practice-card .option[data-key="A"]').click();
+  await page.locator('#practice-card .option[data-key="C"]').click();
+  await page.keyboard.press('ArrowRight');
+  await page.locator('#practice-card .option[data-key="A"]').click();
+  await page.locator('[data-practice-jump="3"]').click();
+  await page.locator('.multi-blank-answer-input-v58914').nth(0).fill('北京市');
+  await page.locator('.multi-blank-answer-input-v58914').nth(1).fill('京');
+  await page.locator('[data-practice-jump="7"]').click();
+  await page.locator('#practice-card .text-answer').fill('二');
+  await page.locator('[data-practice-jump="8"]').click();
+  await page.locator('#practice-card .option[data-key="B"]').click();
+  await page.locator('[data-practice-jump="0"]').click();
+  assert(await page.locator('#practice-card .option[data-key="A"] input').isChecked());
+  await page.locator('[data-practice-jump="1"]').click();
+  assert.equal(await page.locator('#practice-card input:checked').count(), 2);
+  await page.locator('[data-practice-jump="7"]').click();
+  assert.equal(await page.locator('#practice-card .text-answer').inputValue(), '二');
+  assert.deepEqual(JSON.parse(await saved(page)).records, initial.records);
+  assert.equal(await page.locator('#practice-card .correct, #practice-card .wrong, #p-reveal').count(), 0);
+  await page.locator('#p-submit-all').click();
+  await page.locator('#again-practice').waitFor();
+  const after = JSON.parse(await saved(page));
+  assert.equal(after.records.length, initial.records.length + 1);
+  assert.equal(after.records[0].correct, 6);
+  assert.equal(after.records[0].wrong, 3);
+  const twins = after.records[0].details.filter(detail => detail.questionId === 'same-id');
+  assert.deepEqual(twins.map(detail => [detail.sourceBankId, detail.chosen]), [['bank-a', ['A']], ['bank-b', ['B']]]);
+});
+
+test('收藏单题快捷入口先选择提交方式，并保留单题范围', async t => {
+  const initial = webState();
+  initial.favorites['bank-a'] = ['multiple', 'judge'];
+  const page = await pageFor(t, JSON.stringify(initial));
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.locator('.nav[data-view="favorites"]').click();
+  await page.locator('[data-practice-one-fav-v596="judge"]').click();
+  await page.locator('#practice-submit-mode').waitFor({ state: 'visible' });
+  assert.equal(await page.locator('#practice-number-range-v58916').inputValue(), '2');
+  await page.locator('#practice-submit-mode').selectOption('total');
+  await page.locator('#start-practice-btn').click();
+  assert.equal(await page.locator('[data-practice-jump]').count(), 1);
+  assert.match(await page.locator('#practice-card').innerText(), /一加一等于二/);
+  await page.locator('#practice-card .option[data-key="A"]').click();
+  await page.locator('#p-submit-all').click();
+  await page.locator('#again-practice').waitFor();
+  assert.equal(JSON.parse(await saved(page)).records[0].correct, 1);
+});
+
 test('题库删除：单题取消、跨页批量、关联清理和重载保全', async t => {
   const initial=webState();
   initial.banks[0].questions=Array.from({length:302},(_,i)=>({...initial.banks[0].questions[0],id:'q'+i,number:'原'+i,question:'删除回归 '+i,extensions:{preserve:i}}));

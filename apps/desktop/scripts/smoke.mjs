@@ -786,6 +786,25 @@ async function importAndPractice(page, bankName) {
   return { ...result, screenshot: SCREENSHOT_PATH };
 }
 
+/** @param {Page} page @param {string} bankName */
+async function totalPracticeSmoke(page, bankName) {
+  await page.locator('.nav[data-view="practice"]').click();
+  await page.locator('#practice-submit-mode').selectOption('total');
+  await practiceImportedBank(page, bankName);
+  await page.locator('#practice-card .option[data-key="A"]').click();
+  assert.equal(await page.locator('#p-reveal, #p-submit, #p-ai-v613 button').count(), 0);
+  assert.match(await page.locator('#p-total-status').innerText(), /已填写 1 题/);
+  await page.screenshot({ path: path.join(path.dirname(SCREENSHOT_PATH), 'practice-total.png'), fullPage: true });
+  page.once('dialog', dialog => dialog.accept());
+  await page.locator('#p-submit-all').click();
+  await page.locator('#again-practice').waitFor();
+  const metrics = await page.locator('#practice-card .metric b').allTextContents();
+  assert.deepEqual(metrics, ['1', '1', '0', '100%']);
+  await page.locator('#back-practice-setup').click();
+  await page.locator('#practice-submit-mode').selectOption('single');
+  return { mode: 'total', answered: 1, correct: 1, saved: true };
+}
+
 async function main() {
   assert.equal(process.platform, 'win32', '此 smoke 仅支持 Windows WebView2');
   const argument = process.argv[2];
@@ -886,6 +905,7 @@ async function main() {
     }, marker));
     await check('界面导入题库并练习', () => importAndPractice(page, bankName));
     await check('练习与考试专注布局、进入及退出', () => practiceAndExamFocusSmoke(visualRuntime));
+    await check('总提交选择、草稿与原生记录保存', () => totalPracticeSmoke(page, bankName));
     await check('MathJax 本地公式', () => mathSmoke(page));
     await check('PDF.js 本地模块与 Worker', () => pdfSmoke(page));
     await check('Tesseract 本地 OCR', () => ocrSmoke(page));
