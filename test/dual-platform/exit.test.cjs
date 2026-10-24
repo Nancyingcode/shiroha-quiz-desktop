@@ -13,6 +13,7 @@ function fixture(overrides = {}) {
   const context = vm.createContext({
     ShirohaDesktopHost: {}, mutationBusy: false, mutationSaveError: null,
     exam: { items: [], submitted: false }, ocrImportState: { running: false },
+    practice: { items: [] }, totalPracticeFilledCount: () => 0,
     webdavRuntimeV378: { busy: false }, aiImportRequestV99: { running: false }, aiPreviewRequestV991: { running: false }, aiSingleSessionsV613: new Map(),
     confirm: message => { prompts.push(message); return false; }, platformStatus: message => status.push(message),
     ShirohaPlatform: { network: { cancelAll: async () => {} }, saves: { idle: async () => {} } }, ...overrides,
@@ -43,4 +44,14 @@ test('failed native cancellation keeps the window open and reports failure', asy
   const f = fixture({ ShirohaPlatform: { network: { cancelAll: async () => { throw new Error('cancel failed'); } } } });
   assert.equal(await f.close(), false);
   assert.deepEqual(f.status, ['cancel failed']);
+});
+
+test('总提交草稿关闭需确认，已锁定自评须先完成', async () => {
+  const draft = { practice: { submitMode: 'total' }, totalPracticeFilledCount: () => 1 };
+  const cancelled = fixture(draft);
+  assert.equal(await cancelled.close(), false);
+  assert.equal(cancelled.prompts.length, 1);
+  assert.equal(await fixture({ ...draft, confirm: () => true }).close(), true);
+  assert.equal(await fixture({ practice: { submitMode: 'total', totalLocked: true }, confirm: () => true }).close(), false);
+  assert.equal(await fixture({ practice: { submitMode: 'total', totalLocked: true, completed: true } }).close(), true);
 });
