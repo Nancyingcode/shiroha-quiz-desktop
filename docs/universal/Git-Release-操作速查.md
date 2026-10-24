@@ -1,22 +1,18 @@
 # Git & Release 操作速查
 
-## 日常提交（每次改代码都要做）
+## 日常协作入口
+
+分支起点、任务提交和多工作树整合以[协作开发分支规划](./协作开发分支规划.md)和[根开发规范](../../AGENTS.md)为准。先在任务分支完成实现与验证，再按授权提交和整合；不把每次修改视为自动提交或推送授权。
+
+开始前可以先做以下只读核对：
 
 ```powershell
-# 1. 查看改了什么
-git status
-
-# 2. 添加文件（三选一）
-git add apps/                    # 添加指定文件夹
-git add README.md app.js         # 添加指定文件
-git add .                        # 添加所有改动
-
-# 3. 提交
-git commit -m "feat: 做了什么"
-
-# 4. 推送
-git push origin main
+git status --short
+git branch -vv
+git worktree list
 ```
+
+推送 `main` 会触发 Web 自动部署。下文的标签、Release 和撤销命令仅供对应任务查阅，需要独立授权并核对当前环境；它们不属于日常开发的必执行步骤。
 
 ---
 

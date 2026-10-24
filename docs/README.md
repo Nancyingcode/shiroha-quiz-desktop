@@ -43,6 +43,7 @@
 
 ## 工程与发布
 
+- [协作开发分支规划](./universal/协作开发分支规划.md)
 - [Web 与 Windows 桌面双端设计](./superpowers/specs/2026-10-23-web-desktop-dual-platform-design.md)
 - [Windows 候选安装包、人工升级和验收限制](../apps/desktop/README.md#候选安装包与人工升级)
 - [双端阶段验证记录（含阶段 E）](../test/dual-platform/README.md)
