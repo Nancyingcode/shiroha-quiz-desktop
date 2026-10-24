@@ -1,4 +1,5 @@
-use std::fs::{self, File, OpenOptions};
+use crate::error::{Error, Result};
+use std::fs::{self, File, OpenOptions, TryLockError};
 use std::path::{Path, PathBuf};
 
 // 数据根锁由进程上下文持有至退出；数据库、迁移和媒体共享同一写入所有权。
@@ -30,7 +31,7 @@ pub fn reject_links(path: &Path) -> std::io::Result<()> {
 }
 
 impl DataRoot {
-    pub fn open(path: &Path) -> std::io::Result<Self> {
+    pub fn open(path: &Path) -> Result<Self> {
         reject_links(path)?;
         fs::create_dir_all(path)?;
         let path = fs::canonicalize(path)?;
@@ -42,8 +43,10 @@ impl DataRoot {
             .create(true)
             .truncate(false)
             .open(lock_path)?;
-        lock.try_lock()
-            .map_err(|_| std::io::Error::other("data root already in use"))?;
+        lock.try_lock().map_err(|error| match error {
+            TryLockError::WouldBlock => Error::new("storage_in_use"),
+            TryLockError::Error(error) => error.into(),
+        })?;
         for name in ["media", "temporary", "snapshots", "logs"] {
             let directory = path.join(name);
             reject_links(&directory)?;

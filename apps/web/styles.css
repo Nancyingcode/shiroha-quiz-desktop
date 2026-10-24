@@ -7815,3 +7815,11 @@ body.practice-focus.practice-rail-collapsed-v34 #practice-card > .practice-side-
 }
 
 .platform-status{position:fixed;bottom:12px;left:50%;transform:translateX(-50%);z-index:99999;max-width:90vw;padding:12px 18px;border-radius:10px;background:#17364d;color:white;box-shadow:0 4px 20px #0003}.platform-status.failed{background:#793427}.platform-status button{margin-left:12px}
+/* Harness 只在桌面适配器初始化后显示，hidden 必须覆盖表单网格的 display。 */
+#ai-execution-settings[hidden],#ai-harness-settings[hidden],#ai-harness-login-details[hidden],#ai-api-settings-fields[hidden]{display:none}
+#ai-harness-runtime-progress[hidden],#ai-harness-prepare[hidden],#ai-harness-prepare-cancel[hidden]{display:none}
+#ai-harness-advanced summary{cursor:pointer;font-weight:600}
+#ai-harness-advanced .muted{overflow-wrap:anywhere}
+.ai-execution-choice{display:flex;flex-wrap:wrap;gap:12px 24px;margin:16px 0;padding:12px;border:1px solid var(--line,#dbe3ef);border-radius:10px}
+.ai-execution-choice label{display:flex;align-items:center;gap:6px}
+.ai-execution-choice input{width:auto}

@@ -372,10 +372,37 @@ C. 判断题
             <span id="ai-connection-pill-v99" class="pill ai-status-pill-v99">未配置</span>
           </div>
           <div class="ai-settings-intro-v99">
-            <b>配置用于题库辅助整理的 OpenAI-compatible 服务</b>
-            <p>支持本地 Ollama、LM Studio 和自定义兼容接口。普通解析仍是默认主线，AI 结果必须进入预览并由人工核对后才能导入。</p>
+            <b>配置现有 AI 任务的执行方式</b>
+            <p>直接 API 支持 Ollama、LM Studio 和自定义兼容接口；本地 Harness 需要桌面环境。普通解析仍是默认主线，AI 结果必须进入预览并由人工核对后才能导入。</p>
           </div>
-          <div class="ai-settings-grid-v99">
+          <div id="ai-execution-settings" hidden>
+            <fieldset class="ai-execution-choice"><legend>执行方式</legend>
+              <label><input id="ai-execution-api" name="ai-execution-mode" type="radio" value="api" checked /> 直接调用 API</label>
+              <label><input id="ai-execution-harness" name="ai-execution-mode" type="radio" value="harness" /> 使用 Harness</label>
+            </fieldset>
+            <div id="ai-harness-settings" hidden>
+              <div class="ai-settings-grid-v99">
+                <label>Harness<select id="ai-harness-adapter"><option value="codex">Codex</option></select></label>
+                <label>模型名称<select id="ai-harness-model"><option value="gpt-6.1-sol">gpt-6.1-sol</option></select></label>
+                <label>任务超时（秒）<input id="ai-harness-timeout" type="number" min="10" max="600" step="10" value="120" /></label>
+              </div>
+              <div class="notice" role="status" aria-live="polite"><b id="ai-harness-runtime-status">自动管理 · 尚未准备</b><p id="ai-harness-runtime-progress" hidden></p></div>
+              <p class="muted">应用会自动准备官方 Codex 组件。首次需要下载约 341 MB，缓存通过校验后可直接复用；组件准备不会发送题目或调用模型。</p>
+              <div class="actions"><button id="ai-harness-prepare" class="ghost" type="button">重试准备</button><button id="ai-harness-prepare-cancel" class="ghost" type="button" hidden>取消准备</button></div>
+              <p>订阅授权：<b id="ai-harness-auth-status">尚未登录订阅</b></p>
+              <div class="actions"><button id="ai-harness-login" class="primary" type="button">登录订阅</button><button id="ai-harness-auth-refresh" class="ghost" type="button">刷新状态</button><button id="ai-harness-logout" class="ghost danger" type="button">退出订阅登录</button><button id="ai-harness-stop" class="ghost" type="button">停止 Harness 任务</button></div>
+              <p class="muted">点击登录会先完成组件准备并自动保存 Harness 设置，再启动官方授权。登录后可主动测试模型访问；模型可选不代表当前订阅已获得访问权限。</p>
+              <p class="muted">登录取消或失败后，请先点击“退出订阅登录”清理未完成的授权，再重新登录。</p>
+              <div id="ai-harness-login-details" class="notice" hidden><p>请自行打开官方登录地址：<span id="ai-harness-login-url"></span></p><p>验证码：<b id="ai-harness-login-code"></b></p><div class="actions"><button id="ai-harness-copy-url" class="ghost" type="button">复制登录地址</button><button id="ai-harness-copy-code" class="ghost" type="button">复制验证码</button></div></div>
+              <p class="notice">Harness 仅使用独立订阅登录，不使用 API Key，也不自动读取 Codex 的全局登录或配置。授权和运行条件核验通过后才可执行。仅将本次任务所需文本交给 Codex 发送到 OpenAI，不发送题库文件或图片。</p>
+              <details id="ai-harness-advanced"><summary>高级设置：运行组件</summary>
+                <p class="muted">程序：<span id="ai-harness-runtime">组件准备后由应用管理</span><br />版本：<span id="ai-harness-version">未检测</span><br />手动程序仅接受已校验的 Codex 0.163.0 Windows x64 正式版。选择后，登录或保存设置才会提交当前选择。</p>
+                <div class="actions"><button id="ai-harness-choose" class="ghost" type="button">选择 Codex 程序</button><button id="ai-harness-inspect" class="ghost" type="button">检测环境</button><button id="ai-harness-use-managed" class="ghost" type="button">恢复自动管理</button></div>
+              </details>
+              <div id="ai-harness-status" class="notice" role="status" aria-live="polite">尚未检测。</div>
+            </div>
+          </div>
+          <div id="ai-api-settings-fields" class="ai-settings-grid-v99">
             <label>服务类型
               <select id="ai-provider-v99">
                 <option value="ollama">Ollama（本地）</option>

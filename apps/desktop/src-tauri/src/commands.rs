@@ -102,21 +102,30 @@ pub async fn local_query(
     window: tauri::WebviewWindow,
     state: tauri::State<'_, LocalData>,
     services: tauri::State<'_, Arc<crate::services::Services>>,
+    harness: tauri::State<'_, Arc<crate::harness::Harness>>,
     query: Query,
 ) -> Result<Value> {
     authorize(&window)?;
-    if matches!(
+    let restore_guard = if matches!(
         query,
         Query::Recover { .. } | Query::RecoverImport { .. } | Query::Restore { .. }
     ) {
+        let execution = harness.inner().clone();
+        let guard = tauri::async_runtime::spawn_blocking(move || execution.begin_restore())
+            .await
+            .map_err(|_| Error::new("harness_unavailable"))??;
         services.invalidate()?;
-    }
+        Some(guard)
+    } else {
+        None
+    };
     if matches!(
         query,
         Query::RecoverySnapshots | Query::Recover { .. } | Query::RecoverImport { .. }
     ) {
         let state = state.inner().clone();
         return tauri::async_runtime::spawn_blocking(move || {
+            let _restore_guard = restore_guard;
             let mut current = state
                 .0
                 .lock()
@@ -153,35 +162,40 @@ pub async fn local_query(
         .await
         .map_err(|_| Error::new("storage_unavailable"))?;
     }
-    run(state.inner().clone(), move |store| match query {
-        Query::RecoverySnapshots | Query::Recover { .. } | Query::RecoverImport { .. } => {
-            Err(Error::new("invalid_input"))
+    run(state.inner().clone(), move |store| {
+        let _restore_guard = restore_guard;
+        match query {
+            Query::RecoverySnapshots | Query::Recover { .. } | Query::RecoverImport { .. } => {
+                Err(Error::new("invalid_input"))
+            }
+            Query::Hydrate { value, revision } => store.hydrate(value, revision),
+            Query::Summary => Ok(json!({"revision":store.revision()?,"snapshot":store.summary()?})),
+            Query::Details {
+                collection,
+                bank_id,
+                ids,
+                revision,
+            } => Ok(json!(store.details(
+                &collection,
+                &bank_id,
+                &ids,
+                revision
+            )?)),
+            Query::Page {
+                collection,
+                bank_id,
+                cursor,
+                limit,
+            } => store.page(&collection, &bank_id, cursor.as_deref(), limit),
+            Query::Snapshots => Ok(json!(store.snapshots()?)),
+            Query::Restore {
+                snapshot_id,
+                operation_id,
+                expected_revision,
+            } => {
+                Ok(json!({"revision":store.restore(&snapshot_id,&operation_id,expected_revision)?}))
+            }
         }
-        Query::Hydrate { value, revision } => store.hydrate(value, revision),
-        Query::Summary => Ok(json!({"revision":store.revision()?,"snapshot":store.summary()?})),
-        Query::Details {
-            collection,
-            bank_id,
-            ids,
-            revision,
-        } => Ok(json!(store.details(
-            &collection,
-            &bank_id,
-            &ids,
-            revision
-        )?)),
-        Query::Page {
-            collection,
-            bank_id,
-            cursor,
-            limit,
-        } => store.page(&collection, &bank_id, cursor.as_deref(), limit),
-        Query::Snapshots => Ok(json!(store.snapshots()?)),
-        Query::Restore {
-            snapshot_id,
-            operation_id,
-            expected_revision,
-        } => Ok(json!({"revision":store.restore(&snapshot_id,&operation_id,expected_revision)?})),
     })
     .await
 }
@@ -355,13 +369,19 @@ pub async fn local_replace(
     window: tauri::WebviewWindow,
     state: tauri::State<'_, LocalData>,
     services: tauri::State<'_, Arc<crate::services::Services>>,
+    harness: tauri::State<'_, Arc<crate::harness::Harness>>,
     snapshot: Value,
     operation_id: String,
     expected_revision: i64,
 ) -> Result<Value> {
     authorize(&window)?;
+    let execution = harness.inner().clone();
+    let restore_guard = tauri::async_runtime::spawn_blocking(move || execution.begin_restore())
+        .await
+        .map_err(|_| Error::new("harness_unavailable"))??;
     services.invalidate()?;
     run(state.inner().clone(), move |store| {
+        let _restore_guard = restore_guard;
         Ok(json!({"revision":store.replace(&operation_id,expected_revision,&snapshot)?}))
     })
     .await

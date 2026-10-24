@@ -2,8 +2,62 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import vm from 'node:vm';
-/** @param {object} scope @returns {{storage:{initialize():Promise<{state:string}>,write(data:unknown,id:string,revision:number):Promise<unknown>,revision():number,getOperation(id:string):Promise<{revision:number}>}}} */
+/** @param {object} scope @returns {{storage:{initialize():Promise<{state:string,error?:Error & {code?:string}}>,write(data:unknown,id:string,revision:number):Promise<unknown>,revision():number,getOperation(id:string):Promise<{revision:number}>}}} */
 function platform(scope) { return vm.runInNewContext('ShirohaPlatform', scope); }
+
+for (const [code, expected] of /** @type {Array<[string,RegExp]>} */ ([
+  ['storage_in_use', /其他 Shiroha Quiz 窗口.*原数据已保留.*关闭其他 Shiroha Quiz 窗口后重试/],
+  ['permission_denied', /当前窗口.*本地访问.*未授权.*原数据已保留.*重新启动正确的 Shiroha Quiz 桌面程序/],
+  ['corrupt_data', /本地数据校验失败.*原数据已保留.*恢复副本/],
+  ['unsupported_version', /不支持此本地数据版本.*原数据已保留.*支持该版本/],
+])) {
+  test(`原生初始化 ${code} 显示可操作的安全提示并保持禁止写入`, async () => {
+    const source = await readFile(new URL('../frontend/adapter.js', import.meta.url), 'utf8');
+    /** @type {string[]} */ const calls = [];
+    const scope = { ShirohaDesktopHost: { invoke: async (/** @type {string} */ command) => {
+      calls.push(command);
+      throw { code, message: 'fixture-secret-do-not-display', details: 'private-fixture-path' };
+    } }, ShirohaBrowser: {}, ShirohaBrowserCredentials: {}, ShirohaSaveQueue: { create: () => ({}) },
+    localStorage: { getItem: () => null, setItem: () => assert.fail('browser write') }, structuredClone: globalThis.structuredClone };
+    vm.runInNewContext(source, scope);
+    const result = await platform(scope).storage.initialize();
+    assert.equal(result.state, 'recovery_required');
+    assert.equal(result.error?.code, code);
+    assert.match(result.error?.message || '', expected);
+    assert.doesNotMatch(result.error?.message || '', /fixture-secret|private-fixture-path|端口/);
+    await assert.rejects(platform(scope).storage.write({}, 'blocked', 0), /尚未就绪/);
+    assert.deepEqual(calls, ['local_initialize']);
+  });
+}
+
+for (const code of ['unknown_failure', 'constructor', 'toString', '__proto__']) {
+  test(`未知原生错误 ${code} 仅显示固定提示，不显示底层秘密`, async () => {
+    const source = await readFile(new URL('../frontend/adapter.js', import.meta.url), 'utf8');
+    const scope = { ShirohaDesktopHost: { invoke: async () => { throw { code, message: 'fixture-secret-do-not-display' }; } },
+      ShirohaBrowser: {}, ShirohaBrowserCredentials: {}, ShirohaSaveQueue: { create: () => ({}) },
+      localStorage: { getItem: () => null }, structuredClone: globalThis.structuredClone };
+    vm.runInNewContext(source, scope);
+    const result = await platform(scope).storage.initialize();
+    assert.equal(result.state, 'recovery_required');
+    assert.equal(result.error?.message, '本地操作未完成，原数据已保留。请检查权限、空间或重新启动。');
+  });
+}
+
+test('恢复查询访问被拒绝时不套用启动窗口未授权提示', async () => {
+  const source = await readFile(new URL('../frontend/adapter.js', import.meta.url), 'utf8');
+  const scope = { ShirohaDesktopHost: { invoke: async (/** @type {string} */ command) => {
+    assert.equal(command, 'local_query');
+    throw { code: 'permission_denied', message: 'fixture-secret-do-not-display' };
+  } }, ShirohaBrowser: {}, ShirohaBrowserCredentials: {}, ShirohaSaveQueue: { create: () => ({}) },
+  localStorage: { getItem: () => null }, structuredClone: globalThis.structuredClone };
+  vm.runInNewContext(source, scope);
+  const storage = /** @type {import('../../web/platform/runtime.d.ts').BrowserStorage} */ (vm.runInNewContext('ShirohaPlatform.storage', scope));
+  assert(storage.recoverySnapshots);
+  await assert.rejects(storage.recoverySnapshots(), {
+    code: 'permission_denied',
+    message: '本地操作未完成，原数据已保留。请检查权限、空间或重新启动。',
+  });
+});
 
 test('desktop storage fails closed without the native bridge and never writes browser storage', async () => {
   const source = await readFile(new URL('../frontend/adapter.js', import.meta.url), 'utf8');

@@ -14,6 +14,8 @@ fn main() {
             "local_commit",
             "service_credential",
             "service_request",
+            "harness_control",
+            "harness_execute",
         ]),
     ))
     .expect("Unable to validate application permissions");
