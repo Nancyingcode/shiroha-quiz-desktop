@@ -29,6 +29,8 @@ node ./test/web-ai-practice/runner.cjs --self-test
 
 覆盖按需生成、追问/切题隔离、收起重开、新轮次/重置/退出清空及迟到响应隔离、取消/失败保留草稿、重生成成功才清空对话、仅保存解析、拒绝覆写确认、历史记录不变、quota 回滚、图片未发送强制低置信、多空等价答案及简答自评路径。未配置专测真实点击前往 AI 设置，验证表单可见、退出 focus 但保留原 practice/answerState 对象、答案及进度，返回练习不重新开始、不请求 API。富文本专测覆盖旧解析表格替换、题干/选项富字段不变、features 重算、公式反斜杠及保存后继续追问。
 
-`--filter submit-modes` 运行提交模式回归：总提交草稿跨题保留、提交前禁止答案与 AI、简答自评、导航锁定、取消与放弃草稿、重复点击及存储失败回滚重试。全题型、跨库同 ID 和收藏单题入口另由 `apps/desktop` 下的 `npm run test:web-platform` 覆盖；原生保存由隔离 WebView2 的 `npm run test:desktop` 覆盖。
+`--filter submit-modes` 运行提交模式回归：总提交草稿跨题保留、提交前无单题判分、简答自评、导航锁定、取消与放弃草稿、重复点击及存储失败回滚重试。`--filter practice-review-ai` 验证总提交错题答案对照、两种模式未提交时主动使用 AI、当前草稿进入请求、保存简答解析不触发自评，以及配置 AI 后返回保全草稿。未主动操作 AI 时仍不得发起请求。
+
+全题型、跨库同 ID、超过八题的完整错题一览和收藏单题入口另由 `apps/desktop` 下的 `npm run test:web-platform` 覆盖。隔离 WebView2 的 `npm run test:desktop` 使用原生 mock 服务验证答题 AI、错题对照、全对提示与原生保存，不调用真实收费服务。
 
 状态适配集中在 `harness.cjs`：优先直接读取页面 global lexical `state/practice`；当前应用若仍有最外层 IIFE，仅在浏览器脚本响应内注入只读快照函数，报告 `readOnlyIifeBridge: true`，磁盘源码和业务函数不改。现有启动归一化会丢弃 richContent，富文本专测在启动后仅为自建题目初始化富字段，随后真实点击练习/保存。迟到响应用例仅对 mock fetch 去掉 abort signal，模拟取消后的响应竞态，验证会话身份保护。已有解析保存时自动确认覆写（拒绝覆写专测除外）。

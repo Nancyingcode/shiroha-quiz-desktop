@@ -14,6 +14,10 @@ export async function createNativeMock(root) {
     request.on('end', () => {
       if (request.url === '/slow') { setTimeout(() => { response.end('{}'); }, 500); return; }
       if (request.url === '/chat') { response.setHeader('Content-Type', 'application/json'); response.end(JSON.stringify({ choices: [{ message: { content: 'native mock response' } }] })); return; }
+      if (request.url === '/practice-analysis') {
+        const content = JSON.stringify({ suggestedAnswer: 'A', matchesLocalAnswer: true, analysis: 'NATIVE_PRACTICE_AI: 1 + 1 = 2', confidence: 'HIGH', needsReview: false, warning: '' });
+        response.setHeader('Content-Type', 'application/json'); response.end(JSON.stringify({ choices: [{ message: { content } }] })); return;
+      }
       if (request.method === 'PUT') {
         if (request.url?.endsWith('/latest.json')) { response.writeHead(507); response.end(); return; }
         files.set(request.url, Buffer.concat(chunks)); response.writeHead(201); response.end(); return;

@@ -33,6 +33,30 @@ async function pageFor(t, raw, injection = '') {
 }
 const saved = page => page.evaluate(key => globalThis.localStorage.getItem(key), KEY);
 
+test('总提交结果列出全部错题，保留跨库来源且不截断到八题', async t => {
+  const initial = webState();
+  const first = initial.banks[0].questions[0];
+  initial.banks[0].questions = Array.from({ length: 12 }, (_, index) => ({ ...first, id: index ? 'review-' + index : first.id, question: '完整错题题干 ' + (index + 1) }));
+  initial.settings.practiceScope = { type: 'group', value: '自建样本' };
+  const page = await pageFor(t, JSON.stringify(initial));
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.locator('.nav[data-view="practice"]').click();
+  await page.locator('#practice-submit-mode').selectOption('total');
+  await page.locator('#practice-limit').selectOption('all');
+  await page.locator('#start-practice-btn').click();
+  await page.locator('#practice-card .option[data-key="B"]').click();
+  await page.locator('#p-submit-all').click();
+  await page.locator('#again-practice').waitFor();
+  const overview = page.locator('#p-wrong-overview');
+  assert.equal(await overview.locator('[data-wrong-question-index]').count(), 13);
+  assert.match(await overview.locator('[data-wrong-question-index="0"]').innerText(), /阶段A全题型/);
+  const last = overview.locator('[data-wrong-question-index="12"]');
+  assert.match(await last.innerText(), /跨题库同ID/);
+  assert.match(await last.innerText(), /正确答案[：\s]*B[.\s]*三/);
+  assert.match(await last.innerText(), /未作答/);
+  assert.equal(JSON.parse(await saved(page)).records[0].details.length, 13);
+});
+
 test('总提交：全题型、跨库同 ID、键盘与草稿不提前计分', async t => {
   const initial = webState();
   initial.settings.practiceScope = { type: 'group', value: '自建样本' };
