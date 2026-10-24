@@ -1,7 +1,8 @@
 'use strict';
 
 const assert = require('node:assert/strict');
-const { snapshot } = require('./harness.cjs');
+const { snapshot, SEL, assertPayload } = require('./harness.cjs');
+const { analysis, MOCK_ENDPOINT, MODEL, FAKE_KEY } = require('./fixtures.cjs');
 
 async function startTotal(h) {
   await h.page.locator('.nav[data-view="practice"]').click();
@@ -16,9 +17,83 @@ async function ready(h) {
 }
 
 const cases = [
+  ...['single', 'total'].map(mode => ({
+    name: `practice-review-ai-unsubmitted-${mode}`,
+    async run(h) {
+      if (mode === 'total') await startTotal(h); else await h.start();
+      await h.page.locator('#practice-card .option[data-key="B"]').click();
+      const before = await snapshot(h.page);
+      await h.quiet();
+      const call = await h.generate(analysis('UNSUBMITTED_AI'));
+      assertPayload(call, 'SAFE_Q1', ['SAFE_Q2']);
+      assert(call.body.messages.find(message => message.role === 'user').content.includes('"userAnswer":["B"]'));
+      assert.equal((await snapshot(h.page)).practice.answered, 0);
+      assert.deepEqual((await snapshot(h.page)).records, before.records);
+      assert.deepEqual((await snapshot(h.page)).practice.answerState, before.practice.answerState);
+      await h.jump(3);
+      await h.page.locator('#practice-card .text-answer').fill('DRAFT_AI_SHORT_ANSWER');
+      const shortCall = await h.generate(analysis('UNSUBMITTED_SHORT_AI'));
+      assertPayload(shortCall, 'DRAFT_AI_SHORT_ANSWER', ['SAFE_Q1']);
+      await h.page.locator(SEL.save).click();
+      await ready(h);
+      assert.equal(await h.page.locator('#p-self-right').count(), 0, 'Saving AI must not start self-assessment.');
+      assert.equal((await snapshot(h.page)).practice.answered, 0);
+      assert.equal(await h.page.locator('#practice-card .text-answer').inputValue(), 'DRAFT_AI_SHORT_ANSWER');
+      await h.jump(0);
+      assert(await h.page.locator('#practice-card .option[data-key="B"] input').isChecked());
+    },
+  })),
+  {
+    name: 'practice-review-ai-total-settings-preserves-draft', options: { configured: false },
+    async run(h) {
+      await startTotal(h);
+      await h.page.locator('#practice-card .option[data-key="B"]').click();
+      const before = await snapshot(h.page);
+      await h.page.locator(SEL.open).click();
+      await h.page.locator(SEL.settings).click();
+      await h.page.locator('#ai-endpoint-v99').waitFor({ state: 'visible' });
+      assert.deepEqual((await snapshot(h.page)).practice, before.practice);
+      await h.page.locator('#ai-endpoint-v99').fill(MOCK_ENDPOINT);
+      await h.page.locator('#ai-model-v99').fill(MODEL);
+      await h.page.locator('#ai-api-key-v99').fill(FAKE_KEY);
+      await h.page.locator('#ai-save-settings-v99').click();
+      await ready(h);
+      await h.page.locator('.nav[data-view="practice"]').click();
+      await h.page.locator('#p-submit-all').waitFor();
+      assert(await h.page.locator('#practice-card .option[data-key="B"] input').isChecked());
+      assert.deepEqual((await snapshot(h.page)).records, before.records);
+      assert.equal(h.mock.calls.length, 0);
+      await h.generate(analysis('AI_AFTER_SETTINGS'), { regenerate: true });
+      assert.equal((await snapshot(h.page)).practice.answered, 0);
+    },
+  },
+  {
+    name: 'practice-review-ai-wrong-overview',
+    async run(h) {
+      await startTotal(h);
+      await h.page.locator('#practice-card .option[data-key="B"]').click();
+      await h.jump(2);
+      await h.page.locator('.multi-blank-answer-input-v58914').nth(0).fill('one');
+      await h.page.locator('.multi-blank-answer-input-v58914').nth(1).fill('wrong');
+      await h.page.locator('#p-submit-all').click();
+      await h.page.locator('#again-practice').waitFor();
+      const overview = h.page.locator('#p-wrong-overview');
+      await overview.waitFor();
+      assert.equal(await overview.locator('[data-wrong-question-index]').count(), 5);
+      const first = overview.locator('[data-wrong-question-index="0"]');
+      assert.match(await first.innerText(), /SAFE_Q1/);
+      assert.match(await first.innerText(), /你的答案[：\s]*B[.．、\s]*5/);
+      assert.match(await first.innerText(), /正确答案[：\s]*A[.．、\s]*4/);
+      assert.match(await overview.locator('[data-wrong-question-index="1"]').innerText(), /未作答/);
+      assert.match(await overview.locator('[data-wrong-question-index="2"]').innerText(), /wrong/);
+      assert.match(await overview.locator('[data-wrong-question-index="2"]').innerText(), /2 \/ two/);
+      assert.equal(await overview.locator('input,textarea').count(), 0);
+    },
+  },
   {
     name: 'submit-modes-total-drafts-and-subjective',
     async run(h) {
+      const sidebarBefore = await h.page.locator('body').evaluate(body => body.classList.contains('side-collapsed'));
       await startTotal(h);
       const before = await snapshot(h.page);
       await h.page.locator('#practice-card .option[data-key="A"]').click();
@@ -30,7 +105,8 @@ const cases = [
       await h.page.locator('#practice-card .text-answer').fill('A controlled response.');
       await h.jump(0);
       assert(await h.page.locator('.option[data-key="A"] input').isChecked());
-      assert.equal(await h.page.locator('#p-submit, #p-reveal, #p-ai-v613 button').count(), 0);
+      assert.equal(await h.page.locator('#p-submit, #p-reveal').count(), 0);
+      assert(await h.page.locator(SEL.open).isVisible());
       assert(await h.page.locator('#p-edit-v120').isDisabled());
       await h.page.keyboard.press('v');
       assert.equal((await snapshot(h.page)).practice.answered, 0);
@@ -52,6 +128,9 @@ const cases = [
       await h.page.locator('#again-practice').click();
       await h.page.locator('#p-submit-all').waitFor();
       assert.equal((await snapshot(h.page)).practice.answered, 0);
+      await h.page.locator('#p-exit').click();
+      await h.page.locator('#start-practice-btn').waitFor({ state: 'visible' });
+      assert.equal(await h.page.locator('body').evaluate(body => body.classList.contains('side-collapsed')), sidebarBefore);
     },
   },
   {

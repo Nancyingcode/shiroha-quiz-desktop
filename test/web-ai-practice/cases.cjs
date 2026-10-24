@@ -81,10 +81,10 @@ const cases = [
     name: 'unanswered-and-collapsed-never-request',
     async run(h) {
       await h.start();
-      assert.equal(await h.page.locator(`${SEL.panel} button`).count(), 0, 'Unanswered question exposes AI actions.');
+      await collapsed(h);
       await h.page.locator('#p-submit').click();
       await h.quiet();
-      assert.equal(await h.page.locator(`${SEL.panel} button`).count(), 0, 'Empty submission exposed AI actions.');
+      await collapsed(h);
       await h.jump(1);
       await h.jump(0);
       await h.quiet();
@@ -112,7 +112,7 @@ const cases = [
       await h.page.locator(SEL.input).fill('Q1_UNSENT_DRAFT');
 
       await h.jump(1);
-      assert.equal(await h.page.locator(`${SEL.panel} button`).count(), 0);
+      await collapsed(h);
       await h.reveal();
       await collapsed(h);
       const second = await h.generate(analysis('Q2_ANALYSIS_DRAFT', { suggestedAnswer: 'B', confidence: 'MEDIUM' }));

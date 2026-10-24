@@ -786,23 +786,43 @@ async function importAndPractice(page, bankName) {
   return { ...result, screenshot: SCREENSHOT_PATH };
 }
 
-/** @param {Page} page @param {string} bankName */
-async function totalPracticeSmoke(page, bankName) {
+/** @param {Page} page @param {string} bankName @param {string} origin */
+async function totalPracticeSmoke(page, bankName, origin) {
+  await page.locator('.nav[data-view="ai-settings"]').click();
+  await page.locator('#ai-provider-v99').selectOption('custom');
+  await page.locator('#ai-endpoint-v99').fill(origin + '/practice-analysis');
+  await page.locator('#ai-model-v99').fill('mock-model');
+  await page.locator('#ai-api-key-v99').fill('native-fixture-key');
+  await page.locator('#ai-remember-key-v99').uncheck();
+  await page.locator('#ai-save-settings-v99').click();
+  await page.waitForFunction(() => document.querySelector('#ai-settings-status-v99')?.textContent?.includes('设置已保存'));
   await page.locator('.nav[data-view="practice"]').click();
   await page.locator('#practice-submit-mode').selectOption('total');
   await practiceImportedBank(page, bankName);
-  await page.locator('#practice-card .option[data-key="A"]').click();
-  assert.equal(await page.locator('#p-reveal, #p-submit, #p-ai-v613 button').count(), 0);
+  await page.locator('#practice-card .option[data-key="B"]').click();
+  assert.equal(await page.locator('#p-reveal, #p-submit').count(), 0);
+  await page.locator('[data-ai-single-open-v613]').click();
+  await page.waitForFunction(() => document.querySelector('#p-ai-v613')?.textContent?.includes('NATIVE_PRACTICE_AI'));
+  assert(await page.locator('#practice-card .option[data-key="B"] input').isChecked());
   assert.match(await page.locator('#p-total-status').innerText(), /已填写 1 题/);
   await page.screenshot({ path: path.join(path.dirname(SCREENSHOT_PATH), 'practice-total.png'), fullPage: true });
   page.once('dialog', dialog => dialog.accept());
   await page.locator('#p-submit-all').click();
   await page.locator('#again-practice').waitFor();
   const metrics = await page.locator('#practice-card .metric b').allTextContents();
-  assert.deepEqual(metrics, ['1', '1', '0', '100%']);
+  assert.deepEqual(metrics, ['1', '0', '1', '0%']);
+  assert.match(await page.locator('#p-wrong-overview').innerText(), /你的答案[：\s]*B[.\s]*3/);
+  assert.match(await page.locator('#p-wrong-overview').innerText(), /正确答案[：\s]*A[.\s]*2/);
+  await page.screenshot({ path: path.join(path.dirname(SCREENSHOT_PATH), 'practice-wrong-overview.png'), fullPage: true });
+  await page.locator('#again-practice').click();
+  await page.locator('#practice-card .option[data-key="A"]').click();
+  page.once('dialog', dialog => dialog.accept());
+  await page.locator('#p-submit-all').click();
+  await page.locator('#again-practice').waitFor();
+  assert.match(await page.locator('#p-wrong-overview').innerText(), /本轮没有错题/);
   await page.locator('#back-practice-setup').click();
   await page.locator('#practice-submit-mode').selectOption('single');
-  return { mode: 'total', answered: 1, correct: 1, saved: true };
+  return { mode: 'total', answered: 1, nativeAi: true, wrongOverview: true, allCorrect: true, saved: true };
 }
 
 async function main() {
@@ -905,7 +925,11 @@ async function main() {
     }, marker));
     await check('界面导入题库并练习', () => importAndPractice(page, bankName));
     await check('练习与考试专注布局、进入及退出', () => practiceAndExamFocusSmoke(visualRuntime));
-    await check('总提交选择、草稿与原生记录保存', () => totalPracticeSmoke(page, bankName));
+    await check('总提交错题对照、答题 AI 与原生记录保存', async () => {
+      const result = await totalPracticeSmoke(page, bankName, networkMock.origin);
+      assert(networkMock.requests.some(request => request.url === '/practice-analysis' && request.authenticated), '答题 AI 未通过原生请求使用隔离假凭据');
+      return result;
+    });
     await check('MathJax 本地公式', () => mathSmoke(page));
     await check('PDF.js 本地模块与 Worker', () => pdfSmoke(page));
     await check('Tesseract 本地 OCR', () => ocrSmoke(page));
