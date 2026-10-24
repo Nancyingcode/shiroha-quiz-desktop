@@ -172,6 +172,7 @@ pub async fn service_credential(
     window: tauri::WebviewWindow,
     state: tauri::State<'_, Arc<Services>>,
     data: tauri::State<'_, crate::commands::LocalData>,
+    harness: tauri::State<'_, Arc<crate::harness::Harness>>,
     request: CredentialCommand,
 ) -> Result<Value> {
     authorize(&window)?;
@@ -266,7 +267,15 @@ pub async fn service_credential(
             Ok(json!({"accepted":accepted}))
         }
         CredentialCommand::Invalidate => {
-            state.invalidate()?;
+            let execution = harness.inner().clone();
+            let services = state.inner().clone();
+            // 覆盖导入通过现有凭据失效入口撤销授权；界面在整个数据事务期间保持冻结。
+            tauri::async_runtime::spawn_blocking(move || {
+                let _restore = execution.begin_restore()?;
+                services.invalidate()
+            })
+            .await
+            .map_err(|_| Error::new("harness_unavailable"))??;
             Ok(Value::Null)
         }
         CredentialCommand::Stage {

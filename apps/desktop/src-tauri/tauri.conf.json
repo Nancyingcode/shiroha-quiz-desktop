@@ -32,6 +32,7 @@
         "allow-local-file",
         "allow-local-task", "allow-local-query", "allow-local-commit",
         "allow-service-credential", "allow-service-request",
+        "allow-harness-control", "allow-harness-execute",
         "core:event:allow-listen", "core:event:allow-unlisten",
         "core:window:allow-start-dragging",
         "core:window:allow-minimize",

@@ -3,6 +3,32 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import vm from 'node:vm';
 
+test('整体撤销凭据后同步 Harness 修订，仍能保存直接 API 执行方式', async () => {
+  let revision = 1;
+  const status = () => ({mode:'api',adapter:'codex',model:'',timeoutSeconds:120,credentialStatus:'missing',runtimePath:'',runtimeVersion:'',runtimeSource:'managed',runtimeState:'unprepared',runtimeReceivedBytes:0,runtimeTotalBytes:0,ready:false,reason:'待配置',revision,busy:false});
+  const scope = {
+    Response: globalThis.Response, crypto: globalThis.crypto, setTimeout, clearTimeout,
+    document: {getElementById: () => null, addEventListener() {}},
+    ShirohaBrowser: {}, ShirohaBrowserCredentials: {}, ShirohaSaveQueue: {create: () => ({})},
+    ShirohaDesktopHost: {invoke: async (/** @type {string} */ command, /** @type {{request:{kind:string,revision?:number}}} */ args) => {
+      if (command === 'service_credential' && args.request.kind === 'invalidate') { revision++; return {}; }
+      assert.equal(command,'harness_control');
+      if (args.request.kind === 'save') {
+        if (args.request.revision !== revision) throw {code:'harness_stale'};
+        revision++;
+      }
+      return status();
+    }},
+  };
+  for (const file of ['adapter.js','harness.js']) vm.runInNewContext(await readFile(new URL(`../frontend/${file}`,import.meta.url),'utf8'),scope);
+  const platform = vm.runInNewContext('ShirohaPlatform',scope);
+  await platform.harness.initialize();
+  await platform.credentials.reset();
+  assert.equal(platform.harness.status().revision,revision);
+  await platform.harness.saveMode('api');
+  assert.equal(platform.harness.status().mode,'api');
+});
+
 test('desktop AI cancellation keeps AbortError semantics when native IPC rejects', async () => {
   const scope = {
     Response: globalThis.Response, crypto: globalThis.crypto,

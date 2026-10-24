@@ -34,6 +34,9 @@ fn main() {
                     .map_err(|error| std::io::Error::other(error.code))?,
             ));
             app.manage(shiroha_quiz_desktop::tasks::Tasks::default());
+            app.manage(Arc::new(shiroha_quiz_desktop::harness::Harness::open(
+                &root,
+            )));
             shiroha_quiz_desktop::window_state::attach(app, &root)?;
             app.manage(LocalData(Arc::new(Mutex::new(None)), root));
             Ok(())
@@ -51,7 +54,9 @@ fn main() {
             commands::local_query,
             commands::local_commit,
             shiroha_quiz_desktop::services::service_credential,
-            shiroha_quiz_desktop::services::service_request
+            shiroha_quiz_desktop::services::service_request,
+            shiroha_quiz_desktop::harness::harness_control,
+            shiroha_quiz_desktop::harness::harness_execute
         ])
         .run(tauri::generate_context!())
         .expect("Unable to start Shiroha Quiz");

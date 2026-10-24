@@ -21,6 +21,7 @@ async function fixture(t) {
   await writeFile(path.join(desktop, 'frontend/titlebar.js'), '"use strict";');
   await writeFile(path.join(desktop, 'frontend/bridge.js'), '"use strict";');
   await writeFile(path.join(desktop, 'frontend/adapter.js'), '"use strict";');
+  await writeFile(path.join(desktop, 'frontend/harness.js'), '"use strict";');
   for (const name of requiredAssets) {
     await mkdir(path.dirname(path.join(web, name)), { recursive: true });
     await writeFile(path.join(web, name), 'fixture');

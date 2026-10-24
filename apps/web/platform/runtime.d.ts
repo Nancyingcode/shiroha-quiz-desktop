@@ -56,6 +56,26 @@ export interface BrowserFiles {
 }
 export interface BrowserPreferences { sidebar():boolean; setSidebar(collapsed:boolean):void }
 export interface BrowserMedia { display(resource:string):string }
+export type AiTaskKind = 'connection_test'|'import_organize'|'batch_review'|'batch_analysis'|'question_analysis'|'question_followup';
+export interface HarnessStatus {
+  mode:'api'|'harness'; adapter:string; model:string; timeoutSeconds:number;
+  credentialStatus:string; runtimePath:string; runtimeVersion:string; ready:boolean; reason:string; revision:number; busy:boolean;
+  runtimeSource:'managed'|'custom'; runtimeState:'unprepared'|'preparing'|'ready'|'failed'|'cancelled'; runtimeReceivedBytes:number; runtimeTotalBytes:number;
+  loginUrl?:string; userCode?:string;
+}
+export interface HarnessApi {
+  initialize():Promise<void>;
+  status():HarnessStatus;
+  snapshot():Readonly<HarnessStatus>;
+  execute(snapshot:Readonly<HarnessStatus>,task:AiTaskKind,messages:{role:'system'|'user'|'assistant';content:string}[],signal?:AbortSignal):Promise<{content:string}>;
+  cancelAll():Promise<void>;
+  formMode():'api'|'harness';
+  saveMode(mode:'api'|'harness'):Promise<void>;
+  clear():Promise<void>;
+  test():Promise<void>;
+  render():void;
+  bind(onChanged:()=>void,isBusy:()=>boolean):void;
+}
 export interface BrowserGlobals {
   ShirohaPlatformValidation: import('./contracts').ValidationApi;
   ShirohaBrowserCredentials: BrowserCredentials;
@@ -63,6 +83,7 @@ export interface BrowserGlobals {
   ShirohaBrowser: { createStorage(storage: Pick<Storage,'getItem'|'setItem'|'removeItem'>, key:string): BrowserStorage; download(name:string, blob:Blob):void; files:BrowserFiles; preferences:BrowserPreferences; media:BrowserMedia; resourceJson(url:string):Promise<unknown> };
   ShirohaSaveQueue: { create(storage:BrowserStorage):SaveQueue };
   ShirohaPlatform: {
+    harness?:HarnessApi;
     storage: BrowserStorage;
     saves: SaveQueue;
     network: BrowserNetwork;

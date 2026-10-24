@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { markNativeIsolation } from './native-isolation.mjs';
 import { createNativeMock, nativeServiceSmoke } from './network-smoke.mjs';
 import { documentSmoke } from './document-smoke.mjs';
+import { harnessSmoke } from './harness-smoke.mjs';
 import { spawn, execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { mkdir, mkdtemp, realpath, rm, stat, readFile, writeFile } from 'node:fs/promises';
@@ -930,6 +931,7 @@ async function main() {
       assert(networkMock.requests.some(request => request.url === '/practice-analysis' && request.authenticated), '答题 AI 未通过原生请求使用隔离假凭据');
       return result;
     });
+    await check('订阅 Harness 登录、既有 AI 任务与取消草稿保全',()=>harnessSmoke(page,()=>practiceImportedBank(page,bankName)));
     await check('MathJax 本地公式', () => mathSmoke(page));
     await check('PDF.js 本地模块与 Worker', () => pdfSmoke(page));
     await check('Tesseract 本地 OCR', () => ocrSmoke(page));
@@ -975,6 +977,19 @@ async function main() {
     await check('真实 IPC 覆盖快照与恢复', async () => restarted.page.evaluate(async () => {
       const host = (/** @type {NativeTestWindow} */ (window)).ShirohaDesktopHost;
       if (!host) throw new Error('本地桥接缺失');
+      const harnessStatus = async () => /** @type {import('../../web/platform/runtime.d.ts').HarnessStatus} */ (await host.invoke('harness_control',{request:{kind:'status'}}));
+      if ((await harnessStatus()).runtimePath !== 'isolated-fake-codex.exe') throw new Error('恢复验收只允许隔离假 Harness');
+      await host.invoke('harness_control',{request:{kind:'inspect'}});
+      await host.invoke('harness_control',{request:{kind:'login'}});
+      const loginDeadline = Date.now() + 5000;
+      while (!(await harnessStatus()).ready) {
+        if (Date.now() >= loginDeadline) throw new Error('恢复前假订阅未就绪');
+        await new Promise(resolve=>setTimeout(resolve,20));
+      }
+      await host.invoke('service_credential',{request:{kind:'invalidate'}});
+      if ((await harnessStatus()).ready) throw new Error('覆盖导入的凭据失效入口未撤销 Harness 就绪状态');
+      await host.invoke('harness_control',{request:{kind:'inspect'}});
+      if (!(await harnessStatus()).ready) throw new Error('恢复后主动检测不能重新启用隔离订阅');
       const before = await host.invoke('local_read');
       const state = /** @type {{revision:number}} */ (await host.invoke('local_initialize'));
       const checkpoint = /** @type {{snapshotId:string}} */ (await host.invoke('local_checkpoint'));
@@ -982,9 +997,12 @@ async function main() {
       const replaced = /** @type {{revision:number}} */ (await host.invoke('local_replace', {snapshot:empty, operationId:'smoke-replace', expectedRevision:state.revision}));
       const result = /** @type {{banks:unknown[]}} */ (await host.invoke('local_read'));
       if (result.banks.length) throw new Error('覆盖未提交');
+      if ((await harnessStatus()).ready) throw new Error('覆盖数据未要求重新检测 Harness');
+      await host.invoke('harness_control',{request:{kind:'inspect'}});
       await host.invoke('local_query', {query:{kind:'restore',snapshot_id:checkpoint.snapshotId,operation_id:'smoke-restore',expected_revision:replaced.revision}});
       if (JSON.stringify(await host.invoke('local_read')) !== JSON.stringify(before)) throw new Error('恢复内容不一致');
-      return { restored: true, snapshotRetained: true };
+      if ((await harnessStatus()).ready) throw new Error('恢复点恢复未要求重新检测 Harness');
+      return { restored: true, snapshotRetained: true, harnessRequiresInspect: true };
     }));
     await stop(runtime); runtime = undefined;
     const migrationProfile = await mkdtemp(path.join(tempRoot, PROFILE_PREFIX));

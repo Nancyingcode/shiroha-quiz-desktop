@@ -842,6 +842,24 @@ impl Store {
 mod fault_tests {
     use super::*;
     #[test]
+    fn occupied_store_can_retry_after_owner_exits_without_losing_data() {
+        let root = std::env::temp_dir().join(format!("shiroha-native-{}", uuid::Uuid::new_v4()));
+        let mut owner = Store::open(&root).unwrap();
+        let original = json!({"schemaVersion":1,"banks":[],"records":[],"activeBankId":"","wrongBook":{},"favorites":{},"settings":{},"crossPlatformMeta":{}});
+        owner.write("initial", 0, &original).unwrap();
+        let error = Store::open(&root).err().unwrap();
+        assert_eq!(error.code, "storage_in_use");
+        assert_eq!(owner.revision().unwrap(), 1);
+        assert_eq!(owner.read().unwrap(), Some(original.clone()));
+        drop(owner);
+        let reopened = Store::open(&root).unwrap();
+        assert_eq!(reopened.revision().unwrap(), 1);
+        assert_eq!(reopened.read().unwrap(), Some(original));
+        drop(reopened);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn sqlite_full_and_read_only_preserve_revision_and_receipts() {
         let root = std::env::temp_dir().join(format!("shiroha-native-{}", uuid::Uuid::new_v4()));
         let mut store = Store::open(&root).unwrap();
