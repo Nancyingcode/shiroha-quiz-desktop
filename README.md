@@ -475,6 +475,18 @@ AI 练习回归位于 `test/web-ai-practice/`，需要 Node、Playwright 和可�
 
 ---
 
+## 致谢 (Acknowledgements)
+
+本项目基于 [shiroha-quiz](https://github.com/reiqr/shiroha-quiz) 进行二次开发，感谢原作者 [reiqr](https://github.com/reiqr) 的开源贡献。
+
+[![shiroha-quiz](https://github-readme-stats.vercel.app/api/pin/?username=reiqr&repo=shiroha-quiz)](https://github.com/reiqr/shiroha-quiz)
+
+**原项目介绍：** 支持自定义题库导入、练习刷题、模拟考试与错题复习的轻量级刷题应用，并支持 AI 核对与 AI 解析。
+
+**原项目开源协议：** [GPL-3.0](https://github.com/reiqr/shiroha-quiz/blob/main/LICENSE)
+
+---
+
 ## 贡献者
 
 感谢以下贡献者：
