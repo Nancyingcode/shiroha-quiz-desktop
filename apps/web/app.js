@@ -260,7 +260,7 @@ function sanitizeAiDiagnosticDetailV375(text,config){
   return detail.slice(0,520);
 }
 function aiOllamaCorsCommandV375(diag){
-  if(!diag||diag.provider!=='ollama')return'';
+  if(ShirohaPlatform.credentials.native||!diag||diag.provider!=='ollama')return'';
   const origin=/^https?:\/\//i.test(diag.origin||'')?diag.origin:'';
   const origins=[origin,'http://localhost','http://127.0.0.1','http://localhost:*','http://127.0.0.1:*'].filter(Boolean).join(',');
   return `setx OLLAMA_ORIGINS "${origins}"\n\n然后完全退出并重新启动 Ollama，再回到 Shiroha Quiz 点击“测试连接”。`;
@@ -268,12 +268,37 @@ function aiOllamaCorsCommandV375(diag){
 function buildAiDiagnosticV375(error,config,mode='error'){
   const cfg=config||{};const endpoint=String(cfg.endpoint||'').trim();const provider=String(cfg.provider||'custom');const local=endpoint?isLocalAiEndpointV99(endpoint):false;
   const status=Number(error?.status||0);const origin=aiCurrentOriginV375();const providerLabel=aiProviderLabelV99(provider);
+  const native=!!ShirohaPlatform.credentials.native;const code=String(error?.code||'');
   const rawDetail=sanitizeAiDiagnosticDetailV375(error?.detail||error?.cause?.message||error?.message||'',cfg);
   const network=!!error?.network||/Failed to fetch|Load failed|NetworkError|ERR_FAILED/i.test(rawDetail||error?.message||'');
+  const nativeErrors={
+    binding_required:['凭据绑定已变化','重新输入当前服务的 API Key，再保存设置。'],
+    credential_pending:['凭据保存尚未完成','等待保存完成；仍失败时请重新保存设置。'],
+    credential_unavailable:['系统凭据不可用','检查 Windows 凭据管理器是否可用，再重新保存设置。'],
+    configuration_not_committed:['配置尚未保存','先保存当前服务配置，再重新测试连接。'],
+    invalid_service_config:['服务配置不正确','核对完整接口地址；地址不能包含账号、密码、查询参数或片段。'],
+    invalid_input:['请求参数不正确','核对接口地址、模型名称和 API Key 后重试。'],
+    redirect_denied:['服务重定向被拒绝','将接口地址改为服务实际使用的最终 Chat Completions 地址。'],
+    network_scope_denied:['服务重定向超出允许范围','核对服务的最终接口地址，避免跨站重定向。'],
+    network_denied:['当前环境禁止访问该服务','确认正在运行正常桌面版本；测试版本仅允许连接隔离测试服务。'],
+    payload_too_large:['请求内容过大','减少本次发送的题目或文本后重试。'],
+    response_too_large:['接口响应过大','减少请求规模，并检查接口是否返回异常的大量内容。'],
+    invalid_response:['接口响应无效','确认接口返回 UTF-8 编码的 Chat Completions 响应。'],
+  };
+  const nativeError=native?nativeErrors[code]:null;
   let summary='连接状态待确认';let statusMessage='尚未测试连接。';let level='';let steps=[];
   if(mode==='ok'){
     summary='连接测试成功';level='ok';statusMessage='连接测试成功。请点击“保存设置”，导入页才会使用当前配置。';
-    steps=['当前接口已能返回有效响应。','如更换模型、地址或跨域配置后，请重新测试。'];
+    steps=['当前接口已能返回有效响应。',native?'如更换模型、地址或 API Key 后，请重新测试。':'如更换模型、地址或跨域配置后，请重新测试。'];
+  }else if(code==='timeout'||(!status&&/超过\s*\d+\s*秒/.test(error?.message||''))){
+    summary='请求超时';level='warn';statusMessage=error.message||'AI 请求超时，请检查服务连接。';steps=['确认模型已经加载完成。','适当增加请求超时时间。','本地小显存模型首次响应可能较慢。'];
+  }else if(code==='cancelled'||error?.name==='AbortError'){
+    summary='请求已取消';level='warn';statusMessage=error.message||'AI 请求已取消。';steps=['需要继续时，请重新测试连接。'];
+  }else if(nativeError){
+    summary=nativeError[0];level='warn';statusMessage=error.message||summary;steps=[nativeError[1]];
+  }else if(native&&(code==='network_unavailable'||network)){
+    summary=local?'无法连接本地 AI 服务':'无法连接 AI 服务';level='warn';statusMessage=error.message||'无法连接 AI 服务，请检查地址、证书和网络。';
+    steps=[local?'确认本地 AI 服务正在运行且监听对应地址和端口。':'确认接口域名可解析、证书受信任且当前网络能够连接服务。','核对接口地址及服务端日志后重新测试。'];
   }else if(network){
     summary=local?'疑似 CORS 拦截、本地服务未启动或地址不可达':'浏览器无法访问该接口';level='warn';
     statusMessage=local?'无法访问本地 AI 接口。请检查服务是否启动、地址是否正确，以及是否允许当前网页跨域访问。':'无法访问 AI 接口。请检查网络、地址、HTTPS/HTTP 混用和接口跨域设置。';
@@ -281,7 +306,8 @@ function buildAiDiagnosticV375(error,config,mode='error'){
   }else if(status===401){
     summary='鉴权失败';level='warn';statusMessage='鉴权失败，请检查 API Key 或服务权限。';steps=['确认 API Key 是否填写正确。','本地 Ollama 通常不需要 API Key，可以留空。','如果是远程 OpenAI-compatible 服务，请确认 Key 仍有效且有模型调用权限。'];
   }else if(status===403){
-    summary=local?'本地服务拒绝当前网页访问，优先检查 CORS / Origin':'服务拒绝访问';level='warn';statusMessage=local?'本地 AI 服务拒绝当前网页访问，优先检查 OLLAMA_ORIGINS 或服务端跨域设置。':'AI 服务拒绝访问，请检查权限、来源限制或跨域设置。';steps=local?['如果使用 Ollama，请把当前页面 Origin 加入 OLLAMA_ORIGINS。','如果使用 LM Studio，请检查本地服务器是否开启跨域访问。','修改后完全重启本地 AI 服务。']:['确认账号、Key、IP 白名单和 Origin 白名单。','确认当前模型是否允许被调用。'];
+    if(native){summary='服务拒绝访问';level='warn';statusMessage='AI 服务拒绝访问，请检查 API Key、模型权限或服务端访问限制。';steps=['确认 API Key 有效且允许调用当前模型。','检查服务端 IP 白名单、访问权限和日志。']}
+    else{summary=local?'本地服务拒绝当前网页访问，优先检查 CORS / Origin':'服务拒绝访问';level='warn';statusMessage=local?'本地 AI 服务拒绝当前网页访问，优先检查 OLLAMA_ORIGINS 或服务端跨域设置。':'AI 服务拒绝访问，请检查权限、来源限制或跨域设置。';steps=local?['如果使用 Ollama，请把当前页面 Origin 加入 OLLAMA_ORIGINS。','如果使用 LM Studio，请检查本地服务器是否开启跨域访问。','修改后完全重启本地 AI 服务。']:['确认账号、Key、IP 白名单和 Origin 白名单。','确认当前模型是否允许被调用。']}
   }else if(status===404){
     summary='接口路径不存在';level='warn';statusMessage='接口不存在或路径不正确，请检查 Chat Completions 地址。';steps=['Ollama / LM Studio 的 OpenAI-compatible 地址通常应以 /v1/chat/completions 结尾。','如果只填到 /v1，本页面会自动补全为 /v1/chat/completions。','确认服务端版本是否支持 Chat Completions。'];
   }else if(status===405){
@@ -292,12 +318,10 @@ function buildAiDiagnosticV375(error,config,mode='error'){
     summary='请求频率或额度受限';level='warn';statusMessage='请求过于频繁或账户额度不足。';steps=['稍后重试。','如果是远程服务，请检查账户额度、速率限制和模型权限。'];
   }else if(status>=500){
     summary='AI 服务内部错误';level='warn';statusMessage='AI 服务内部错误，请稍后重试或查看本地服务日志。';steps=['检查模型是否已成功加载。','查看本地 AI 服务控制台日志。','降低模型或上下文规模后重试。'];
-  }else if(/超过\s*\d+\s*秒/.test(error?.message||'')){
-    summary='请求超时';level='warn';statusMessage=error.message;steps=['确认模型已经加载完成。','适当增加请求超时时间。','本地小显存模型首次响应可能较慢。'];
   }else if(error){
-    summary='连接测试失败';level='warn';statusMessage=error.message||'连接测试失败。';steps=['检查服务是否启动、地址是否正确、模型名称是否存在。','如果浏览器控制台出现 CORS、Origin 或 Failed to fetch，按跨域问题处理。'];
+    summary='连接测试失败';level='warn';statusMessage=error.message||'连接测试失败。';steps=['检查服务是否启动、地址是否正确、模型名称是否存在。',native?'根据错误摘要检查桌面服务和接口状态后重试。':'如果浏览器控制台出现 CORS、Origin 或 Failed to fetch，按跨域问题处理。'];
   }else{
-    steps=['填写接口地址和模型名称后点击“测试连接”。','如果使用 GitHub Pages 访问本地服务，通常还需要本地服务允许跨域访问。'];
+    steps=['填写接口地址和模型名称后点击“测试连接”。',native?'桌面通过原生网络连接服务，请确认地址、模型和 API Key 正确。':'如果使用 GitHub Pages 访问本地服务，通常还需要本地服务允许跨域访问。'];
   }
   return {time:new Date().toLocaleString('zh-CN',{hour12:false}),mode,provider,providerLabel,endpoint,host:aiEndpointHostV375(endpoint),origin,local,status:status||'',statusLabel:status?`HTTP ${status}`:'无 HTTP 状态',summary,statusMessage,level,detail:rawDetail||'无额外错误详情',steps};
 }
@@ -545,7 +569,7 @@ async function requestAiChatV99(config,messages,{controller,maxTokens,testMode,p
   for(let i=0;i<attempts.length;i++){
     let response;
     try{response=await ShirohaPlatform.network.ai(config,attempts[i],controller?.signal)}
-    catch(error){if(error?.name==='AbortError')throw error;const e=new Error('无法访问 AI 接口。请检查服务是否启动、地址是否正确，以及接口是否允许浏览器跨域访问。');e.cause=error;e.network=true;e.aiStage='fetch';e.endpoint=config.endpoint;e.provider=config.provider;throw e}
+    catch(error){if(error?.name==='AbortError'||ShirohaPlatform.credentials.native)throw error;const e=new Error('无法访问 AI 接口。请检查服务是否启动、地址是否正确，以及接口是否允许浏览器跨域访问。');e.cause=error;e.network=true;e.aiStage='fetch';e.endpoint=config.endpoint;e.provider=config.provider;throw e}
     const raw=await response.text();
     if(response.ok){
       let payload;try{payload=raw?JSON.parse(raw):{}}catch(_){const e=new Error('接口已响应，但返回内容不是有效 JSON。');e.aiStage='json';e.endpoint=config.endpoint;e.provider=config.provider;e.detail=raw.replace(/\s+/g,' ').slice(0,400);throw e}
