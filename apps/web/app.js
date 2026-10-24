@@ -6145,6 +6145,14 @@ function parseBlock(block,idx){
       continue;
     }
 
+    // 组合题先列圈号陈述，再由 A-D 引用组合；这些陈述不能进入无标号选项兜底。
+    const isCircledStemStatement=!options.length && !collectingAnalysis && qlines.length &&
+      /^[①-⑳]/.test(line) && /[^①-⑳\s、，,；;。．.]/.test(line) &&
+      lines.slice(li+1).some(next=>/^\s*(?:A\s*[、.．:：]|[（(]\s*A\s*[）)])/.test(next));
+    if(isCircledStemStatement){
+      qlines.push(line);seenQuestion=true;
+      continue;
+    }
     const semiOptions=splitSemicolonOptionsFromLine(line,answer);
     if(semiOptions && semiOptions.length>=2 && (seenQuestion||qlines.length)){
       collectingAnalysis=false;unkeyedMode=false;
