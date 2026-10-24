@@ -1042,6 +1042,33 @@ async function main() {
       });
       return {questions:130,pageSize:50,lastPage:15,initialBodies:0,crossBankIdentity:true};
     });
+    await check('题库试题跨页批量删除、未加载正文保全与持久化',async()=>{
+      const page=migratedRestart.page;
+      await page.reload();await page.locator('body[data-storage-state="ready"]').waitFor();
+      await page.locator('.nav[data-view="banks"]').click();
+      await page.locator('[data-select-bank-question="q0"]').check();
+      await page.locator('#bank-preview-pager').getByRole('button',{name:'下一页',exact:true}).click();
+      await page.locator('[data-select-bank-question="q50"]').waitFor();
+      await page.locator('#select-bank-question-page').click();
+      assert.match(await page.locator('#bank-question-selection').textContent()||'',/已选择 16/);
+      page.once('dialog',dialog=>dialog.accept());
+      await page.locator('#delete-selected-questions').click();
+      await page.locator('body[data-storage-state="ready"]').waitFor();
+      await page.locator('[data-select-bank-question="q1"]').waitFor();
+      assert.equal(await page.locator('[data-select-bank-question]').count(),49);
+      await page.screenshot({path:fileURLToPath(new URL('../.reports/question-deletion.png',import.meta.url))});
+      await page.reload();await page.locator('body[data-storage-state="ready"]').waitFor();
+      await page.evaluate(async()=>{
+        const host=(/** @type {NativeTestWindow} */(window)).ShirohaDesktopHost;if(!host)throw new Error('bridge');
+        const data=/** @type {import('../../web/platform/contracts.d.ts').Snapshot} */(await host.invoke('local_read'));
+        const a=data.banks.find(bank=>bank.id==='lazy-a'),b=data.banks.find(bank=>bank.id==='lazy-b');
+        if(!a||a.questions.length!==49||!b||b.questions.length!==65)throw new Error('删除数量或题库隔离错误');
+        if(a.questions.some(q=>q.id==='q0'||Number(q.id.slice(1))>=50))throw new Error('已删除题目重载后恢复');
+        if(data.banks.some(bank=>bank.questions.some(q=>!q.question||!q.extension)))throw new Error('未删除题目正文或扩展丢失');
+        if(!data.records.some(record=>record.id==='old-record'))throw new Error('历史记录丢失');
+      });
+      return {deleted:16,remaining:49,otherBank:65,reloaded:true};
+    });
     const repairCheckpoint=/** @type {{snapshotId:string}} */(await migratedRestart.page.evaluate(async()=>{
       const host=(/** @type {NativeTestWindow} */(window)).ShirohaDesktopHost;if(!host)throw new Error('bridge');return host.invoke('local_checkpoint');
     }));

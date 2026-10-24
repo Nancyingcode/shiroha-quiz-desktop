@@ -33,6 +33,145 @@ async function pageFor(t, raw, injection = '') {
 }
 const saved = page => page.evaluate(key => globalThis.localStorage.getItem(key), KEY);
 
+test('题库删除：单题取消、跨页批量、关联清理和重载保全', async t => {
+  const initial=webState();
+  initial.banks[0].questions=Array.from({length:302},(_,i)=>({...initial.banks[0].questions[0],id:'q'+i,number:'原'+i,question:'删除回归 '+i,extensions:{preserve:i}}));
+  initial.wrongBook['bank-a']=['q0',{id:'q300',wrongCount:2},'q2'];
+  initial.favorites['bank-a']=['q0','q300','q2'];
+  initial.crossPlatformMeta.favoriteQuestions['bank-a']={q0:{favoritedAt:1},q300:{favoritedAt:2},q2:{favoritedAt:3}};
+  const page=await pageFor(t,JSON.stringify(initial));
+  page.setDefaultTimeout(5000);
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.locator('#save-all-btn').click();await page.locator('body[data-storage-state="ready"]').waitFor();
+  const baseline=JSON.parse(await saved(page));
+  await page.locator('.nav[data-view="banks"]').click();
+  await page.locator('[data-delete-bank-question="q0"]').waitFor();
+  page.removeAllListeners('dialog');page.once('dialog',dialog=>dialog.dismiss());
+  await page.locator('[data-delete-bank-question="q0"]').click();
+  assert.equal(JSON.parse(await saved(page)).banks[0].questions.length,302);
+  page.on('dialog',dialog=>dialog.accept());
+  await page.locator('[data-select-bank-question="q0"]').check();
+  for(let i=0;i<6;i++)await page.locator('#bank-preview-pager').getByRole('button',{name:'下一页',exact:true}).click();
+  await page.locator('[data-select-bank-question="q300"]').check();
+  assert.match(await page.locator('#bank-question-selection').textContent(),/2/);
+  await page.locator('#delete-selected-questions').click();
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  const result=JSON.parse(await saved(page));
+  assert.deepEqual(result.banks[0].questions,baseline.banks[0].questions.filter(q=>!['q0','q300'].includes(q.id)));
+  assert.deepEqual(result.banks[1],baseline.banks[1]);
+  assert.deepEqual(result.records,baseline.records);
+  assert.deepEqual(result.wrongBook['bank-a'],baseline.wrongBook['bank-a'].filter(q=>(q.id||q)==='q2'));
+  assert.deepEqual(result.favorites['bank-a'],['q2']);
+  assert.deepEqual(result.crossPlatformMeta.favoriteQuestions['bank-a'],{q2:{favoritedAt:3}});
+  assert.match(await page.locator('#bank-preview-pager').textContent(),/第 6 \/ 6 页/);
+  await page.reload();await page.locator('body[data-storage-state="ready"]').waitFor();
+  assert.equal(JSON.parse(await saved(page)).banks[0].questions.length,300);
+});
+
+test('题库删除：切库清空选择、写入失败保留选择、重试删空',async t=>{
+  const initial=webState();const page=await pageFor(t,JSON.stringify(initial));page.setDefaultTimeout(5000);
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.locator('#save-all-btn').click();await page.locator('body[data-storage-state="ready"]').waitFor();
+  const baseline=JSON.parse(await saved(page));
+  await page.locator('.nav[data-view="banks"]').click();
+  await page.locator('#select-bank-question-page').click();
+  await page.locator('[data-openbank="bank-b"]').click();
+  assert.match(await page.locator('#bank-question-selection').textContent(),/已选择 0/);
+  await page.locator('#select-bank-question-page').click();
+  await page.evaluate(()=>{const write=globalThis.ShirohaPlatform.storage.write;globalThis.__resumeWrite=()=>{globalThis.ShirohaPlatform.storage.write=write};globalThis.ShirohaPlatform.storage.write=async()=>{throw new Error('Synthetic deletion failure')};});
+  await page.locator('#delete-selected-questions').click();await page.locator('#platform-status.failed').waitFor();
+  assert.equal(JSON.parse(await saved(page)).banks[1].questions.length,1);
+  assert.equal(await page.locator('[data-select-bank-question="same-id"]').isChecked(),true);
+  await page.evaluate(()=>globalThis.__resumeWrite());
+  await page.locator('#platform-status button').click();await page.locator('body[data-storage-state="ready"]').waitFor();
+  assert.equal(JSON.parse(await saved(page)).banks[1].questions.length,0);
+  assert.deepEqual(JSON.parse(await saved(page)).banks[0],baseline.banks[0]);
+  await page.locator('#bank-preview').getByText('当前题库暂无试题。',{exact:true}).waitFor();
+  await page.reload();await page.locator('body[data-storage-state="ready"]').waitFor();
+  assert.equal(JSON.parse(await saved(page)).banks[1].questions.length,0);
+});
+
+test('题库删除：二次编辑删除保留未编辑题目，允许保存空库',async t=>{
+  const initial=webState();const page=await pageFor(t,JSON.stringify(initial));page.setDefaultTimeout(5000);
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.locator('#save-all-btn').click();await page.locator('body[data-storage-state="ready"]').waitFor();
+  const baseline=JSON.parse(await saved(page));
+  const edit=async()=>{await page.locator('.nav[data-view="banks"]').click();await page.locator('[data-editbank-v45="bank-a"]').locator('..').locator('..').locator('summary').click();await page.locator('[data-editbank-v45="bank-a"]').click();};
+  await edit();
+  // 桌面释放正文再加载会重建对象；属性插入顺序变化不代表题目被修改。
+  await page.evaluate(()=>{globalThis.ShirohaPlatform.storage.ensureQuestions=async snapshot=>{for(const bank of snapshot.banks)bank.questions=bank.questions.map(q=>Object.fromEntries(Object.entries(q).reverse()))};});
+  await page.locator('[data-delete-import="0"]').click();await page.locator('#bank-edit-save-v45').click();
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  assert.deepEqual(JSON.parse(await saved(page)).banks[0].questions,baseline.banks[0].questions.slice(1));
+  await edit();await page.locator('#import-select-all-visible').check();await page.locator('#batch-delete-import-btn').click();
+  assert.equal(await page.locator('#confirm-import-btn').isDisabled(),false);
+  await page.locator('#confirm-import-btn').click();await page.locator('body[data-storage-state="ready"]').waitFor();
+  assert.equal(JSON.parse(await saved(page)).banks[0].questions.length,0);
+});
+
+test('题库删除：进行中练习阻止删除和编辑绕过，其他题库不受影响，完成后可删除',async t=>{
+  const initial=webState();initial.banks[0].questions=initial.banks[0].questions.slice(0,1);
+  const page=await pageFor(t,JSON.stringify(initial));page.setDefaultTimeout(5000);
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.locator('.nav[data-view="practice"]').click();await page.locator('#start-practice-btn').click();
+  await page.locator('.nav[data-view="banks"]').dispatchEvent('click');
+  await page.locator('[data-delete-bank-question="same-id"]').click();
+  assert.equal(JSON.parse(await saved(page)).banks[0].questions.length,1);
+  await page.locator('[data-editbank-v45="bank-a"]').locator('..').locator('..').locator('summary').click();
+  await page.locator('[data-editbank-v45="bank-a"]').click();await page.locator('[data-delete-import="0"]').click();
+  await page.locator('#bank-edit-save-v45').click();
+  assert.equal(JSON.parse(await saved(page)).banks[0].questions.length,1);
+  assert.equal(await page.locator('#bank-edit-panel-v45').isVisible(),true);
+  await page.locator('#bank-edit-cancel-v45').click();
+  await page.locator('.nav[data-view="banks"]').click();
+  await page.locator('[data-editbank-v45="bank-a"]').locator('..').locator('..').locator('summary').click();
+  await page.locator('[data-openbank="bank-b"]').click();
+  await page.locator('[data-delete-bank-question="same-id"]').click();
+  assert.equal(JSON.parse(await saved(page)).banks[1].questions.length,0);
+  await page.locator('[data-openbank="bank-a"]').click();
+  await page.locator('.nav[data-view="practice"]').click();await page.locator('#p-next').click();
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.locator('.nav[data-view="banks"]').dispatchEvent('click');
+  await page.locator('[data-delete-bank-question="same-id"]').click();
+  assert.equal(JSON.parse(await saved(page)).banks[0].questions.length,0);
+});
+
+test('题库删除：未交卷阻止删除，交卷后保留成绩并允许删除',async t=>{
+  const initial=webState();initial.banks[0].questions=initial.banks[0].questions.slice(0,1);
+  const page=await pageFor(t,JSON.stringify(initial));page.setDefaultTimeout(5000);
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.locator('.nav[data-view="exam"]').click();await page.locator('#start-exam-btn').click();
+  await page.locator('.nav[data-view="banks"]').dispatchEvent('click');
+  await page.locator('[data-delete-bank-question="same-id"]').click();
+  assert.equal(JSON.parse(await saved(page)).banks[0].questions.length,1);
+  await page.locator('.nav[data-view="exam"]').click();await page.locator('#submit-exam-btn').click();
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  const records=JSON.parse(await saved(page)).records;
+  await page.locator('.nav[data-view="banks"]').dispatchEvent('click');
+  await page.locator('[data-delete-bank-question="same-id"]').click();
+  assert.equal(JSON.parse(await saved(page)).banks[0].questions.length,0);
+  assert.deepEqual(JSON.parse(await saved(page)).records,records);
+});
+
+test('题库删除：失效 ID 不写入，重复点击只删除一次，旧编辑不能恢复已删除题目',async t=>{
+  const page=await pageFor(t,JSON.stringify(webState()));page.setDefaultTimeout(5000);
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.locator('.nav[data-view="banks"]').click();
+  await page.locator('[data-editbank-v45="bank-a"]').locator('..').locator('..').locator('summary').click();
+  await page.locator('[data-editbank-v45="bank-a"]').click();
+  await page.locator('.nav[data-view="banks"]').click();
+  const before=await saved(page);let confirmations=0;page.on('dialog',()=>{confirmations++});
+  await page.locator('[data-delete-bank-question="same-id"]').evaluate(button=>{button.dataset.deleteBankQuestion='missing-id';button.click()});
+  assert.equal(await saved(page),before);assert.equal(confirmations,0);
+  await page.evaluate(()=>{const write=globalThis.ShirohaPlatform.storage.write;globalThis.ShirohaPlatform.storage.write=async(...args)=>{await new Promise(resolve=>setTimeout(resolve,150));return write(...args)};});
+  await page.locator('[data-delete-bank-question="missing-id"]').evaluate(button=>{button.dataset.deleteBankQuestion='same-id';button.click();button.click()});
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  assert.equal(confirmations,1);assert.equal(JSON.parse(await saved(page)).banks[0].questions.length,6);
+  await page.locator('.nav[data-view="import"]').click();await page.locator('#bank-edit-save-v45').click();
+  assert.equal(JSON.parse(await saved(page)).banks[0].questions.length,6);
+  assert.equal(await page.locator('#bank-edit-panel-v45').isVisible(),true);
+});
+
 test('拖放复用导入解析并拒绝多文件和非法扩展', async t => {
   const page = await pageFor(t, JSON.stringify(webState()));
   await page.locator('body[data-storage-state="ready"]').waitFor();

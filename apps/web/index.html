@@ -290,7 +290,13 @@ C. 判断题
         </div>
         <div class="card">
           <h2>当前题库预览</h2>
-          <div class="table-wrap"><table id="bank-preview"><thead><tr><th>#</th><th>题型</th><th>题干</th><th>答案</th><th>分类</th><th>分值</th></tr></thead><tbody></tbody></table></div>
+          <div class="actions" aria-label="试题批量管理">
+            <button id="select-bank-question-page" class="ghost" type="button">全选本页</button>
+            <button id="clear-bank-question-selection" class="ghost" type="button">清空选择</button>
+            <button id="delete-selected-questions" class="ghost danger" type="button" disabled>删除选中试题</button>
+            <span id="bank-question-selection" role="status" aria-live="polite">已选择 0 道试题</span>
+          </div>
+          <div class="table-wrap"><table id="bank-preview"><thead><tr><th>选择</th><th>#</th><th>题型</th><th>题干</th><th>答案</th><th>分类</th><th>分值</th><th>操作</th></tr></thead><tbody></tbody></table></div>
         </div>
       </section>
 
