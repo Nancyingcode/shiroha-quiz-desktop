@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/promo4.jpg" width="800" alt="Shiroha Quiz">
+<img src="assets/promo5.jpg" width="800" alt="Shiroha Quiz Desktop">
 </div>
 
 <br>
