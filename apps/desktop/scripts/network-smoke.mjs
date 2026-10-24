@@ -39,6 +39,8 @@ export async function nativeServiceSmoke(page, origin) {
   await page.locator('#ai-model-v99').fill('mock-model');
   await page.locator('#ai-api-key-v99').fill('native-fixture-key');
   await page.locator('#ai-remember-key-v99').check();
+  await page.locator('#ai-test-connection-v99').click();
+  await page.waitForFunction(() => document.querySelector('#ai-settings-status-v99')?.textContent?.includes('连接测试成功'));
   await page.locator('#ai-save-settings-v99').click();
   await page.waitForFunction(() => document.querySelector('#ai-settings-status-v99')?.textContent?.includes('设置已保存'));
   return page.evaluate(async origin => {

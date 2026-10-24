@@ -58,7 +58,9 @@
     catch (error) {
       const code = error && typeof error === 'object' && 'code' in error ? String(error.code) : 'storage_unavailable';
       const messages = { cancelled: '请求已取消。', timeout: '请求超时，请检查服务连接。', network_unavailable: '无法连接服务，请检查地址、证书和网络。', binding_required: '服务绑定已变化，请重新输入凭据。', credential_pending: '凭据保存尚未完成，请重试保存设置。', credential_unavailable: '系统凭据不可用，未确认清除或保存成功。', configuration_not_committed: '配置尚未保存，凭据尚未生效。', result_unknown: '远端写入结果尚不确定，请先刷新远端列表核对备份。' };
-      throw Object.assign(new Error(/** @type {Record<string,string>} */ (messages)[code] || '本地操作未完成，原数据已保留。请检查权限、空间或重新启动。'), { code });
+      const serviceMessages = { invalid_service_config: '接口地址配置无效，请使用完整的 HTTP(S) 地址，不含账号、查询参数或片段。', invalid_input: '请求参数无效，请检查服务配置。', redirect_denied: '服务返回了不允许的重定向，请填写最终的 API 接口地址。', network_scope_denied: '请求超出已配置服务的允许范围，请检查接口地址和服务重定向。', network_denied: '当前运行环境不允许访问该网络服务。', response_too_large: '服务响应超过允许大小，请减少本次请求内容。', payload_too_large: '请求内容超过允许大小，请减少本次发送的内容。', invalid_response: '服务响应格式无效，请检查 API 接口地址。' };
+      const serviceMessage = ['service_request', 'service_credential'].includes(command) ? /** @type {Record<string,string>} */ (serviceMessages)[code] : '';
+      throw Object.assign(new Error(/** @type {Record<string,string>} */ (messages)[code] || serviceMessage || '本地操作未完成，原数据已保留。请检查权限、空间或重新启动。'), { code, name: code === 'cancelled' && command === 'service_request' ? 'AbortError' : 'Error' });
     }
   }
   /** @param {string} type */
