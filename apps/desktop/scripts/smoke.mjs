@@ -297,6 +297,9 @@ Add-Type -TypeDefinition @'
 using System;
 using System.Runtime.InteropServices;
 public static class CaptionWindow {
+  [StructLayout(LayoutKind.Sequential)] public struct Rect { public int Left, Top, Right, Bottom; }
+  [DllImport("user32.dll")] public static extern IntPtr SetThreadDpiAwarenessContext(IntPtr context);
+  [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr window, out Rect rect);
   [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr window);
   [DllImport("user32.dll")] public static extern bool IsZoomed(IntPtr window);
   [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr window, int command);
@@ -309,9 +312,12 @@ $captionOwner=0
 [void][CaptionWindow]::GetWindowThreadProcessId($captionWindow,[ref]$captionOwner)
 if($captionOwner -ne ${runtime.child.pid}){throw '窗口不属于测试进程'}
 ${restore ? '[void][CaptionWindow]::ShowWindow($captionWindow,9)' : ''}
-@{handle=$captionWindow.ToInt64();minimized=[CaptionWindow]::IsIconic($captionWindow);maximized=[CaptionWindow]::IsZoomed($captionWindow)} | ConvertTo-Json -Compress
+[void][CaptionWindow]::SetThreadDpiAwarenessContext([IntPtr](-4))
+$captionRect=New-Object CaptionWindow+Rect
+if(-not [CaptionWindow]::GetWindowRect($captionWindow,[ref]$captionRect)){throw '无法读取测试窗口位置'}
+@{handle=$captionWindow.ToInt64();x=$captionRect.Left;y=$captionRect.Top;minimized=[CaptionWindow]::IsIconic($captionWindow);maximized=[CaptionWindow]::IsZoomed($captionWindow)} | ConvertTo-Json -Compress
 `], { windowsHide: true, timeout: START_TIMEOUT_MS });
-  const state = /** @type {{handle: number, minimized: boolean, maximized: boolean}} */ (JSON.parse(stdout));
+  const state = /** @type {{handle: number, x: number, y: number, minimized: boolean, maximized: boolean}} */ (JSON.parse(stdout));
   // 最小化后 .NET MainWindowHandle 可能选中辅助窗口；句柄仅保存在本次隔离进程生命周期内。
   runtime.nativeHandle = state.handle;
   return state;
@@ -970,10 +976,13 @@ async function main() {
     runtime = await launch(executable, profile, proxyPort);
     const restarted = runtime;
     await check('CodeBuddy 仅内存登录在重启后清除',()=>codebuddyLoginAfterRestart(restarted.page));
-    await check('重启恢复普通窗口尺寸', async () => {
+    await check('重启按保存位置和尺寸创建普通窗口', async () => {
       const size = await restarted.page.evaluate(() => ({ width: window.innerWidth, height: window.innerHeight }));
       assert.deepEqual(size, { width: 1100, height: 760 });
-      return size;
+      const saved = JSON.parse(await readFile(path.join(profile, 'window-state.json'), 'utf8'));
+      const actual = await nativeWindowState(restarted);
+      assert.deepEqual({ x: actual.x, y: actual.y }, { x: saved.x, y: saved.y });
+      return { ...size, x: actual.x, y: actual.y };
     });
     await check('重启后数据保留', async () => {
       await restarted.page.evaluate(({ key, value }) => {
