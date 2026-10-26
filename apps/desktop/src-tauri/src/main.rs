@@ -49,7 +49,7 @@ fn main() {
             app.manage(Arc::new(
                 shiroha_quiz_desktop::harness::Harness::open_with_codebuddy(&root, codebuddy_login),
             ));
-            shiroha_quiz_desktop::window_state::attach(app, &root)?;
+            shiroha_quiz_desktop::window_state::create(app, &root)?;
             app.manage(LocalData(Arc::new(Mutex::new(None)), root));
             Ok(())
         })

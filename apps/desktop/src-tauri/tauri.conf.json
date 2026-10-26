@@ -12,7 +12,10 @@
     "withGlobalTauri": false,
     "windows": [{
       "label": "main",
+      "create": false,
       "title": "Shiroha Quiz",
+      "visible": false,
+      "center": true,
       "width": 1280,
       "height": 860,
       "minWidth": 900,

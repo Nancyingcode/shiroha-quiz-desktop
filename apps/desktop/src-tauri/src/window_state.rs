@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::path::Path;
-use tauri::{Manager, PhysicalPosition, PhysicalSize};
+use tauri::utils::config::WindowConfig;
 
 #[derive(Clone, Copy, Serialize, Deserialize)]
 struct Bounds {
@@ -11,6 +11,15 @@ struct Bounds {
 }
 
 impl Bounds {
+    fn apply_to(self, config: &mut WindowConfig, scale_factor: f64) {
+        // 保存文件使用物理像素，构造器使用目标屏幕的逻辑像素，避免 DPI 缩放重复应用。
+        config.x = Some(f64::from(self.x) / scale_factor);
+        config.y = Some(f64::from(self.y) / scale_factor);
+        config.width = f64::from(self.width) / scale_factor;
+        config.height = f64::from(self.height) / scale_factor;
+        config.center = false;
+    }
+
     fn visible_on(self, screen: Self) -> bool {
         let right = i64::from(self.x) + i64::from(self.width);
         let bottom = i64::from(self.y) + i64::from(self.height);
@@ -23,15 +32,21 @@ impl Bounds {
     }
 }
 
-pub fn attach(app: &tauri::App, root: &Path) -> Result<(), Box<dyn std::error::Error>> {
-    let window = app
-        .get_webview_window("main")
-        .ok_or("missing main window")?;
+pub fn create(app: &tauri::App, root: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    let mut config = app
+        .config()
+        .app
+        .windows
+        .iter()
+        .find(|window| window.label == "main")
+        .ok_or("missing main window configuration")?
+        .clone();
     let file = root.join("window-state.json");
     crate::paths::reject_links(&file)?;
     if let Ok(bytes) = std::fs::read(&file) {
         if let Ok(bounds) = serde_json::from_slice::<Bounds>(&bytes) {
-            let visible = window.available_monitors()?.iter().any(|monitor| {
+            let monitors = app.available_monitors()?;
+            let monitor = monitors.iter().find(|monitor| {
                 let area = monitor.work_area();
                 bounds.visible_on(Bounds {
                     x: area.position.x,
@@ -40,14 +55,12 @@ pub fn attach(app: &tauri::App, root: &Path) -> Result<(), Box<dyn std::error::E
                     height: area.size.height,
                 })
             });
-            if visible {
-                window.set_size(PhysicalSize::new(bounds.width, bounds.height))?;
-                window.set_position(PhysicalPosition::new(bounds.x, bounds.y))?;
-            } else {
-                window.center()?;
+            if let Some(monitor) = monitor {
+                bounds.apply_to(&mut config, monitor.scale_factor());
             }
         }
     }
+    let window = tauri::WebviewWindowBuilder::from_config(app, &config)?.build()?;
     let observed = window.clone();
     // 只在关闭请求时记录普通窗口，避免最大化/最小化坐标污染下次启动；不保存题库数据。
     window.on_window_event(move |event| {
@@ -75,12 +88,36 @@ pub fn attach(app: &tauri::App, root: &Path) -> Result<(), Box<dyn std::error::E
             eprintln!("window preferences could not be saved");
         }
     });
+    window.show()?;
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::Bounds;
+    use tauri::utils::config::WindowConfig;
+
+    #[test]
+    fn saved_physical_bounds_become_initial_logical_geometry() {
+        for scale_factor in [1.0, 1.25, 1.5, 2.0] {
+            let mut config = WindowConfig {
+                center: true,
+                ..Default::default()
+            };
+            let bounds = Bounds {
+                x: -1800,
+                y: 150,
+                width: 1500,
+                height: 1000,
+            };
+            bounds.apply_to(&mut config, scale_factor);
+            assert_eq!(config.x.unwrap() * scale_factor, f64::from(bounds.x));
+            assert_eq!(config.y.unwrap() * scale_factor, f64::from(bounds.y));
+            assert_eq!(config.width * scale_factor, f64::from(bounds.width));
+            assert_eq!(config.height * scale_factor, f64::from(bounds.height));
+            assert!(!config.center);
+        }
+    }
 
     #[test]
     fn rejects_disconnected_monitor_overflow_and_invalid_sizes() {
