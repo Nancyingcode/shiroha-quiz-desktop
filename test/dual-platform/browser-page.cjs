@@ -33,6 +33,23 @@ async function pageFor(t, raw, injection = '') {
 }
 const saved = page => page.evaluate(key => globalThis.localStorage.getItem(key), KEY);
 
+test('旧组合题练习显示陈述与组合选项，作答仍使用原答案键', async t => {
+  const initial = webState();
+  const statements = ['①有关法律、法规、规章和标准的规定', '②本地区、本部门、本单位的安全生产实际情况', '③应急组织和人员的职责分工明确，并有具体的落实措施', '④有明确的应急保障措施'];
+  const combinations = ['①②', '①②③', '②③④', '①②③④'];
+  initial.banks = [initial.banks[0]];
+  initial.banks[0].questions = [{ id: 'legacy-combination', type: 'single', question: '应急预案应当符合下列（ ）基本要求。', answer: ['D'], options: statements.map((text, i) => ({ key: 'ABCD'[i], text: text + ' ' + combinations[i] })) }];
+  const page = await pageFor(t, JSON.stringify(initial));
+  await page.locator('.nav[data-view="practice"]').click();
+  await page.locator('#start-practice-btn').click();
+  const title = await page.locator('#practice-card .question-title').innerText();
+  for (const statement of statements) assert.ok(title.includes(statement), title);
+  assert.deepEqual(await page.locator('#practice-card .option-text').allTextContents(), combinations);
+  await page.locator('#practice-card .option[data-key="D"]').click();
+  await page.locator('#p-submit').click();
+  assert.match(await page.locator('#p-feedback').innerText(), /回答正确/);
+});
+
 test('总提交结果列出全部错题，保留跨库来源且不截断到八题', async t => {
   const initial = webState();
   const first = initial.banks[0].questions[0];
