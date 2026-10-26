@@ -16,10 +16,23 @@
   let pendingMutations = 0;
   // 退出失败后必须重试清理；普通查询不能用旧授权重新启用当前窗口。
   let authorizationBlock = '';
+  // 账户卡片只报告失效边界；可执行状态仍由原生查询确认，不影响其他提供方的任务。
+  /** @type {{revision:number,phase:string,blocked:boolean}|undefined} */ let codebuddyAccount;
+  let accountEpoch = 0;
   // 准备与登录属于当前窗口的设置流程；取消、恢复和切换模式会废弃尚未继续的步骤。
   let setupGeneration = 0;
   let automaticPreparationAttempted = false;
   let loginInProgress = false;
+  // 提供方草稿属于当前窗口；保存失败仍阻断旧执行器，直到明确重试或保存另一选择。
+  /** @type {string|undefined} */ let draftAdapter;
+  let selectingAdapter = false;
+  let selectionSequence = 0;
+  let selectionFailure = '';
+  // 模型草稿只属于 CodeBuddy；保存失败须保留到重试或重新初始化，不能用旧模型继续执行。
+  /** @type {string|undefined} */ let draftModel;
+  let selectingModel = false;
+  let modelSelectionSequence = 0;
+  let modelSelectionFailure = '';
   /** @type {Promise<void>|undefined} */ let preparation;
   /** @type {'prepare_runtime'|'use_managed_runtime'|undefined} */ let preparationKind;
   /** @type {((error?:Error)=>void)|undefined} */ let preparationCheck;
@@ -32,10 +45,52 @@
   const element = id => document.getElementById(id);
   /** @param {string} id */
   const input = id => /** @type {HTMLInputElement|null} */ (element(id));
+  const adapters = ['codex','codebuddy','deepseek'];
+  const codebuddyModels = ['deepseek-v4.1-flash','hy4-preview','hy3','default'];
+  // 只有原生已定义的固定标识可进入文案，未知代码不能成为动态诊断输出。
+  const codebuddyDiagnosticCodes = new Set([
+    'codebuddy_account_stale','codebuddy_auth_cancelled','codebuddy_auth_challenge','codebuddy_auth_expired',
+    'codebuddy_auth_network','codebuddy_auth_personal_required','codebuddy_auth_required','codebuddy_auth_response',
+    'codebuddy_auth_session','codebuddy_auth_state','codebuddy_auth_timeout','codebuddy_auth_token_domain',
+    'codebuddy_auth_token_expiry','codebuddy_auth_token_shape','codebuddy_auth_url','codebuddy_business_json',
+    'codebuddy_candidate_rejected','codebuddy_cleanup_failed','codebuddy_cli_finished','codebuddy_config_invalid',
+    'codebuddy_container_required','codebuddy_frame_invalid','codebuddy_isolation_failed','codebuddy_login_browser',
+    'codebuddy_login_busy','codebuddy_login_not_pending','codebuddy_login_not_ready','codebuddy_login_stale',
+    'codebuddy_login_unavailable','codebuddy_login_unsupported','codebuddy_login_url','codebuddy_model_already_requested',
+    'codebuddy_output_invalid','codebuddy_pipe_closed','codebuddy_profile_cleanup_failed','codebuddy_relay_io_failed',
+    'codebuddy_relay_peer_closed','codebuddy_relay_start_failed','codebuddy_request_budget','codebuddy_request_denied',
+    'codebuddy_runtime_busy','codebuddy_runtime_download','codebuddy_runtime_integrity','codebuddy_runtime_proxy',
+    'codebuddy_runtime_proxy_config','codebuddy_runtime_redirect','codebuddy_runtime_storage','codebuddy_runtime_unavailable',
+    'codebuddy_upstream_content_filter','codebuddy_upstream_incomplete','codebuddy_upstream_length',
+    'codebuddy_upstream_tool_call','codebuddy_upstream_unknown_field','codebuddy_upstream_unverified',
+    'codebuddy_worker_environment','codebuddy_worker_failed','codebuddy_worker_path',
+  ]);
+  function selectedAdapter() { return draftAdapter ?? current.adapter; }
+  function codexSelected() { return current.adapter === 'codex' && selectedAdapter() === 'codex' && draftAdapter === undefined && !selectingAdapter; }
+  function modelSelectionPending() { return current.adapter === 'codebuddy' && draftModel !== undefined; }
+  function supportedSelection() { return ['codex','codebuddy'].includes(current.adapter) && selectedAdapter() === current.adapter && draftAdapter === undefined && !selectingAdapter && !modelSelectionPending(); }
+  function providerLabel() { return current.adapter === 'codebuddy' ? 'CodeBuddy' : 'Codex'; }
+  function selectionReason() { return selectionFailure || '正在保存 Harness 提供方选择，请等待完成。'; }
+  function modelSelectionReason() { return modelSelectionFailure || '正在保存 CodeBuddy 模型选择，请等待完成。'; }
+  /** @param {string} adapter */
+  function unavailableReason(adapter) { return adapter === 'codebuddy' ? '请准备 CodeBuddy 组件并完成个人账户登录，再使用连接测试、单题解析和追问。' : 'DeepSeek 订阅尚未接入，模型执行尚未开放。'; }
+  function assertSupported() {
+    if (modelSelectionPending()) throw failure({code:'harness_unavailable',message:modelSelectionReason()});
+    if (!supportedSelection()) throw failure({code:'harness_unavailable',message:draftAdapter !== undefined ? selectionReason() : unavailableReason(selectedAdapter())});
+  }
+  function assertCodex() {
+    if (!codexSelected()) throw failure({code:'harness_unavailable',message:draftAdapter !== undefined ? selectionReason() : unavailableReason(selectedAdapter())});
+  }
   /** @param {unknown} error */
   function failure(error) {
     const source = error && typeof error === 'object' ? /** @type {{code?:string;message?:string}} */ (error) : {};
-    const result = Object.assign(new Error(source.message || 'Harness 操作失败，请检查配置后重试。'), { code:source.code || 'harness_unavailable' });
+    const code = typeof source.code === 'string' && source.code ? source.code : 'harness_unavailable';
+    let message = typeof source.message === 'string' && source.message ? source.message : 'Harness 操作失败，请检查配置后重试。';
+    if (codebuddyDiagnosticCodes.has(code)) {
+      const diagnostic = `（诊断码：${code}）`;
+      if (!message.endsWith(diagnostic)) message += diagnostic;
+    }
+    const result = Object.assign(new Error(message), { code });
     if (result.code === 'cancelled') result.name = 'AbortError';
     return result;
   }
@@ -47,9 +102,13 @@
   }
   /** @param {Record<string,unknown>} request */
   async function control(request) {
+    const codexOperation = ['use_managed_runtime','choose_runtime','inspect','login','logout','clear'].includes(String(request.kind));
+    if (codexOperation) assertCodex();
+    if (['prepare_runtime','cancel'].includes(String(request.kind))) assertSupported();
     const epoch = generation;
     const sequence = ++requestSequence;
     const observation = observationEpoch;
+    const accountObservation = accountEpoch;
     const query = request.kind === 'status';
     if (!query) { observationEpoch++; pendingMutations++; }
     /** @type {HarnessStatus} */ let next;
@@ -57,23 +116,32 @@
     finally { if (!query) { pendingMutations--; observationEpoch++; } }
     if (epoch !== generation) return current;
     if (query && (observation !== observationEpoch || pendingMutations)) return current;
-    if (!next || !['api','harness'].includes(next.mode) || !Number.isSafeInteger(next.revision) || typeof next.ready !== 'boolean') throw new Error('Harness 状态格式无效，请重新打开应用后检测。');
+    if (query && current.adapter === 'codebuddy' && accountObservation !== accountEpoch) return current;
+    if (!next || !['api','harness'].includes(next.mode) || !adapters.includes(next.adapter) || !Number.isSafeInteger(next.revision) || typeof next.ready !== 'boolean') throw new Error('Harness 状态格式无效，请重新打开应用后检测。');
     // 同一页面生命周期内，较早的查询也可能晚于登录或保存返回，不能让授权状态倒退。
     if (next.revision < current.revision || (next.revision === current.revision && sequence < acceptedSequence)) return current;
+    if (next.adapter === 'codebuddy' && current.adapter === 'codebuddy' && next.accountRevision !== undefined && current.accountRevision !== undefined && next.accountRevision < current.accountRevision) return current;
     if (request.kind === 'logout' || request.kind === 'clear') {
       if (next.credentialStatus !== 'missing') throw new Error('订阅授权清理尚未确认，请重试退出登录。');
       authorizationBlock = '';
     }
     acceptedSequence = Math.max(acceptedSequence, sequence);
+    const accountChanged = next.adapter === 'codebuddy' && (next.accountRevision !== current.accountRevision || next.credentialStatus !== current.credentialStatus);
     current = {...next};
-    if (current.credentialStatus !== 'subscription') current.ready = false;
+    if (!['codex','codebuddy'].includes(current.adapter) || current.credentialStatus !== 'subscription') current.ready = false;
     protectAuthorization();
     preparationCheck?.();
     observeAuthorization();
+    if (accountChanged) document.dispatchEvent?.(new Event('shiroha-codebuddy-account-refresh'));
     return current;
   }
   function protectAuthorization() {
-    if (authorizationBlock) current = {...current,ready:false,credentialStatus:'missing',loginUrl:undefined,userCode:undefined,reason:authorizationBlock};
+    if (current.adapter === 'codex' && authorizationBlock) current = {...current,ready:false,credentialStatus:'missing',loginUrl:undefined,userCode:undefined,reason:authorizationBlock};
+    if (current.adapter === 'codebuddy') {
+      const invalidRevision = !Number.isSafeInteger(current.accountRevision) || Number(current.accountRevision) < 0;
+      const blockedAccount = codebuddyAccount && (codebuddyAccount.blocked || codebuddyAccount.phase !== 'signed_in' || Number(current.accountRevision) < codebuddyAccount.revision);
+      if (invalidRevision || blockedAccount) current = {...current,ready:false,reason:'CodeBuddy 账户状态尚未确认，请完成登录或退出后刷新状态。'};
+    }
   }
   function invalidateSetup() {
     setupGeneration++;
@@ -85,6 +153,7 @@
   }
   /** @param {'prepare_runtime'|'use_managed_runtime'} [kind] @returns {Promise<void>} */
   function ensurePrepared(kind = 'prepare_runtime') {
+    try { if (kind === 'use_managed_runtime') assertCodex(); else assertSupported(); } catch (error) { return Promise.reject(error); }
     if (preparation) return preparation;
     if (kind === 'prepare_runtime' && current.runtimeState === 'ready' && !current.busy) return Promise.resolve();
     if (current.runtimeState !== 'preparing') assertIdle();
@@ -98,7 +167,7 @@
           if (error || epoch !== generation) { reject(error || cancelled()); return; }
           if (current.runtimeState === 'preparing' || (current.runtimeState === 'ready' && current.busy)) { observeAuthorization(); return; }
           if (current.runtimeState === 'ready') resolve(undefined);
-          else reject(failure({code:current.runtimeState === 'cancelled' ? 'cancelled' : 'harness_unavailable',message:current.reason || 'Codex 组件尚未准备完成，请重试准备。'}));
+          else reject(failure({code:current.runtimeState === 'cancelled' ? 'cancelled' : 'harness_unavailable',message:current.reason || `${providerLabel()} 组件尚未准备完成，请重试准备。`}));
         };
         preparationCheck();
       });
@@ -113,20 +182,21 @@
   }
   function activateRuntime() {
     const canActivate = ['unprepared','ready'].includes(current.runtimeState) && !current.busy && !preparation && !pendingMutations && !businessBusy();
-    if (api.formMode() !== 'harness' || automaticPreparationAttempted || !canActivate) return;
+    if (!supportedSelection() || api.formMode() !== 'harness' || automaticPreparationAttempted || !canActivate) return;
     automaticPreparationAttempted = true;
     void uiAction(async()=>{
       if (current.runtimeState === 'unprepared') await ensurePrepared();
-      else await control({kind:'inspect'});
+      else if (codexSelected()) await control({kind:'inspect'});
     });
   }
   async function refreshStatus() {
     const epoch = generation;
     await control({kind:'status'});
     const canInspect = current.runtimeState === 'ready' && !current.busy && !pendingMutations && !active.size && !preparation && !businessBusy();
-    if (epoch === generation && canInspect && !authorizationBlock && current.credentialStatus !== 'authenticating') await control({kind:'inspect'});
+    if (epoch === generation && codexSelected() && canInspect && !authorizationBlock && current.credentialStatus !== 'authenticating') await control({kind:'inspect'});
   }
   async function loginSubscription() {
+    assertCodex();
     if (loginInProgress) return;
     if (authorizationBlock) throw new Error(authorizationBlock);
     const epoch = setupGeneration;
@@ -148,12 +218,13 @@
       if (epoch !== generation) return;
       // 未确认进程终态时保持阻塞，并使此前所有查询失效，直到用户重新查询或停止。
       observationEpoch++;
-      current = {...current,ready:false,busy:true,reason:'无法确认 Codex 任务状态，请刷新状态或重试停止。' + failure(error).message};
+      current = {...current,ready:false,busy:true,reason:`无法确认 ${providerLabel()} 任务状态，请刷新状态或重试停止。` + failure(error).message};
       protectAuthorization();
     }
   }
   /** @param {'logout'|'clear'} kind */
   async function endAuthorization(kind) {
+    assertCodex();
     invalidateSetup();
     generation++;
     clearTimeout(authTimer); authTimer = undefined;
@@ -172,7 +243,7 @@
     } finally { render(false); changed(); }
   }
   function observeAuthorization() {
-    const observing = current.credentialStatus === 'authenticating' || current.runtimeState === 'preparing' || !!(preparationCheck && current.busy);
+    const observing = supportedSelection() && ((codexSelected() && current.credentialStatus === 'authenticating') || current.runtimeState === 'preparing' || !!(preparationCheck && current.busy));
     if (!observing) { clearTimeout(authTimer); authTimer = undefined; return; }
     if (authTimer !== undefined) return;
     const epoch = generation;
@@ -185,11 +256,68 @@
   }
   /** @param {string} message @param {boolean} [error] */
   function notice(message, error = false) {
-    const target = element('ai-harness-status');
+    const target = element(current.adapter === 'codebuddy' ? 'ai-codebuddy-execution-status' : 'ai-harness-status');
     if (target) { target.textContent = message; target.className = 'notice' + (error ? ' warn' : ''); }
+    if (!codexSelected() && api.formMode() === 'harness') { const common = element('ai-settings-status-v99'); if (common) common.textContent = message; }
   }
   function assertIdle() {
     if (active.size || current.busy || pendingMutations || businessBusy()) throw failure({code:'busy',message:'AI 任务仍在执行或停止中，请等待结束后保存设置。'});
+  }
+  /** @param {string} adapter */
+  async function selectAdapter(adapter) {
+    if (!adapters.includes(adapter)) throw new Error('请选择支持的 Harness 提供方。');
+    assertIdle();
+    if (selectingAdapter || selectingModel || loginInProgress || preparation || current.credentialStatus === 'authenticating' || current.runtimeState === 'preparing') throw failure({code:'busy',message:'请等待当前任务或订阅设置操作结束后切换提供方。'});
+    const retrying = !!selectionFailure;
+    const epoch = ++generation;
+    const operation = ++selectionSequence;
+    invalidateSetup();
+    clearTimeout(authTimer); authTimer = undefined;
+    draftAdapter = adapter; selectingAdapter = true; selectionFailure = '';
+    const mode = input('ai-execution-harness'); if (mode) mode.checked = true;
+    render(false); changed();
+    /** @type {boolean|undefined} */ let saved;
+    try {
+      if (retrying) await control({kind:'status'});
+      if (epoch !== generation) throw cancelled();
+      await control({kind:'select_adapter',adapter,revision:current.revision});
+      if (epoch !== generation) throw cancelled();
+      if (current.adapter !== adapter || current.mode !== 'harness') throw new Error('提供方选择尚未确认保存，请重试。');
+      draftAdapter = undefined; selectionFailure = ''; saved = true;
+    } catch (error) {
+      if (operation === selectionSequence) selectionFailure = '提供方选择尚未保存，请重新选择或点击“重试保存选择”。' + failure(error).message;
+      throw error;
+    } finally {
+      if (operation === selectionSequence) { selectingAdapter = false; render(false); changed(); }
+    }
+    if (saved) { render(); automaticPreparationAttempted = false; activateRuntime(); }
+  }
+  /** @param {string} model */
+  async function selectModel(model) {
+    if (!codebuddyModels.includes(model)) throw new Error('请选择支持的 CodeBuddy 模型。');
+    if (current.adapter !== 'codebuddy' || selectedAdapter() !== 'codebuddy' || draftAdapter !== undefined || api.formMode() !== 'harness') throw new Error('请先选择 CodeBuddy Harness，再修改模型。');
+    if (current.mode !== 'harness') throw new Error('请先保存“使用 Harness”执行方式，再选择 CodeBuddy 模型。');
+    assertIdle();
+    if (selectingAdapter || selectingModel || loginInProgress || preparation || current.credentialStatus === 'authenticating' || current.runtimeState === 'preparing') throw failure({code:'busy',message:'请等待当前任务或订阅设置操作结束后切换模型。'});
+    const retrying = !!modelSelectionFailure;
+    const epoch = ++generation;
+    const operation = ++modelSelectionSequence;
+    draftModel = model; selectingModel = true; modelSelectionFailure = '';
+    render(false); changed();
+    try {
+      if (retrying) await control({kind:'status'});
+      if (epoch !== generation) throw cancelled();
+      const revision = current.revision;
+      await control({kind:'select_model',model,revision});
+      if (epoch !== generation) throw cancelled();
+      if (current.adapter !== 'codebuddy' || current.model !== model || current.revision <= revision) throw new Error('模型选择尚未确认保存，请重试。');
+      draftModel = undefined; modelSelectionFailure = '';
+    } catch (error) {
+      if (operation === modelSelectionSequence) modelSelectionFailure = 'CodeBuddy 模型选择尚未保存，请重新选择或点击“重试保存模型”。' + failure(error).message;
+      throw error;
+    } finally {
+      if (operation === modelSelectionSequence) { selectingModel = false; render(false); changed(); }
+    }
   }
   /** @param {boolean} [reset] */
   function render(reset = true) {
@@ -197,14 +325,26 @@
     if (!section) return;
     section.hidden = false;
     if (reset) {
-      const selected = input('ai-execution-' + current.mode);
+      const selected = input('ai-execution-' + (draftAdapter === undefined ? current.mode : 'harness'));
       if (selected) selected.checked = true;
-      const model = input('ai-harness-model'); if (model) model.value = current.model || 'gpt-6.1-sol';
-      const timeout = input('ai-harness-timeout'); if (timeout) timeout.value = String(current.timeoutSeconds);
+      const model = input('ai-harness-model'); if (model && current.adapter === 'codex') model.value = current.model || 'gpt-6.1-sol';
+      const timeout = input('ai-harness-timeout'); if (timeout && current.adapter === 'codex') timeout.value = String(current.timeoutSeconds);
     }
     const mode = api.formMode();
+    const adapter = selectedAdapter();
+    const provider = input('ai-harness-adapter');
+    if (provider) { provider.value = adapter; provider.disabled = current.busy || active.size > 0 || pendingMutations > 0 || !!preparation || loginInProgress || selectingAdapter || selectingModel || businessBusy(); }
     const apiFields = element('ai-api-settings-fields'); if (apiFields) apiFields.hidden = mode === 'harness';
     const panel = element('ai-harness-settings'); if (panel) panel.hidden = mode !== 'harness';
+    for (const name of adapters) { const providerPanel = element(`ai-${name}-settings`); if (providerPanel) providerPanel.hidden = mode !== 'harness' || adapter !== name; }
+    const unavailableProvider = mode === 'harness' && adapter !== 'codex';
+    const retrySelection = !!selectionFailure;
+    const showSave = !unavailableProvider || retrySelection || mode !== current.mode;
+    const actions = element('ai-settings-actions'); if (actions) actions.hidden = mode === 'harness' && adapter === 'deepseek' && !showSave;
+    const save = input('ai-save-settings-v99');
+    if (save) { save.hidden = !showSave; save.textContent = retrySelection ? '重试保存选择' : '保存设置'; }
+    const test = input('ai-test-connection-v99'); if (test) test.hidden = mode === 'harness' && adapter === 'deepseek';
+    const clear = input('ai-clear-settings-v99'); if (clear) clear.hidden = unavailableProvider;
     const diagnostic = element('ai-toggle-diagnostics-v375'); if (diagnostic) diagnostic.hidden = mode === 'harness';
     if (mode === 'harness') { const existing = element('ai-diagnostics-v375'); existing?.classList.add('ai-hidden-v99'); }
     const preparing = current.runtimeState === 'preparing' || !!preparation;
@@ -222,7 +362,7 @@
     const prepareButton = input('ai-harness-prepare'); if (prepareButton) prepareButton.hidden = preparing || current.runtimeState === 'ready';
     const cancelPrepare = input('ai-harness-prepare-cancel'); if (cancelPrepare) cancelPrepare.hidden = !preparing;
     const loginButton = input('ai-harness-login'); if (loginButton) loginButton.disabled = loginInProgress || current.credentialStatus === 'authenticating';
-    for (const id of ['ai-harness-model','ai-harness-timeout','ai-save-settings-v99']) { const field = input(id); if (field) field.disabled = loginInProgress || preparing; }
+    for (const id of ['ai-harness-model','ai-harness-timeout','ai-save-settings-v99']) { const field = input(id); if (field) field.disabled = loginInProgress || preparing || selectingAdapter || selectingModel; }
     const path = element('ai-harness-runtime'); if (path) path.textContent = current.runtimePath || '组件准备后由应用管理';
     const version = element('ai-harness-version'); if (version) version.textContent = current.runtimeVersion || '未检测';
     const authorization = element('ai-harness-auth-status');
@@ -236,8 +376,34 @@
     const url = element('ai-harness-login-url'); if (url) url.textContent = current.loginUrl || '';
     const code = element('ai-harness-login-code'); if (code) code.textContent = current.userCode || '此流程无需输入验证码';
     const description = element('ai-settings-status-v99');
-    if (description) description.textContent = mode === 'harness' ? 'Codex 组件由应用准备。点击“登录订阅”会自动保存 Harness 设置，再启动官方授权；模型测试由你主动执行。' : '直接 API 设置与 Harness 分别保存，切换执行方式须点击“保存设置”。';
-    notice((current.ready ? 'Codex 已就绪。' : current.reason || '完成组件准备后，点击“登录订阅”即可。') + (mode !== current.mode ? ' 执行方式尚未保存。' : ''));
+    let descriptionText = '直接 API 设置与 Harness 分别保存，切换执行方式须点击“保存设置”。';
+    if (mode === 'harness') descriptionText = adapter === 'codex' ? 'Codex 组件由应用准备。点击“登录订阅”会自动保存 Harness 设置，再启动官方授权；模型测试由你主动执行。' : unavailableReason(adapter);
+    if (draftAdapter !== undefined) descriptionText = selectionReason();
+    else if (modelSelectionPending()) descriptionText = modelSelectionReason();
+    if (description) description.textContent = descriptionText;
+    let reason = current.ready ? `${providerLabel()} 已就绪。` : current.reason || '完成组件准备后，请登录账户。';
+    if (adapter === 'deepseek') reason = unavailableReason(adapter);
+    if (draftAdapter !== undefined) reason = selectionReason();
+    else if (modelSelectionPending()) reason = modelSelectionReason();
+    notice(reason + (mode !== current.mode && draftAdapter === undefined ? ' 执行方式尚未保存。' : ''));
+    if (adapter === 'codebuddy') {
+      const modelModeUnsaved = current.mode !== 'harness';
+      const modelBusy = modelModeUnsaved || current.busy || active.size > 0 || pendingMutations > 0 || preparing || loginInProgress || selectingAdapter || selectingModel || businessBusy();
+      const model = input('ai-codebuddy-model');
+      if (model) { model.value = draftModel ?? (current.adapter === 'codebuddy' ? current.model : codebuddyModels[0]); model.disabled = modelBusy; }
+      const modelStatus = element('ai-codebuddy-model-status');
+      if (modelStatus) {
+        if (modelModeUnsaved) modelStatus.textContent = '请先保存“使用 Harness”执行方式，再选择 CodeBuddy 模型。';
+        else modelStatus.textContent = modelSelectionPending() ? modelSelectionReason() : '模型选择已保存，后续请求将使用此模型。';
+      }
+      const retryModel = input('ai-codebuddy-model-retry'); if (retryModel) { retryModel.hidden = !modelSelectionFailure; retryModel.disabled = modelBusy; }
+      const runtime = element('ai-codebuddy-runtime-status'); if (runtime) runtime.textContent = runtimeLabels[preparing ? 'preparing' : current.runtimeState];
+      const bytes = element('ai-codebuddy-runtime-progress');
+      if (bytes) { bytes.textContent = `${Math.max(0,current.runtimeReceivedBytes || 0).toLocaleString('zh-CN')} / ${Math.max(0,current.runtimeTotalBytes || 0).toLocaleString('zh-CN')} 字节`; bytes.hidden = !preparing || !current.runtimeReceivedBytes; }
+      const prepare = input('ai-codebuddy-prepare'); if (prepare) { prepare.hidden = preparing || current.runtimeState === 'ready'; prepare.disabled = current.busy || selectingAdapter; }
+      const cancel = input('ai-codebuddy-prepare-cancel'); if (cancel) cancel.hidden = !preparing;
+      const stop = input('ai-codebuddy-stop'); if (stop) stop.hidden = !current.busy && !active.size;
+    }
   }
   /** @param {()=>Promise<void>} action */
   async function uiAction(action) {
@@ -248,32 +414,63 @@
   const api = {
     async initialize() {
       invalidateSetup();
+      // 旧设置操作未收敛时查询会被屏障丢弃；重新读取必须先停用旧执行状态。
+      current = {...current,mode:'harness',ready:false,reason:'正在重新读取 AI 设置；请等待当前操作结束后刷新状态。'};
+      selectionSequence++; draftAdapter = undefined; selectingAdapter = false; selectionFailure = '';
+      modelSelectionSequence++; draftModel = undefined; selectingModel = false; modelSelectionFailure = '';
       // 恢复后的重读只更新状态，不把仍可见的设置页当成用户再次进入。
       automaticPreparationAttempted = generation > 0;
-      generation++;
+      const epoch = ++generation;
       clearTimeout(authTimer); authTimer = undefined;
       try { await control({kind:'status'}); }
-      catch (error) { current = {...current,mode:'harness',ready:false,reason:failure(error).message}; }
+      catch (error) { if (epoch === generation) current = {...current,mode:'harness',ready:false,reason:failure(error).message}; }
     },
-    status() { return {...current,busy:current.busy || active.size > 0 || pendingMutations > 0 || !!preparation}; },
-    snapshot() { return Object.freeze({...current}); },
+    status() {
+      const result = {...current,busy:current.busy || active.size > 0 || pendingMutations > 0 || !!preparation || selectingAdapter || selectingModel};
+      if (draftAdapter !== undefined) return {...result,mode:'harness',adapter:draftAdapter,ready:false,reason:selectionReason()};
+      if (modelSelectionPending()) return {...result,model:draftModel ?? current.model,ready:false,reason:modelSelectionReason()};
+      return result;
+    },
+    snapshot() { return Object.freeze(api.status()); },
+    codebuddyAccountChanged(account) {
+      if (!Number.isSafeInteger(account.revision) || account.revision < 0 || (codebuddyAccount && account.revision < codebuddyAccount.revision)) return;
+      const sameObservation = codebuddyAccount && account.revision === codebuddyAccount.revision && account.phase === codebuddyAccount.phase && account.blocked === codebuddyAccount.blocked;
+      const firstConfirmedAccount = !codebuddyAccount && account.revision === current.accountRevision && account.phase === 'signed_in' && !account.blocked && current.credentialStatus === 'subscription';
+      const invalidatesExecution = !sameObservation && !firstConfirmedAccount;
+      codebuddyAccount = {...account};
+      if (invalidatesExecution) accountEpoch++;
+      if (current.adapter !== 'codebuddy' || current.mode !== 'harness') return;
+      if (invalidatesExecution) {
+        current = {...current,ready:false,reason:'CodeBuddy 账户已变化，正在确认当前登录状态。'};
+        observationEpoch++; protectAuthorization(); render(false); changed();
+      }
+      if (!account.blocked) void uiAction(async()=>{await control({kind:'status'});});
+    },
     async execute(snapshot, task, messages, signal) {
       if (signal?.aborted) throw cancelled();
-      if (active.size || current.busy || pendingMutations) throw failure({code:'busy',message:'Codex 正在执行或停止任务，请等待结束后重试。'});
+      assertSupported();
+      if (snapshot.adapter !== current.adapter) throw failure({code:'configuration_changed',message:'AI 提供方已变化，请重新发起任务。'});
+      const codebuddy = snapshot.adapter === 'codebuddy';
+      if (codebuddy && !['connection_test','question_analysis','question_followup'].includes(task)) throw failure({code:'harness_task_unavailable',message:'CodeBuddy 当前支持连接测试、单题解析和追问；尚未开放批量与导入任务。'});
+      if (codebuddy && (!Number.isSafeInteger(snapshot.accountRevision) || Number(snapshot.accountRevision) < 0 || snapshot.accountRevision !== current.accountRevision)) throw failure({code:'configuration_changed',message:'CodeBuddy 账户已变化，请重新发起任务。'});
+      if (active.size || current.busy || pendingMutations) throw failure({code:'busy',message:`${providerLabel()} 正在执行或停止任务，请等待结束后重试。`});
       if (snapshot.revision !== current.revision) throw failure({code:'configuration_changed',message:'AI 执行配置已变化，请重新开始本次任务。'});
-      if (snapshot.mode !== 'harness' || !snapshot.ready || !current.ready) throw failure({code:'harness_unavailable',message:current.reason || snapshot.reason || 'Codex 尚未就绪，请先检查 AI 设置。'});
+      if (snapshot.mode !== 'harness' || !snapshot.ready || !current.ready) throw failure({code:'harness_unavailable',message:current.reason || snapshot.reason || `${providerLabel()} 尚未就绪，请先检查 AI 设置。`});
       const id = scope.crypto.randomUUID();
       const epoch = generation;
+      const account = accountEpoch;
       let stopped = false;
       /** @type {Promise<unknown>|undefined} */ let stopping;
       const abort = () => { stopped = true; stopping = control({kind:'cancel',id}).catch(() => undefined); };
       let finished = () => {};
       active.set(id,new Promise(resolve => { finished = resolve; }));
       signal?.addEventListener('abort',abort,{once:true});
+      if (codebuddy) { render(false); changed(); }
       try {
         /** @type {{content:string}} */ let result;
         try {
-          result = /** @type {{content:string}} */ (await invoke('harness_execute',{id,revision:snapshot.revision,task,messages}));
+          const request = {id,revision:snapshot.revision,task,messages,...(codebuddy ? {accountRevision:snapshot.accountRevision} : {})};
+          result = /** @type {{content:string}} */ (await invoke('harness_execute',request));
         } finally {
           const pendingStop = stopping;
           await pendingStop;
@@ -283,7 +480,8 @@
         }
         if (stopped || signal?.aborted || epoch !== generation) throw cancelled();
         if (snapshot.revision !== current.revision) throw failure({code:'configuration_changed',message:'AI 配置已变化，旧结果已丢弃。'});
-        if (!result || typeof result.content !== 'string' || !result.content.trim()) throw failure({code:'invalid_response',message:'Codex 没有返回有效内容。'});
+        if (codebuddy && (account !== accountEpoch || snapshot.accountRevision !== current.accountRevision)) throw failure({code:'configuration_changed',message:'CodeBuddy 账户已变化，旧结果已丢弃。'});
+        if (!result || typeof result.content !== 'string' || !result.content.trim()) throw failure({code:'invalid_response',message:`${providerLabel()} 没有返回有效内容。`});
         return {content:result.content};
       } catch (error) {
         await stopping;
@@ -291,29 +489,38 @@
         throw error;
       } finally { signal?.removeEventListener('abort',abort); active.delete(id); finished(); render(false); changed(); }
     },
-    async cancelAll() { invalidateSetup(); generation++; clearTimeout(authTimer); authTimer = undefined; const pending = [...active.values()]; await control({kind:'cancel_all'}); await Promise.all(pending); },
+    async cancelAll() { invalidateSetup(); generation++; clearTimeout(authTimer); authTimer = undefined; if (!['codex','codebuddy'].includes(current.adapter)) return; const pending = [...active.values()]; await control({kind:'cancel_all'}); await Promise.all(pending); },
     formMode() { return input('ai-execution-harness')?.checked ? 'harness' : 'api'; },
+    formAdapter() { return selectedAdapter(); },
+    selectAdapter,
+    selectModel,
     async saveMode(mode) {
       assertIdle();
-      const model = mode === 'harness' ? input('ai-harness-model')?.value.trim() || current.model || 'gpt-6.1-sol' : current.model;
-      const timeoutSeconds = mode === 'harness' ? Number(input('ai-harness-timeout')?.value || 120) : current.timeoutSeconds;
+      if (mode === 'harness' && draftAdapter !== undefined) { await selectAdapter(draftAdapter); return; }
+      if (mode === 'harness' && current.mode === 'harness' && modelSelectionPending()) { await selectModel(draftModel ?? current.model); return; }
+      const editCodex = mode === 'harness' && current.adapter === 'codex';
+      const model = editCodex ? input('ai-harness-model')?.value.trim() || current.model || 'gpt-6.1-sol' : current.model;
+      const timeoutSeconds = editCodex ? Number(input('ai-harness-timeout')?.value || 120) : current.timeoutSeconds;
       if (!Number.isInteger(timeoutSeconds) || timeoutSeconds < 10 || timeoutSeconds > 600) throw new Error('任务超时须为 10 至 600 秒的整数。');
       const epoch = generation;
-      await control({kind:'save',mode,adapter:'codex',model,timeoutSeconds,revision:current.revision});
+      await control({kind:'save',mode,adapter:current.adapter,model,timeoutSeconds,revision:current.revision});
       if (epoch !== generation) throw cancelled();
       generation++;
+      if (mode === 'api') { draftAdapter = undefined; selectionFailure = ''; }
       clearTimeout(authTimer); authTimer = undefined; observeAuthorization();
       render(); changed();
+      if (mode === 'harness' && modelSelectionPending()) await selectModel(draftModel ?? current.model);
     },
-    async clear() { if(active.size || current.busy)throw new Error('正在停止 Codex 任务，请等待结束后清除配置。'); await endAuthorization('clear'); render(); },
+    async clear() { assertCodex(); if(active.size || current.busy)throw new Error('正在停止 Codex 任务，请等待结束后清除配置。'); await endAuthorization('clear'); render(); },
     async test() {
+      assertSupported();
       if (api.formMode() !== current.mode) throw new Error('请先保存当前执行方式，再测试执行。');
-      if ((input('ai-harness-model')?.value.trim() || '') !== current.model || Number(input('ai-harness-timeout')?.value || 120) !== current.timeoutSeconds) throw new Error('配置草稿尚未保存，请先保存后再测试。');
+      if (codexSelected() && ((input('ai-harness-model')?.value.trim() || '') !== current.model || Number(input('ai-harness-timeout')?.value || 120) !== current.timeoutSeconds)) throw new Error('配置草稿尚未保存，请先保存后再测试。');
       notice('正在执行固定测试任务，将使用当前订阅额度……');
       try {
         const result = await api.execute(api.snapshot(),'connection_test',[{role:'system',content:'只回复一个 JSON 对象。'},{role:'user',content:'回复 {"ok":true}'}]);
-        let value; try { value = JSON.parse(result.content); } catch { throw new Error('Codex 返回的测试结果不是有效 JSON。'); }
-        if (!value || value.ok !== true) throw new Error('Codex 测试结果校验失败。');
+        let value; try { value = JSON.parse(result.content); } catch { throw new Error(`${providerLabel()} 返回的测试结果不是有效 JSON。`); }
+        if (!value || value.ok !== true || (current.adapter === 'codebuddy' && (Array.isArray(value) || Object.keys(value).length !== 1))) throw new Error(`${providerLabel()} 测试结果校验失败。`);
         notice('测试执行成功，结果已通过校验。');
       } catch (error) {
         notice(failure(error).message,true);
@@ -323,6 +530,12 @@
     render() { render(); if (element('ai-settings')?.classList.contains('active')) activateRuntime(); },
     bind(onChanged,isBusy) {
       changed = onChanged; businessBusy = isBusy;
+      const provider = input('ai-harness-adapter');
+      if (provider) provider.onchange = () => { const adapter = provider.value; void uiAction(()=>selectAdapter(adapter)); };
+      const codebuddyModel = input('ai-codebuddy-model');
+      if (codebuddyModel) codebuddyModel.onchange = () => { const model = codebuddyModel.value; void uiAction(()=>selectModel(model)); };
+      const retryModel = element('ai-codebuddy-model-retry');
+      if (retryModel) retryModel.onclick = () => { if (draftModel !== undefined) { const model = draftModel; void uiAction(()=>selectModel(model)); } };
       for (const mode of ['api','harness']) {
         const radio = input('ai-execution-' + mode);
         if (radio) radio.onchange = () => {
@@ -332,6 +545,8 @@
         };
       }
       const prepare = element('ai-harness-prepare'); if (prepare) prepare.onclick = () => { void uiAction(()=>ensurePrepared()); };
+      const codebuddyPrepare = element('ai-codebuddy-prepare'); if (codebuddyPrepare) codebuddyPrepare.onclick = () => { void uiAction(()=>ensurePrepared()); };
+      for (const id of ['ai-codebuddy-prepare-cancel','ai-codebuddy-stop']) { const button = element(id); if (button) button.onclick = () => { void uiAction(()=>api.cancelAll()); }; }
       const cancelPrepare = element('ai-harness-prepare-cancel'); if (cancelPrepare) cancelPrepare.onclick = () => { void uiAction(()=>api.cancelAll()); };
       const managed = element('ai-harness-use-managed'); if (managed) managed.onclick = () => { void uiAction(()=>ensurePrepared('use_managed_runtime')); };
       const choose = element('ai-harness-choose'); if (choose) choose.onclick = () => { void uiAction(async()=>{assertIdle();await control({kind:'choose_runtime'});}); };

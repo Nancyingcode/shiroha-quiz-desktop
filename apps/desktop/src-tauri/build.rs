@@ -16,6 +16,7 @@ fn main() {
             "service_request",
             "harness_control",
             "harness_execute",
+            "codebuddy_control",
         ]),
     ))
     .expect("Unable to validate application permissions");

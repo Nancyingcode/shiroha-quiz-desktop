@@ -223,13 +223,36 @@ function ensureAiImportStateV99(){
 }
 function readStoredAiKeyV99(configOverride){return ShirohaPlatform.credentials.status('ai',configOverride||ensureAiImportStateV99())}
 function aiProviderLabelV99(provider){return AI_PROVIDER_PRESETS_V99[provider]?.label||'自定义接口'}
+function aiHarnessLabelV99(adapter){
+  switch(adapter){case'codex':return'Codex';case'codebuddy':return'CodeBuddy';case'deepseek':return'DeepSeek';default:return'未知 Harness'}
+}
+function aiHarnessTaskReasonV99(config,task){
+  if(config.execution?.mode!=='harness')return '';
+  if(config.execution.adapter==='codex')return '';
+  if(config.execution.adapter==='codebuddy')return ['connection_test','question_analysis','question_followup'].includes(task)?'':'CodeBuddy 当前支持连接测试、单题解析和追问；尚未开放批量与导入任务。';
+  return `${aiHarnessLabelV99(config.execution.adapter)} 当前尚未开放模型执行，本次不会发送题目内容。`;
+}
+function aiUnavailableReasonV99(config,task){return aiHarnessTaskReasonV99(config,task)||config.execution?.reason||'尚未配置 AI 服务，请先前往“AI 设置”。'}
+function aiHarnessPrivacyV99(config,subject){
+  if(config.execution?.adapter==='codex')return `${subject}将经 Codex 发送到 OpenAI，使用已登录的订阅额度。`;
+  if(config.execution?.adapter==='codebuddy')return aiConfiguredV99(config,'question_analysis')?`${subject}将发送到 CodeBuddy，使用当前个人账户并消耗账户用量。`:'CodeBuddy 组件或账户尚未就绪，本次不会发送题目内容。';
+  return `${aiHarnessLabelV99(config.execution?.adapter)} 当前尚未开放模型执行，本次不会发送题目内容。`;
+}
 function aiExecutionConfigV99(){
   const execution=ShirohaPlatform.harness?.snapshot();
-  if(execution?.mode==='harness')return {provider:'codex',model:execution.model||'适配器默认模型',timeoutSeconds:execution.timeoutSeconds,execution};
+  if(execution?.mode==='harness'&&execution.adapter==='codebuddy')return {provider:'codebuddy',model:execution.model,timeoutSeconds:120,execution};
+  if(execution?.mode==='harness')return {provider:execution.adapter,model:execution.adapter==='codex'?(execution.model||'适配器默认模型'):'',timeoutSeconds:execution.timeoutSeconds,execution};
   return {...ensureAiImportStateV99(),execution};
 }
-function aiConfiguredV99(config){return config.execution?.mode==='harness'?config.execution.ready:!!(config.endpoint&&config.model)}
-function aiExecutionLabelV99(config){return config.execution?.mode==='harness'?'Codex Harness':aiProviderLabelV99(config.provider)}
+function aiConfiguredV99(config,task='connection_test'){
+  if(config.execution?.mode!=='harness')return !!(config.endpoint&&config.model);
+  if(aiHarnessTaskReasonV99(config,task)||!config.execution.ready)return false;
+  return config.execution.adapter==='codex'||(Number.isSafeInteger(config.execution.accountRevision)&&config.execution.accountRevision>=0);
+}
+function aiExecutionLabelV99(config){
+  if(config.execution?.mode!=='harness')return aiProviderLabelV99(config.provider);
+  const label=aiHarnessLabelV99(config.execution.adapter);return label==='未知 Harness'?label:`${label} Harness`;
+}
 function aiRequestConfigV99(config){return config.execution?.mode==='harness'?config:{...config,apiKey:readStoredAiKeyV99(config)}}
 function aiTasksBusyV99(){return aiImportRequestV99.running||aiPreviewRequestV991.running||Array.from(aiSingleSessionsV613.values()).some(session=>session.loading)||!!ShirohaPlatform.harness?.status().busy||!!$('#ai-test-connection-v99')?.disabled}
 function normalizeAiEndpointV99(value,provider){
@@ -416,6 +439,10 @@ async function saveAiSettingsV99(){
 });}
 async function clearAiSettingsV99(){
   if(ShirohaPlatform.harness?.formMode()==='harness'){
+    const execution=ShirohaPlatform.harness.snapshot();
+    const adapter=ShirohaPlatform.harness.formAdapter?.()??execution.adapter;
+    if(adapter!=='codex'){setAiSettingsStatusV99(`${aiHarnessLabelV99(adapter)} 的账户操作请使用对应面板；其他提供方配置已保留。`,'warn');return}
+    if(execution.adapter!==adapter){setAiSettingsStatusV99('提供方选择尚未保存，请等待保存完成后再清除配置。','warn');return}
     if(!confirm('确定停止 Harness 任务并清除 Codex 配置和订阅授权？原直接 API 配置将保留。'))return;
     try{await ShirohaPlatform.harness.cancelAll();await ShirohaPlatform.harness.clear();setAiSettingsStatusV99('Codex 配置已清除；如需使用直接 API，请明确选择并保存执行方式。');updateAiConnectionPillV99('idle');syncAiImportActionV99()}
     catch(error){setAiSettingsStatusV99(error.message||'清除失败。','warn')}
@@ -499,18 +526,18 @@ function openAiImportPanelV99(){
   const panel=$('#ai-import-panel-v99');if(!panel)return;panel.classList.remove('ai-hidden-v99');refreshAiImportPanelV99();panel.scrollIntoView({behavior:'smooth',block:'nearest'});
 }
 function refreshAiImportPanelV99(){
-  const config=aiExecutionConfigV99();const configured=aiConfiguredV99(config);const selected=currentAiImportSelectionV992();const selectedInput=$('#ai-import-scope-selection-v992');const selectedSize=$('#ai-import-selection-size-v992');const allInput=$('#ai-import-scope-all-v992');
+  const config=aiExecutionConfigV99();const configured=aiConfiguredV99(config,'import_organize');const selected=currentAiImportSelectionV992();const selectedInput=$('#ai-import-scope-selection-v992');const selectedSize=$('#ai-import-selection-size-v992');const allInput=$('#ai-import-scope-all-v992');
   if(allInput)allInput.disabled=aiImportRequestV99.running;
   if(selectedInput){selectedInput.disabled=aiImportRequestV99.running||!selected;if(selectedInput.checked&&!selected&&allInput)allInput.checked=true}
   if(selectedSize)selectedSize.textContent=selected?`${selected.length.toLocaleString('zh-CN')} 字`:'未选择';
   const range=aiImportRangeV992();const provider=$('#ai-import-provider-v99');const model=$('#ai-import-model-v99');const size=$('#ai-import-size-v99');const preview=$('#ai-import-preview-count-v99');const badge=$('#ai-import-badge-v99');const privacy=$('#ai-import-privacy-v99');const start=$('#ai-import-start-btn-v99');const settings=$('#ai-import-settings-btn-v99');const hint=$('#ai-import-range-hint-v992');
-  if(provider)provider.textContent=configured?aiExecutionLabelV99(config):'未配置';if(model)model.textContent=config.model||'—';if(size)size.textContent=`${range.text.length.toLocaleString('zh-CN')} 字`;if(preview)preview.textContent=`${importCache.length} 题`;if(badge)badge.textContent=configured?aiExecutionLabelV99(config):'未配置';
+  if(provider)provider.textContent=configured||config.execution?.mode==='harness'?aiExecutionLabelV99(config):'未配置';if(model)model.textContent=config.model||'—';if(size)size.textContent=`${range.text.length.toLocaleString('zh-CN')} 字`;if(preview)preview.textContent=`${importCache.length} 题`;if(badge)badge.textContent=configured||config.execution?.mode==='harness'?aiExecutionLabelV99(config):'未配置';
   if(hint)hint.textContent=range.scope==='selection'?`将只发送当前选中的 ${range.text.length.toLocaleString('zh-CN')} 字；成功后预览显示本次整理结果，导入框原文不变。`:'将整理导入框中的全部原始文本；成功后更新当前预览，导入框原文不变。';
   if(start){start.classList.toggle('ai-hidden-v99',!configured);start.disabled=aiImportRequestV99.running||!range.text||range.text.length>AI_IMPORT_MAX_CHARS_V99;start.textContent=aiImportRequestV99.running?'正在整理……':'开始整理'}
   if(settings)settings.classList.toggle('ai-hidden-v99',configured);
   if(privacy){
-    if(!configured){privacy.textContent=config.execution?.reason||'尚未配置 AI 执行方式。请先前往“AI 设置”。';privacy.className='notice warn'}
-    else if(config.execution?.mode==='harness'){privacy.textContent=`本次${range.label}及相关核对上下文将经 Codex 发送到 OpenAI，使用已登录的订阅额度。只返回待核对结果，不发送本地题库文件或图片。`;privacy.className='notice warn'}
+    if(!configured){privacy.textContent=aiUnavailableReasonV99(config,'import_organize');privacy.className='notice warn'}
+    else if(config.execution?.mode==='harness'){privacy.textContent=aiHarnessPrivacyV99(config,`本次${range.label}及相关核对上下文`)+'只返回待核对结果，不发送本地题库文件或图片。';privacy.className='notice warn'}
     else if(isLocalAiEndpointV99(config.endpoint)){privacy.textContent='当前使用本地 AI 服务。浏览器仍需获得跨域访问权限；整理结果只会在成功后替换当前预览。';privacy.className='notice'}
     else{privacy.textContent=`本次${range.label}将发送到远程 AI 接口。请确认题库内容允许上传，并确保所用密钥和服务可信。`;privacy.className='notice warn'}
   }
@@ -597,6 +624,8 @@ function aiResponseContentV99(payload){
 async function requestAiChatV99(config,messages,{controller,maxTokens,testMode,plainText,task}={}){
   if(config.execution?.mode==='harness'){
     if(!ShirohaPlatform.harness)throw new Error('当前平台不支持 Harness，请在桌面端配置。');
+    const unavailable=aiHarnessTaskReasonV99(config,task);if(unavailable)throw new Error(unavailable);
+    if(config.execution.adapter==='codebuddy'&&!aiConfiguredV99(config,task))throw new Error(aiUnavailableReasonV99(config,task));
     return ShirohaPlatform.harness.execute(config.execution,task,messages,controller?.signal);
   }
   const base={model:config.model,messages,temperature:0,stream:false};if(maxTokens)base.max_tokens=maxTokens;
@@ -627,8 +656,15 @@ async function withAiTimeoutV99(timeoutSeconds,runner){
 async function testAiConnectionV99(){
   const btn=$('#ai-test-connection-v99');let config=null;
   if(ShirohaPlatform.harness?.formMode()==='harness'){
-    try{if(btn){btn.disabled=true;btn.textContent='测试中……'}await ShirohaPlatform.harness.test();setAiSettingsStatusV99('Codex 测试执行成功，结果已通过校验。','ok');updateAiConnectionPillV99('ok',true)}
-    catch(error){setAiSettingsStatusV99(error.message||'Codex 测试执行失败。','warn');updateAiConnectionPillV99('error')}
+    try{
+      const execution=ShirohaPlatform.harness.snapshot();
+      const adapter=ShirohaPlatform.harness.formAdapter?.()??execution.adapter;
+      const unavailable=aiHarnessTaskReasonV99({execution:{...execution,adapter}},'connection_test');if(unavailable)throw new Error(unavailable);
+      if(execution.mode!=='harness'||execution.adapter!==adapter)throw new Error('请先保存当前提供方和执行方式，再测试执行。');
+      if(!aiConfiguredV99({execution},'connection_test'))throw new Error(execution.reason||'当前 Harness 尚未就绪，请先检查设置。');
+      if(btn){btn.disabled=true;btn.textContent='测试中……'}await ShirohaPlatform.harness.test();setAiSettingsStatusV99(`${aiHarnessLabelV99(adapter)} 测试执行成功，结果已通过校验。`,'ok');updateAiConnectionPillV99('ok',true)
+    }
+    catch(error){setAiSettingsStatusV99(error.message||'Harness 测试执行失败。','warn');updateAiConnectionPillV99('error')}
     finally{if(btn){btn.disabled=false;btn.textContent='测试连接'}}
     return;
   }
@@ -767,7 +803,7 @@ function openAiPreviewPanelV991(mode){
 }
 function refreshAiPreviewPanelV991(resetScope=false){
   const panel=$('#ai-preview-panel-v991');if(!panel||panel.classList.contains('ai-hidden-v99'))return;
-  const mode=aiPreviewPanelModeV991;const config=aiExecutionConfigV99();const configured=aiConfiguredV99(config);
+  const mode=aiPreviewPanelModeV991;const config=aiExecutionConfigV99();const task=mode==='analysis'?'batch_analysis':'batch_review';const configured=aiConfiguredV99(config,task);
   const title=$('#ai-preview-title-v991');const badge=$('#ai-preview-badge-v991');const desc=$('#ai-preview-description-v991');const scope=$('#ai-preview-scope-v991');const conditionField=$('#ai-preview-condition-field-v992');const condition=$('#ai-preview-condition-v992');const rangeFields=$('#ai-preview-range-fields-v992');const rangeStart=$('#ai-preview-range-start-v992');const rangeEnd=$('#ai-preview-range-end-v992');const batch=$('#ai-preview-batch-v991');const rangeCount=$('#ai-preview-range-count-v992');const count=$('#ai-preview-count-v991');const requestCount=$('#ai-preview-request-count-v992');const service=$('#ai-preview-service-v991');const model=$('#ai-preview-model-v991');const start=$('#ai-preview-start-btn-v991');const settings=$('#ai-preview-settings-btn-v991');
   if(title)title.textContent=aiPreviewModeLabelV991(mode);if(badge)badge.textContent=mode==='analysis'?'补充解析':'结果核对';
   if(desc)desc.textContent=mode==='analysis'?'选择题目范围后，再按解析条件筛选；AI 只生成解析建议，不修改题干、题型、选项和答案。':'选择需要核对的题目范围；AI 只生成修改建议，不会自动改题。';
@@ -779,16 +815,16 @@ function refreshAiPreviewPanelV991(resetScope=false){
   const controlsLocked=aiPreviewRequestV991.running;if(scope)scope.disabled=controlsLocked;if(condition)condition.disabled=controlsLocked;if(rangeStart){rangeStart.max=String(Math.max(1,importCache.length));rangeStart.disabled=controlsLocked}if(rangeEnd){rangeEnd.max=String(Math.max(1,importCache.length));rangeEnd.disabled=controlsLocked}
   if(batch){const current=Number(batch.value||0);batch.value=String(resetScope?(mode==='analysis'?AI_ANALYSIS_DEFAULT_BATCH_V991:AI_REVIEW_DEFAULT_BATCH_V991):(current|| (mode==='analysis'?AI_ANALYSIS_DEFAULT_BATCH_V991:AI_REVIEW_DEFAULT_BATCH_V991)));batch.disabled=controlsLocked}
   const batchSize=Math.min(30,Math.max(1,Number(batch?.value||1)||1));const details=collectAiPreviewTargetDetailsV992(mode,activeScope,condition?.value||'missing');const requests=details.indexes.length?Math.ceil(details.indexes.length/batchSize):0;
-  if(rangeCount)rangeCount.textContent=`${details.baseIndexes.length} 题`;if(count)count.textContent=`${details.indexes.length} 题`;if(requestCount)requestCount.textContent=`${requests} 次`;if(service)service.textContent=configured?aiExecutionLabelV99(config):'未配置';if(model)model.textContent=config.model||'—';
+  if(rangeCount)rangeCount.textContent=`${details.baseIndexes.length} 题`;if(count)count.textContent=`${details.indexes.length} 题`;if(requestCount)requestCount.textContent=`${requests} 次`;if(service)service.textContent=configured||config.execution?.mode==='harness'?aiExecutionLabelV99(config):'未配置';if(model)model.textContent=config.model||'—';
   if(settings)settings.classList.toggle('ai-hidden-v99',configured);
   if(start){start.classList.toggle('ai-hidden-v99',!configured);start.disabled=aiPreviewRequestV991.running||!!details.error||!details.indexes.length||details.indexes.length>AI_PREVIEW_MAX_ITEMS_V991;start.textContent=aiPreviewRequestV991.running?'处理中……':`开始${aiPreviewModeLabelV991(mode)}`}
   const status=$('#ai-preview-status-v991');if(status&&!aiPreviewRequestV991.running&&status.dataset.stickyV991!=='1'){
-    if(!configured){status.textContent=config.execution?.reason||'尚未配置 AI 服务，请先前往“AI 设置”。';status.className='notice warn'}
+    if(!configured){status.textContent=aiUnavailableReasonV99(config,task);status.className='notice warn'}
     else if(details.error){status.textContent=details.error;status.className='notice warn'}
     else if(!details.baseIndexes.length){status.textContent='当前范围没有题目。';status.className='notice'}
     else if(!details.indexes.length&&mode==='analysis'){status.textContent=`范围内有 ${details.baseIndexes.length} 道题，但没有符合当前解析条件的题目。`;status.className='notice'}
     else if(details.indexes.length>AI_PREVIEW_MAX_ITEMS_V991){status.textContent=`实际处理 ${details.indexes.length} 道题，超过单次任务 ${AI_PREVIEW_MAX_ITEMS_V991} 道上限。请缩小题号范围或改用勾选后处理，程序不会静默截断。`;status.className='notice warn'}
-    else{status.textContent=`范围内 ${details.baseIndexes.length} 道，实际处理 ${details.indexes.length} 道；按每批 ${batchSize} 道提交，预计请求 ${requests} 次。AI 结果只作为建议。${config.execution?.mode==='harness'?' 所选题目的文字与参考答案将经 Codex 发送到 OpenAI，使用已登录的订阅额度。':''}`;status.className='notice'}
+    else{status.textContent=`范围内 ${details.baseIndexes.length} 道，实际处理 ${details.indexes.length} 道；按每批 ${batchSize} 道提交，预计请求 ${requests} 次。AI 结果只作为建议。${config.execution?.mode==='harness'?' '+aiHarnessPrivacyV99(config,'所选题目的文字与参考答案'):''}`;status.className='notice'}
   }
 }
 function clearAiPreviewStatusStickyV991(){const el=$('#ai-preview-status-v991');if(el)delete el.dataset.stickyV991}
@@ -860,7 +896,7 @@ async function requestAiPreviewBatchV991(mode,requestConfig,batchItems){
 }
 async function startAiPreviewTaskV991(){
   if(aiPreviewRequestV991.running||aiImportRequestV99.running)return;if(bankEditSessionV45){setAiPreviewStatusV991('第一阶段不处理题库二次编辑草稿。','warn');return}
-  const config=aiExecutionConfigV99();if(!aiConfiguredV99(config)){setAiPreviewStatusV991(config.execution?.reason||'尚未配置 AI 服务，请先前往“AI 设置”。','warn');return}
+  const config=aiExecutionConfigV99();const task=aiPreviewPanelModeV991==='analysis'?'batch_analysis':'batch_review';if(!aiConfiguredV99(config,task)){setAiPreviewStatusV991(aiUnavailableReasonV99(config,task),'warn');return}
   const mode=aiPreviewPanelModeV991;const scope=$('#ai-preview-scope-v991')?.value||'range';const condition=$('#ai-preview-condition-v992')?.value||'missing';const details=collectAiPreviewTargetDetailsV992(mode,scope,condition);const indexes=details.indexes;
   if(details.error){setAiPreviewStatusV991(details.error,'warn');return}if(!details.baseIndexes.length){setAiPreviewStatusV991('当前范围没有题目。','warn');return}if(!indexes.length){setAiPreviewStatusV991(mode==='analysis'?'当前范围没有符合解析条件的题目。':'当前范围没有可处理的题目。','warn');return}if(indexes.length>AI_PREVIEW_MAX_ITEMS_V991){setAiPreviewStatusV991(`实际处理题目超过单次 ${AI_PREVIEW_MAX_ITEMS_V991} 道上限，请缩小范围。`,'warn');return}
   const batchSize=Math.min(30,Math.max(1,Number($('#ai-preview-batch-v991')?.value|| (mode==='analysis'?AI_ANALYSIS_DEFAULT_BATCH_V991:AI_REVIEW_DEFAULT_BATCH_V991))||1));const requestConfig=aiRequestConfigV99(config);
@@ -899,7 +935,7 @@ async function startAiImportV99(){
   if(aiImportRequestV99.running||aiPreviewRequestV991.running)return;
   if(bankEditSessionV45){setAiImportStatusV99('题库二次编辑期间不能使用 AI 替换当前编辑草稿。','warn');return}
   const config=aiExecutionConfigV99();
-  if(!aiConfiguredV99(config)){refreshAiImportPanelV99();setAiImportStatusV99(config.execution?.reason||'尚未配置 AI 服务，请先前往“AI 设置”。','warn');return}
+  if(!aiConfiguredV99(config,'import_organize')){refreshAiImportPanelV99();setAiImportStatusV99(aiUnavailableReasonV99(config,'import_organize'),'warn');return}
   const range=aiImportRangeV992();const text=range.text;
   if(range.scope==='selection'&&!text){setAiImportStatusV99('当前没有有效的选中文本。请先在导入文本框中选中需要整理的内容。','warn');return}
   if(!text){setAiImportStatusV99('当前没有可整理的文本。','warn');return}
@@ -8364,7 +8400,7 @@ function parseAiSingleAnalysisV613(content){
 function aiSingleConfidenceLabelV613(confidence){return confidence==='HIGH'?'高置信':confidence==='LOW'?'信息不足':'中等置信'}
 function aiSingleConfigV613(){
   const config=aiExecutionConfigV99();
-  return {configured:aiConfiguredV99(config),config,requestConfig:aiRequestConfigV99(config)};
+  return {configured:aiConfiguredV99(config,'question_analysis'),config,requestConfig:aiRequestConfigV99(config)};
 }
 function renderPracticeAiPanelV613(){
   const box=$('#p-ai-v613');if(!box)return;
@@ -8375,10 +8411,10 @@ function renderPracticeAiPanelV613(){
   if(!session.expanded){box.className='practice-ai-entry-v613';box.innerHTML=`<button class="ghost mini-btn" type="button" data-ai-single-open-v613="1" aria-expanded="false">${busy?'AI 解析中……':result?'查看 AI 解析':'AI 解析'}</button>`;bindPracticeAiPanelV613();return}
   box.className='practice-ai-panel-v613';
   const {configured,config}=aiSingleConfigV613();
-  const blocks=[`<div class="practice-ai-head-v613"><div><b>AI 单题解析</b><span>${configured?esc(aiExecutionLabelV99(config))+(config.model?' · '+esc(config.model):''):'尚未配置 AI 服务'}</span></div><span class="pill practice-ai-status-v613${busy?' is-busy':''}">${busy?(session.loading==='followUp'?'追问中……':'生成中……'):result?'已生成':'按需生成'}</span></div>`];
+  const blocks=[`<div class="practice-ai-head-v613"><div><b>AI 单题解析</b><span>${configured||config.execution?.mode==='harness'?esc(aiExecutionLabelV99(config))+(config.model?' · '+esc(config.model):''):'尚未配置 AI 服务'}</span></div><span class="pill practice-ai-status-v613${busy?' is-busy':''}">${busy?(session.loading==='followUp'?'追问中……':'生成中……'):result?'已生成':'按需生成'}</span></div>`];
   blocks.push(`<div class="actions practice-ai-actions-v613"><button class="ghost mini-btn" type="button" data-ai-single-close-v613="1" aria-expanded="true">收起 AI 面板</button>${busy?'<button class="ghost mini-btn" type="button" data-ai-single-stop-v613="1">停止请求</button>':''}</div>`);
   if(aiSingleHasImagesV613(item))blocks.push('<p class="practice-ai-warn-v613">本次仅发送文字，未发送题目图片；AI 无法读取图表细节，请人工核对。</p>');
-  if(config.execution?.mode==='harness')blocks.push('<p class="practice-ai-hint-v613">本题文字、参考答案、作答及追问记录将经 Codex 发送到 OpenAI，使用已登录的订阅额度。</p>');
+  if(config.execution?.mode==='harness')blocks.push(`<p class="practice-ai-hint-v613">${esc(aiHarnessPrivacyV99(config,'本题文字、参考答案、作答及追问记录'))}</p>`);
   if(result){
     const match=result.matchesLocalAnswer===null?'':result.matchesLocalAnswer?'｜与题库答案一致':'｜与题库答案可能不一致，请人工确认';
     const saved=!!String(result.analysis||'').trim()&&String(q.analysis||'').trim()===String(result.analysis||'').trim();
@@ -8386,7 +8422,7 @@ function renderPracticeAiPanelV613(){
     blocks.push(`<div class="practice-ai-text-v613">${result.analysis?renderQuestionContent(result.analysis):'<span class="muted">AI 未生成可靠解析。</span>'}</div>`);
     if(result.needsReview)blocks.push('<p class="practice-ai-warn-v613">需要人工确认：AI 对本题答案没有把握，请自行核对后再决定是否写入题库。</p>');
     if(result.warning)blocks.push(`<p class="practice-ai-note-v613">${esc(result.warning)}</p>`);
-    blocks.push(`<div class="actions practice-ai-actions-v613"><button class="primary mini-btn" type="button" data-ai-single-save-v613="1" ${(!result.analysis||busy||saved)?'disabled':''}>${saved?'已写入题库解析':'保存到题库解析'}</button><button class="ghost mini-btn" type="button" data-ai-single-analysis-v613="1" ${busy?'disabled':''}>重新生成</button><button class="ghost mini-btn" type="button" data-ai-single-follow-v613="1" ${busy?'disabled':''}>${session.followUpOpen?'收起追问':'追问'}</button></div>`);
+    blocks.push(`<div class="actions practice-ai-actions-v613"><button class="primary mini-btn" type="button" data-ai-single-save-v613="1" ${(!result.analysis||busy||saved)?'disabled':''}>${saved?'已写入题库解析':'保存到题库解析'}</button><button class="ghost mini-btn" type="button" data-ai-single-analysis-v613="1" ${(!configured||busy)?'disabled':''}>重新生成</button><button class="ghost mini-btn" type="button" data-ai-single-follow-v613="1" ${busy?'disabled':''}>${session.followUpOpen?'收起追问':'追问'}</button></div>`);
   }else{
     blocks.push('<p class="practice-ai-hint-v613">只把当前这道题的题干、选项、答案和你的作答发给 AI，生成一段简短解析；结果先作为草稿，确认后再写入题库。</p>');
     blocks.push(`<div class="actions practice-ai-actions-v613"><button class="primary mini-btn" type="button" data-ai-single-analysis-v613="1" ${(!configured||busy)?'disabled':''}>${busy?'生成中……':'AI 解析'}</button>${configured?'':'<button class="ghost mini-btn" type="button" data-ai-single-settings-v613="1">前往 AI 设置</button>'}</div>`);
@@ -8394,7 +8430,7 @@ function renderPracticeAiPanelV613(){
   if(session.error)blocks.push(`<p class="notice warn practice-ai-message-v613">${esc(session.error)}</p>`);
   if(session.notice)blocks.push(`<p class="notice ok practice-ai-message-v613">${esc(session.notice)}</p>`);
   if(session.messages.length)blocks.push(`<div class="practice-ai-chat-v613"><b>追问记录</b>${session.messages.map(message=>`<div class="practice-ai-msg-v613 is-${message.role}"><span>${message.role==='user'?'你':'AI'}</span><div>${message.role==='user'?esc(message.content):renderQuestionContent(message.content)}</div></div>`).join('')}</div>`);
-  if(session.followUpOpen&&result)blocks.push(`<div class="practice-ai-follow-v613"><textarea id="practice-ai-follow-input-v613" rows="2" placeholder="例如：为什么 C 选项不对？" ${busy?'disabled':''}>${esc(session.draft||'')}</textarea><button class="primary mini-btn" type="button" data-ai-single-send-v613="1" ${busy?'disabled':''}>发送追问</button></div>`);
+  if(session.followUpOpen&&result)blocks.push(`<div class="practice-ai-follow-v613"><textarea id="practice-ai-follow-input-v613" rows="2" placeholder="例如：为什么 C 选项不对？" ${busy?'disabled':''}>${esc(session.draft||'')}</textarea><button class="primary mini-btn" type="button" data-ai-single-send-v613="1" ${(!configured||busy)?'disabled':''}>发送追问</button></div>`);
   box.innerHTML=blocks.join('');
   bindPracticeAiPanelV613();
 }

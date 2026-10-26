@@ -3,6 +3,7 @@ import { markNativeIsolation } from './native-isolation.mjs';
 import { createNativeMock, nativeServiceSmoke } from './network-smoke.mjs';
 import { documentSmoke } from './document-smoke.mjs';
 import { harnessSmoke } from './harness-smoke.mjs';
+import { codebuddyLoginSmoke, codebuddyLoginAfterRestart } from './codebuddy-login-smoke.mjs';
 import { spawn, execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { mkdir, mkdtemp, realpath, rm, stat, readFile, writeFile } from 'node:fs/promises';
@@ -932,6 +933,7 @@ async function main() {
       return result;
     });
     await check('订阅 Harness 登录、既有 AI 任务与取消草稿保全',()=>harnessSmoke(page,()=>practiceImportedBank(page,bankName)));
+    await check('CodeBuddy 登录、单题解析、追问与配置保全',()=>codebuddyLoginSmoke(page,()=>practiceImportedBank(page,bankName)));
     await check('MathJax 本地公式', () => mathSmoke(page));
     await check('PDF.js 本地模块与 Worker', () => pdfSmoke(page));
     await check('Tesseract 本地 OCR', () => ocrSmoke(page));
@@ -955,6 +957,7 @@ async function main() {
     await stop(runtime); runtime = undefined;
     runtime = await launch(executable, profile, proxyPort);
     const restarted = runtime;
+    await check('CodeBuddy 仅内存登录在重启后清除',()=>codebuddyLoginAfterRestart(restarted.page));
     await check('重启恢复普通窗口尺寸', async () => {
       const size = await restarted.page.evaluate(() => ({ width: window.innerWidth, height: window.innerHeight }));
       assert.deepEqual(size, { width: 1100, height: 760 });
