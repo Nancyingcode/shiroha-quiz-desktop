@@ -19,6 +19,7 @@ function fixture(overrides = {}) {
     confirm: message => { prompts.push(message); return false; }, platformStatus: message => status.push(message),
     ShirohaPlatform: { network: { cancelAll: async () => {} }, saves: { idle: async () => {} } }, ...overrides,
   });
+  context.ShirohaDialogs = { confirm: context.confirm };
   const busyStart = source.indexOf('function aiTasksBusyV99(');
   vm.runInContext(source.slice(busyStart,source.indexOf('\n',busyStart)),context);
   vm.runInContext(source.slice(start, end), context);

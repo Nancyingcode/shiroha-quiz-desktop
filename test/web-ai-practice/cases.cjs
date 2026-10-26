@@ -16,6 +16,7 @@ async function collapsed(h) {
 async function saveAndCheck(h, expected) {
   const before = await snapshot(h.page);
   await h.page.locator(SEL.save).click();
+  await h.page.locator('body[data-storage-state="ready"]').waitFor();
   const after = await snapshot(h.page);
   assertOnlyAnalysis(before, after, expected);
   const stored = await h.page.evaluate(key => JSON.parse(localStorage.getItem(key)), h.keys.state);
@@ -326,16 +327,17 @@ const cases = [
       const before = await snapshot(h.page);
       const raw = await h.page.evaluate(key => localStorage.getItem(key), h.keys.state);
       let confirmationSeen = false;
-      h.page.removeAllListeners('dialog');
-      h.page.on('dialog', dialog => { confirmationSeen = dialog.type() === 'confirm'; return dialog.dismiss(); });
+      h.page.removeAllListeners('app-dialog');
+      h.page.on('app-dialog', dialog => { confirmationSeen = dialog.type() === 'confirm'; return dialog.dismiss(); });
       await h.page.locator(SEL.save).click();
+      await h.page.locator('body[data-storage-state="ready"]').waitFor();
       assert.equal(confirmationSeen, true, 'Existing local analysis was overwritten without confirmation.');
       assert.deepEqual(await snapshot(h.page), before);
       assert.equal(await h.page.evaluate(key => localStorage.getItem(key), h.keys.state), raw);
       await h.text('OVERWRITE_DRAFT');
       assert(await h.page.locator(SEL.save).isEnabled());
-      h.page.removeAllListeners('dialog');
-      h.page.on('dialog', dialog => dialog.accept());
+      h.page.removeAllListeners('app-dialog');
+      h.page.on('app-dialog', dialog => dialog.accept());
       await saveAndCheck(h, 'OVERWRITE_DRAFT');
     },
   },
@@ -410,6 +412,7 @@ const cases = [
       }, h.keys.state);
       try {
         await h.page.locator(SEL.save).click();
+        await h.page.locator('body[data-storage-state="ready"]').waitFor();
         assert((await h.page.evaluate(() => window.__webAiQuotaTest.attempts)) > 0, 'Quota injection did not reach the save path.');
         assert.deepEqual(await snapshot(h.page), before, 'Quota failure did not roll back in-memory question/bank/practice.');
         assert.equal(await h.page.evaluate(key => localStorage.getItem(key), h.keys.state), stored);

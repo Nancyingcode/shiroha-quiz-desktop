@@ -1,4 +1,5 @@
 'use strict';
+const { observeAppDialogs } = require('../web-ai-practice/dialogs.cjs');
 const test = require('node:test');
 const { chromium } = require('../../apps/desktop/node_modules/playwright-core');
 const { startServer, WEB_ROOT } = require('../web-ai-practice/harness.cjs');
@@ -11,7 +12,8 @@ test('Web offline Chinese PDF and OOXML import pipeline', { timeout: 240000 }, a
     const context = await browser.newContext();
     await context.route('**/*', route => new URL(route.request().url()).origin === new URL(server.url).origin ? route.continue() : route.abort());
     const page = await context.newPage();
-    page.on('dialog', dialog => dialog.accept());
+  await observeAppDialogs(page);
+    page.on('app-dialog', dialog => dialog.accept());
     await page.goto(server.url);
     await page.locator('body[data-storage-state="ready"]').waitFor();
     const { documentSmoke } = await import('../../apps/desktop/scripts/document-smoke.mjs');
