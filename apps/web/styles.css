@@ -7827,3 +7827,23 @@ body.practice-focus.practice-rail-collapsed-v34 #practice-card > .practice-side-
 .ai-execution-choice{display:flex;flex-wrap:wrap;gap:12px 24px;margin:16px 0;padding:12px;border:1px solid var(--line,#dbe3ef);border-radius:10px}
 .ai-execution-choice label{display:flex;align-items:center;gap:6px}
 .ai-execution-choice input{width:auto}
+
+/* 详情仅撑开当前题目；正文沿页面滚动，避免长材料形成嵌套纵向滚动。 */
+#bank-question-detail > td{padding:0;white-space:normal}
+.bank-detail{padding:18px 22px;background:#f4f8fe;overflow-wrap:anywhere;color:var(--ink)}
+.bank-detail-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;background:#f4f8fe;padding:8px 0}
+.bank-detail-toolbar h3{margin:0;scroll-margin-top:100px}
+.bank-detail-body{line-height:1.8;white-space:pre-wrap}
+.bank-detail-body img,.bank-detail-option img{max-width:100%;height:auto}
+.bank-detail-option{display:flex;align-items:flex-start;gap:14px;padding:12px;margin:8px 0;background:var(--card);border:1px solid var(--line);border-radius:10px;white-space:pre-wrap}
+.bank-detail-option > div{flex:1;min-width:0}
+.bank-detail-option > span{font-size:12px;white-space:nowrap;color:#2457a7}
+.bank-detail-option.is-answer{background:#e9f2ff;border-color:#8eb8ed}
+.bank-detail-status{font-size:13px;color:var(--muted);margin:8px 0}
+.bank-manual-copy textarea{display:block;width:100%;min-height:180px;margin:8px 0;resize:vertical}
+.bank-detail .q-table-wrap{max-width:100%;overflow-x:auto}
+.bank-detail-toolbar{position:relative;z-index:2;border-bottom:1px solid var(--line)}
+.bank-detail-toolbar button:focus-visible{outline:2px solid #2457a7;outline-offset:3px}
+#bank-preview th:last-child,#bank-preview > tbody > tr:not(#bank-question-detail) > td:last-child{min-width:108px}
+#bank-preview [data-preview-question],#bank-preview [data-preview-full]{white-space:nowrap}
+.bank-detail{position:sticky;left:0;box-sizing:border-box;max-width:100%}

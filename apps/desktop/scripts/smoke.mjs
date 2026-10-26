@@ -1068,8 +1068,15 @@ async function main() {
       await migratedRestart.page.locator('.nav[data-view="banks"]').click();
       await migratedRestart.page.locator('#bank-preview tbody tr').first().getByText('lazy-a 正文 0',{exact:true}).waitFor();
       assert.equal(await migratedRestart.page.locator('#bank-preview tbody tr').count(),50);
+      await migratedRestart.page.locator('[data-preview-question]').first().click();
+      assert.equal(await migratedRestart.page.locator('#bank-question-detail .bank-detail-body').innerText(),'lazy-a 正文 0');
+      assert(await migratedRestart.page.locator('#bank-question-detail .bank-detail-option').count()>0);
+      await migratedRestart.page.evaluate(()=>Object.defineProperty(window.navigator,'clipboard',{configurable:true,value:{writeText:async(/** @type {string} */ text)=>{Reflect.set(window,'__previewCopied',text)}}}));
+      await migratedRestart.page.locator('[data-copy-question]').click();
+      assert.equal(await migratedRestart.page.evaluate(()=>Reflect.get(window,'__previewCopied')),'lazy-a 正文 0');
       await migratedRestart.page.locator('#bank-preview').locator('..').getByRole('button',{name:'下一页',exact:true}).last().click();
       await migratedRestart.page.locator('#bank-preview tbody tr').first().getByText('lazy-a 正文 50',{exact:true}).waitFor();
+      assert.equal(await migratedRestart.page.locator('#bank-question-detail').count(),0);
       assert.equal(await migratedRestart.page.locator('#bank-preview tbody tr').count(),15);
       await migratedRestart.page.locator('.nav[data-view="records"]').click();
       await migratedRestart.page.locator('#records-list details').waitFor();
