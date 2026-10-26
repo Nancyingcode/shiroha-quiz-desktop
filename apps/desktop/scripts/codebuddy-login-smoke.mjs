@@ -126,13 +126,11 @@ async function questionSmoke(page,startPractice) {
     const answerStatus=await page.locator('#p-total-status').innerText();
     const nextFollowUp='保留的下一条合成追问草稿。';
     await page.locator('#practice-ai-follow-input-v613').fill(nextFollowUp);
-    /** @param {import('playwright-core').Dialog} dialog */
-    const confirmReplacement=dialog=>dialog.accept();
-    page.on('dialog',confirmReplacement);
-    try {
-      await page.locator('[data-ai-single-save-v613]').click();
-      await page.waitForFunction(()=>document.querySelector('[data-ai-single-save-v613]')?.textContent?.includes('已写入题库解析'));
-    } finally {page.off('dialog',confirmReplacement);}
+    /** @param {import('playwright-core').Locator} dialog */
+    const confirmReplacement=dialog=>dialog.locator('[data-dialog-accept]').click();
+    await page.locator('[data-ai-single-save-v613]').click();
+    if(sourceQuestion.analysis&&sourceQuestion.analysis!==savedDraft)await confirmReplacement(page.locator('#app-dialog'));
+    await page.waitForFunction(()=>document.querySelector('[data-ai-single-save-v613]')?.textContent?.includes('已写入题库解析'));
     const afterSave=/** @type {import('../../web/platform/contracts.d.ts').Snapshot} */ (JSON.parse(await persistedState(page)));
     const savedBank=afterSave.banks.find(bank=>bank.id===sourceBank.id);
     assert(savedBank,'保存后来源题库必须存在');
@@ -149,7 +147,7 @@ async function questionSmoke(page,startPractice) {
     assert.equal(await page.locator('.practice-ai-chat-v613').innerText(),conversation,'人工保存必须保留追问记录');
     assert.equal(await page.locator('#practice-ai-follow-input-v613').inputValue(),nextFollowUp,'人工保存必须保留未发送的追问草稿');
   } finally {
-    if(started&&await page.locator('#p-exit').isVisible()) {page.once('dialog',dialog=>dialog.accept());await page.locator('#p-exit').click();}
+    if(started&&await page.locator('#p-exit').isVisible()) {await page.locator('#p-exit').click();await page.locator('#app-dialog [data-dialog-accept]').click();}
     await page.waitForFunction(()=>!document.body.classList.contains('practice-focus'));
     await page.locator('#practice-submit-mode').selectOption('single');
     await page.locator('.nav[data-view="ai-settings"]').click();

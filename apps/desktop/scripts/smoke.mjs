@@ -639,8 +639,19 @@ async function focusVisualSmoke(runtime, mode) {
 async function practiceAndExamFocusSmoke(runtime) {
   const { page } = runtime;
   const practice = await focusVisualSmoke(runtime, 'practice');
-  page.once('dialog', dialog => dialog.accept());
   await page.locator('#p-exit').click();
+  const dialog = page.locator('#app-dialog');
+  await dialog.waitFor();
+  await dialog.evaluate(element => Promise.all(element.getAnimations().map(animation => animation.finished)));
+  await page.screenshot({ path: path.join(path.dirname(SCREENSHOT_PATH), 'centered-dialog.png'), fullPage: true });
+  const bounds = await dialog.boundingBox();
+  const viewport = await page.evaluate(() => ({ width: window.innerWidth, height: window.innerHeight }));
+  assert(bounds && Math.abs(bounds.x + bounds.width / 2 - viewport.width / 2) < 2, '弹框未水平居中');
+  assert(bounds && Math.abs(bounds.y + bounds.height / 2 - viewport.height / 2) < 2, '弹框未垂直居中');
+  await page.keyboard.press('Escape');
+  assert.equal(await page.locator('#p-exit').isVisible(), true);
+  await page.locator('#p-exit').click();
+  await page.locator('#app-dialog [data-dialog-accept]').click();
   // 手动切换会取代自动收起状态；考试不切换导航，另行覆盖退出后的自动恢复。
   await page.waitForFunction(() => !document.body.classList.contains('practice-focus') && document.body.classList.contains('side-collapsed'));
   await page.locator('#sidebar-toggle').click();
@@ -650,8 +661,8 @@ async function practiceAndExamFocusSmoke(runtime) {
   await page.locator('#exam-type').selectOption('all');
   await page.locator('#start-exam-btn').click();
   const exam = await focusVisualSmoke(runtime, 'exam');
-  page.once('dialog', dialog => dialog.accept());
   await page.locator('#exam-exit-focus').click();
+  await page.locator('#app-dialog [data-dialog-accept]').click();
   await page.waitForFunction(() => !document.body.classList.contains('exam-focus') && !document.body.classList.contains('side-collapsed'));
   await page.locator('#exam-setup').waitFor({ state: 'visible' });
   return { practice, exam, manualNavigationRetained: true, automaticNavigationRestored: true };
@@ -808,8 +819,8 @@ async function totalPracticeSmoke(page, bankName, origin) {
   assert(await page.locator('#practice-card .option[data-key="B"] input').isChecked());
   assert.match(await page.locator('#p-total-status').innerText(), /已填写 1 题/);
   await page.screenshot({ path: path.join(path.dirname(SCREENSHOT_PATH), 'practice-total.png'), fullPage: true });
-  page.once('dialog', dialog => dialog.accept());
   await page.locator('#p-submit-all').click();
+  await page.locator('#app-dialog [data-dialog-accept]').click();
   await page.locator('#again-practice').waitFor();
   const metrics = await page.locator('#practice-card .metric b').allTextContents();
   assert.deepEqual(metrics, ['1', '0', '1', '0%']);
@@ -818,8 +829,8 @@ async function totalPracticeSmoke(page, bankName, origin) {
   await page.screenshot({ path: path.join(path.dirname(SCREENSHOT_PATH), 'practice-wrong-overview.png'), fullPage: true });
   await page.locator('#again-practice').click();
   await page.locator('#practice-card .option[data-key="A"]').click();
-  page.once('dialog', dialog => dialog.accept());
   await page.locator('#p-submit-all').click();
+  await page.locator('#app-dialog [data-dialog-accept]').click();
   await page.locator('#again-practice').waitFor();
   assert.match(await page.locator('#p-wrong-overview').innerText(), /本轮没有错题/);
   await page.locator('#back-practice-setup').click();
@@ -1023,8 +1034,8 @@ async function main() {
       });
       await migrated.page.reload();
       await migrated.page.getByText('确认迁移旧原型数据', {exact:true}).waitFor();
-      migrated.page.once('dialog',dialog=>dialog.accept());
       await migrated.page.getByText('确认迁移旧原型数据', {exact:true}).click();
+      await migrated.page.locator('#app-dialog [data-dialog-accept]').click();
       await migrated.page.locator('#active-bank-select option[value="legacy-bank"]').waitFor({state:'attached'});
       await migrated.page.waitForFunction(()=>localStorage.getItem('shiroha_webdav_password_local_v378')===null);
       await migrated.page.evaluate(async () => {
@@ -1093,8 +1104,8 @@ async function main() {
       assert.match(await migratedRestart.page.locator('#practice-progress').innerText(),/1\s*\/\s*2/);
       await migratedRestart.page.locator('#p-next').click();
       await migratedRestart.page.locator('#practice-card').getByText('lazy-b 正文 0',{exact:true}).waitFor();
-      migratedRestart.page.once('dialog',dialog=>dialog.accept());
       await migratedRestart.page.locator('#p-exit').click();
+      await migratedRestart.page.locator('#app-dialog [data-dialog-accept]').click();
       await migratedRestart.page.waitForFunction(()=>!document.body.classList.contains('practice-focus'));
       if(await migratedRestart.page.evaluate(()=>document.body.classList.contains('side-collapsed')))await migratedRestart.page.locator('#sidebar-toggle').click();
       await migratedRestart.page.locator('.nav[data-view="dashboard"]').click();
@@ -1124,8 +1135,8 @@ async function main() {
       await page.locator('[data-select-bank-question="q50"]').waitFor();
       await page.locator('#select-bank-question-page').click();
       assert.match(await page.locator('#bank-question-selection').textContent()||'',/已选择 16/);
-      page.once('dialog',dialog=>dialog.accept());
       await page.locator('#delete-selected-questions').click();
+      await page.locator('#app-dialog [data-dialog-accept]').click();
       await page.locator('body[data-storage-state="ready"]').waitFor();
       await page.locator('[data-select-bank-question="q1"]').waitFor();
       assert.equal(await page.locator('[data-select-bank-question]').count(),49);
@@ -1155,8 +1166,8 @@ async function main() {
       const status=repaired.page.locator('#platform-status');
       await status.getByRole('button',{name:'查找本机恢复点',exact:true}).click();
       await status.getByLabel('修复使用的恢复点').selectOption(repairCheckpoint.snapshotId);
-      repaired.page.once('dialog',dialog=>dialog.accept());
       await status.getByRole('button',{name:'从恢复点修复数据',exact:true}).click();
+      await repaired.page.locator('#app-dialog [data-dialog-accept]').click();
       await repaired.page.locator('#active-bank-select option[value="lazy-a"]').waitFor({state:'attached'});
       assert.deepEqual(await readFile(path.join(migrationProfile,'library.sqlite3')),broken);
       assert.match(await readFile(path.join(migrationProfile,'active.json'),'utf8'),/[a-f0-9-]{36}/);
@@ -1183,8 +1194,9 @@ async function main() {
     const importedRecovery=runtime;
     await check('损坏数据库从兼容备份修复',async()=>{
       const input=importedRecovery.page.locator('#platform-status').getByLabel('选择兼容备份修复数据');
-      await input.waitFor();importedRecovery.page.once('dialog',dialog=>dialog.accept());
+      await input.waitFor();
       await input.setInputFiles({name:'synthetic-recovery.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(repairBackup))});
+      await importedRecovery.page.locator('#app-dialog [data-dialog-accept]').click();
       await importedRecovery.page.locator('#active-bank-select option[value="lazy-a"]').waitFor({state:'attached'});
       assert.deepEqual(await readFile(path.join(damaged,'library.sqlite3')),broken);
       return {imported:true,originalPreserved:true};

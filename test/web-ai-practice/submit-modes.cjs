@@ -138,14 +138,14 @@ const cases = [
     async run(h) {
       await startTotal(h);
       const before = await snapshot(h.page);
-      h.page.removeAllListeners('dialog');
-      h.page.on('dialog', dialog => dialog.dismiss());
+      h.page.removeAllListeners('app-dialog');
+      h.page.on('app-dialog', dialog => dialog.dismiss());
       await h.page.locator('#p-submit-all').click();
       await h.page.locator('.option[data-key="A"]').click();
       await h.page.locator('#p-exit').click();
       assert(await h.page.locator('#p-submit-all').isVisible());
-      h.page.removeAllListeners('dialog');
-      h.page.on('dialog', dialog => dialog.accept());
+      h.page.removeAllListeners('app-dialog');
+      h.page.on('app-dialog', dialog => dialog.accept());
       await h.page.locator('#p-exit').click();
       await h.page.locator('#start-practice-btn').waitFor({ state: 'visible' });
       const after = await snapshot(h.page);

@@ -243,7 +243,7 @@ test('共享清除入口在非Codex提供方不确认或清理Codex授权',async
   const source=readFileSync(require.resolve('../../apps/web/app.js'),'utf8');
   for(const adapter of ['codebuddy','deepseek']){
     const calls=[];
-    const context=vm.createContext({ShirohaPlatform:{harness:{formMode:()=>'harness',formAdapter:()=>adapter,snapshot:()=>({...status,adapter}),cancelAll:async()=>calls.push('cancel'),clear:async()=>calls.push('clear')}},confirm:()=>{calls.push('confirm');return true;},setAiSettingsStatusV99(){},updateAiConnectionPillV99(){},syncAiImportActionV99(){}});
+    const context=vm.createContext({ShirohaPlatform:{harness:{formMode:()=>'harness',formAdapter:()=>adapter,snapshot:()=>({...status,adapter}),cancelAll:async()=>calls.push('cancel'),clear:async()=>calls.push('clear')}},ShirohaDialogs:{confirm:async()=>{calls.push('confirm');return true;}},setAiSettingsStatusV99(){},updateAiConnectionPillV99(){},syncAiImportActionV99(){}});
     vm.runInContext(source.slice(source.indexOf('function aiProviderLabelV99('),source.indexOf('function normalizeAiEndpointV99(')),context);
     vm.runInContext(source.slice(source.indexOf('async function clearAiSettingsV99('),source.indexOf('function bindAiImportEventsV99(')),context);
     await context.clearAiSettingsV99();assert.deepEqual(calls,[]);

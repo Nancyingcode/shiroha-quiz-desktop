@@ -1,4 +1,5 @@
 'use strict';
+const { observeAppDialogs } = require('./dialogs.cjs');
 
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -181,10 +182,11 @@ async function setup(browser, url, keys, { configured = true, rich = false, igno
   const pageErrors = [];
   let bridgeUsed = false;
   const page = await context.newPage();
+  await observeAppDialogs(page);
   page.setDefaultTimeout(timeout);
   page.setDefaultNavigationTimeout(timeout * 3);
   page.on('pageerror', error => pageErrors.push(error.message));
-  page.on('dialog', dialog => dialog.accept());
+  page.on('app-dialog', dialog => dialog.accept());
   const location = new URL(url);
   const staticPrefix = location.pathname.endsWith('index.html') ? location.pathname.slice(0, -'index.html'.length) : location.pathname;
   await context.route('**/*', async route => {

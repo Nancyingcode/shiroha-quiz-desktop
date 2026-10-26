@@ -118,8 +118,8 @@ export async function harnessSmoke(page,startPractice) {
     });
     assert.equal(await persistedState(page),beforeAi,'取消任务改变了题库或学习数据');
     assert.equal(await page.locator('.practice-ai-text-v613').innerText(),revisedAnalysis,'取消任务覆盖了已有解析草稿');
-    page.once('dialog',dialog=>dialog.accept());
     await page.locator('#p-exit').click();
+    await page.locator('#app-dialog [data-dialog-accept]').click();
     practiceStarted = false;
     await page.waitForFunction(()=>!document.body.classList.contains('practice-focus'));
     await page.locator('#practice-submit-mode').selectOption('single');
@@ -166,8 +166,8 @@ export async function harnessSmoke(page,startPractice) {
       if(platform.harness?.status().mode!=='api')await platform.harness?.saveMode('api');
     });
     if (practiceStarted && await page.locator('#p-exit').isVisible()) {
-      page.once('dialog',dialog=>dialog.accept());
       await page.locator('#p-exit').click();
+      await page.locator('#app-dialog [data-dialog-accept]').click();
     }
   }
 }
