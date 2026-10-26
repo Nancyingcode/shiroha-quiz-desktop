@@ -8,6 +8,7 @@
   const host = scope.ShirohaDesktopHost;
   if (!host) return;
   const pollIntervalMs = 1000;
+  const statusTimeoutMs = 15000;
   /** @type {Record<Phase,string>} */
   const labels = { signed_out:'尚未登录', authenticating:'等待完成登录', signed_in:'个人账户已登录', expired:'登录已过期', failed:'登录失败', cancelled:'登录已取消' };
 
@@ -41,9 +42,11 @@
     let acceptedSequence = 0;
     let disposed = false;
     let refreshing = false;
+    let readFailed = false;
     /** @type {Action|undefined} */ let action;
     /** @type {'cancel'|'logout'|undefined} */ let cleanupPending;
     /** @type {ReturnType<typeof setTimeout>|undefined} */ let timer;
+    /** @type {ReturnType<typeof setTimeout>|undefined} */ let readTimer;
     let notice = '';
 
     function stopPolling() { clearTimeout(timer); timer = undefined; }
@@ -55,24 +58,30 @@
     function usableLink() { return !cleanupPending && current.phase === 'authenticating' && !!current.loginUrl; }
     function render() {
       if (!panel || disposed) return;
+      const reading = refreshing && !pendingLogin();
       panel.dataset.phase = cleanupPending ? 'signed_out' : current.phase;
+      panel.setAttribute('aria-busy', String(reading));
       const phase = element('phase');
-      if (phase) phase.textContent = cleanupPending ? '正在确认登录已结束' : labels[current.phase];
+      let phaseLabel = labels[current.phase];
+      if (readFailed) phaseLabel = '读取失败';
+      if (reading || current.revision < 0 && !readFailed) phaseLabel = '读取中';
+      if (cleanupPending) phaseLabel = '正在确认登录已结束';
+      if (phase) phase.textContent = phaseLabel;
       const status = element('status');
-      if (status) status.textContent = notice || current.message;
+      if (status) status.textContent = reading ? '正在读取 CodeBuddy 登录状态…' : notice || current.message;
       const awaitingLogin = pendingLogin();
       const signedIn = current.phase === 'signed_in' && !cleanupPending;
       const login = button('login');
       if (login) {
         login.hidden = awaitingLogin || signedIn;
-        login.disabled = !!action || !!cleanupPending || current.busy || current.revision < 0;
+        login.disabled = reading || readFailed || !!action || !!cleanupPending || current.busy || current.revision < 0;
       }
       const cancel = button('cancel');
       if (cancel) { cancel.hidden = !awaitingLogin && cleanupPending !== 'cancel'; cancel.disabled = action === 'cancel' || action === 'logout'; }
       const logout = button('logout');
-      if (logout) { logout.hidden = !signedIn && cleanupPending !== 'logout'; logout.disabled = action === 'cancel' || action === 'logout'; }
+      if (logout) { logout.hidden = !signedIn && cleanupPending !== 'logout'; logout.disabled = reading || readFailed || action === 'cancel' || action === 'logout'; }
       const refresh = button('refresh');
-      if (refresh) refresh.disabled = !!action || refreshing || !!cleanupPending;
+      if (refresh) { refresh.disabled = !!action || refreshing || !!cleanupPending; refresh.textContent = readFailed ? '重新读取' : '刷新状态'; }
       const hasLink = usableLink();
       const details = element('details');
       if (details) details.hidden = !hasLink;
@@ -105,20 +114,24 @@
       stopPolling();
       const epoch = generation;
       const requestSequence = ++sequence;
-      refreshing = true; render();
+      refreshing = true; readFailed = false;
+      if (!pendingLogin()) notifyAccount(true);
+      render();
       try {
-        const result = await host?.invoke('codebuddy_control', { request:{ kind:'status' } });
+        const result = await Promise.race([host?.invoke('codebuddy_control', { request:{ kind:'status' } }), new Promise((_, reject) => { readTimer = setTimeout(() => reject(new Error('status_timeout')), statusTimeoutMs); })]);
         if (epoch !== generation || disposed) return;
         if (accept(readStatus(result), requestSequence)) notifyAccount();
       } catch {
-        if (epoch === generation && !disposed) notice = '无法刷新 CodeBuddy 登录状态，请重试。';
+        if (epoch === generation && !disposed) { readFailed = true; notice = '暂时无法读取 CodeBuddy 登录状态，请重新读取。'; notifyAccount(true); }
       } finally {
+        if (epoch === generation) { clearTimeout(readTimer); readTimer = undefined; }
         if (epoch === generation && !disposed) { refreshing = false; render(); observeLogin(); }
       }
     }
     /** @param {Action} kind */
     function canPerform(kind) {
       if (disposed) return false;
+      if ((refreshing || readFailed) && kind !== 'cancel' && kind !== 'logout') return false;
       if (kind === 'cancel') return (pendingLogin() || cleanupPending === 'cancel') && action !== 'cancel' && action !== 'logout';
       if (kind === 'logout') return (current.phase === 'signed_in' || cleanupPending === 'logout') && action !== 'cancel' && action !== 'logout';
       if (action || cleanupPending) return false;
@@ -132,7 +145,7 @@
       const request = kind === 'login' ? { kind, revision:current.revision } : { kind };
       const epoch = ++generation;
       const requestSequence = ++sequence;
-      stopPolling(); refreshing = false; action = kind;
+      stopPolling(); clearTimeout(readTimer); readTimer = undefined; refreshing = false; action = kind;
       const endingLogin = kind === 'cancel' || kind === 'logout';
       if (endingLogin) cleanupPending = kind;
       if (kind !== 'open_login') notifyAccount(true);
@@ -177,7 +190,7 @@
     button('refresh')?.addEventListener('click', () => { void refreshStatus(); });
     button('copy-link')?.addEventListener('click', () => { void copyLink(); });
     document.addEventListener('shiroha-codebuddy-account-refresh', () => { void refreshStatus(); });
-    scope.addEventListener('pagehide', () => { disposed = true; generation++; stopPolling(); }, { once:true });
+    scope.addEventListener('pagehide', () => { disposed = true; generation++; stopPolling(); clearTimeout(readTimer); readTimer = undefined; }, { once:true });
     render();
     void refreshStatus();
   }

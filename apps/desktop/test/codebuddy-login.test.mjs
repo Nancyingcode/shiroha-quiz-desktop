@@ -65,6 +65,33 @@ function fixture(options = {}) {
   };
 }
 
+test('initial account query shows loading rather than signed out', async () => {
+  /** @type {(value:unknown)=>void} */ let resolve = () => {};
+  const promise = new Promise(accept => { resolve = accept; });
+  const f = fixture(); f.respond(() => promise); f.start();
+  assert.equal(f.get('phase').textContent, '读取中');
+  assert.equal(f.get('login').disabled, true);
+  resolve(status()); await setImmediate();
+  assert.equal(f.get('phase').textContent, '尚未登录');
+});
+
+test('account read timeout permits retry and ignores the late original response', async () => {
+  /** @type {(value:unknown)=>void} */ let resolveOld = () => {};
+  const pending = new Promise(resolve => { resolveOld = resolve; });
+  const f = fixture(); f.respond(() => pending); f.start();
+  await f.tick();
+  assert.equal(f.get('phase').textContent, '读取失败');
+  assert.equal(f.get('refresh').disabled, false);
+  assert.equal(f.get('refresh').textContent, '重新读取');
+  assert.equal(f.get('login').disabled, true);
+  f.respond(async () => status('signed_out', 2));
+  f.get('refresh').click(); await setImmediate();
+  resolveOld(status('signed_in', 99)); await setImmediate();
+  assert.equal(f.get('phase').textContent, '尚未登录');
+  assert.equal(f.get('login').disabled, false);
+  assert.equal(f.timers.size, 0);
+});
+
 test('desktop initializes after DOM ready with only a status query; Web stays hidden', async () => {
   const web = fixture({ desktop: false }); web.start(); await setImmediate();
   assert.equal(web.get('settings').hidden, true);
@@ -233,7 +260,7 @@ test('shared HTML keeps the account card hidden and clearly limits this entry to
   assert.match(html, /关闭应用后需要重新登录/);
   assert.doesNotMatch(html, /<script[^>]*codebuddy-login\.js/);
   for (const provider of ['codex','codebuddy','deepseek']) assert.match(html, new RegExp(`<option value="${provider}">`, 'i'));
-  assert.match(html, /id="ai-codex-settings"/);
+  assert.match(html, /id="ai-codex-settings"[^>]*class="notice"/);
   assert.match(html, /id="ai-deepseek-settings"[^>]*hidden/);
   assert(html.indexOf('id="ai-codebuddy-settings"') < html.indexOf('id="ai-api-settings-fields"'), '账户面板应在 Harness 容器内');
 });

@@ -57,12 +57,17 @@ export interface BrowserFiles {
 export interface BrowserPreferences { sidebar():boolean; setSidebar(collapsed:boolean):void }
 export interface BrowserMedia { display(resource:string):string }
 export type AiTaskKind = 'connection_test'|'import_organize'|'batch_review'|'batch_analysis'|'question_analysis'|'question_followup';
+export interface HarnessComponentTask {
+  adapter:string; id:string; phase:'checking'|'queued'|'downloading'|'verifying'|'extracting'; received:number; total:number;
+}
 export interface HarnessStatus {
   mode:'api'|'harness'; adapter:string; model:string; timeoutSeconds:number;
   credentialStatus:string; runtimePath:string; runtimeVersion:string; ready:boolean; reason:string; revision:number; busy:boolean;
   runtimeSource:'managed'|'custom'; runtimeState:'unprepared'|'preparing'|'ready'|'failed'|'cancelled'; runtimeReceivedBytes:number; runtimeTotalBytes:number;
   loginUrl?:string; userCode?:string;
   accountRevision?:number;
+  operationBusy?:boolean;
+  componentTasks?:HarnessComponentTask[];
 }
 export interface HarnessApi {
   initialize():Promise<void>;

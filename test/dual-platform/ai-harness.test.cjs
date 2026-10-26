@@ -36,6 +36,66 @@ function pollingClock() {
 }
 const managedStatus={...status,mode:'api',model:'',credentialStatus:'missing',runtimePath:'',runtimeVersion:'',runtimeSource:'managed',runtimeState:'unprepared',ready:false};
 
+test('下载中切换保留后台任务，切回不重新准备并按提供方取消',async()=>{
+  const elements=settingsElements();const clock=pollingClock();const calls=[];
+  for(const id of ['ai-harness-background','ai-harness-background-status','ai-harness-background-view','ai-harness-background-cancel'])elements[id]={};
+  const task={adapter:'codex',id:'task-codex',phase:'downloading',received:42,total:100};
+  let native={...managedStatus,mode:'harness',operationBusy:false,componentTasks:[]};
+  const api=client(async(_command,{request})=>{
+    calls.push(request);
+    if(request.kind==='prepare_runtime')native={...native,runtimeState:'preparing',busy:true,componentTasks:[task]};
+    if(request.kind==='select_adapter')native={...native,adapter:request.adapter,revision:native.revision+1,runtimeState:request.adapter==='codex'?'preparing':'ready',busy:request.adapter==='codex',accountRevision:1};
+    if(request.kind==='cancel_preparation')native={...native,runtimeState:'cancelled',busy:false,componentTasks:[]};
+    return {...native};
+  },elements,clock);
+  await api.initialize();api.bind(()=>{},()=>false);api.render();await settleUi();
+  assert.equal(elements['ai-harness-adapter'].disabled,false);
+  assert.equal(api.status().busy,false,'组件准备不冒充模型忙碌');
+  await api.selectAdapter('codebuddy');await settleUi();
+  assert.equal(elements['ai-harness-background'].hidden,false);
+  assert.match(elements['ai-harness-background-status'].textContent,/Codex.*42%/);
+  await api.selectAdapter('codex');await settleUi();
+  assert.equal(calls.filter(call=>call.kind==='prepare_runtime').length,1);
+  assert.equal(calls.some(call=>call.kind==='cancel_all'),false);
+  elements['ai-harness-prepare-cancel'].onclick();await settleUi();
+  assert.deepEqual({...calls.find(call=>call.kind==='cancel_preparation')},{kind:'cancel_preparation',adapter:'codex',id:'task-codex'});
+  assert.equal(native.componentTasks.length,0);
+  assert.equal(clock.timers.size,0);
+});
+
+test('组件恰好完成导致选择修订过期时，重读并保存同一次用户选择',async()=>{
+  const elements=settingsElements();const clock=pollingClock();const calls=[];let selections=0;
+  let native={...managedStatus,mode:'harness',adapter:'codebuddy',operationBusy:false,runtimeState:'preparing',busy:true,componentTasks:[{adapter:'codebuddy',id:'task',phase:'checking',received:0,total:0}]};
+  const api=client(async(_command,{request})=>{
+    calls.push(request.kind);
+    if(request.kind==='select_adapter') {
+      if(++selections===1) {native={...native,revision:5,runtimeState:'ready',busy:false,componentTasks:[]};throw {code:'harness_stale'};}
+      assert.equal(request.revision,5);
+      native={...native,adapter:request.adapter,revision:6};
+    }
+    return {...native};
+  },elements,clock);
+  await api.initialize();api.bind(()=>{},()=>false);
+  await api.selectAdapter('codex');await settleUi();
+  assert.equal(api.status().adapter,'codex');assert.equal(elements['ai-codex-settings'].hidden,false);
+  assert.equal(selections,2);assert.equal(calls.includes('cancel_all'),false);
+});
+
+test('本地组件检查不显示下载字节，初始化延迟显示设置加载状态',async()=>{
+  const elements=settingsElements();const pending=deferred();const clock=pollingClock();
+  elements['ai-harness-loading']={};elements['ai-harness-load-retry']={};
+  const task={adapter:'codex',id:'checking',phase:'checking',received:0,total:0};
+  const native={...managedStatus,mode:'harness',runtimeState:'preparing',operationBusy:false,componentTasks:[task]};
+  const api=client(async()=>pending.promise,elements,clock);
+  const initializing=api.initialize();
+  assert.equal(elements['ai-harness-loading'].hidden,false);
+  assert.equal(elements['ai-harness-settings'].hidden,true);
+  pending.resolve(native);await initializing;api.bind(()=>{},()=>false);
+  assert.match(elements['ai-harness-runtime-status'].textContent,/检查本地组件/);
+  assert.equal(elements['ai-harness-runtime-progress'].hidden,true);
+  native.runtimeState='ready';native.componentTasks=[];await api.initialize();
+});
+
 for(const adapter of ['codex','codebuddy','deepseek'])test(`Harness选择${adapter}时仅显示对应面板，API模式隐藏所有订阅面板`,async()=>{
   const elements=settingsElements();const calls=[];
   const api=client(async(_command,{request})=>{calls.push(request.kind);return {...status,adapter,ready:adapter==='codex'};},elements);
@@ -45,7 +105,7 @@ for(const adapter of ['codex','codebuddy','deepseek'])test(`Harness选择${adapt
   if(adapter!=='codex'){
     assert.deepEqual(calls,['status']);
     assert.equal(elements['ai-test-connection-v99'].hidden,adapter==='deepseek');
-    assert.notEqual(elements['ai-test-connection-v99'].disabled,true);
+    assert.equal(elements['ai-test-connection-v99'].disabled,true,'未就绪时测试按钮禁用，但提供方仍可切换');
   }
   elements['ai-execution-api'].checked=true;elements['ai-execution-api'].onchange();await settleUi();
   for(const name of ['codex','codebuddy','deepseek'])assert.equal(elements[`ai-${name}-settings`].hidden,true);
@@ -76,7 +136,7 @@ test('选择立即阻断旧Codex快照，保存成功保留订阅且迟到状态
   assert.deepEqual(calls.find(call=>call.kind==='select_adapter'),{command:'harness_control',kind:'select_adapter',adapter:'codebuddy',revision:4});
 });
 
-test('选择失败保留目标且禁止旧执行，保存可重试并使用当前修订',async()=>{
+test('选择失败恢复已保存的提供方且禁止旧执行，保存重试目标并使用当前修订',async()=>{
   const calls=[];const elements=settingsElements();let fail=true;
   const api=client(async(command,{request})=>{
     calls.push({command,...request});
@@ -88,8 +148,8 @@ test('选择失败保留目标且禁止旧执行，保存可重试并使用当�
   },elements);
   await api.initialize();api.bind(()=>{},()=>false);
   await assert.rejects(api.selectAdapter('deepseek'));
-  api.render();assert.equal(api.snapshot().adapter,'deepseek');assert.equal(api.snapshot().ready,false);
-  assert.equal(elements['ai-harness-adapter'].value,'deepseek');
+  api.render();assert.equal(api.snapshot().adapter,'codex');assert.equal(api.snapshot().ready,false);
+  assert.equal(elements['ai-harness-adapter'].value,'codex');
   assert.equal(elements['ai-save-settings-v99'].hidden,false);
   await assert.rejects(api.execute({...status},'batch_analysis',[]));
   await assert.rejects(api.test());
@@ -343,7 +403,7 @@ test('订阅授权只轮询已有登录状态，完成或取消后释放计时�
   let timerId = 0;
   const requests = [];
   let authorization = 'authenticating';
-  const api = client(async(_command,args)=>{requests.push(args.request.kind);return {...status,credentialStatus:authorization,ready:authorization==='subscription'};},{},{setTimeout(callback,delay){assert.equal(delay,1000);timers.set(++timerId,callback);return timerId;},clearTimeout(id){timers.delete(id);}});
+  const api = client(async(_command,args)=>{requests.push(args.request.kind);return {...status,credentialStatus:authorization,ready:authorization==='subscription'};},{},{setTimeout(callback,delay){assert([1000,15000].includes(delay));timers.set(++timerId,callback);return timerId;},clearTimeout(id){timers.delete(id);}});
   await api.initialize();
   assert.equal(timers.size,1);
   const [id,callback] = [...timers][0];timers.delete(id);
@@ -380,7 +440,7 @@ test('较早发出的 status 迟到不能覆盖登录的新修订或停止授权
   elements['ai-harness-login'].onclick();
   await loggedIn;
   assert.equal(api.status().revision,5);
-  assert.equal(timers.size,1);
+  assert.equal(timers.size,2,'登录轮询与在途读取的超时各有一个计时器');
   const refreshed = new Promise(resolve=>{changed=resolve;});
   resolveStatus(initial);
   await refreshed;

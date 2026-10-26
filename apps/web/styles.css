@@ -7820,6 +7820,10 @@ body.practice-focus.practice-rail-collapsed-v34 #practice-card > .practice-side-
 #ai-harness-runtime-progress[hidden],#ai-harness-prepare[hidden],#ai-harness-prepare-cancel[hidden]{display:none}
 #ai-harness-advanced summary{cursor:pointer;font-weight:600}
 #ai-harness-advanced .muted{overflow-wrap:anywhere}
+#ai-codebuddy-model{margin-top:7px}
+#ai-harness-loading[hidden],#ai-harness-load-retry[hidden],#ai-harness-background[hidden],.ai-execution-choice[hidden]{display:none}
+#ai-harness-background-status{margin-top:0}
+#ai-harness-auth-status,#ai-codebuddy-status{min-height:1.5em}
 .ai-execution-choice{display:flex;flex-wrap:wrap;gap:12px 24px;margin:16px 0;padding:12px;border:1px solid var(--line,#dbe3ef);border-radius:10px}
 .ai-execution-choice label{display:flex;align-items:center;gap:6px}
 .ai-execution-choice input{width:auto}

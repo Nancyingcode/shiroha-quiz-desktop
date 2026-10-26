@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { markNativeIsolation } from './native-isolation.mjs';
 import { createNativeMock, nativeServiceSmoke } from './network-smoke.mjs';
 import { documentSmoke } from './document-smoke.mjs';
-import { harnessSmoke } from './harness-smoke.mjs';
+import { harnessSmoke, harnessSwitchingSmoke } from './harness-smoke.mjs';
 import { codebuddyLoginSmoke, codebuddyLoginAfterRestart } from './codebuddy-login-smoke.mjs';
 import { spawn, execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
@@ -933,6 +933,7 @@ async function main() {
       return result;
     });
     await check('订阅 Harness 登录、既有 AI 任务与取消草稿保全',()=>harnessSmoke(page,()=>practiceImportedBank(page,bankName)));
+    await check('Harness 下载中切换与组件缓存复用',()=>harnessSwitchingSmoke(page,profile));
     await check('CodeBuddy 登录、单题解析、追问与配置保全',()=>codebuddyLoginSmoke(page,()=>practiceImportedBank(page,bankName)));
     await check('MathJax 本地公式', () => mathSmoke(page));
     await check('PDF.js 本地模块与 Worker', () => pdfSmoke(page));
