@@ -57,6 +57,8 @@ const nativeOpenRecords=new Set();
 const nativeRenderVersions=new Map();
 // 选择仅归当前题库页面会话；切库或题目集合被替换后重置，不写入备份。
 let bankQuestionSelection={bank:null,idsKey:'',selected:new Set()};
+// 详情 DOM 仅归预览页面所有；重绘、翻页和离开页面时移除，使旧异步复制反馈失效。
+function closeBankQuestionDetail(){const detail=document.getElementById('bank-question-detail');detail?.dispatchEvent(new Event('preview-close'));detail?.remove();document.querySelectorAll('[data-preview-question]').forEach(button=>{button.textContent='查看详情';button.setAttribute('aria-expanded','false')})}
 function beginNativeRender(view){const version=(nativeRenderVersions.get(view)||0)+1;nativeRenderVersions.set(view,version);return version}
 let nativePracticeRequest=0,nativeExamRequest=0;
 async function readNative(action){const task=Promise.resolve().then(action);nativeReads.add(task);try{await task;return true}catch(error){platformStatus(error.message||'读取本地数据失败，请重试。',true);return false}finally{nativeReads.delete(task)}}
@@ -170,6 +172,7 @@ function bindNav(){ $$('.nav').forEach(btn=>btn.onclick=()=>{
   if(document.body.classList.contains('exam-focus')&&target!=='exam')exitExamFocus();
   if(aiImportRequestV99.running&&target!=='import')cancelAiImportRequestV99(true);
   if(aiPreviewRequestV991.running&&target!=='import')cancelAiPreviewRequestV991(true);
+  closeBankQuestionDetail();
   $$('.nav').forEach(b=>b.classList.toggle('active',b===btn));
   $$('.view').forEach(v=>v.classList.toggle('active',v===view));
   const title=$('#page-title');if(title)title.textContent=btn.textContent;
@@ -1207,12 +1210,21 @@ async function renderBankPreview(){
   const bank=activeBank(),idsKey=JSON.stringify(bank.questions.map(q=>q.id));
   if(bankQuestionSelection.bank!==bank||bankQuestionSelection.idsKey!==idsKey)bankQuestionSelection={bank,idsKey,selected:new Set()};
   if(!nativeViewVisible('banks'))return;
+  closeBankQuestionDetail();
   const renderVersion=beginNativeRender('banks');
   const qs=nativePage(bank.questions,'preview:'+bank.id,document.getElementById('bank-preview'),renderBankPreview,true);
-  if(!await loadNativeItems(practiceSessionItemsForBanksV8916([{...bank,questions:qs}])))return;
+  $('#bank-preview tbody').innerHTML='<tr><td colspan="8" role="status">正在加载题目……</td></tr>';
+  for(const id of ['select-bank-question-page','clear-bank-question-selection','delete-selected-questions'])document.getElementById(id).disabled=true;
+  if(!await loadNativeItems(practiceSessionItemsForBanksV8916([{...bank,questions:qs}]))){
+    if(renderVersion!==nativeRenderVersions.get('banks')||activeBank().id!==bank.id)return;
+    $('#bank-preview tbody').innerHTML='<tr><td colspan="8" role="status">题目加载失败，请重试。 <button type="button" id="retry-bank-preview">重试</button></td></tr>';
+    $('#retry-bank-preview').onclick=renderBankPreview;return;
+  }
   if(renderVersion!==nativeRenderVersions.get('banks')||!nativeViewVisible('banks')||activeBank().id!==bank.id)return;
   const selected=bankQuestionSelection.selected;
-  $('#bank-preview tbody').innerHTML=qs.map(q=>{const number=bank.questions.indexOf(q)+1;return `<tr><td><input type="checkbox" data-select-bank-question="${esc(q.id)}" aria-label="选择第 ${number} 道试题" ${selected.has(q.id)?'checked':''}></td><td>${number}</td><td>${label(q.type)}</td><td>${esc(short(q.question,80))}</td><td>${esc((q.answer||q.answerKeys||[]).join(''))}</td><td>${esc(q.category||q.topic||'')}</td><td>${esc(q.score||'默认')}</td><td><button class="ghost danger mini-btn" type="button" data-delete-bank-question="${esc(q.id)}" aria-label="删除第 ${number} 道试题">删除</button></td></tr>`}).join('')||'<tr><td colspan="8" class="empty">当前题库暂无试题。</td></tr>';
+  $('#bank-preview tbody').innerHTML=qs.map(q=>{const number=bank.questions.indexOf(q)+1,preview=bankQuestionCopyText(q);return `<tr><td><input type="checkbox" data-select-bank-question="${esc(q.id)}" aria-label="选择第 ${number} 道试题" ${selected.has(q.id)?'checked':''}></td><td>${number}</td><td>${label(q.type)}</td><td>${esc(short(preview.text,80))}${preview.text.length>80?` <button class="ghost mini-btn" type="button" data-preview-full="${esc(q.id)}" aria-label="查看第 ${number} 道试题全文">查看全文</button>`:''}${preview.hasImages?' <span class="muted">含图片</span>':''}</td><td>${esc((q.answer||q.answerKeys||[]).join(''))}</td><td>${esc(q.category||q.topic||'')}</td><td>${esc(q.score||'默认')}</td><td><button class="ghost mini-btn" type="button" data-preview-question="${esc(q.id)}" aria-expanded="false" aria-controls="bank-question-detail" aria-label="查看第 ${number} 道试题详情">查看详情</button> <button class="ghost danger mini-btn" type="button" data-delete-bank-question="${esc(q.id)}" aria-label="删除第 ${number} 道试题">删除</button></td></tr>`}).join('')||'<tr><td colspan="8" class="empty">当前题库暂无试题。</td></tr>';
+  $$('[data-preview-question]').forEach(button=>button.onclick=()=>openBankQuestionDetail(bank,qs.find(q=>q.id===button.dataset.previewQuestion),button,false));
+  $$('[data-preview-full]').forEach(button=>button.onclick=()=>openBankQuestionDetail(bank,qs.find(q=>q.id===button.dataset.previewFull),button,true));
   const updateSelection=()=>{
     $('#bank-question-selection').textContent=`已选择 ${selected.size} 道试题`;
     $('#delete-selected-questions').disabled=!selected.size;
@@ -1227,6 +1239,88 @@ async function renderBankPreview(){
   $('#delete-selected-questions').onclick=()=>deleteBankQuestions(bank.id,[...selected]);
   updateSelection();
 }
+
+function bankQuestionPreviewSource(q){
+  const rich=q.richContent,fields=rich?.fields||rich,field=fields?.question;
+  const candidates=typeof field==='string'?[field]:[field?.text,field?.markdown,field?.sourceText,field?.fallbackText,field?.plainText];
+  candidates.push(q.question);
+  return stripUnsafeImageDataUrisV83(String(candidates.find(value=>value!=null&&String(value).trim())||''));
+}
+function bankQuestionCopyText(q){
+  const seen=new Set();let hasImages=false;
+  const imageText=(src,description)=>{hasImages=true;seen.add(src);const safe=String(description||'').replace(/(?:data:|file:|https?:|[a-z]:[\\/])\S*/gi,'').trim();return safe?'[图片：'+safe+']':'[图片]'};
+  let text=String(bankQuestionPreviewSource(q)).replace(/!\[([^\]]*)\]\(([^\n]*?)\)/g,(_,alt,src)=>imageText(src,alt));
+  text=text.replace(/【DOCX表格开始】[\s\S]*?【DOCX表格结束】/g,block=>parseDocxMarkdownTableBlockV55(block).map(row=>row.join('\t')).join('\n'));
+  // 只解析惰性模板；先移除图片来源，再取文字，避免复制内部媒体路径或执行导入内容。
+  text=text.replace(/```[\s\S]*?```/g,block=>esc(block));
+  text=text.replace(/<img\b[^>]*>/gi,tag=>{const alt=tag.match(/\balt=["']([^"']*)["']/i);return imageText('',alt?.[1]||'')});
+  text=text.replace(/<br\s*\/?\s*>/gi,'\n').replace(/<\/(?:p|div|li|tr)>/gi,'\n').replace(/<\/(?:td|th)>\s*(?=<(?:td|th)\b)/gi,'\t');
+  if(/<\/?[a-z][^>]*>|&(?:#\d+|#x[\da-f]+|[a-z]+);/i.test(text)){
+    const template=document.createElement('template');template.innerHTML=text;template.content.querySelectorAll('script,style,iframe,object').forEach(node=>node.remove());text=template.content.textContent||'';
+  }
+  text=text.replace(/data:image\/[^\s)]+/gi,()=>imageText('',''));
+  for(const img of normalizeQuestionImagesForWebV83(q.images)){
+    const src=img.dataUrl||img.localPath;
+    if(!seen.has(src))text+='\n'+imageText(src,img.sourceName);
+  }
+  return {text,hasImages};
+}
+function openBankQuestionDetail(bank,q,trigger,full){
+  if(!q||activeBank()!==bank)return;
+  const row=trigger.closest('tr'),button=row.querySelector('[data-preview-question]');
+  const current=document.getElementById('bank-question-detail');
+  if(current?.previousElementSibling===row){
+    if(full){current.querySelector('h3').focus();current.querySelector('h3').scrollIntoView({block:'nearest'})}
+    else{closeBankQuestionDetail();button.focus()}
+    return;
+  }
+  closeBankQuestionDetail();
+  const copy=bankQuestionCopyText(q),answers=q.answer||q.answerKeys||[],options=Array.isArray(q.options)?q.options:[];
+  const type=normalizeWebQuestionType(q.type);
+  let empty='该题暂无选项，请检查题库内容';
+  if(type==='judge')empty='该判断题未提供独立选项';
+  if(type==='blank'||type==='short')empty='该题型无需选项';
+  const detail=document.createElement('tr');detail.id='bank-question-detail';
+  detail.innerHTML='<td colspan="8"><section class="bank-detail" aria-labelledby="bank-detail-title"><div class="bank-detail-toolbar"><h3 id="bank-detail-title" tabindex="-1">完整题干</h3><div><button type="button" class="ghost mini-btn" data-copy-question>复制题干</button> <button type="button" class="ghost mini-btn" data-close-detail>收起详情</button></div></div><div class="bank-detail-status" role="status" aria-live="polite"></div><div class="bank-detail-body">'+(copy.text.trim()?renderQuestionBodyV83({...q,question:bankQuestionPreviewSource(q)}):'暂无题干')+'</div><h4>选项</h4>'+options.map((o,index)=>{
+    const matches=answers.includes(o.key)&&options.filter(item=>item.key===o.key).length===1;
+    return '<div class="bank-detail-option'+(matches?' is-answer':'')+'"><b>'+esc(o.key)+'</b><div>'+ (pickRichOptionTextV57(q,index,o)?renderQuestionContent(pickRichOptionTextV57(q,index,o)):'选项内容为空')+'</div>'+(matches?'<span>已存答案</span>':'')+'</div>';
+  }).join('')+(!options.length?'<p class="muted">'+empty+'</p>':'')+'<p><b>已存答案：</b>'+esc(answers.length?answerDisplay(answers):'未提供答案')+'</p><div class="bank-manual-copy" hidden><label for="bank-question-manual-copy">完整题干纯文本</label><textarea id="bank-question-manual-copy" readonly></textarea><button type="button" class="ghost mini-btn" data-select-copy>全选文本</button> <button type="button" class="ghost mini-btn" data-hide-copy>收起手动复制区</button></div></section></td>';
+  row.after(detail);
+  // 表格横向滚动容器会限制 CSS sticky，工具栏只在本详情范围内平移，并随关闭释放监听。
+  const toolbar=detail.querySelector('.bank-detail-toolbar');
+  const moveToolbar=()=>{
+    detail.querySelector('.bank-detail').style.width=document.getElementById('bank-preview').parentElement.clientWidth+'px';
+    toolbar.style.transform='';
+    const bounds=detail.getBoundingClientRect(),bar=toolbar.getBoundingClientRect();
+    const topbar=document.querySelector('.topbar'),topBounds=topbar?.getBoundingClientRect();
+    const fixedTop=topbar&&['fixed','sticky'].includes(getComputedStyle(topbar).position)&&topBounds.bottom>0?topBounds.bottom:0;
+    const offset=Math.max(0,Math.min(fixedTop+8-bar.top,bounds.bottom-bar.bottom-8));
+    toolbar.style.transform='translateY('+offset+'px)';
+  };
+  document.addEventListener('scroll',moveToolbar,true);window.addEventListener('resize',moveToolbar);
+  detail.addEventListener('preview-close',()=>{document.removeEventListener('scroll',moveToolbar,true);window.removeEventListener('resize',moveToolbar)},{once:true});
+  moveToolbar();button.textContent='收起';button.setAttribute('aria-expanded','true');
+  const copyButton=detail.querySelector('[data-copy-question]'),status=detail.querySelector('[role="status"]'),manual=detail.querySelector('.bank-manual-copy'),field=detail.querySelector('textarea');
+  field.value=copy.text;copyButton.disabled=!copy.text.trim();
+  if(copy.hasImages)status.textContent='复制文字，图片以占位说明保留';
+  detail.querySelector('[data-close-detail]').onclick=()=>{closeBankQuestionDetail();button.focus();button.scrollIntoView({block:'nearest'})};
+  detail.querySelector('[data-select-copy]').onclick=()=>{field.focus();field.select()};
+  detail.querySelector('[data-hide-copy]').onclick=()=>{manual.hidden=true;copyButton.focus()};
+  copyButton.onclick=async()=>{
+    try{
+      await navigator.clipboard.writeText(copy.text);
+      if(!detail.isConnected)return;
+      status.textContent=copy.hasImages?'已复制题干文字（图片为占位说明）':'已复制完整题干';copyButton.textContent='已复制';
+      setTimeout(()=>{if(detail.isConnected)copyButton.textContent='复制题干'},1800);
+    }catch(_){
+      if(!detail.isConnected)return;
+      status.textContent='自动复制失败，请选中文本后按 Ctrl+C，或使用系统复制菜单';manual.hidden=false;field.focus();field.select();
+    }
+  };
+  detail.querySelectorAll('img').forEach(img=>img.addEventListener('error',()=>{const fallback=document.createElement('span');fallback.textContent='图片加载失败：'+(img.alt||'题目图片');img.replaceWith(fallback)},{once:true}));
+  if(full){detail.querySelector('h3').focus();detail.querySelector('h3').scrollIntoView({block:'nearest'})}
+}
+
 function bankQuestionDeletionBlocked(bankId,ids){
   const contains=items=>(items||[]).some(item=>practiceItemBankIdV8916(item)===bankId&&ids.has(practiceQuestionV8916(item).id));
   return (!practice.completed&&contains(practice.items))||(!exam.submitted&&contains(exam.items));
