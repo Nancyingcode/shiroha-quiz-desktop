@@ -1,5 +1,5 @@
 use crate::error::Result;
-use crate::harness::failure;
+use crate::harness::{failure, PreparationContext, PreparationPhase};
 use crate::harness_proxy::SystemProxy;
 use crate::paths::reject_links;
 use sha2::{Digest, Sha256};
@@ -91,13 +91,25 @@ struct Preparation<'a> {
     download: &'a Manifest,
     executable: &'a Manifest,
     policy: &'a Policy,
+    context: Option<&'a PreparationContext<'a>>,
 }
 
+#[cfg(test)]
 pub(crate) async fn prepare_component(
     root: &Path,
     cancel: &AtomicBool,
     progress: &(dyn Fn(u64, u64) + Send + Sync),
     component: Component,
+) -> Result<PathBuf> {
+    prepare_observed(root, cancel, progress, component, None).await
+}
+
+pub(crate) async fn prepare_observed(
+    root: &Path,
+    cancel: &AtomicBool,
+    progress: &(dyn Fn(u64, u64) + Send + Sync),
+    component: Component,
+    context: Option<&PreparationContext<'_>>,
 ) -> Result<PathBuf> {
     use crate::harness_codebuddy_runtime as codebuddy;
     let (download, executable, policy) = match component {
@@ -137,6 +149,7 @@ pub(crate) async fn prepare_component(
             download: &download,
             executable: &executable,
             policy: &policy,
+            context,
         },
         PREPARE_TIMEOUT,
     )
@@ -176,6 +189,7 @@ fn managed_path(root: &Path) -> PathBuf {
     Component::Codex.managed_path(root)
 }
 
+#[cfg(test)]
 pub(crate) async fn prepare(
     root: &Path,
     cancel: &AtomicBool,
@@ -202,6 +216,7 @@ async fn prepare_with(
             download: manifest,
             executable: manifest,
             policy,
+            context: None,
         },
         timeout,
     )
@@ -541,15 +556,30 @@ async fn prepare_inner(
     let target = directory.join(preparation.component.executable_name());
     install_licenses(&directory, cancel, preparation.component)?;
     let manifest = preparation.download;
-    progress(0, manifest.bytes);
+    if let Some(context) = preparation.context {
+        (context.phase)(PreparationPhase::Checking);
+    }
     if valid_cache(&target, preparation.executable, cancel).await? {
-        progress(manifest.bytes, manifest.bytes);
         return Ok(target);
     }
+    // 缓存检查不占用下载队列；同一应用最多下载一个组件，等待仍可取消。
+    let _download_lease = if let Some(context) = preparation.context {
+        (context.phase)(PreparationPhase::Queued);
+        let lease = context.downloads.lock().await;
+        check_cancel(cancel)?;
+        (context.phase)(PreparationPhase::Downloading);
+        Some(lease)
+    } else {
+        None
+    };
+    progress(0, manifest.bytes);
     let mut pending = download(&directory, cancel, progress, preparation).await?;
     match preparation.component {
         Component::Codex => pending.install(&target, cancel)?,
         Component::CodeBuddy => {
+            if let Some(context) = preparation.context {
+                (context.phase)(PreparationPhase::Extracting);
+            }
             let mut executable = Pending::new(&directory)?;
             crate::harness_codebuddy_runtime::unpack_verified_zip(
                 pending.file_mut()?,
@@ -650,6 +680,9 @@ async fn download(
         }
         progress(bytes, manifest.bytes);
     }
+    if let Some(context) = preparation.context {
+        (context.phase)(PreparationPhase::Verifying);
+    }
     if bytes != manifest.bytes || format!("{:x}", hash.finalize()) != manifest.sha256 {
         return Err(failure("harness_runtime_integrity"));
     }
@@ -690,6 +723,7 @@ mod tests {
                 download: &manifest,
                 executable: &manifest,
                 policy: &Policy::MockOrigin(server.origin.clone()),
+                context: None,
             },
             Duration::from_secs(5),
         ));
@@ -729,6 +763,7 @@ mod tests {
                 download: &archive,
                 executable: &executable,
                 policy: &Policy::MockOrigin(server.origin.clone()),
+                context: None,
             },
             Duration::from_secs(5),
         ));
@@ -799,6 +834,7 @@ mod tests {
                     download: &archive,
                     executable: &executable,
                     policy: &Policy::MockOrigin(server.origin.clone()),
+                    context: None,
                 },
                 Duration::from_secs(5),
             ))
@@ -844,6 +880,7 @@ mod tests {
                 download: &archive,
                 executable: &archive,
                 policy: &Policy::MockOrigin(server.origin.clone()),
+                context: None,
             },
             Duration::from_secs(5),
         ))
@@ -1155,6 +1192,81 @@ mod tests {
             include_bytes!("../../third-party/codex/README.md")
         );
         assert_eq!(server.hits.load(Ordering::Acquire), 0);
+    }
+
+    #[test]
+    fn cached_component_bypasses_download_queue_and_never_reports_download_bytes() {
+        let fixture = Fixture::new();
+        fixture.write_cache(BODY);
+        let server = Server::new(|_| panic!("cached component must stay offline"));
+        let downloads = tokio::sync::Mutex::new(());
+        let _occupied = downloads.try_lock().unwrap();
+        let phases = std::sync::Mutex::new(Vec::new());
+        let phase = |value| phases.lock().unwrap().push(value);
+        let context = PreparationContext {
+            phase: &phase,
+            downloads: &downloads,
+        };
+        let manifest = server.manifest();
+        let policy = Policy::MockOrigin(server.origin.clone());
+        let preparation = Preparation {
+            component: Component::Codex,
+            download: &manifest,
+            executable: &manifest,
+            policy: &policy,
+            context: Some(&context),
+        };
+        for _ in 0..3 {
+            let path = run(prepare_component_with(
+                &fixture.0,
+                &AtomicBool::new(false),
+                &|_, _| panic!("cache checking is not downloading"),
+                &preparation,
+                Duration::from_secs(2),
+            ))
+            .unwrap();
+            assert_eq!(fs::read(path).unwrap(), BODY);
+        }
+        assert_eq!(*phases.lock().unwrap(), vec![PreparationPhase::Checking; 3]);
+        assert_eq!(server.hits.load(Ordering::Acquire), 0);
+    }
+
+    #[test]
+    fn queued_component_can_be_cancelled_without_network_or_cache_changes() {
+        let fixture = Fixture::new();
+        let server = Server::new(|_| panic!("queued component must not download"));
+        let downloads = tokio::sync::Mutex::new(());
+        let _occupied = downloads.try_lock().unwrap();
+        let cancel = AtomicBool::new(false);
+        let phase = |value| {
+            if value == PreparationPhase::Queued {
+                cancel.store(true, Ordering::Release);
+            }
+        };
+        let context = PreparationContext {
+            phase: &phase,
+            downloads: &downloads,
+        };
+        let manifest = server.manifest();
+        let policy = Policy::MockOrigin(server.origin.clone());
+        let preparation = Preparation {
+            component: Component::Codex,
+            download: &manifest,
+            executable: &manifest,
+            policy: &policy,
+            context: Some(&context),
+        };
+        let error = run(prepare_component_with(
+            &fixture.0,
+            &cancel,
+            &|_, _| panic!("queued task has no progress"),
+            &preparation,
+            Duration::from_secs(2),
+        ))
+        .unwrap_err();
+        assert_eq!(error.code, "cancelled");
+        assert_eq!(server.hits.load(Ordering::Acquire), 0);
+        assert!(!managed_path(&fixture.0).exists());
     }
 
     #[test]

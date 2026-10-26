@@ -35,6 +35,7 @@ pub(crate) fn managed_path(root: &Path) -> PathBuf {
         .join("codebuddy.exe")
 }
 
+#[cfg(test)]
 pub(crate) async fn prepare(
     root: &Path,
     cancel: &AtomicBool,
@@ -47,19 +48,21 @@ pub(crate) async fn prepare(
         crate::harness_runtime::Component::CodeBuddy,
     )
     .await
-    .map_err(|error| {
-        let code = match error.code {
-            "harness_runtime_storage" => "codebuddy_runtime_storage",
-            "harness_runtime_busy" => "codebuddy_runtime_busy",
-            "harness_runtime_download" => "codebuddy_runtime_download",
-            "harness_runtime_proxy" => "codebuddy_runtime_proxy",
-            "harness_runtime_proxy_config" => "codebuddy_runtime_proxy_config",
-            "harness_runtime_integrity" => "codebuddy_runtime_integrity",
-            "harness_runtime_redirect" => "codebuddy_runtime_redirect",
-            _ => return error,
-        };
-        failure(code)
-    })
+    .map_err(preparation_error)
+}
+
+pub(crate) fn preparation_error(error: crate::error::Error) -> crate::error::Error {
+    let code = match error.code {
+        "harness_runtime_storage" => "codebuddy_runtime_storage",
+        "harness_runtime_busy" => "codebuddy_runtime_busy",
+        "harness_runtime_download" => "codebuddy_runtime_download",
+        "harness_runtime_proxy" => "codebuddy_runtime_proxy",
+        "harness_runtime_proxy_config" => "codebuddy_runtime_proxy_config",
+        "harness_runtime_integrity" => "codebuddy_runtime_integrity",
+        "harness_runtime_redirect" => "codebuddy_runtime_redirect",
+        _ => return error,
+    };
+    failure(code)
 }
 
 struct Entry<'a> {

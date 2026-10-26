@@ -19,6 +19,16 @@ function fixture(invoke,initial=ready) {
   return {api:context.ShirohaPlatform.harness,elements,events};
 }
 
+test('CodeBuddy account warning appears only inside its provider card',async()=>{
+  const f=fixture(async()=>({...ready,accountRevision:undefined,ready:false}));
+  await f.api.initialize();f.api.render();
+  const message=f.elements['ai-codebuddy-execution-status'].textContent;
+  assert.match(message,/组件与账户就绪/);
+  assert.doesNotMatch(message,/账户状态尚未确认/);
+  assert.notEqual(f.elements['ai-settings-status-v99'].textContent,message);
+  assert.match(f.elements['ai-settings-status-v99'].textContent,/组件.*登录/);
+});
+
 test('CodeBuddy freezes both revisions for its three tasks without consulting Codex fields',async()=>{
   const calls=[];const f=fixture(async(command,{request})=>{calls.push({command,...request});return command==='harness_execute'?{content:'{"ok":true}'}:{...ready};});
   await f.api.initialize();f.api.bind(()=>{},()=>false);

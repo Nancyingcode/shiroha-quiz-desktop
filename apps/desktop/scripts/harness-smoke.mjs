@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { readFile, writeFile, rm } from 'node:fs/promises';
+import path from 'node:path';
 
 /** @typedef {import('playwright-core').Page} Page */
 
@@ -168,4 +170,55 @@ export async function harnessSmoke(page,startPractice) {
       await page.locator('#p-exit').click();
     }
   }
+}
+
+/** @param {Page} page @param {string} profile */
+export async function harnessSwitchingSmoke(page, profile) {
+  assert.match(await readFile(path.join(profile,'test-isolation'),'utf8'),/fake-credentials/);
+  await page.locator('.nav[data-view="ai-settings"]').click();
+  await page.locator('#ai-execution-harness').check();
+  await preparedRuntime(page,'managed');
+  const marker = path.join(profile,'ai-execution','fake-prepare-wait');
+  await writeFile(marker,'isolated switching regression',{flag:'wx'});
+  try {
+    await page.locator('#ai-harness-advanced > summary').click();
+    await page.locator('#ai-harness-use-managed').click();
+    await page.waitForFunction(()=>{
+      const platform=/** @type {import('../../web/platform/runtime.d.ts').BrowserGlobals['ShirohaPlatform']} */ (Reflect.get(window,'ShirohaPlatform'));
+      return platform.harness?.status().componentTasks?.some(task=>task.adapter==='codex');
+    });
+    const task = (await executionStatus(page)).componentTasks?.find(task=>task.adapter==='codex');
+    assert(task);
+    assert.equal(await page.locator('#ai-harness-adapter').isEnabled(),true);
+    await page.locator('#ai-harness-adapter').selectOption('codebuddy');
+    await page.locator('#ai-codebuddy-settings').waitFor({state:'visible'});
+    await page.locator('#ai-harness-background').waitFor({state:'visible'});
+    assert.match(await page.locator('#ai-harness-background-status').innerText(),/Codex.*后台继续/);
+    await page.locator('#ai-harness-background-view').click();
+    await page.locator('#ai-codex-settings').waitFor({state:'visible'});
+    assert.equal((await executionStatus(page)).componentTasks?.find(item=>item.adapter==='codex')?.id,task.id);
+  } finally {
+    await rm(marker,{force:true});
+  }
+  await page.waitForFunction(()=>{
+    const platform=/** @type {import('../../web/platform/runtime.d.ts').BrowserGlobals['ShirohaPlatform']} */ (Reflect.get(window,'ShirohaPlatform'));
+    return platform.harness?.status().componentTasks?.length===0;
+  });
+  const codexPath = (await preparedRuntime(page,'managed')).runtimePath;
+  for (const provider of ['codebuddy','codex','codebuddy','codex']) {
+    await page.locator('#ai-harness-adapter').selectOption(provider);
+    await page.waitForFunction(expected=>{
+      const platform=/** @type {import('../../web/platform/runtime.d.ts').BrowserGlobals['ShirohaPlatform']} */ (Reflect.get(window,'ShirohaPlatform'));
+      const state=platform.harness?.status();
+      return state?.adapter===expected&&state.runtimeState==='ready'&&!state.busy;
+    },provider);
+    const state=await executionStatus(page);
+    assert.equal(state.componentTasks?.length,0,'已有组件切换后不应重启准备');
+    if(provider==='codex')assert.equal(state.runtimePath,codexPath);
+  }
+  await page.locator('#ai-harness-advanced > summary').click();
+  await page.locator('#ai-execution-api').check();
+  await page.locator('#ai-save-settings-v99').click();
+  await page.waitForFunction(()=>document.querySelector('#ai-settings-status-v99')?.textContent?.includes('设置已保存'));
+  return {switchDuringDownload:true,backgroundTaskRetained:true,cacheReused:true};
 }

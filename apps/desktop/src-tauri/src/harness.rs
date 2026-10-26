@@ -26,6 +26,21 @@ const MAX_MESSAGE_BYTES: usize = 512 * 1024;
 const MIN_TIMEOUT_SECONDS: u64 = 10;
 const MAX_TIMEOUT_SECONDS: u64 = 600;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum PreparationPhase {
+    Checking,
+    Queued,
+    Downloading,
+    Verifying,
+    Extracting,
+}
+
+pub(crate) struct PreparationContext<'a> {
+    pub phase: &'a (dyn Fn(PreparationPhase) + Send + Sync),
+    pub downloads: &'a tokio::sync::Mutex<()>,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 enum RuntimeSource {
@@ -104,6 +119,24 @@ pub struct Status {
     user_code: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     account_revision: Option<u64>,
+    operation_busy: bool,
+    component_tasks: Vec<ComponentTaskStatus>,
+}
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ComponentTaskStatus {
+    adapter: String,
+    id: String,
+    phase: PreparationPhase,
+    received: u64,
+    total: u64,
+}
+// 组件任务归所属提供方，不随选择修订变化；恢复和取消通过独立令牌失效。
+struct ComponentTask {
+    operation: Operation,
+    phase: PreparationPhase,
+    received: u64,
+    total: u64,
 }
 #[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
@@ -119,6 +152,10 @@ pub enum Control {
     },
     ChooseRuntime,
     PrepareRuntime {},
+    CancelPreparation {
+        adapter: String,
+        id: String,
+    },
     UseManagedRuntime {},
     Inspect,
     CancelAll,
@@ -167,6 +204,7 @@ struct Active {
     id: String,
     cancel: Arc<AtomicBool>,
     login: bool,
+    readonly: bool,
 }
 struct Inner {
     root: PathBuf,
@@ -178,6 +216,7 @@ struct Inner {
     runtime_received_bytes: u64,
     runtime_total_bytes: u64,
     active: Option<Active>,
+    preparations: Vec<ComponentTask>,
     barrier: bool,
     restores: usize,
     cancel_waiters: usize,
@@ -235,10 +274,11 @@ impl Drop for RestoreGuard {
     }
 }
 
-// 本应用进程拥有执行配置与唯一活动任务；配置锁不跨越任务进程等待，取消等待任务确认退出。
+// 本进程拥有配置与唯一模型/授权任务；组件任务按提供方独立，取消等待所有目标任务退出。
 pub struct Harness {
     inner: Mutex<Result<Inner>>,
     idle: Condvar,
+    downloads: tokio::sync::Mutex<()>,
 }
 impl Harness {
     pub fn open(root: &Path) -> Self {
@@ -248,6 +288,7 @@ impl Harness {
         Self {
             inner: Mutex::new(Inner::open(&root.join("ai-execution"), login)),
             idle: Condvar::new(),
+            downloads: tokio::sync::Mutex::new(()),
         }
     }
     fn with<T>(&self, action: impl FnOnce(&mut Inner) -> Result<T>) -> Result<T> {
@@ -309,6 +350,11 @@ impl Harness {
                 }
             }
         }
+        if id.is_none() {
+            for task in &state.preparations {
+                task.operation.cancel.store(true, Ordering::Release);
+            }
+        }
         let target = state
             .active
             .as_ref()
@@ -319,14 +365,16 @@ impl Harness {
             });
         let deadline = std::time::Instant::now() + STOP_WAIT_TIMEOUT;
         let mut timed_out = false;
-        while let Some(target) = &target {
+        loop {
             let state = lock.as_ref().map_err(|_| failure("harness_unavailable"))?;
-            if state.barrier
-                || !state
+            let active_pending = target.as_ref().is_some_and(|target| {
+                state
                     .active
                     .as_ref()
                     .is_some_and(|active| &active.id == target)
-            {
+            });
+            let components_pending = id.is_none() && !state.preparations.is_empty();
+            if state.barrier || (!active_pending && !components_pending) {
                 break;
             }
             let remaining = deadline.saturating_duration_since(std::time::Instant::now());
@@ -438,9 +486,11 @@ impl Harness {
             {
                 return Ok(None);
             }
-            state
-                .start(uuid::Uuid::new_v4().to_string(), false)
-                .map(Some)
+            let operation = state.start(uuid::Uuid::new_v4().to_string(), false)?;
+            if let Some(active) = &mut state.active {
+                active.readonly = true;
+            }
+            Ok(Some(operation))
         })?;
         let Some(operation) = operation else {
             return self.with(|state| Ok(state.status()));
@@ -462,11 +512,59 @@ impl Harness {
             Ok(state.status())
         })
     }
+    fn inspect_runtime(&self) -> Result<Status> {
+        let (mut operation, candidate) = self.with(|state| {
+            state.require_codex()?;
+            let candidate = state.candidate.clone();
+            let operation = state.start(uuid::Uuid::new_v4().to_string(), false)?;
+            if let Some(active) = &mut state.active {
+                active.readonly = true;
+            }
+            Ok((operation, candidate))
+        })?;
+        if let Some(path) = &candidate {
+            operation.config.runtime_path = path.clone();
+        }
+        let checked = codex::inspect_cancellable(&operation.config.runtime_path, &operation.cancel);
+        let result = checked.and_then(|()| {
+            if candidate.is_some() || operation.config.logout_pending {
+                return Ok(None);
+            }
+            codex::subscription(
+                &operation.root,
+                &operation.config.runtime_path,
+                &operation.cancel,
+            )
+            .map(Some)
+        });
+        self.finish(&operation, result, |state, result| {
+            let subscribed = result?;
+            if candidate.is_none() {
+                let mut config = state.config.clone();
+                config.verified = true;
+                config.revision += 1;
+                state.persist(config)?;
+            }
+            state.runtime_state = RuntimeState::Ready;
+            if !state.config.logout_pending {
+                state.notice.clear();
+            }
+            if let Some(subscribed) = subscribed {
+                state.update_subscription(subscribed)?;
+            }
+            Ok(state.status())
+        })
+    }
     fn control(self: &Arc<Self>, request: Control) -> Result<Status> {
         match request {
             Control::Status => self.with(|state| Ok(state.status())),
             Control::SelectAdapter { adapter, revision } => self.with(|state| {
-                state.ensure_idle()?;
+                if state.barrier {
+                    return Err(failure("harness_stopping"));
+                }
+                if state.operation_busy() || state.codebuddy_login.execution_status()?.busy {
+                    return Err(failure("harness_busy"));
+                }
                 if revision != state.config.revision {
                     return Err(failure("harness_stale"));
                 }
@@ -508,6 +606,7 @@ impl Harness {
                 Ok(state.status())
             }),
             Control::PrepareRuntime {} => self.start_preparation(false),
+            Control::CancelPreparation { adapter, id } => self.cancel_preparation(&adapter, &id),
             Control::UseManagedRuntime {} => self.start_preparation(true),
             Control::CancelAll => self.cancel(None, false),
             Control::Cancel { id } => self.cancel(Some(&id), false),
@@ -537,30 +636,7 @@ impl Harness {
                     self.refresh()
                 }
             }
-            Control::Inspect => {
-                self.with(|state| {
-                    state.require_codex()?;
-                    state.ensure_idle()?;
-                    codex::inspect(
-                        state
-                            .candidate
-                            .as_ref()
-                            .unwrap_or(&state.config.runtime_path),
-                    )?;
-                    if state.candidate.is_none() {
-                        let mut config = state.config.clone();
-                        config.verified = true;
-                        config.revision += 1;
-                        state.persist(config)?;
-                    }
-                    state.runtime_state = RuntimeState::Ready;
-                    if !state.config.logout_pending {
-                        state.notice.clear();
-                    }
-                    Ok(())
-                })?;
-                self.refresh()
-            }
+            Control::Inspect => self.inspect_runtime(),
             Control::Save {
                 mode,
                 adapter,
@@ -617,105 +693,216 @@ impl Harness {
             if !matches!(state.config.adapter.as_str(), "codex" | "codebuddy") {
                 return Err(failure("harness_provider_unavailable"));
             }
-            state.ensure_idle()?;
-            let mut operation = state.start(uuid::Uuid::new_v4().to_string(), false)?;
-            if operation.config.adapter == "codebuddy" {
-                operation.config.runtime_source = RuntimeSource::Managed;
-                state.codebuddy_runtime = CodeBuddyRuntime {
-                    state: RuntimeState::Preparing,
-                    ..CodeBuddyRuntime::default()
-                };
-            } else if use_managed {
-                operation.config.runtime_source = RuntimeSource::Managed;
-            } else if let Some(path) = &state.candidate {
-                operation.config.runtime_source = RuntimeSource::Custom;
-                operation.config.runtime_path = path.clone();
+            if state.barrier {
+                return Err(failure("harness_stopping"));
             }
-            if operation.config.adapter == "codex" {
+            if state.operation_busy() {
+                return Err(failure("harness_busy"));
+            }
+            let adapter = &state.config.adapter;
+            if state
+                .preparations
+                .iter()
+                .any(|task| &task.operation.config.adapter == adapter)
+            {
+                return Ok(None);
+            }
+            let already_ready = if adapter == "codebuddy" {
+                state.codebuddy_runtime.verified
+                    && state.codebuddy_runtime.state == RuntimeState::Ready
+            } else {
+                state.config.verified
+                    && state.runtime_state == RuntimeState::Ready
+                    && state.candidate.is_none()
+            };
+            if already_ready && !use_managed {
+                return Ok(None);
+            }
+            let mut config = state.config.clone();
+            if adapter == "codebuddy" || use_managed {
+                config.runtime_source = RuntimeSource::Managed;
+            } else if let Some(path) = &state.candidate {
+                config.runtime_source = RuntimeSource::Custom;
+                config.runtime_path = path.clone();
+            }
+            let operation = Operation {
+                id: uuid::Uuid::new_v4().to_string(),
+                config,
+                root: state.root.clone(),
+                cancel: Arc::new(AtomicBool::new(false)),
+                codebuddy_login: state.codebuddy_login.clone(),
+            };
+            if adapter == "codebuddy" {
+                state.codebuddy_runtime.state = RuntimeState::Preparing;
+                state.codebuddy_runtime.notice.clear();
+                state.codebuddy_runtime.received = 0;
+                state.codebuddy_runtime.total = 0;
+            } else {
                 state.runtime_state = RuntimeState::Preparing;
                 state.runtime_received_bytes = 0;
                 state.runtime_total_bytes = 0;
                 state.notice.clear();
             }
-            Ok(operation)
+            state.preparations.push(ComponentTask {
+                operation: operation.clone(),
+                phase: PreparationPhase::Checking,
+                received: 0,
+                total: 0,
+            });
+            Ok(Some(operation))
         })?;
+        let Some(operation) = operation else {
+            return self.with(|state| Ok(state.status()));
+        };
         let worker = self.clone();
         let worker_operation = operation.clone();
         let spawned = std::thread::Builder::new()
             .name("harness-runtime-preparation".into())
             .spawn(move || {
-                let result = prepare_component(&worker_operation, &|received, total| {
+                let progress = |received, total| {
                     let _ = worker.with(|state| {
-                        let owns_preparation = state.active.as_ref().is_some_and(|active| {
-                            active.id == worker_operation.id
-                                && !active.cancel.load(Ordering::Acquire)
-                                && state.config.revision == worker_operation.config.revision
-                        });
-                        if owns_preparation {
-                            if worker_operation.config.adapter == "codebuddy" {
-                                state.codebuddy_runtime.received = received;
-                                state.codebuddy_runtime.total = total;
-                            } else {
-                                state.runtime_received_bytes = received;
-                                state.runtime_total_bytes = total;
+                        if let Some(task) = state
+                            .preparations
+                            .iter_mut()
+                            .find(|task| task.operation.id == worker_operation.id)
+                        {
+                            if !task.operation.cancel.load(Ordering::Acquire) {
+                                task.received = received;
+                                task.total = total;
+                                if task.operation.config.adapter == "codebuddy" {
+                                    state.codebuddy_runtime.received = received;
+                                    state.codebuddy_runtime.total = total;
+                                } else {
+                                    state.runtime_received_bytes = received;
+                                    state.runtime_total_bytes = total;
+                                }
                             }
                         }
                         Ok(())
                     });
-                });
-                let _ = worker.finish(&worker_operation, result, |state, result| {
-                    if worker_operation.config.adapter == "codebuddy" {
-                        return state.finish_codebuddy_preparation(result);
-                    }
-                    let applied = result.and_then(|path| {
-                        let mut config = state.config.clone();
-                        config.runtime_path = path;
-                        config.runtime_source = worker_operation.config.runtime_source;
-                        config.verified = true;
-                        config.revision += 1;
-                        state.persist(config)?;
-                        state.candidate = None;
+                };
+                let phase = |phase| {
+                    let _ = worker.with(|state| {
+                        if let Some(task) = state
+                            .preparations
+                            .iter_mut()
+                            .find(|task| task.operation.id == worker_operation.id)
+                        {
+                            if !task.operation.cancel.load(Ordering::Acquire) {
+                                task.phase = phase;
+                            }
+                        }
                         Ok(())
                     });
-                    match applied {
-                        Ok(()) => {
-                            state.runtime_state = RuntimeState::Ready;
-                            state.notice.clear();
-                        }
-                        Err(error) => {
-                            state.runtime_state = if error.code == "cancelled" {
-                                RuntimeState::Cancelled
-                            } else {
-                                RuntimeState::Failed
-                            };
-                            state.notice = if error.code == "cancelled" {
-                                "Codex 组件准备已取消，请主动重试。".into()
-                            } else {
-                                failure(error.code).message.into()
-                            };
-                        }
-                    }
-                    Ok(())
-                });
+                };
+                let context = PreparationContext {
+                    phase: &phase,
+                    downloads: &worker.downloads,
+                };
+                let result = prepare_component(&worker_operation, &progress, &context);
+                let _ = worker.finish_preparation(&worker_operation, result);
             });
         if spawned.is_err() {
-            self.finish(
-                &operation,
-                Err::<(), _>(failure("harness_unavailable")),
-                |state, result| {
-                    if operation.config.adapter == "codebuddy" {
-                        state.codebuddy_runtime.state = RuntimeState::Failed;
-                        state.codebuddy_runtime.notice =
-                            failure("codebuddy_runtime_unavailable").message.into();
-                    } else {
-                        state.runtime_state = RuntimeState::Failed;
-                        state.notice = failure("harness_unavailable").message.into();
-                    }
-                    result
-                },
-            )?;
+            self.finish_preparation(&operation, Err(failure("harness_unavailable")))?;
         }
         self.with(|state| Ok(state.status()))
+    }
+    fn finish_preparation(&self, operation: &Operation, result: Result<PathBuf>) -> Result<()> {
+        let applied = self.with(|state| {
+            let Some(index) = state
+                .preparations
+                .iter()
+                .position(|task| task.operation.id == operation.id)
+            else {
+                return Ok(());
+            };
+            state.preparations.remove(index);
+            let result = if operation.cancel.load(Ordering::Acquire)
+                || state.restores > 0
+                || state.barrier
+            {
+                Err(failure("cancelled"))
+            } else {
+                result
+            };
+            if operation.config.adapter == "codebuddy" {
+                return state.finish_codebuddy_preparation(result);
+            }
+            let applied = result.and_then(|path| {
+                // 只合并本提供方的组件字段，不能用下载开始时的快照覆盖当前选择和模型。
+                let mut config = state.config.clone();
+                config.runtime_path = path;
+                config.runtime_source = operation.config.runtime_source;
+                config.verified = true;
+                if config.adapter == "codex" {
+                    config.revision += 1;
+                }
+                state.persist(config)?;
+                state.candidate = None;
+                Ok(())
+            });
+            match applied {
+                Ok(()) => {
+                    state.runtime_state = RuntimeState::Ready;
+                    state.notice.clear();
+                }
+                Err(error) => {
+                    state.runtime_state = if error.code == "cancelled" {
+                        RuntimeState::Cancelled
+                    } else {
+                        RuntimeState::Failed
+                    };
+                    state.notice = if error.code == "cancelled" {
+                        "Codex 组件准备已取消，请主动重试。".into()
+                    } else {
+                        failure(error.code).message.into()
+                    };
+                }
+            }
+            Ok(())
+        });
+        self.idle.notify_all();
+        applied
+    }
+    fn cancel_preparation(&self, adapter: &str, id: &str) -> Result<Status> {
+        if !matches!(adapter, "codex" | "codebuddy") || uuid::Uuid::parse_str(id).is_err() {
+            return Err(failure("invalid_input"));
+        }
+        let mut lock = self
+            .inner
+            .lock()
+            .map_err(|_| failure("harness_unavailable"))?;
+        let state = lock.as_mut().map_err(|_| failure("harness_unavailable"))?;
+        if let Some(task) = state
+            .preparations
+            .iter()
+            .find(|task| task.operation.id == id && task.operation.config.adapter == adapter)
+        {
+            task.operation.cancel.store(true, Ordering::Release);
+        } else {
+            return Ok(state.status());
+        }
+        let deadline = std::time::Instant::now() + STOP_WAIT_TIMEOUT;
+        loop {
+            let state = lock.as_mut().map_err(|_| failure("harness_unavailable"))?;
+            if !state
+                .preparations
+                .iter()
+                .any(|task| task.operation.id == id)
+            {
+                return Ok(state.status());
+            }
+            let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+            if remaining.is_zero() {
+                state.poison();
+                return Err(failure("harness_stopping"));
+            }
+            lock = self
+                .idle
+                .wait_timeout(lock, remaining)
+                .map_err(|_| failure("harness_unavailable"))?
+                .0;
+        }
     }
 
     fn logout(&self, clear: bool) -> Result<Status> {
@@ -927,6 +1114,7 @@ impl Harness {
 fn prepare_component(
     operation: &Operation,
     progress: &(dyn Fn(u64, u64) + Send + Sync),
+    context: &PreparationContext<'_>,
 ) -> Result<PathBuf> {
     if operation.cancel.load(Ordering::Acquire) {
         return Err(failure("cancelled"));
@@ -937,23 +1125,41 @@ fn prepare_component(
     }
     #[cfg(not(any(test, feature = "native-test")))]
     {
-        if operation.config.adapter == "codebuddy" {
-            return tauri::async_runtime::block_on(crate::harness_codebuddy_runtime::prepare(
-                &operation.root,
-                &operation.cancel,
-                progress,
-            ));
-        }
-        tauri::async_runtime::block_on(crate::harness_runtime::prepare(
+        let component = if operation.config.adapter == "codebuddy" {
+            crate::harness_runtime::Component::CodeBuddy
+        } else {
+            crate::harness_runtime::Component::Codex
+        };
+        tauri::async_runtime::block_on(crate::harness_runtime::prepare_observed(
             &operation.root,
             &operation.cancel,
             progress,
+            component,
+            Some(context),
         ))
+        .map_err(|error| {
+            if operation.config.adapter == "codebuddy" {
+                crate::harness_codebuddy_runtime::preparation_error(error)
+            } else {
+                error
+            }
+        })
     }
     #[cfg(any(test, feature = "native-test"))]
     {
+        (context.phase)(PreparationPhase::Queued);
+        let _download_slot = loop {
+            if operation.cancel.load(Ordering::Acquire) {
+                return Err(failure("cancelled"));
+            }
+            if let Ok(slot) = context.downloads.try_lock() {
+                break slot;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        };
         progress(0, 1);
         let wait_marker = operation.root.join("fake-prepare-wait");
+        (context.phase)(PreparationPhase::Downloading);
         let deadline = std::time::Instant::now() + Duration::from_secs(5);
         while wait_marker.exists() {
             if operation.cancel.load(Ordering::Acquire) {
@@ -971,6 +1177,10 @@ fn prepare_component(
             return Err(failure("harness_runtime_download"));
         }
         progress(1, 1);
+        (context.phase)(PreparationPhase::Verifying);
+        if operation.config.adapter == "codebuddy" {
+            (context.phase)(PreparationPhase::Extracting);
+        }
         Ok(PathBuf::from(if operation.config.adapter == "codebuddy" {
             "isolated-fake-codebuddy.exe"
         } else {
@@ -1024,6 +1234,7 @@ impl Inner {
             runtime_received_bytes: 0,
             runtime_total_bytes: 0,
             active: None,
+            preparations: Vec::new(),
             barrier: false,
             restores: 0,
             cancel_waiters: 0,
@@ -1036,8 +1247,31 @@ impl Inner {
             codebuddy_runtime: CodeBuddyRuntime::default(),
         })
     }
+    fn operation_busy(&self) -> bool {
+        self.active.as_ref().is_some_and(|active| !active.readonly)
+            || self.barrier
+            || self.restores > 0
+            || self.cancel_waiters > 0
+    }
     fn busy(&self) -> bool {
-        self.active.is_some() || self.barrier || self.restores > 0 || self.cancel_waiters > 0
+        self.active.is_some()
+            || self.operation_busy()
+            || self
+                .preparations
+                .iter()
+                .any(|task| task.operation.config.adapter == self.config.adapter)
+    }
+    fn component_tasks(&self) -> Vec<ComponentTaskStatus> {
+        self.preparations
+            .iter()
+            .map(|task| ComponentTaskStatus {
+                adapter: task.operation.config.adapter.clone(),
+                id: task.operation.id.clone(),
+                phase: task.phase,
+                received: task.received,
+                total: task.total,
+            })
+            .collect()
     }
     fn require_codex(&self) -> Result<()> {
         if self.config.adapter == "codex" {
@@ -1069,6 +1303,9 @@ impl Inner {
         if let Some(active) = &self.active {
             active.cancel.store(true, Ordering::Release);
         }
+        for task in &self.preparations {
+            task.operation.cancel.store(true, Ordering::Release);
+        }
     }
     fn start(&mut self, id: String, login: bool) -> Result<Operation> {
         self.ensure_idle()?;
@@ -1077,6 +1314,7 @@ impl Inner {
             id: id.clone(),
             cancel: cancel.clone(),
             login,
+            readonly: false,
         });
         let mut config = self.config.clone();
         if config.adapter == "codebuddy" {
@@ -1115,7 +1353,9 @@ impl Inner {
     fn finish_codebuddy_preparation(&mut self, result: Result<PathBuf>) -> Result<()> {
         let applied = result.and_then(|path| {
             let mut config = self.config.clone();
-            config.revision += 1;
+            if config.adapter == "codebuddy" {
+                config.revision += 1;
+            }
             self.persist(config)?;
             self.codebuddy_runtime.path = path;
             self.codebuddy_runtime.verified = true;
@@ -1199,6 +1439,8 @@ impl Inner {
             login_url: String::new(),
             user_code: String::new(),
             account_revision: account.as_ref().ok().map(|account| account.revision),
+            operation_busy: self.operation_busy() || account_busy,
+            component_tasks: self.component_tasks(),
         }
     }
     fn status(&self) -> Status {
@@ -1274,6 +1516,8 @@ impl Inner {
             login_url: self.login_url.clone(),
             user_code: self.user_code.clone(),
             account_revision: None,
+            operation_busy: self.operation_busy(),
+            component_tasks: self.component_tasks(),
         }
     }
 }
@@ -1446,7 +1690,10 @@ mod tests {
     }
     fn wait_login(service: &Harness) {
         let start = std::time::Instant::now();
-        while service.with(|state| Ok(state.active.is_some())).unwrap() {
+        while service
+            .with(|state| Ok(state.active.is_some() || !state.preparations.is_empty()))
+            .unwrap()
+        {
             assert!(start.elapsed() < Duration::from_secs(5));
             std::thread::sleep(Duration::from_millis(10));
         }
@@ -2045,6 +2292,80 @@ mod tests {
         assert_eq!(status["credentialStatus"], "missing");
         assert_eq!(status["ready"], false);
         assert!(!root.join("ai-execution/fake-subscription").exists());
+    }
+
+    #[test]
+    fn switching_during_preparation_preserves_task_and_selected_provider() {
+        let f = Fixture::new();
+        let gate = f.root.join("ai-execution/fake-prepare-wait");
+        std::fs::write(&gate, b"fixture").unwrap();
+        let preparing = f.service.control(Control::UseManagedRuntime {}).unwrap();
+        let selected = select_adapter(&f.service, "codebuddy", preparing.revision).unwrap();
+        assert_eq!(selected.adapter, "codebuddy");
+        std::fs::remove_file(gate).unwrap();
+        wait_login(&f.service);
+        let finished = f.service.control(Control::Status).unwrap();
+        assert_eq!(finished.adapter, "codebuddy");
+        let codex = select_adapter(&f.service, "codex", finished.revision).unwrap();
+        assert_eq!(codex.runtime_state, RuntimeState::Ready);
+        let reused = f.service.control(Control::PrepareRuntime {}).unwrap();
+        assert_eq!(reused.runtime_state, RuntimeState::Ready);
+        assert_eq!(reused.revision, codex.revision);
+    }
+
+    #[test]
+    fn preparation_cancellation_is_scoped_and_duplicate_starts_join_the_task() {
+        let f = Fixture::new();
+        std::fs::write(f.root.join("ai-execution/fake-prepare-wait"), b"fixture").unwrap();
+        let codex = f.service.control(Control::UseManagedRuntime {}).unwrap();
+        let id = codex.component_tasks[0].id.clone();
+        let duplicate = f.service.control(Control::PrepareRuntime {}).unwrap();
+        assert_eq!(duplicate.component_tasks.len(), 1);
+        assert_eq!(duplicate.component_tasks[0].id, id);
+        select_adapter(&f.service, "codebuddy", codex.revision).unwrap();
+        let buddy = f.service.control(Control::PrepareRuntime {}).unwrap();
+        assert_eq!(buddy.component_tasks.len(), 2);
+        let stopped = f
+            .service
+            .control(Control::CancelPreparation {
+                adapter: "codex".into(),
+                id,
+            })
+            .unwrap();
+        assert_eq!(stopped.adapter, "codebuddy");
+        assert_eq!(stopped.runtime_state, RuntimeState::Preparing);
+        assert_eq!(stopped.component_tasks.len(), 1);
+        assert_eq!(stopped.component_tasks[0].adapter, "codebuddy");
+        f.service.control(Control::CancelAll).unwrap();
+        assert!(f
+            .service
+            .control(Control::Status)
+            .unwrap()
+            .component_tasks
+            .is_empty());
+    }
+
+    #[test]
+    fn prepared_provider_can_execute_while_other_component_is_preparing() {
+        let (f, _, account_revision) = codebuddy_fixture();
+        let initial = f.service.control(Control::Status).unwrap();
+        select_adapter(&f.service, "codex", initial.revision).unwrap();
+        std::fs::write(f.root.join("ai-execution/fake-prepare-wait"), b"fixture").unwrap();
+        let preparing = f.service.control(Control::UseManagedRuntime {}).unwrap();
+        let selected = select_adapter(&f.service, "codebuddy", preparing.revision).unwrap();
+        assert!(selected.ready);
+        assert!(!selected.busy);
+        let mut task = request(&f.service);
+        task.account_revision = Some(account_revision);
+        assert!(f.service.execute(task).is_ok());
+        assert_eq!(
+            f.service
+                .control(Control::Status)
+                .unwrap()
+                .component_tasks
+                .len(),
+            1
+        );
     }
 
     #[test]

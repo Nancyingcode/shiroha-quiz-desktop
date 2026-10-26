@@ -376,6 +376,8 @@ C. 判断题
             <p>直接 API 支持 Ollama、LM Studio 和自定义兼容接口；本地 Harness 需要桌面环境。普通解析仍是默认主线，AI 结果必须进入预览并由人工核对后才能导入。</p>
           </div>
           <div id="ai-execution-settings" hidden>
+            <div id="ai-harness-loading" class="notice" role="status" aria-live="polite" hidden>正在读取 AI 设置…</div>
+            <button id="ai-harness-load-retry" class="ghost" type="button" hidden>重新读取设置</button>
             <fieldset class="ai-execution-choice"><legend>执行方式</legend>
               <label><input id="ai-execution-api" name="ai-execution-mode" type="radio" value="api" checked /> 直接调用 API</label>
               <label><input id="ai-execution-harness" name="ai-execution-mode" type="radio" value="harness" /> 使用 Harness</label>
@@ -384,7 +386,11 @@ C. 判断题
               <div class="ai-settings-grid-v99">
                 <label>Harness<select id="ai-harness-adapter"><option value="codex">Codex</option><option value="codebuddy">CodeBuddy</option><option value="deepseek">DeepSeek</option></select></label>
               </div>
-              <div id="ai-codex-settings" role="group" aria-label="Codex 订阅">
+              <div id="ai-harness-background" class="notice" hidden>
+                <p id="ai-harness-background-status" role="status" aria-live="polite"></p>
+                <div class="actions"><button id="ai-harness-background-view" class="ghost" type="button">查看</button><button id="ai-harness-background-cancel" class="ghost" type="button">取消下载</button></div>
+              </div>
+              <div id="ai-codex-settings" class="notice" role="group" aria-label="Codex 订阅">
                 <h3>Codex 订阅</h3>
                 <div class="ai-settings-grid-v99">
                   <label>模型名称<select id="ai-harness-model"><option value="gpt-6.1-sol">gpt-6.1-sol</option></select></label>
@@ -393,7 +399,7 @@ C. 判断题
                 <div class="notice" role="status" aria-live="polite"><b id="ai-harness-runtime-status">自动管理 · 尚未准备</b><p id="ai-harness-runtime-progress" hidden></p></div>
                 <p class="muted">应用会自动准备官方 Codex 组件。首次需要下载约 341 MB，缓存通过校验后可直接复用；组件准备不会发送题目或调用模型。</p>
                 <div class="actions"><button id="ai-harness-prepare" class="ghost" type="button">重试准备</button><button id="ai-harness-prepare-cancel" class="ghost" type="button" hidden>取消准备</button></div>
-                <p>订阅授权：<b id="ai-harness-auth-status">尚未登录订阅</b></p>
+                <p role="status" aria-live="polite">订阅授权：<b id="ai-harness-auth-status">正在读取登录状态…</b></p>
                 <div class="actions"><button id="ai-harness-login" class="primary" type="button">登录订阅</button><button id="ai-harness-auth-refresh" class="ghost" type="button">刷新状态</button><button id="ai-harness-logout" class="ghost danger" type="button">退出订阅登录</button><button id="ai-harness-stop" class="ghost" type="button">停止 Harness 任务</button></div>
                 <p class="muted">点击登录会先完成组件准备并自动保存 Harness 设置，再启动官方授权。登录后可主动测试模型访问；模型可选不代表当前订阅已获得访问权限。</p>
                 <p class="muted">登录取消或失败后，请先点击“退出订阅登录”清理未完成的授权，再重新登录。</p>
@@ -406,7 +412,7 @@ C. 判断题
                 <div id="ai-harness-status" class="notice" role="status" aria-live="polite">尚未检测。</div>
               </div>
               <div id="ai-codebuddy-settings" class="notice" role="group" aria-labelledby="ai-codebuddy-title" hidden>
-                <div class="section-head"><h3 id="ai-codebuddy-title">CodeBuddy 个人账户</h3><span id="ai-codebuddy-phase" class="pill">尚未登录</span></div>
+                <div class="section-head"><h3 id="ai-codebuddy-title">CodeBuddy 个人账户</h3><span id="ai-codebuddy-phase" class="pill">读取中</span></div>
                 <p>登录状态仅保留在本次应用运行期间，关闭应用后需要重新登录。</p>
                 <p class="muted">CodeBuddy 当前支持连接测试、单题解析和追问；暂不支持导入与批量任务。每次最多等待 120 秒。执行会使用当前个人账户并消耗账户用量。</p>
                 <label for="ai-codebuddy-model">CodeBuddy 模型</label>
@@ -427,7 +433,7 @@ C. 判断题
                   <label>当前官方登录地址<input id="ai-codebuddy-login-url" type="url" readonly spellcheck="false" autocomplete="off" /></label>
                   <div class="actions"><button id="ai-codebuddy-open-login" class="ghost" type="button">重新打开授权页</button><button id="ai-codebuddy-copy-link" class="ghost" type="button">复制登录链接</button></div>
                 </div>
-                <p id="ai-codebuddy-status" class="notice" role="status" aria-live="polite">尚未登录 CodeBuddy。</p>
+                <p id="ai-codebuddy-status" class="notice" role="status" aria-live="polite">正在读取 CodeBuddy 登录状态…</p>
                 <p id="ai-codebuddy-execution-status" class="notice" role="status" aria-live="polite">请准备组件并完成登录。</p>
               </div>
               <div id="ai-deepseek-settings" class="notice" role="group" aria-labelledby="ai-deepseek-title" hidden>

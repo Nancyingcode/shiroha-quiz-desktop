@@ -254,7 +254,8 @@ function aiExecutionLabelV99(config){
   const label=aiHarnessLabelV99(config.execution.adapter);return label==='未知 Harness'?label:`${label} Harness`;
 }
 function aiRequestConfigV99(config){return config.execution?.mode==='harness'?config:{...config,apiKey:readStoredAiKeyV99(config)}}
-function aiTasksBusyV99(){return aiImportRequestV99.running||aiPreviewRequestV991.running||Array.from(aiSingleSessionsV613.values()).some(session=>session.loading)||!!ShirohaPlatform.harness?.status().busy||!!$('#ai-test-connection-v99')?.disabled}
+// 按钮未就绪也会禁用，只有连接测试的在途标记才代表业务占用。
+function aiTasksBusyV99(){return aiImportRequestV99.running||aiPreviewRequestV991.running||Array.from(aiSingleSessionsV613.values()).some(session=>session.loading)||!!ShirohaPlatform.harness?.status().busy||$('#ai-test-connection-v99')?.getAttribute?.('aria-busy')==='true'}
 function normalizeAiEndpointV99(value,provider){
   let text=String(value||'').trim();
   if(!text)text=AI_PROVIDER_PRESETS_V99[provider]?.endpoint||'';
@@ -662,14 +663,14 @@ async function testAiConnectionV99(){
       const unavailable=aiHarnessTaskReasonV99({execution:{...execution,adapter}},'connection_test');if(unavailable)throw new Error(unavailable);
       if(execution.mode!=='harness'||execution.adapter!==adapter)throw new Error('请先保存当前提供方和执行方式，再测试执行。');
       if(!aiConfiguredV99({execution},'connection_test'))throw new Error(execution.reason||'当前 Harness 尚未就绪，请先检查设置。');
-      if(btn){btn.disabled=true;btn.textContent='测试中……'}await ShirohaPlatform.harness.test();setAiSettingsStatusV99(`${aiHarnessLabelV99(adapter)} 测试执行成功，结果已通过校验。`,'ok');updateAiConnectionPillV99('ok',true)
+      if(btn){btn.disabled=true;btn.setAttribute?.('aria-busy','true');btn.textContent='测试中……'}await ShirohaPlatform.harness.test();setAiSettingsStatusV99(`${aiHarnessLabelV99(adapter)} 测试执行成功，结果已通过校验。`,'ok');updateAiConnectionPillV99('ok',true)
     }
     catch(error){setAiSettingsStatusV99(error.message||'Harness 测试执行失败。','warn');updateAiConnectionPillV99('error')}
-    finally{if(btn){btn.disabled=false;btn.textContent='测试连接'}}
+    finally{if(btn){btn.removeAttribute?.('aria-busy');btn.disabled=!ShirohaPlatform.harness.snapshot().ready;btn.textContent='测试连接'}}
     return;
   }
   try{
-    config=readAiFormV99();if(btn){btn.disabled=true;btn.textContent='测试中……'}setAiSettingsStatusV99('正在连接接口并调用所选模型……');
+    config=readAiFormV99();if(btn){btn.disabled=true;btn.setAttribute?.('aria-busy','true');btn.textContent='测试中……'}setAiSettingsStatusV99('正在连接接口并调用所选模型……');
     setAiDiagnosticV375(buildAiDiagnosticV375(null,config,'idle'),aiDiagnosticsVisibleV375);
     const messages=[{role:'system',content:'只回复一个 JSON 对象。'},{role:'user',content:'回复 {"ok":true}'}];
     const result=await withAiTimeoutV99(config.timeoutSeconds,controller=>requestAiChatV99(config,messages,{controller,maxTokens:32,testMode:true,task:'connection_test'}));
@@ -682,7 +683,7 @@ async function testAiConnectionV99(){
     if(diag)setAiDiagnosticV375(diag,true);
     setAiSettingsStatusV99(diag?.statusMessage||error.message||'连接测试失败。','warn');showNotice('AI 连接',diag?.summary||error.message||'连接测试失败。','danger')
   }
-  finally{if(btn){btn.disabled=false;btn.textContent='测试连接'}}
+  finally{if(btn){btn.removeAttribute?.('aria-busy');btn.disabled=false;btn.textContent='测试连接'}}
 }
 function extractBalancedJsonV99(text){
   const s=String(text||'').replace(/^\uFEFF/,'').trim();
