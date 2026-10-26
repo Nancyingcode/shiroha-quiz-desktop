@@ -24,6 +24,8 @@ function settingsElements() {
   elements['ai-settings']={classList:{contains:()=>true}};
   elements['ai-harness-model']={value:'gpt-6.1-sol'};
   elements['ai-harness-timeout']={value:'120'};
+  for(const id of ['ai-harness-settings','ai-codex-settings','ai-codebuddy-settings','ai-deepseek-settings','ai-api-settings-fields','ai-settings-actions','ai-save-settings-v99','ai-test-connection-v99','ai-clear-settings-v99','ai-settings-status-v99'])elements[id]={};
+  elements['ai-harness-adapter']={value:'codex'};
   let selected='api';
   for(const mode of ['api','harness'])Object.defineProperty(elements['ai-execution-'+mode],'checked',{get:()=>selected===mode,set:value=>{if(value)selected=mode;}});
   return elements;
@@ -33,6 +35,177 @@ function pollingClock() {
   return {setTimeout(callback){timers.set(++id,callback);return id;},clearTimeout(key){timers.delete(key);},async tick(){const entry=timers.entries().next().value;assert(entry,'缺少状态轮询');timers.delete(entry[0]);await entry[1]();},timers};
 }
 const managedStatus={...status,mode:'api',model:'',credentialStatus:'missing',runtimePath:'',runtimeVersion:'',runtimeSource:'managed',runtimeState:'unprepared',ready:false};
+
+for(const adapter of ['codex','codebuddy','deepseek'])test(`Harness选择${adapter}时仅显示对应面板，API模式隐藏所有订阅面板`,async()=>{
+  const elements=settingsElements();const calls=[];
+  const api=client(async(_command,{request})=>{calls.push(request.kind);return {...status,adapter,ready:adapter==='codex'};},elements);
+  await api.initialize();api.bind(()=>{},()=>false);api.render();await settleUi();
+  assert.equal(elements['ai-harness-adapter'].value,adapter);
+  for(const name of ['codex','codebuddy','deepseek'])assert.equal(elements[`ai-${name}-settings`].hidden,name!==adapter);
+  if(adapter!=='codex'){
+    assert.deepEqual(calls,['status']);
+    assert.equal(elements['ai-test-connection-v99'].hidden,adapter==='deepseek');
+    assert.notEqual(elements['ai-test-connection-v99'].disabled,true);
+  }
+  elements['ai-execution-api'].checked=true;elements['ai-execution-api'].onchange();await settleUi();
+  for(const name of ['codex','codebuddy','deepseek'])assert.equal(elements[`ai-${name}-settings`].hidden,true);
+  assert.match(elements['ai-settings-status-v99'].textContent,/直接 API/);
+  assert.equal(calls.some(kind=>kind==='logout'||kind==='clear'),false);
+});
+
+test('选择立即阻断旧Codex快照，保存成功保留订阅且迟到状态不能改回界面',async()=>{
+  const saving=deferred();const stale=deferred();const calls=[];const elements=settingsElements();let reads=0;
+  elements['ai-harness-auth-refresh']={};
+  const api=client(async(command,{request})=>{
+    calls.push({command,...request});
+    if(request.kind==='select_adapter')return saving.promise;
+    if(request.kind==='status'&&++reads>1)return stale.promise;
+    return {...status};
+  },elements);
+  await api.initialize();api.bind(()=>{},()=>false);
+  const old=api.snapshot();elements['ai-harness-auth-refresh'].onclick();await settleUi();
+  const selected=api.selectAdapter('codebuddy');
+  assert.equal(api.snapshot().adapter,'codebuddy');assert.equal(api.snapshot().ready,false);
+  await assert.rejects(api.execute(old,'question_analysis',[]));
+  assert.equal(elements['ai-codebuddy-settings'].hidden,false);
+  saving.resolve({...status,adapter:'codebuddy',ready:false,revision:5});await selected;
+  stale.resolve({...status,revision:99});await settleUi();api.render();
+  assert.equal(api.snapshot().adapter,'codebuddy');assert.equal(elements['ai-harness-adapter'].value,'codebuddy');
+  assert.equal(api.status().credentialStatus,'subscription');
+  assert.equal(calls.some(call=>call.command==='harness_execute'||['logout','clear','inspect'].includes(call.kind)),false);
+  assert.deepEqual(calls.find(call=>call.kind==='select_adapter'),{command:'harness_control',kind:'select_adapter',adapter:'codebuddy',revision:4});
+});
+
+test('选择失败保留目标且禁止旧执行，保存可重试并使用当前修订',async()=>{
+  const calls=[];const elements=settingsElements();let fail=true;
+  const api=client(async(command,{request})=>{
+    calls.push({command,...request});
+    if(request.kind==='select_adapter'){
+      if(fail)throw {code:'save_failed',message:'保存失败'};
+      return {...status,adapter:request.adapter,ready:false,revision:5};
+    }
+    return {...status};
+  },elements);
+  await api.initialize();api.bind(()=>{},()=>false);
+  await assert.rejects(api.selectAdapter('deepseek'));
+  api.render();assert.equal(api.snapshot().adapter,'deepseek');assert.equal(api.snapshot().ready,false);
+  assert.equal(elements['ai-harness-adapter'].value,'deepseek');
+  assert.equal(elements['ai-save-settings-v99'].hidden,false);
+  await assert.rejects(api.execute({...status},'batch_analysis',[]));
+  await assert.rejects(api.test());
+  fail=false;await api.saveMode('harness');
+  assert.equal(api.status().adapter,'deepseek');assert.equal(api.status().revision,5);
+  assert.equal(calls.filter(call=>call.kind==='select_adapter').length,2);
+  assert.equal(calls.some(call=>call.command==='harness_execute'||call.kind==='clear'||call.kind==='logout'),false);
+});
+
+for(const outcome of ['success','failure'])test(`重新初始化与提供方保存${outcome}重叠时旧Codex始终不可执行`,async()=>{
+  const saving=deferred();const calls=[];const elements=settingsElements();let reads=0;
+  elements['ai-harness-auth-refresh']={};
+  const native={...status,adapter:'codebuddy',ready:false,revision:5,reason:'CodeBuddy 模型执行尚未开放。'};
+  const api=client(async(command,{request})=>{
+    calls.push({command,...request});
+    if(request.kind==='select_adapter')return saving.promise;
+    return ++reads===1?{...status}:{...native};
+  },elements);
+  await api.initialize();api.bind(()=>{},()=>false);const old=api.snapshot();
+  const selection=api.selectAdapter('codebuddy');const rejected=assert.rejects(selection);
+  const initializing=api.initialize();
+  assert.equal(api.snapshot().ready,false,'重新读取开始即停用旧已就绪状态');
+  await initializing;
+  assert.equal(api.status().ready,false,'保存未收敛时的查询不能解除阻断');
+  if(outcome==='success')saving.resolve(native);else saving.reject(new Error('保存回复失败'));
+  await rejected;
+  assert.equal(api.status().busy,false);assert.equal(api.snapshot().ready,false);
+  assert.match(api.status().reason,/刷新|重新/);
+  await assert.rejects(api.execute(old,'question_analysis',[]));
+  assert.equal(calls.some(call=>call.command==='harness_execute'),false);
+  elements['ai-harness-auth-refresh'].onclick();await settleUi();
+  assert.equal(api.snapshot().adapter,'codebuddy');assert.equal(api.snapshot().revision,5);
+  assert.equal(api.snapshot().ready,false);
+});
+
+test('旧初始化查询的失败不能覆盖新生命周期已确认的提供方状态',async()=>{
+  const stale=deferred();let reads=0;
+  const native={...status,adapter:'deepseek',ready:false,revision:6,reason:'DeepSeek 尚未接入。'};
+  const api=client(async()=>++reads===1?{...status}:reads===2?stale.promise:{...native});
+  await api.initialize();const old=api.initialize();await api.initialize();
+  stale.reject(new Error('旧生命周期读取失败'));await old;
+  assert.equal(api.snapshot().adapter,'deepseek');assert.equal(api.snapshot().reason,native.reason);
+});
+
+test('任务忙碌拒绝切换，返回Codex保留登录并刷新环境',async()=>{
+  const elements=settingsElements();const calls=[];let busy=true;let native={...status};
+  const api=client(async(_command,{request})=>{
+    calls.push(request.kind);
+    if(request.kind==='select_adapter')native={...native,adapter:request.adapter,revision:native.revision+1,ready:request.adapter==='codex'};
+    return {...native};
+  },elements);
+  await api.initialize();api.bind(()=>{},()=>busy);
+  await assert.rejects(api.selectAdapter('codebuddy'),error=>error.code==='busy');
+  assert.equal(api.formAdapter(),'codex');assert.equal(calls.includes('select_adapter'),false);
+  busy=false;await api.selectAdapter('codebuddy');await api.selectAdapter('codex');await settleUi();
+  assert.equal(api.status().credentialStatus,'subscription');assert.equal(calls.includes('inspect'),true);
+  assert.equal(calls.some(kind=>kind==='login'||kind==='logout'||kind==='clear'),false);
+});
+
+for(const adapter of ['codebuddy','deepseek'])test(`${adapter}即使收到伪造ready也不能执行或触发Codex专属操作`,async()=>{
+  const elements=settingsElements();for(const id of ['ai-harness-choose','ai-harness-inspect','ai-harness-logout','ai-harness-auth-refresh','ai-harness-stop'])elements[id]={};
+  const calls=[];const api=client(async(command,{request})=>{calls.push({command,...request});return {...status,adapter};},elements);
+  await api.initialize();api.bind(()=>{},()=>false);
+  assert.equal(api.snapshot().ready,false);
+  for(const task of ['connection_test','import_organize','batch_review','batch_analysis','question_analysis','question_followup'])await assert.rejects(api.execute({...status,adapter},task,[]));
+  await assert.rejects(api.test());await assert.rejects(api.clear());
+  for(const id of ['ai-harness-login','ai-harness-prepare','ai-harness-use-managed','ai-harness-choose','ai-harness-inspect','ai-harness-logout'])elements[id].onclick();
+  await api.cancelAll();await settleUi();
+  assert.deepEqual(calls.map(call=>call.kind),adapter==='codebuddy'?['status','cancel_all']:['status']);
+});
+
+test('共享业务冻结真实提供方标签并拒绝未开放提供方，隐私文案不冒称OpenAI',()=>{
+  const source=readFileSync(require.resolve('../../apps/web/app.js'),'utf8');
+  let execution={...status};
+  const context=vm.createContext({ShirohaPlatform:{harness:{snapshot:()=>execution}},AI_PROVIDER_PRESETS_V99:{}});
+  vm.runInContext(source.slice(source.indexOf('function aiProviderLabelV99('),source.indexOf('function normalizeAiEndpointV99(')),context);
+  for(const [adapter,label] of [['codex','Codex'],['codebuddy','CodeBuddy'],['deepseek','DeepSeek']]){
+    execution={...status,adapter,model:adapter==='codebuddy'?'deepseek-v4.1-flash':status.model};const config=context.aiExecutionConfigV99();
+    assert.equal(config.provider,adapter);assert.equal(context.aiExecutionLabelV99(config),`${label} Harness`);
+    assert.equal(context.aiConfiguredV99(config),adapter==='codex');
+    if(adapter!=='codex'){
+      assert.notEqual(config.model,status.model);
+      if(adapter==='codebuddy')assert.equal(config.model,execution.model);
+      const privacy=context.aiHarnessPrivacyV99(config,'本题文字');
+      assert.doesNotMatch(privacy,/Codex|OpenAI/);assert.match(privacy,/不会发送|尚未开放/);
+    }
+  }
+});
+
+test('共享清除入口在非Codex提供方不确认或清理Codex授权',async()=>{
+  const source=readFileSync(require.resolve('../../apps/web/app.js'),'utf8');
+  for(const adapter of ['codebuddy','deepseek']){
+    const calls=[];
+    const context=vm.createContext({ShirohaPlatform:{harness:{formMode:()=>'harness',formAdapter:()=>adapter,snapshot:()=>({...status,adapter}),cancelAll:async()=>calls.push('cancel'),clear:async()=>calls.push('clear')}},confirm:()=>{calls.push('confirm');return true;},setAiSettingsStatusV99(){},updateAiConnectionPillV99(){},syncAiImportActionV99(){}});
+    vm.runInContext(source.slice(source.indexOf('function aiProviderLabelV99('),source.indexOf('function normalizeAiEndpointV99(')),context);
+    vm.runInContext(source.slice(source.indexOf('async function clearAiSettingsV99('),source.indexOf('function bindAiImportEventsV99(')),context);
+    await context.clearAiSettingsV99();assert.deepEqual(calls,[]);
+  }
+});
+
+test('共享测试与统一请求入口拒绝缺少账户修订的CodeBuddy和未开放提供方',async()=>{
+  const source=readFileSync(require.resolve('../../apps/web/app.js'),'utf8');
+  for(const adapter of ['codebuddy','deepseek']){
+    const calls=[];const messages=[];const button={disabled:false,textContent:'测试连接'};
+    const context=vm.createContext({
+      ShirohaPlatform:{harness:{formMode:()=>'harness',formAdapter:()=>adapter,snapshot:()=>({...status,adapter}),test:async()=>calls.push('test'),execute:async()=>calls.push('execute')},network:{ai:async()=>calls.push('network')}},
+      $:()=>button,setAiSettingsStatusV99:message=>messages.push(message),updateAiConnectionPillV99(){},
+    });
+    vm.runInContext(source.slice(source.indexOf('function aiProviderLabelV99('),source.indexOf('function normalizeAiEndpointV99(')),context);
+    vm.runInContext(source.slice(source.indexOf('async function testAiConnectionV99('),source.indexOf('function extractBalancedJsonV99(')),context);
+    vm.runInContext(source.slice(source.indexOf('async function requestAiChatV99('),source.indexOf('async function withAiTimeoutV99(')),context);
+    await context.testAiConnectionV99();
+    for(const task of ['connection_test','import_organize','batch_review','batch_analysis','question_analysis','question_followup'])await assert.rejects(context.requestAiChatV99({execution:{...status,adapter}},[],{task}),adapter==='codebuddy'?/尚未配置|尚未开放/:/尚未开放/);
+    assert.deepEqual(calls,[]);assert.equal(button.disabled,false);assert.match(messages[0],adapter==='codebuddy'?/尚未就绪/:/尚未开放/);
+  }
+});
 
 test('Harness 每次操作冻结已保存配置并分派任务，不接触 API 设置', async () => {
   const calls = [];
@@ -272,6 +445,7 @@ test('统一入口返回 Harness 内容，失败不走 API response_format 重�
   let apiCalls = 0;
   let harnessCalls = 0;
   const context = vm.createContext({ ShirohaPlatform: { credentials: { native: true }, network: { ai() { apiCalls++; } }, harness: { async execute(snapshot, task) { harnessCalls++; assert.equal(snapshot.revision, 4); assert.equal(task, 'import_organize'); throw Object.assign(new Error('额度不足'), { code: 'quota_exceeded' }); } } } });
+  vm.runInContext(source.slice(source.indexOf('function aiProviderLabelV99('),source.indexOf('function normalizeAiEndpointV99(')),context);
   vm.runInContext(fragment, context);
   await assert.rejects(context.requestAiChatV99({ execution: status }, [], { task: 'import_organize' }), /额度不足/);
   assert.equal(apiCalls, 0);

@@ -22,6 +22,7 @@ async function fixture(t) {
   await writeFile(path.join(desktop, 'frontend/bridge.js'), '"use strict";');
   await writeFile(path.join(desktop, 'frontend/adapter.js'), '"use strict";');
   await writeFile(path.join(desktop, 'frontend/harness.js'), '"use strict";');
+  await writeFile(path.join(desktop, 'frontend/codebuddy-login.js'), '"use strict"; // account fixture');
   for (const name of requiredAssets) {
     await mkdir(path.dirname(path.join(web, name)), { recursive: true });
     await writeFile(path.join(web, name), 'fixture');
@@ -69,6 +70,16 @@ test('stages offline resources and licenses, excludes tooling, and leaves Web so
   await prepareWeb(f.web, f.desktop);
   assert.equal(await readFile(path.join(f.dist, 'index.html'), 'utf8'), first);
   assert.equal((await readdir(f.dist)).includes('stale.js'), false);
+});
+
+test('adds the independent account script after the native bridge without changing the Web entry', async t => {
+  const f = await fixture(t);
+  await prepareWeb(f.web, f.desktop);
+  const html = await readFile(path.join(f.dist, 'index.html'), 'utf8');
+  assert.match(html, /src="\.\/codebuddy-login\.js"/);
+  assert(html.indexOf('src="./bridge.js"') < html.indexOf('src="./codebuddy-login.js"'));
+  assert.equal(await readFile(path.join(f.dist, 'codebuddy-login.js'), 'utf8'), '"use strict"; // account fixture');
+  assert.equal(await readFile(path.join(f.web, 'index.html'), 'utf8'), f.html);
 });
 
 test('moves handlers to an external script while preserving click/error behavior and this', async (t) => {

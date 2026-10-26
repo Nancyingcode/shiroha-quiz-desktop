@@ -77,7 +77,7 @@ pub(crate) fn run(
 }
 
 #[cfg(windows)]
-mod windows {
+pub(crate) mod windows {
     use super::{
         Error, Observer, OsString, Output, Path, Result, MAX_STDERR_BYTES, MAX_STDOUT_BYTES,
     };
@@ -120,9 +120,9 @@ mod windows {
     const STOP_TIMEOUT: Duration = Duration::from_secs(5);
 
     // Job 与管道归单次调用所有；关闭最后一个 Job 句柄也终止后代，宿主异常退出时不遗留任务。
-    struct Job(OwnedHandle);
+    pub(crate) struct Job(OwnedHandle);
     impl Job {
-        fn new() -> Result<Self> {
+        pub(crate) fn new() -> Result<Self> {
             // SAFETY: 空属性创建不可继承的匿名 Job；返回句柄立即转为唯一所有者。
             let raw = unsafe { CreateJobObjectW(std::ptr::null(), std::ptr::null()) };
             if raw.is_null() {
@@ -148,6 +148,10 @@ mod windows {
         }
 
         fn bind(&self, child: &Child) -> Result<()> {
+            self.bind_handle(child)
+        }
+
+        pub(crate) fn bind_handle(&self, child: &impl AsRawHandle) -> Result<()> {
             // SAFETY: 两个句柄均由本次调用持有；子进程仍挂起，不能在加入 Job 前产生后代。
             if unsafe { AssignProcessToJobObject(self.0.as_raw_handle(), child.as_raw_handle()) }
                 == 0
@@ -157,7 +161,7 @@ mod windows {
             Ok(())
         }
 
-        fn stop(&self, deadline: Instant) -> Result<()> {
+        pub(crate) fn stop(&self, deadline: Instant) -> Result<()> {
             // SAFETY: 只终止本次创建且持有句柄的 Job，不按进程名或重新查找的 PID 操作。
             if unsafe { TerminateJobObject(self.0.as_raw_handle(), 1) } == 0 {
                 return Err(Error::new("harness_stop_failed"));

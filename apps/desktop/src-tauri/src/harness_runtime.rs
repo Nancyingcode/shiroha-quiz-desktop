@@ -46,8 +46,122 @@ struct Manifest {
     sha256: String,
 }
 
+#[derive(Clone, Copy)]
+pub(crate) enum Component {
+    Codex,
+    CodeBuddy,
+}
+
+impl Component {
+    fn managed_path(self, root: &Path) -> PathBuf {
+        match self {
+            Self::Codex => root
+                .join("runtime")
+                .join("codex")
+                .join(VERSION)
+                .join("codex.exe"),
+            Self::CodeBuddy => crate::harness_codebuddy_runtime::managed_path(root),
+        }
+    }
+
+    fn executable_name(self) -> &'static str {
+        match self {
+            Self::Codex => "codex.exe",
+            Self::CodeBuddy => "codebuddy.exe",
+        }
+    }
+
+    fn licenses(self) -> &'static [(&'static str, &'static [u8])] {
+        match self {
+            Self::Codex => LICENSE_FILES,
+            Self::CodeBuddy => crate::harness_codebuddy_runtime::LICENSE_FILES,
+        }
+    }
+
+    fn user_agent(self) -> &'static str {
+        match self {
+            Self::Codex => "Shiroha-Quiz-Codex-Runtime",
+            Self::CodeBuddy => "Shiroha-Quiz-CodeBuddy-Runtime",
+        }
+    }
+}
+
+struct Preparation<'a> {
+    component: Component,
+    download: &'a Manifest,
+    executable: &'a Manifest,
+    policy: &'a Policy,
+}
+
+pub(crate) async fn prepare_component(
+    root: &Path,
+    cancel: &AtomicBool,
+    progress: &(dyn Fn(u64, u64) + Send + Sync),
+    component: Component,
+) -> Result<PathBuf> {
+    use crate::harness_codebuddy_runtime as codebuddy;
+    let (download, executable, policy) = match component {
+        Component::Codex => (
+            Manifest {
+                url: EXECUTABLE_URL.into(),
+                bytes: EXECUTABLE_BYTES,
+                sha256: EXECUTABLE_SHA256.into(),
+            },
+            Manifest {
+                url: String::new(),
+                bytes: EXECUTABLE_BYTES,
+                sha256: EXECUTABLE_SHA256.into(),
+            },
+            Policy::Official,
+        ),
+        Component::CodeBuddy => (
+            Manifest {
+                url: codebuddy::ARCHIVE_URL.into(),
+                bytes: codebuddy::ARCHIVE_BYTES,
+                sha256: codebuddy::ARCHIVE_SHA256.into(),
+            },
+            Manifest {
+                url: String::new(),
+                bytes: codebuddy::EXECUTABLE_BYTES,
+                sha256: codebuddy::EXECUTABLE_SHA256.into(),
+            },
+            Policy::CodeBuddy,
+        ),
+    };
+    prepare_component_with(
+        root,
+        cancel,
+        progress,
+        &Preparation {
+            component,
+            download: &download,
+            executable: &executable,
+            policy: &policy,
+        },
+        PREPARE_TIMEOUT,
+    )
+    .await
+}
+
+async fn prepare_component_with(
+    root: &Path,
+    cancel: &AtomicBool,
+    progress: &(dyn Fn(u64, u64) + Send + Sync),
+    preparation: &Preparation<'_>,
+    timeout: Duration,
+) -> Result<PathBuf> {
+    // 取消和总时限覆盖等待响应、响应正文和本地校验；丢弃任务时临时文件 guard 同步回收。
+    tokio::select! {
+        biased;
+        _ = cancellation(cancel) => Err(failure("cancelled")),
+        _ = tokio::time::sleep(timeout) => Err(failure("timeout")),
+        result = prepare_inner(root, cancel, progress, preparation) => result,
+    }
+}
+
 enum Policy {
     Official,
+    CodeBuddy,
     #[cfg(test)]
     MockOrigin(String),
     #[cfg(test)]
@@ -59,10 +173,7 @@ enum Policy {
 
 #[cfg(test)]
 fn managed_path(root: &Path) -> PathBuf {
-    root.join("runtime")
-        .join("codex")
-        .join(VERSION)
-        .join("codex.exe")
+    Component::Codex.managed_path(root)
 }
 
 pub(crate) async fn prepare(
@@ -70,21 +181,10 @@ pub(crate) async fn prepare(
     cancel: &AtomicBool,
     progress: &(dyn Fn(u64, u64) + Send + Sync),
 ) -> Result<PathBuf> {
-    prepare_with(
-        root,
-        cancel,
-        progress,
-        &Manifest {
-            url: EXECUTABLE_URL.into(),
-            bytes: EXECUTABLE_BYTES,
-            sha256: EXECUTABLE_SHA256.into(),
-        },
-        &Policy::Official,
-        PREPARE_TIMEOUT,
-    )
-    .await
+    prepare_component(root, cancel, progress, Component::Codex).await
 }
 
+#[cfg(test)]
 async fn prepare_with(
     root: &Path,
     cancel: &AtomicBool,
@@ -93,13 +193,19 @@ async fn prepare_with(
     policy: &Policy,
     timeout: Duration,
 ) -> Result<PathBuf> {
-    // 取消和总时限覆盖等待响应、响应正文和本地校验；丢弃任务时临时文件 guard 同步回收。
-    tokio::select! {
-        biased;
-        _ = cancellation(cancel) => Err(failure("cancelled")),
-        _ = tokio::time::sleep(timeout) => Err(failure("timeout")),
-        result = prepare_inner(root, cancel, progress, manifest, policy) => result,
-    }
+    prepare_component_with(
+        root,
+        cancel,
+        progress,
+        &Preparation {
+            component: Component::Codex,
+            download: manifest,
+            executable: manifest,
+            policy,
+        },
+        timeout,
+    )
+    .await
 }
 
 fn check_cancel(cancel: &AtomicBool) -> Result<()> {
@@ -129,6 +235,13 @@ fn validate_target(target: &Url, policy: &Policy) -> Result<()> {
                     Some("github.com" | "release-assets.githubusercontent.com")
                 )
                 && target.port_or_known_default() == Some(443)
+        }
+        Policy::CodeBuddy => {
+            target.scheme() == "https"
+                && target.host_str() == Some("acc-1258344699.cos.accelerate.myqcloud.com")
+                && target.port_or_known_default() == Some(443)
+                && target.path() == "/@tencent-ai/codebuddy-code/releases/download/2.175.0/codebuddy-code_Windows_x86_64.zip"
+                && target.query().is_none()
         }
         #[cfg(test)]
         Policy::MockOrigin(origin) | Policy::MockProxy { origin, .. } => {
@@ -185,8 +298,17 @@ fn pin_directory(path: &Path) -> Result<File> {
     Ok(directory)
 }
 
+#[cfg(test)]
 fn install_directory(
     root: &Path,
+    before_canonicalize: Option<&dyn Fn()>,
+) -> Result<(PathBuf, Vec<File>)> {
+    install_component_directory(root, Component::Codex, before_canonicalize)
+}
+
+fn install_component_directory(
+    root: &Path,
+    component: Component,
     #[cfg(test)] before_canonicalize: Option<&dyn Fn()>,
 ) -> Result<(PathBuf, Vec<File>)> {
     if !root.is_absolute()
@@ -209,7 +331,12 @@ fn install_directory(
     }
     let canonical_root = fs::canonicalize(root).map_err(storage_error)?;
     let mut directory = canonical_root.clone();
-    for part in ["runtime", "codex", VERSION] {
+    let target = component.managed_path(&canonical_root);
+    let relative = target
+        .parent()
+        .and_then(|parent| parent.strip_prefix(&canonical_root).ok())
+        .ok_or_else(|| failure("harness_runtime_storage"))?;
+    for part in relative {
         directory.push(part);
         reject_links(&directory).map_err(storage_error)?;
         match fs::create_dir(&directory) {
@@ -311,9 +438,9 @@ struct Pending {
 
 impl Pending {
     fn new(directory: &Path) -> Result<Self> {
-        let path = directory.join(format!("codex-{}.pending", uuid::Uuid::new_v4()));
+        let path = directory.join(format!("runtime-{}.pending", uuid::Uuid::new_v4()));
         let mut options = OpenOptions::new();
-        options.write(true).create_new(true);
+        options.read(true).write(true).create_new(true);
         #[cfg(windows)]
         {
             use std::os::windows::fs::OpenOptionsExt;
@@ -329,11 +456,13 @@ impl Pending {
     }
 
     fn write(&mut self, bytes: &[u8]) -> Result<()> {
+        self.file_mut()?.write_all(bytes).map_err(storage_error)
+    }
+
+    fn file_mut(&mut self) -> Result<&mut File> {
         self.file
             .as_mut()
-            .ok_or_else(|| failure("harness_runtime_storage"))?
-            .write_all(bytes)
-            .map_err(storage_error)
+            .ok_or_else(|| failure("harness_runtime_storage"))
     }
 
     fn install(mut self, target: &Path, cancel: &AtomicBool) -> Result<()> {
@@ -359,8 +488,8 @@ impl Drop for Pending {
     }
 }
 
-fn install_licenses(directory: &Path, cancel: &AtomicBool) -> Result<()> {
-    for (name, bytes) in LICENSE_FILES {
+fn install_licenses(directory: &Path, cancel: &AtomicBool, component: Component) -> Result<()> {
+    for (name, bytes) in component.licenses() {
         check_cancel(cancel)?;
         let target = directory.join(name);
         let matches = if let Some(mut existing) = open_read_locked(&target)? {
@@ -399,25 +528,52 @@ async fn prepare_inner(
     root: &Path,
     cancel: &AtomicBool,
     progress: &(dyn Fn(u64, u64) + Send + Sync),
-    manifest: &Manifest,
-    policy: &Policy,
+    preparation: &Preparation<'_>,
 ) -> Result<PathBuf> {
     check_cancel(cancel)?;
-    let (directory, _protected_directories) = install_directory(
+    let (directory, _protected_directories) = install_component_directory(
         root,
+        preparation.component,
         #[cfg(test)]
         None,
     )?;
     let _lock = preparation_lock(&directory)?;
-    let target = directory.join("codex.exe");
-    install_licenses(&directory, cancel)?;
+    let target = directory.join(preparation.component.executable_name());
+    install_licenses(&directory, cancel, preparation.component)?;
+    let manifest = preparation.download;
     progress(0, manifest.bytes);
-    if valid_cache(&target, manifest, cancel).await? {
+    if valid_cache(&target, preparation.executable, cancel).await? {
         progress(manifest.bytes, manifest.bytes);
         return Ok(target);
     }
+    let mut pending = download(&directory, cancel, progress, preparation).await?;
+    match preparation.component {
+        Component::Codex => pending.install(&target, cancel)?,
+        Component::CodeBuddy => {
+            let mut executable = Pending::new(&directory)?;
+            crate::harness_codebuddy_runtime::unpack_verified_zip(
+                pending.file_mut()?,
+                executable.file_mut()?,
+                cancel,
+            )
+            .await?;
+            executable.install(&target, cancel)?;
+        }
+    }
+    progress(manifest.bytes, manifest.bytes);
+    Ok(target)
+}
+
+async fn download(
+    directory: &Path,
+    cancel: &AtomicBool,
+    progress: &(dyn Fn(u64, u64) + Send + Sync),
+    preparation: &Preparation<'_>,
+) -> Result<Pending> {
+    let manifest = preparation.download;
+    let policy = preparation.policy;
     let proxy = match policy {
-        Policy::Official => crate::harness_proxy::current()?,
+        Policy::Official | Policy::CodeBuddy => crate::harness_proxy::current()?,
         #[cfg(test)]
         Policy::MockOrigin(_) => SystemProxy::direct(),
         #[cfg(test)]
@@ -437,7 +593,10 @@ async fn prepare_inner(
         let response = client
             .get(url.clone())
             .header(reqwest::header::ACCEPT_ENCODING, "identity")
-            .header(reqwest::header::USER_AGENT, "Shiroha-Quiz-Codex-Runtime")
+            .header(
+                reqwest::header::USER_AGENT,
+                preparation.component.user_agent(),
+            )
             .send()
             .await
             .map_err(|_| failure(download_error))?;
@@ -468,7 +627,7 @@ async fn prepare_inner(
     {
         return Err(failure("harness_runtime_integrity"));
     }
-    let mut pending = Pending::new(&directory)?;
+    let mut pending = Pending::new(directory)?;
     let mut hash = Sha256::new();
     let mut bytes = 0u64;
     while let Some(chunk) = response
@@ -494,9 +653,8 @@ async fn prepare_inner(
     if bytes != manifest.bytes || format!("{:x}", hash.finalize()) != manifest.sha256 {
         return Err(failure("harness_runtime_integrity"));
     }
-    pending.install(&target, cancel)?;
-    progress(bytes, manifest.bytes);
-    Ok(target)
+    check_cancel(cancel)?;
+    Ok(pending)
 }
 
 #[cfg(test)]
@@ -512,6 +670,194 @@ mod tests {
     use std::time::Instant;
 
     const BODY: &[u8] = b"isolated synthetic runtime: never execute";
+
+    #[test]
+    fn codebuddy_cache_and_lock_are_independent_of_codex() {
+        let fixture = Fixture::new();
+        let codex = fixture.write_cache(b"keep Codex runtime");
+        let lock = preparation_lock(codex.parent().unwrap()).unwrap();
+        let codebuddy = crate::harness_codebuddy_runtime::managed_path(&fixture.0);
+        fs::create_dir_all(codebuddy.parent().unwrap()).unwrap();
+        fs::write(&codebuddy, BODY).unwrap();
+        let server = Server::new(|_| panic!("verified CodeBuddy cache must not download"));
+        let manifest = server.manifest();
+        let result = run(prepare_component_with(
+            &fixture.0,
+            &AtomicBool::new(false),
+            &|_, _| {},
+            &Preparation {
+                component: Component::CodeBuddy,
+                download: &manifest,
+                executable: &manifest,
+                policy: &Policy::MockOrigin(server.origin.clone()),
+            },
+            Duration::from_secs(5),
+        ));
+        drop(lock);
+        let installed = result.unwrap();
+        assert_eq!(
+            fs::canonicalize(installed).unwrap(),
+            fs::canonicalize(&codebuddy).unwrap()
+        );
+        for (name, expected) in crate::harness_codebuddy_runtime::LICENSE_FILES {
+            assert_eq!(
+                fs::read(codebuddy.parent().unwrap().join(name)).unwrap(),
+                *expected
+            );
+        }
+        assert!(!codebuddy.parent().unwrap().join("NOTICE").exists());
+        assert_eq!(fs::read(codex).unwrap(), b"keep Codex runtime");
+        assert_eq!(server.hits.load(Ordering::Acquire), 0);
+    }
+
+    #[test]
+    fn codebuddy_archive_must_not_be_installed_as_an_executable() {
+        let fixture = Fixture::new();
+        let server = Server::new(|_| Reply::body(BODY));
+        let archive = server.manifest();
+        let executable = Manifest {
+            url: String::new(),
+            bytes: 100,
+            sha256: "0".repeat(64),
+        };
+        let result = run(prepare_component_with(
+            &fixture.0,
+            &AtomicBool::new(false),
+            &|_, _| {},
+            &Preparation {
+                component: Component::CodeBuddy,
+                download: &archive,
+                executable: &executable,
+                policy: &Policy::MockOrigin(server.origin.clone()),
+            },
+            Duration::from_secs(5),
+        ));
+        assert_eq!(result.unwrap_err().code, "harness_runtime_integrity");
+        assert!(!crate::harness_codebuddy_runtime::managed_path(&fixture.0).exists());
+        assert!(!managed_path(&fixture.0).exists());
+        assert!(fs::read_dir(
+            crate::harness_codebuddy_runtime::managed_path(&fixture.0)
+                .parent()
+                .unwrap()
+        )
+        .unwrap()
+        .all(|entry| !entry
+            .unwrap()
+            .file_name()
+            .to_string_lossy()
+            .ends_with(".pending")));
+    }
+
+    #[test]
+    fn codebuddy_download_policy_is_independent_and_fixed_to_the_reviewed_asset() {
+        let url = crate::harness_codebuddy_runtime::ARCHIVE_URL;
+        validate_target(&Url::parse(url).unwrap(), &Policy::CodeBuddy).unwrap();
+        for invalid in [
+            EXECUTABLE_URL.to_string(),
+            url.replace("https://", "http://"),
+            url.replace("https://", "https://user:password@"),
+            url.replace("myqcloud.com/", "myqcloud.com:8443/"),
+            url.replace("myqcloud.com/", "myqcloud.com.evil.invalid/"),
+            url.replace("2.175.0", "latest"),
+            format!("{url}?other=asset"),
+            format!("{url}#fragment"),
+        ] {
+            assert_eq!(
+                validate_target(&Url::parse(&invalid).unwrap(), &Policy::CodeBuddy)
+                    .unwrap_err()
+                    .code,
+                "harness_runtime_redirect"
+            );
+        }
+        assert!(validate_target(&Url::parse(url).unwrap(), &Policy::Official).is_err());
+    }
+
+    #[test]
+    fn codebuddy_invalid_archive_preserves_both_existing_runtimes() {
+        for bad_hash in [false, true] {
+            let fixture = Fixture::new();
+            let codex = fixture.write_cache(b"original Codex");
+            let target = crate::harness_codebuddy_runtime::managed_path(&fixture.0);
+            fs::create_dir_all(target.parent().unwrap()).unwrap();
+            fs::write(&target, b"original CodeBuddy").unwrap();
+            let server = Server::new(|_| Reply::body(BODY));
+            let mut archive = server.manifest();
+            if bad_hash {
+                archive.sha256 = "0".repeat(64);
+            }
+            let executable = Manifest {
+                url: String::new(),
+                bytes: 100,
+                sha256: "0".repeat(64),
+            };
+            let error = run(prepare_component_with(
+                &fixture.0,
+                &AtomicBool::new(false),
+                &|_, _| {},
+                &Preparation {
+                    component: Component::CodeBuddy,
+                    download: &archive,
+                    executable: &executable,
+                    policy: &Policy::MockOrigin(server.origin.clone()),
+                },
+                Duration::from_secs(5),
+            ))
+            .unwrap_err();
+            assert_eq!(error.code, "harness_runtime_integrity");
+            assert_eq!(fs::read(codex).unwrap(), b"original Codex");
+            assert_eq!(fs::read(&target).unwrap(), b"original CodeBuddy");
+            assert!(fs::read_dir(target.parent().unwrap())
+                .unwrap()
+                .all(|entry| !entry
+                    .unwrap()
+                    .file_name()
+                    .to_string_lossy()
+                    .ends_with(".pending")));
+        }
+    }
+
+    #[test]
+    fn codebuddy_cancelled_download_preserves_cache_and_cleans_its_pending_file() {
+        let fixture = Fixture::new();
+        let target = crate::harness_codebuddy_runtime::managed_path(&fixture.0);
+        fs::create_dir_all(target.parent().unwrap()).unwrap();
+        fs::write(&target, b"original CodeBuddy").unwrap();
+        let server = Server::new(|_| Reply {
+            status: 200,
+            headers: format!("Content-Length: {}\r\n", BODY.len()),
+            body: BODY[..3].into(),
+            stall: true,
+        });
+        let cancel = AtomicBool::new(false);
+        let progress = |received, _| {
+            if received > 0 {
+                cancel.store(true, Ordering::Release);
+            }
+        };
+        let archive = server.manifest();
+        let error = run(prepare_component_with(
+            &fixture.0,
+            &cancel,
+            &progress,
+            &Preparation {
+                component: Component::CodeBuddy,
+                download: &archive,
+                executable: &archive,
+                policy: &Policy::MockOrigin(server.origin.clone()),
+            },
+            Duration::from_secs(5),
+        ))
+        .unwrap_err();
+        assert_eq!(error.code, "cancelled");
+        assert_eq!(fs::read(&target).unwrap(), b"original CodeBuddy");
+        assert!(fs::read_dir(target.parent().unwrap())
+            .unwrap()
+            .all(|entry| !entry
+                .unwrap()
+                .file_name()
+                .to_string_lossy()
+                .ends_with(".pending")));
+    }
 
     #[test]
     fn configured_system_proxy_receives_download_and_origin_is_not_contacted() {

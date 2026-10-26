@@ -5,6 +5,15 @@ use std::sync::{Arc, Mutex};
 use tauri::Manager;
 
 fn main() {
+    if std::env::args_os().nth(1).as_deref() == Some(std::ffi::OsStr::new("--codebuddy-worker")) {
+        #[cfg(all(windows, not(feature = "native-test")))]
+        if std::env::args_os().count() == 2
+            && shiroha_quiz_desktop::harness_codebuddy::run_worker().is_ok()
+        {
+            return;
+        }
+        std::process::exit(1);
+    }
     tauri::Builder::default()
         .setup(|app| {
             #[cfg(feature = "native-test")]
@@ -34,9 +43,12 @@ fn main() {
                     .map_err(|error| std::io::Error::other(error.code))?,
             ));
             app.manage(shiroha_quiz_desktop::tasks::Tasks::default());
-            app.manage(Arc::new(shiroha_quiz_desktop::harness::Harness::open(
-                &root,
-            )));
+            let codebuddy_login =
+                Arc::new(shiroha_quiz_desktop::harness_codebuddy_login::Login::new());
+            app.manage(codebuddy_login.clone());
+            app.manage(Arc::new(
+                shiroha_quiz_desktop::harness::Harness::open_with_codebuddy(&root, codebuddy_login),
+            ));
             shiroha_quiz_desktop::window_state::attach(app, &root)?;
             app.manage(LocalData(Arc::new(Mutex::new(None)), root));
             Ok(())
@@ -56,7 +68,8 @@ fn main() {
             shiroha_quiz_desktop::services::service_credential,
             shiroha_quiz_desktop::services::service_request,
             shiroha_quiz_desktop::harness::harness_control,
-            shiroha_quiz_desktop::harness::harness_execute
+            shiroha_quiz_desktop::harness::harness_execute,
+            shiroha_quiz_desktop::harness_codebuddy_login::codebuddy_control
         ])
         .run(tauri::generate_context!())
         .expect("Unable to start Shiroha Quiz");

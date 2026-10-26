@@ -111,7 +111,7 @@ export async function prepareWeb(sourceDir, projectDir) {
   if (!stylesheetStat.isFile()) throw new Error(`Missing desktop stylesheet: ${stylesheet}`);
   const desktopCss = await readFile(stylesheet);
   const titlebarAssets = new Map();
-  for (const name of ['titlebar.html', 'titlebar.js', 'bridge.js', 'adapter.js', 'harness.js']) {
+  for (const name of ['titlebar.html', 'titlebar.js', 'bridge.js', 'adapter.js', 'harness.js', 'codebuddy-login.js']) {
     const input = path.join(frontend, name);
     const inputStat = await lstat(input);
     if (inputStat.isSymbolicLink() || !inputStat.isFile()) throw new Error(`Invalid or linked titlebar asset: ${input}`);
@@ -120,7 +120,7 @@ export async function prepareWeb(sourceDir, projectDir) {
   const transformed = externalizeEvents(optimizeDesktopHtml(await readFile(path.join(source, 'index.html'), 'utf8')));
   const bridge = await build({ entryPoints: [path.join(frontend, 'bridge.js')], bundle: true, write: false, format: 'iife', platform: 'browser', target: 'es2022', legalComments: 'inline' });
   const desktopHtml = applyDesktopStyles(transformed.html)
-    .replace(/<script src="\.\/(?:platform\/index|app)\.js"><\/script>/, script => `<script src="./bridge.js"></script>\n<script src="./adapter.js"></script>\n<script src="./harness.js"></script>\n${script}`)
+    .replace(/<script src="\.\/(?:platform\/index|app)\.js"><\/script>/, script => `<script src="./bridge.js"></script>\n<script src="./adapter.js"></script>\n<script src="./harness.js"></script>\n<script src="./codebuddy-login.js"></script>\n${script}`)
     .replace(/<body\b[^>]*>/i, body => `${body}\n${titlebarAssets.get('titlebar.html')}`)
     .replace(/<\/body>/i, '  <script src="./titlebar.js"></script>\n</body>');
   // Only this fixed generated directory is removed, after overlap, link and input checks above.
@@ -146,6 +146,7 @@ export async function prepareWeb(sourceDir, projectDir) {
   await writeFile(path.join(output, 'bridge.js'), bridge.outputFiles[0].contents);
   await writeFile(path.join(output, 'adapter.js'), titlebarAssets.get('adapter.js') ?? '');
   await writeFile(path.join(output, 'harness.js'), titlebarAssets.get('harness.js') ?? '');
+  await writeFile(path.join(output, 'codebuddy-login.js'), titlebarAssets.get('codebuddy-login.js') ?? '');
   return output;
 }
 

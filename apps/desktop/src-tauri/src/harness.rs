@@ -1,6 +1,8 @@
 use crate::{
     commands::authorize,
     error::{Error, Result},
+    harness_codebuddy_execute as codebuddy,
+    harness_codebuddy_login::Login,
     harness_codex as codex,
     paths::reject_links,
 };
@@ -33,6 +35,9 @@ enum RuntimeSource {
 fn legacy_runtime_source() -> RuntimeSource {
     RuntimeSource::Custom
 }
+fn default_codebuddy_model() -> String {
+    codebuddy::DEFAULT_MODEL.into()
+}
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 enum RuntimeState {
@@ -51,6 +56,8 @@ struct Config {
     mode: String,
     adapter: String,
     model: String,
+    #[serde(default = "default_codebuddy_model")]
+    codebuddy_model: String,
     timeout_seconds: u64,
     runtime_path: PathBuf,
     #[serde(default = "legacy_runtime_source")]
@@ -66,6 +73,7 @@ impl Default for Config {
             mode: "api".into(),
             adapter: "codex".into(),
             model: String::new(),
+            codebuddy_model: default_codebuddy_model(),
             timeout_seconds: 120,
             runtime_path: PathBuf::new(),
             runtime_source: RuntimeSource::Managed,
@@ -94,11 +102,21 @@ pub struct Status {
     busy: bool,
     login_url: String,
     user_code: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    account_revision: Option<u64>,
 }
 #[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Control {
     Status,
+    SelectAdapter {
+        adapter: String,
+        revision: u64,
+    },
+    SelectModel {
+        model: String,
+        revision: u64,
+    },
     ChooseRuntime,
     PrepareRuntime {},
     UseManagedRuntime {},
@@ -142,6 +160,8 @@ pub struct Request {
     revision: u64,
     task: Task,
     messages: Vec<Message>,
+    #[serde(rename = "accountRevision")]
+    account_revision: Option<u64>,
 }
 struct Active {
     id: String,
@@ -166,6 +186,29 @@ struct Inner {
     login_url: String,
     user_code: String,
     notice: String,
+    codebuddy_login: Arc<Login>,
+    codebuddy_runtime: CodeBuddyRuntime,
+}
+// 组件状态只归当前进程；重新准备会验证独立缓存，不改写 Codex 的持久设置。
+struct CodeBuddyRuntime {
+    path: PathBuf,
+    state: RuntimeState,
+    verified: bool,
+    received: u64,
+    total: u64,
+    notice: String,
+}
+impl Default for CodeBuddyRuntime {
+    fn default() -> Self {
+        Self {
+            path: PathBuf::new(),
+            state: RuntimeState::Unprepared,
+            verified: false,
+            received: 0,
+            total: 0,
+            notice: String::new(),
+        }
+    }
 }
 #[derive(Clone)]
 struct Operation {
@@ -173,6 +216,7 @@ struct Operation {
     config: Config,
     root: PathBuf,
     cancel: Arc<AtomicBool>,
+    codebuddy_login: Arc<Login>,
 }
 
 // 恢复令牌随阻塞存储操作所有权移动，异步调用被丢弃也不能提前解除屏障。
@@ -198,8 +242,11 @@ pub struct Harness {
 }
 impl Harness {
     pub fn open(root: &Path) -> Self {
+        Self::open_with_codebuddy(root, Arc::new(Login::new()))
+    }
+    pub fn open_with_codebuddy(root: &Path, login: Arc<Login>) -> Self {
         Self {
-            inner: Mutex::new(Inner::open(&root.join("ai-execution"))),
+            inner: Mutex::new(Inner::open(&root.join("ai-execution"), login)),
             idle: Condvar::new(),
         }
     }
@@ -253,6 +300,10 @@ impl Harness {
             }
             if invalidate {
                 state.candidate = None;
+                state.codebuddy_runtime.verified = false;
+                if state.codebuddy_runtime.state != RuntimeState::Preparing {
+                    state.codebuddy_runtime.state = RuntimeState::Unprepared;
+                }
                 if state.runtime_state != RuntimeState::Preparing {
                     state.runtime_state = RuntimeState::Unprepared;
                 }
@@ -345,10 +396,14 @@ impl Harness {
         apply: impl FnOnce(&mut Inner, Result<T>) -> Result<R>,
     ) -> Result<R> {
         let result = self.with(|state| {
-            if result
-                .as_ref()
-                .is_err_and(|error| error.code == "harness_stop_failed")
-            {
+            if result.as_ref().is_err_and(|error| {
+                matches!(
+                    error.code,
+                    "harness_stop_failed"
+                        | "codebuddy_cleanup_failed"
+                        | "codebuddy_profile_cleanup_failed"
+                )
+            }) {
                 state.poison();
                 return Err(failure("harness_stopping"));
             }
@@ -376,7 +431,11 @@ impl Harness {
     }
     fn refresh(&self) -> Result<Status> {
         let operation = self.with(|state| {
-            if state.busy() || !state.config.verified || state.config.logout_pending {
+            if state.config.adapter != "codex"
+                || state.busy()
+                || !state.config.verified
+                || state.config.logout_pending
+            {
                 return Ok(None);
             }
             state
@@ -406,12 +465,57 @@ impl Harness {
     fn control(self: &Arc<Self>, request: Control) -> Result<Status> {
         match request {
             Control::Status => self.with(|state| Ok(state.status())),
+            Control::SelectAdapter { adapter, revision } => self.with(|state| {
+                state.ensure_idle()?;
+                if revision != state.config.revision {
+                    return Err(failure("harness_stale"));
+                }
+                if !is_supported_adapter(&adapter) {
+                    return Err(failure("invalid_input"));
+                }
+                let mut config = state.config.clone();
+                config.adapter = adapter;
+                config.mode = "harness".into();
+                config.revision = config
+                    .revision
+                    .checked_add(1)
+                    .ok_or_else(|| failure("harness_unavailable"))?;
+                // 选择执行方不检测或修改其他账户；Codex 组件和订阅状态仍归原账户所有。
+                state.persist(config)?;
+                Ok(state.status())
+            }),
+            Control::SelectModel { model, revision } => self.with(|state| {
+                state.ensure_idle()?;
+                if state.config.mode != "harness" || state.config.adapter != "codebuddy" {
+                    return Err(failure("harness_provider_unavailable"));
+                }
+                if state.codebuddy_login.execution_status()?.busy {
+                    return Err(failure("harness_busy"));
+                }
+                if revision != state.config.revision {
+                    return Err(failure("harness_stale"));
+                }
+                if !codebuddy::supports_model(&model) {
+                    return Err(failure("codebuddy_config_invalid"));
+                }
+                let mut config = state.config.clone();
+                config.codebuddy_model = model;
+                config.revision = config
+                    .revision
+                    .checked_add(1)
+                    .ok_or_else(|| failure("harness_unavailable"))?;
+                state.persist(config)?;
+                Ok(state.status())
+            }),
             Control::PrepareRuntime {} => self.start_preparation(false),
             Control::UseManagedRuntime {} => self.start_preparation(true),
             Control::CancelAll => self.cancel(None, false),
             Control::Cancel { id } => self.cancel(Some(&id), false),
             Control::ChooseRuntime => {
-                self.with(|state| state.ensure_idle())?;
+                self.with(|state| {
+                    state.require_codex()?;
+                    state.ensure_idle()
+                })?;
                 #[cfg(any(test, feature = "native-test"))]
                 let selected = Some(PathBuf::from("isolated-fake-codex.exe"));
                 #[cfg(not(any(test, feature = "native-test")))]
@@ -420,9 +524,10 @@ impl Harness {
                     .add_filter("Codex 程序", &["exe"])
                     .pick_file();
                 if let Some(path) = selected {
-                    codex::inspect(&path)?;
                     self.with(|state| {
+                        state.require_codex()?;
                         state.ensure_idle()?;
+                        codex::inspect(&path)?;
                         state.candidate = Some(path);
                         state.runtime_state = RuntimeState::Ready;
                         state.notice.clear();
@@ -434,6 +539,7 @@ impl Harness {
             }
             Control::Inspect => {
                 self.with(|state| {
+                    state.require_codex()?;
                     state.ensure_idle()?;
                     codex::inspect(
                         state
@@ -468,15 +574,18 @@ impl Harness {
                         return Err(failure("harness_stale"));
                     }
                     if !matches!(mode.as_str(), "api" | "harness")
-                        || adapter != "codex"
+                        || !is_supported_adapter(&adapter)
                         || !(MIN_TIMEOUT_SECONDS..=MAX_TIMEOUT_SECONDS).contains(&timeout_seconds)
                     {
                         return Err(failure("invalid_input"));
                     }
                     let mut config = state.config.clone();
                     config.mode = mode;
+                    config.adapter = adapter;
                     config.revision += 1;
-                    if config.mode == "harness" {
+                    let saves_codex_settings =
+                        config.mode == "harness" && config.adapter == "codex";
+                    if saves_codex_settings {
                         if model != "gpt-6.1-sol" {
                             return Err(failure("invalid_input"));
                         }
@@ -490,9 +599,9 @@ impl Harness {
                         config.timeout_seconds = timeout_seconds;
                     }
                     state.persist(config)?;
-                    state.candidate = None;
-                    state.notice.clear();
-                    if state.config.mode == "harness" {
+                    if saves_codex_settings {
+                        state.candidate = None;
+                        state.notice.clear();
                         state.runtime_state = RuntimeState::Ready;
                     }
                     Ok(())
@@ -505,24 +614,35 @@ impl Harness {
     }
     fn start_preparation(self: &Arc<Self>, use_managed: bool) -> Result<Status> {
         let operation = self.with(|state| {
+            if !matches!(state.config.adapter.as_str(), "codex" | "codebuddy") {
+                return Err(failure("harness_provider_unavailable"));
+            }
             state.ensure_idle()?;
             let mut operation = state.start(uuid::Uuid::new_v4().to_string(), false)?;
-            if use_managed {
+            if operation.config.adapter == "codebuddy" {
+                operation.config.runtime_source = RuntimeSource::Managed;
+                state.codebuddy_runtime = CodeBuddyRuntime {
+                    state: RuntimeState::Preparing,
+                    ..CodeBuddyRuntime::default()
+                };
+            } else if use_managed {
                 operation.config.runtime_source = RuntimeSource::Managed;
             } else if let Some(path) = &state.candidate {
                 operation.config.runtime_source = RuntimeSource::Custom;
                 operation.config.runtime_path = path.clone();
             }
-            state.runtime_state = RuntimeState::Preparing;
-            state.runtime_received_bytes = 0;
-            state.runtime_total_bytes = 0;
-            state.notice.clear();
+            if operation.config.adapter == "codex" {
+                state.runtime_state = RuntimeState::Preparing;
+                state.runtime_received_bytes = 0;
+                state.runtime_total_bytes = 0;
+                state.notice.clear();
+            }
             Ok(operation)
         })?;
         let worker = self.clone();
         let worker_operation = operation.clone();
         let spawned = std::thread::Builder::new()
-            .name("codex-runtime-preparation".into())
+            .name("harness-runtime-preparation".into())
             .spawn(move || {
                 let result = prepare_component(&worker_operation, &|received, total| {
                     let _ = worker.with(|state| {
@@ -532,13 +652,21 @@ impl Harness {
                                 && state.config.revision == worker_operation.config.revision
                         });
                         if owns_preparation {
-                            state.runtime_received_bytes = received;
-                            state.runtime_total_bytes = total;
+                            if worker_operation.config.adapter == "codebuddy" {
+                                state.codebuddy_runtime.received = received;
+                                state.codebuddy_runtime.total = total;
+                            } else {
+                                state.runtime_received_bytes = received;
+                                state.runtime_total_bytes = total;
+                            }
                         }
                         Ok(())
                     });
                 });
                 let _ = worker.finish(&worker_operation, result, |state, result| {
+                    if worker_operation.config.adapter == "codebuddy" {
+                        return state.finish_codebuddy_preparation(result);
+                    }
                     let applied = result.and_then(|path| {
                         let mut config = state.config.clone();
                         config.runtime_path = path;
@@ -575,8 +703,14 @@ impl Harness {
                 &operation,
                 Err::<(), _>(failure("harness_unavailable")),
                 |state, result| {
-                    state.runtime_state = RuntimeState::Failed;
-                    state.notice = failure("harness_unavailable").message.into();
+                    if operation.config.adapter == "codebuddy" {
+                        state.codebuddy_runtime.state = RuntimeState::Failed;
+                        state.codebuddy_runtime.notice =
+                            failure("codebuddy_runtime_unavailable").message.into();
+                    } else {
+                        state.runtime_state = RuntimeState::Failed;
+                        state.notice = failure("harness_unavailable").message.into();
+                    }
                     result
                 },
             )?;
@@ -585,8 +719,10 @@ impl Harness {
     }
 
     fn logout(&self, clear: bool) -> Result<Status> {
+        self.with(|state| state.require_codex())?;
         self.cancel(None, false)?;
         let operation = self.with(|state| {
+            state.require_codex()?;
             state.ensure_idle()?;
             let mut config = state.config.clone();
             config.logout_pending = true;
@@ -608,6 +744,7 @@ impl Harness {
                 Config {
                     mode: state.config.mode.clone(),
                     revision: state.config.revision + 1,
+                    codebuddy_model: state.config.codebuddy_model.clone(),
                     ..Config::default()
                 }
             } else {
@@ -630,6 +767,7 @@ impl Harness {
     fn start_login(self: &Arc<Self>) -> Result<Status> {
         self.refresh()?;
         let operation = self.with(|state| {
+            state.require_codex()?;
             state.ensure_idle()?;
             if !state.config.verified {
                 return Err(failure("harness_not_ready"));
@@ -718,11 +856,58 @@ impl Harness {
             if request.revision != state.config.revision {
                 return Err(failure("harness_stale"));
             }
+            if state.config.adapter == "codebuddy" {
+                if !codebuddy::supports(request.task) {
+                    return Err(failure("harness_task_unavailable"));
+                }
+                let revision = request
+                    .account_revision
+                    .ok_or_else(|| failure("codebuddy_account_stale"))?;
+                state.codebuddy_login.ensure_execution_current(revision)?;
+            } else {
+                state.require_codex()?;
+            }
             if state.config.mode != "harness" || !state.status().ready {
                 return Err(failure("harness_not_ready"));
             }
             state.start(request.id, false)
         })?;
+        if operation.config.adapter == "codebuddy" {
+            // 租约跨越协议校验与最终提交，退出登录直到 finish 结束仍能取消同一任务。
+            let lease = request
+                .account_revision
+                .ok_or_else(|| failure("codebuddy_account_stale"))
+                .and_then(|revision| {
+                    operation
+                        .codebuddy_login
+                        .lease(revision, operation.cancel.clone())
+                })
+                .map(|lease| Arc::new(Mutex::new(lease)));
+            let result = match &lease {
+                Ok(lease) => codebuddy::execute(
+                    &operation.root,
+                    &operation.config.runtime_path,
+                    &operation.config.codebuddy_model,
+                    request.task,
+                    &request.messages,
+                    lease.clone(),
+                    operation.cancel.clone(),
+                ),
+                Err(error) => Err(failure(error.code)),
+            };
+            let finished = self.finish(&operation, result, |_, result| {
+                let content = result?;
+                let revision = request
+                    .account_revision
+                    .ok_or_else(|| failure("codebuddy_account_stale"))?;
+                operation
+                    .codebuddy_login
+                    .ensure_execution_current(revision)?;
+                Ok(json!({"content":content}))
+            });
+            drop(lease);
+            return finished.map_err(|error| failure(error.code));
+        }
         let result = codex::execute(
             &operation.root,
             &operation.config.runtime_path,
@@ -752,6 +937,13 @@ fn prepare_component(
     }
     #[cfg(not(any(test, feature = "native-test")))]
     {
+        if operation.config.adapter == "codebuddy" {
+            return tauri::async_runtime::block_on(crate::harness_codebuddy_runtime::prepare(
+                &operation.root,
+                &operation.cancel,
+                progress,
+            ));
+        }
         tauri::async_runtime::block_on(crate::harness_runtime::prepare(
             &operation.root,
             &operation.cancel,
@@ -779,12 +971,16 @@ fn prepare_component(
             return Err(failure("harness_runtime_download"));
         }
         progress(1, 1);
-        Ok(PathBuf::from("isolated-fake-codex.exe"))
+        Ok(PathBuf::from(if operation.config.adapter == "codebuddy" {
+            "isolated-fake-codebuddy.exe"
+        } else {
+            "isolated-fake-codex.exe"
+        }))
     }
 }
 
 impl Inner {
-    fn open(root: &Path) -> Result<Self> {
+    fn open(root: &Path, codebuddy_login: Arc<Login>) -> Result<Self> {
         reject_links(root)?;
         std::fs::create_dir_all(root)?;
         for name in [
@@ -809,7 +1005,8 @@ impl Inner {
         }
         if config.schema != 1
             || !matches!(config.mode.as_str(), "api" | "harness")
-            || config.adapter != "codex"
+            || !is_supported_adapter(&config.adapter)
+            || !codebuddy::supports_model(&config.codebuddy_model)
         {
             return Err(failure("invalid_input"));
         }
@@ -835,10 +1032,19 @@ impl Inner {
             login_url: String::new(),
             user_code: String::new(),
             notice: String::new(),
+            codebuddy_login,
+            codebuddy_runtime: CodeBuddyRuntime::default(),
         })
     }
     fn busy(&self) -> bool {
         self.active.is_some() || self.barrier || self.restores > 0 || self.cancel_waiters > 0
+    }
+    fn require_codex(&self) -> Result<()> {
+        if self.config.adapter == "codex" {
+            Ok(())
+        } else {
+            Err(failure("harness_provider_unavailable"))
+        }
     }
     fn ensure_idle(&self) -> Result<()> {
         if self.barrier {
@@ -855,6 +1061,8 @@ impl Inner {
         self.subscription = false;
         self.config.verified = false;
         self.runtime_state = RuntimeState::Failed;
+        self.codebuddy_runtime.verified = false;
+        self.codebuddy_runtime.state = RuntimeState::Failed;
         self.login_url.clear();
         self.user_code.clear();
         self.notice = failure("harness_stopping").message.to_owned();
@@ -870,11 +1078,17 @@ impl Inner {
             cancel: cancel.clone(),
             login,
         });
+        let mut config = self.config.clone();
+        if config.adapter == "codebuddy" {
+            config.runtime_path = self.codebuddy_runtime.path.clone();
+            config.runtime_source = RuntimeSource::Managed;
+        }
         Ok(Operation {
             id,
-            config: self.config.clone(),
+            config,
             root: self.root.clone(),
             cancel,
+            codebuddy_login: self.codebuddy_login.clone(),
         })
     }
     fn update_subscription(&mut self, subscribed: bool) -> Result<()> {
@@ -898,15 +1112,111 @@ impl Inner {
         self.config = config;
         Ok(())
     }
+    fn finish_codebuddy_preparation(&mut self, result: Result<PathBuf>) -> Result<()> {
+        let applied = result.and_then(|path| {
+            let mut config = self.config.clone();
+            config.revision += 1;
+            self.persist(config)?;
+            self.codebuddy_runtime.path = path;
+            self.codebuddy_runtime.verified = true;
+            Ok(())
+        });
+        match applied {
+            Ok(()) => {
+                self.codebuddy_runtime.state = RuntimeState::Ready;
+                self.codebuddy_runtime.notice.clear();
+            }
+            Err(error) => {
+                self.codebuddy_runtime.verified = false;
+                self.codebuddy_runtime.state = if error.code == "cancelled" {
+                    RuntimeState::Cancelled
+                } else {
+                    RuntimeState::Failed
+                };
+                self.codebuddy_runtime.notice = if error.code == "cancelled" {
+                    "CodeBuddy 组件准备已取消，请主动重试。".into()
+                } else {
+                    failure(error.code).message.into()
+                };
+            }
+        }
+        Ok(())
+    }
+    fn codebuddy_status(&self) -> Status {
+        let account = self.codebuddy_login.execution_status();
+        let signed_in = account.as_ref().is_ok_and(|account| account.signed_in);
+        let account_busy = account.as_ref().is_ok_and(|account| account.busy);
+        let runtime = &self.codebuddy_runtime;
+        let busy = self.busy() || account_busy;
+        let ready = runtime.verified && runtime.state == RuntimeState::Ready && signed_in && !busy;
+        let reason = if self.barrier {
+            "CodeBuddy 停止状态尚未确认，请重新启动应用。"
+        } else if self.restores > 0 {
+            "数据恢复期间不能启动 CodeBuddy，请等待恢复完成后重新准备组件。"
+        } else if runtime.state == RuntimeState::Preparing {
+            "正在准备 CodeBuddy 组件，可取消；不会发起模型请求。"
+        } else if !runtime.notice.is_empty() {
+            &runtime.notice
+        } else if !runtime.verified {
+            "请准备 CodeBuddy 组件并完成账户登录。"
+        } else if busy && signed_in {
+            "CodeBuddy 任务正在执行，可停止任务。"
+        } else if !signed_in {
+            account
+                .as_ref()
+                .map(|account| account.message)
+                .unwrap_or("CodeBuddy 账户状态不可用，请重新启动应用。")
+        } else {
+            "CodeBuddy 已就绪，可测试连接、生成单题解析和追问；执行会消耗账户用量。"
+        };
+        Status {
+            mode: self.config.mode.clone(),
+            adapter: self.config.adapter.clone(),
+            model: self.config.codebuddy_model.clone(),
+            timeout_seconds: codebuddy::TIMEOUT_SECONDS,
+            credential_status: if signed_in {
+                "subscription"
+            } else if account_busy {
+                "authenticating"
+            } else {
+                "missing"
+            }
+            .into(),
+            runtime_path: runtime.path.display().to_string(),
+            runtime_version: if runtime.verified {
+                "2.175.0".into()
+            } else {
+                String::new()
+            },
+            runtime_source: RuntimeSource::Managed,
+            runtime_state: runtime.state,
+            runtime_received_bytes: runtime.received,
+            runtime_total_bytes: runtime.total,
+            ready,
+            reason: reason.into(),
+            revision: self.config.revision,
+            busy,
+            login_url: String::new(),
+            user_code: String::new(),
+            account_revision: account.as_ref().ok().map(|account| account.revision),
+        }
+    }
     fn status(&self) -> Status {
+        if self.config.adapter == "codebuddy" {
+            return self.codebuddy_status();
+        }
+        let codex_selected = self.config.adapter == "codex";
         let authenticating = self.active.as_ref().is_some_and(|active| active.login);
-        let ready = self.config.verified
+        let ready = codex_selected
+            && self.config.verified
             && self.runtime_state == RuntimeState::Ready
             && !self.config.logout_pending
             && self.subscription
             && !self.config.model.is_empty()
             && !self.busy();
-        let reason = if self.barrier {
+        let reason = if self.config.adapter == "deepseek" {
+            "DeepSeek 的 Harness 订阅执行尚未接入。"
+        } else if self.barrier {
             "Codex 停止状态尚未确认，请重新启动应用。"
         } else if self.restores > 0 {
             "数据恢复期间不能启动 Codex，请等待恢复完成后重新检测。"
@@ -927,7 +1237,7 @@ impl Inner {
         };
         Status {
             mode: self.config.mode.clone(),
-            adapter: "codex".into(),
+            adapter: self.config.adapter.clone(),
             model: self.config.model.clone(),
             timeout_seconds: self.config.timeout_seconds,
             credential_status: if authenticating {
@@ -963,8 +1273,12 @@ impl Inner {
             busy: self.busy(),
             login_url: self.login_url.clone(),
             user_code: self.user_code.clone(),
+            account_revision: None,
         }
     }
+}
+fn is_supported_adapter(adapter: &str) -> bool {
+    matches!(adapter, "codex" | "codebuddy" | "deepseek")
 }
 fn validate_request(request: &Request) -> Result<()> {
     if uuid::Uuid::parse_str(&request.id).is_err()
@@ -987,9 +1301,9 @@ fn validate_request(request: &Request) -> Result<()> {
 }
 pub(crate) fn failure(code: &'static str) -> Error {
     let message = match code {
-        "cancelled" => "Codex 任务已停止。",
-        "timeout" => "Codex 执行超时，已停止本次任务；请主动重试。",
-        "harness_busy" | "harness_stopping" => "Codex 任务尚未停止，请等待停止完成后重试。",
+        "cancelled" => "AI 任务已停止。",
+        "timeout" => "AI 执行超时，已停止本次任务；请主动重试。",
+        "harness_busy" | "harness_stopping" => "AI 任务尚未停止，请等待停止完成后重试。",
         "harness_stale" => "AI 执行配置已变化，请重新发起任务。",
         "harness_runtime" => {
             "Codex 组件未通过校验，请重新准备；高级设置仅支持已验证的 0.163.0 Windows x64 程序。"
@@ -1005,7 +1319,35 @@ pub(crate) fn failure(code: &'static str) -> Error {
         "harness_runtime_redirect" => "Codex 组件下载地址未通过校验，下载已停止。",
         "harness_runtime_busy" => "另一个进程正在准备 Codex 组件，请稍后重试。",
         "harness_runtime_storage" => "Codex 组件无法写入本地缓存，请检查权限和可用空间后重试。",
-        "harness_not_ready" => "Codex 尚未就绪，请准备组件并完成订阅登录。",
+        "harness_not_ready" => "所选 Harness 尚未就绪，请准备组件并完成订阅登录。",
+        "harness_task_unavailable" => "CodeBuddy 当前支持连接测试、单题解析和追问；尚未开放批量与导入任务。",
+        "codebuddy_account_stale" | "codebuddy_login_stale" => "CodeBuddy 账户已变化，请重新发起任务。",
+        "codebuddy_auth_expired" | "codebuddy_auth_required" | "codebuddy_login_not_ready" => "CodeBuddy 登录已失效，请重新登录后再试。",
+        "codebuddy_login_busy" => "CodeBuddy 账户正在使用中，请等待或停止当前任务。",
+        "codebuddy_runtime_download" => "CodeBuddy 组件下载失败，请检查网络后重试。",
+        "codebuddy_runtime_proxy" | "codebuddy_runtime_proxy_config" => "CodeBuddy 组件下载的系统代理不可用，请检查 Windows 代理配置后重试。",
+        "codebuddy_runtime_integrity" => "CodeBuddy 组件完整性校验失败，文件未启用，请重新准备。",
+        "codebuddy_runtime_redirect" => "CodeBuddy 组件下载地址未通过校验，下载已停止。",
+        "codebuddy_runtime_busy" => "另一个进程正在准备 CodeBuddy 组件，请稍后重试。",
+        "codebuddy_runtime_storage" => "CodeBuddy 组件无法写入本地缓存，请检查权限和可用空间后重试。",
+        "codebuddy_auth_network" => "CodeBuddy 网络请求未完成，本次任务已停止；不会自动重试。",
+        "codebuddy_request_denied" => "CodeBuddy 请求未通过受控请求校验，本次任务已停止。",
+        "codebuddy_request_budget" | "codebuddy_model_already_requested" => "CodeBuddy 请求次数已达到本次任务上限，后续请求已阻止。",
+        "codebuddy_upstream_length" => "CodeBuddy 模型响应达到输出上限，结果不完整，未被采纳；不会自动重试。",
+        "codebuddy_upstream_content_filter" => "CodeBuddy 模型响应被服务端内容过滤，结果未被采纳。",
+        "codebuddy_upstream_tool_call" => "CodeBuddy 模型响应包含不受支持的工具调用，结果未被采纳。",
+        "codebuddy_upstream_unknown_field" => "CodeBuddy 模型响应包含尚未兼容的协议字段，结果未被采纳。",
+        "codebuddy_upstream_incomplete" => "CodeBuddy 模型响应未确认完整结束，结果未被采纳；不会自动重试。",
+        "codebuddy_upstream_unverified" => "CodeBuddy 模型响应未通过协议校验，结果未被采纳。",
+        "codebuddy_candidate_rejected" | "codebuddy_output_invalid" => "CodeBuddy 组件输出未通过完整性校验，结果未被采纳。",
+        "codebuddy_frame_invalid" | "codebuddy_pipe_closed" => "CodeBuddy 隔离进程通信异常，本次任务已停止。",
+        "codebuddy_relay_start_failed" | "codebuddy_relay_io_failed" | "codebuddy_relay_peer_closed" => "CodeBuddy 隔离进程通信中断，本次任务已停止。",
+        "codebuddy_isolation_failed" | "codebuddy_container_required" => "CodeBuddy 隔离环境未通过检查，本次任务已停止。",
+        "codebuddy_worker_failed" | "codebuddy_worker_environment" | "codebuddy_worker_path" | "codebuddy_config_invalid" => "CodeBuddy 隔离组件未能完成执行，本次任务已停止。",
+        "codebuddy_cleanup_failed" | "codebuddy_profile_cleanup_failed" => "CodeBuddy 隔离环境清理未完成，结果未被采纳。",
+        "codebuddy_business_json" => "CodeBuddy 未返回完整的解析或追问 JSON，结果未被采纳；请主动重试。",
+        code if code.starts_with("codebuddy_") => "CodeBuddy 未确认任务成功，请检查组件、账户权限和连接后重试；不会自动重新生成。",
+        "harness_provider_unavailable" => "当前所选 Harness 尚未开放模型执行，请查看对应提供方的说明。",
         "harness_auth" => {
             "订阅登录未完成，请先退出订阅登录清理本次授权，再重试。不会切换到 API Key。"
         }
@@ -1057,6 +1399,7 @@ pub async fn harness_execute(
     tauri::async_runtime::spawn_blocking(move || state.execute(request))
         .await
         .map_err(|_| failure("harness_unavailable"))?
+        .map_err(|error| failure(error.code))
 }
 
 #[cfg(test)]
@@ -1094,6 +1437,7 @@ mod tests {
             id: uuid::Uuid::new_v4().to_string(),
             revision: service.with(|state| Ok(state.config.revision)).unwrap(),
             task: Task::ConnectionTest,
+            account_revision: None,
             messages: vec![Message {
                 role: "user".into(),
                 content: "synthetic".into(),
@@ -1105,6 +1449,583 @@ mod tests {
         while service.with(|state| Ok(state.active.is_some())).unwrap() {
             assert!(start.elapsed() < Duration::from_secs(5));
             std::thread::sleep(Duration::from_millis(10));
+        }
+    }
+
+    fn select_adapter(service: &Arc<Harness>, adapter: &str, revision: u64) -> Result<Status> {
+        let control = serde_json::from_value::<Control>(json!({
+            "kind":"select_adapter", "adapter":adapter, "revision":revision
+        }))?;
+        service.control(control)
+    }
+
+    fn config_snapshot(service: &Harness) -> Value {
+        service
+            .with(|state| Ok(serde_json::to_value(&state.config)?))
+            .unwrap()
+    }
+
+    fn select_model(service: &Arc<Harness>, model: &str, revision: u64) -> Result<Status> {
+        let control = serde_json::from_value::<Control>(json!({
+            "kind":"select_model", "model":model, "revision":revision
+        }))?;
+        service.control(control)
+    }
+
+    #[test]
+    fn codebuddy_model_selection_persists_and_preserves_accounts_and_codex() {
+        let (fixture, login, account_revision) = codebuddy_fixture();
+        let service = &fixture.service;
+        let initial = service.control(Control::Status).unwrap();
+        assert_eq!(initial.model, "deepseek-v4.1-flash");
+        let before = config_snapshot(service);
+        let mut old_request = request(service);
+        old_request.account_revision = Some(account_revision);
+        let selected = select_model(service, "hy4-preview", initial.revision).unwrap();
+        assert_eq!(selected.model, "hy4-preview");
+        assert_eq!(selected.revision, initial.revision + 1);
+        assert_eq!(selected.account_revision, Some(account_revision));
+        assert!(selected.ready);
+        let mut expected = before;
+        expected["revision"] = json!(selected.revision);
+        expected["codebuddyModel"] = json!("hy4-preview");
+        assert_eq!(config_snapshot(service), expected);
+        assert_eq!(
+            service.execute(old_request).unwrap_err().code,
+            "harness_stale"
+        );
+        assert!(login.execution_status().unwrap().signed_in);
+        assert_eq!(login.execution_status().unwrap().revision, account_revision);
+
+        let codex = select_adapter(service, "codex", selected.revision).unwrap();
+        assert_eq!(codex.model, "gpt-6.1-sol");
+        let returned = select_adapter(service, "codebuddy", codex.revision).unwrap();
+        assert_eq!(returned.model, "hy4-preview");
+        assert_eq!(returned.account_revision, Some(account_revision));
+        let selected = select_model(service, "hy3", returned.revision).unwrap();
+        let codex = select_adapter(service, "codex", selected.revision).unwrap();
+        assert_eq!(codex.model, "gpt-6.1-sol");
+        service.control(Control::Login).unwrap();
+        wait_login(service);
+        service.control(Control::Clear).unwrap();
+        let cleared = service.control(Control::Status).unwrap();
+        let returned = select_adapter(service, "codebuddy", cleared.revision).unwrap();
+        assert_eq!(returned.model, "hy3");
+        assert!(returned.ready);
+        assert_eq!(returned.account_revision, Some(account_revision));
+        let reopened = Arc::new(Harness::open(&fixture.root));
+        assert_eq!(reopened.control(Control::Status).unwrap().model, "hy3");
+    }
+
+    #[test]
+    fn codebuddy_model_selection_rejects_invalid_stale_busy_and_failed_save() {
+        let (fixture, _, _) = codebuddy_fixture();
+        let service = &fixture.service;
+        let before = config_snapshot(service);
+        let revision = before["revision"].as_u64().unwrap();
+        for model in ["", "other", "deepseek-v4.1-flash-sg", " hy3"] {
+            assert_eq!(
+                select_model(service, model, revision).err().unwrap().code,
+                "codebuddy_config_invalid"
+            );
+        }
+        assert_eq!(
+            select_model(service, "hy3", revision - 1)
+                .err()
+                .unwrap()
+                .code,
+            "harness_stale"
+        );
+        let operation = service
+            .with(|state| state.start("model-selection-busy".into(), false))
+            .unwrap();
+        assert_eq!(
+            select_model(service, "hy3", revision).err().unwrap().code,
+            "harness_busy"
+        );
+        service
+            .finish(&operation, Ok(()), |_, result| result)
+            .unwrap();
+        service
+            .with(|state| {
+                state.db.execute_batch("PRAGMA query_only=ON")?;
+                Ok(())
+            })
+            .unwrap();
+        assert!(select_model(service, "hy3", revision).is_err());
+        assert_eq!(config_snapshot(service), before);
+        service
+            .with(|state| {
+                state.db.execute_batch("PRAGMA query_only=OFF")?;
+                Ok(())
+            })
+            .unwrap();
+        let codex = select_adapter(service, "codex", revision).unwrap();
+        assert_eq!(
+            select_model(service, "hy3", codex.revision)
+                .err()
+                .unwrap()
+                .code,
+            "harness_provider_unavailable"
+        );
+    }
+
+    #[test]
+    fn codebuddy_model_missing_legacy_setting_defaults_without_replacing_codex() {
+        let fixture = Fixture::new();
+        let mut legacy = config_snapshot(&fixture.service);
+        legacy.as_object_mut().unwrap().remove("codebuddyModel");
+        fixture
+            .service
+            .with(|state| {
+                state
+                    .db
+                    .execute("UPDATE config SET value=? WHERE id=1", [legacy.to_string()])?;
+                Ok(())
+            })
+            .unwrap();
+        let reopened = Arc::new(Harness::open(&fixture.root));
+        let codex = reopened.control(Control::Status).unwrap();
+        assert_eq!(codex.model, "gpt-6.1-sol");
+        let codebuddy = select_adapter(&reopened, "codebuddy", codex.revision).unwrap();
+        assert_eq!(codebuddy.model, "deepseek-v4.1-flash");
+        assert_eq!(config_snapshot(&reopened)["model"], "gpt-6.1-sol");
+    }
+
+    #[test]
+    fn codebuddy_model_invalid_persisted_setting_is_rejected_without_replacement() {
+        let fixture = Fixture::new();
+        let mut invalid = config_snapshot(&fixture.service);
+        invalid["codebuddyModel"] = json!("unknown-model");
+        fixture
+            .service
+            .with(|state| {
+                state.db.execute(
+                    "UPDATE config SET value=? WHERE id=1",
+                    [invalid.to_string()],
+                )?;
+                Ok(())
+            })
+            .unwrap();
+        let reopened = Arc::new(Harness::open(&fixture.root));
+        assert_eq!(
+            reopened.control(Control::Status).err().unwrap().code,
+            "harness_unavailable"
+        );
+        assert_eq!(
+            Inner::open(&fixture.root.join("ai-execution"), Arc::new(Login::new()))
+                .err()
+                .unwrap()
+                .code,
+            "invalid_input"
+        );
+        let stored = fixture
+            .service
+            .with(|state| {
+                let raw: String =
+                    state
+                        .db
+                        .query_row("SELECT value FROM config WHERE id=1", [], |row| row.get(0))?;
+                Ok(serde_json::from_str::<Value>(&raw)?)
+            })
+            .unwrap();
+        assert_eq!(stored, invalid);
+    }
+
+    #[test]
+    fn codebuddy_execution_failures_explain_the_failed_stage_without_retrying() {
+        for (code, stage) in [
+            ("codebuddy_auth_network", "网络"),
+            ("codebuddy_request_denied", "请求"),
+            ("codebuddy_request_budget", "请求"),
+            ("codebuddy_upstream_unverified", "模型响应"),
+            ("codebuddy_candidate_rejected", "组件输出"),
+            ("codebuddy_frame_invalid", "进程通信"),
+            ("codebuddy_pipe_closed", "进程通信"),
+            ("codebuddy_isolation_failed", "隔离"),
+            ("codebuddy_cleanup_failed", "清理"),
+        ] {
+            let error = failure(code);
+            assert_eq!(error.code, code);
+            assert!(error.message.contains("CodeBuddy"));
+            assert!(error.message.contains(stage), "{code}: {}", error.message);
+            assert!(!error.retryable);
+        }
+    }
+
+    #[test]
+    fn codebuddy_preparation_preserves_codex_configuration() {
+        let f = Fixture::new();
+        let before = config_snapshot(&f.service);
+        select_adapter(
+            &f.service,
+            "codebuddy",
+            before["revision"].as_u64().unwrap(),
+        )
+        .unwrap();
+        let prepared = f.service.control(Control::PrepareRuntime {}).unwrap();
+        assert_eq!(prepared.runtime_source, RuntimeSource::Managed);
+        wait_login(&f.service);
+        let status = f.service.control(Control::Status).unwrap();
+        assert_eq!(status.runtime_state, RuntimeState::Ready);
+        assert_eq!(status.model, "deepseek-v4.1-flash");
+        assert!(!status.ready);
+        let after = config_snapshot(&f.service);
+        for field in [
+            "model",
+            "timeoutSeconds",
+            "runtimePath",
+            "runtimeSource",
+            "verified",
+        ] {
+            assert_eq!(before[field], after[field]);
+        }
+    }
+
+    fn codebuddy_fixture() -> (Fixture, Arc<Login>, u64) {
+        let fixture = Fixture::new();
+        let service = &fixture.service;
+        let revision = service.control(Control::Status).unwrap().revision;
+        select_adapter(service, "codebuddy", revision).unwrap();
+        service.control(Control::PrepareRuntime {}).unwrap();
+        wait_login(service);
+        let login = service
+            .with(|state| Ok(state.codebuddy_login.clone()))
+            .unwrap();
+        let revision = login.execution_status().unwrap().revision;
+        login
+            .control(crate::harness_codebuddy_login::Control::Login { revision })
+            .unwrap();
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        while !login.execution_status().unwrap().signed_in {
+            assert!(std::time::Instant::now() < deadline);
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        let revision = login.execution_status().unwrap().revision;
+        (fixture, login, revision)
+    }
+
+    #[test]
+    fn codebuddy_question_and_followup_use_current_account_and_keep_codex_settings() {
+        let (fixture, login, account_revision) = codebuddy_fixture();
+        let before = config_snapshot(&fixture.service);
+        assert!(fixture.service.control(Control::Status).unwrap().ready);
+        for (task, field) in [
+            (Task::ConnectionTest, "ok"),
+            (Task::QuestionAnalysis, "analysis"),
+            (Task::QuestionFollowup, "revisedAnalysis"),
+        ] {
+            let mut request = request(&fixture.service);
+            request.task = task;
+            request.account_revision = Some(account_revision);
+            let response = fixture.service.execute(request).unwrap();
+            let content: Value =
+                serde_json::from_str(response["content"].as_str().unwrap()).unwrap();
+            assert!(content.get(field).is_some());
+            assert!(login.execution_status().unwrap().signed_in);
+            assert!(!login.execution_status().unwrap().busy);
+        }
+        assert_eq!(before, config_snapshot(&fixture.service));
+        assert!(!fixture.root.join("ai-execution/fake-subscription").exists());
+    }
+
+    #[test]
+    fn codebuddy_rejects_unsupported_tasks_and_missing_or_old_accounts_before_start() {
+        let (fixture, login, account_revision) = codebuddy_fixture();
+        for task in [Task::ImportOrganize, Task::BatchReview, Task::BatchAnalysis] {
+            let mut request = request(&fixture.service);
+            request.task = task;
+            request.account_revision = Some(account_revision);
+            assert_eq!(
+                fixture.service.execute(request).unwrap_err().code,
+                "harness_task_unavailable"
+            );
+        }
+        assert_eq!(
+            fixture
+                .service
+                .execute(request(&fixture.service))
+                .unwrap_err()
+                .code,
+            "codebuddy_account_stale"
+        );
+        let mut old = request(&fixture.service);
+        old.account_revision = Some(account_revision);
+        login
+            .control(crate::harness_codebuddy_login::Control::Logout {})
+            .unwrap();
+        assert_eq!(
+            fixture.service.execute(old).unwrap_err().code,
+            "codebuddy_login_stale"
+        );
+        assert!(!fixture
+            .service
+            .with(|state| Ok(state.active.is_some()))
+            .unwrap());
+        assert!(!fixture.service.control(Control::Status).unwrap().ready);
+    }
+
+    #[test]
+    fn codebuddy_logout_stops_execution_and_discards_the_result() {
+        let (fixture, login, account_revision) = codebuddy_fixture();
+        let marker = fixture.root.join("ai-execution/fake-codebuddy-wait");
+        std::fs::write(&marker, b"fixture").unwrap();
+        let mut request = request(&fixture.service);
+        request.account_revision = Some(account_revision);
+        let service = fixture.service.clone();
+        let executing = std::thread::spawn(move || service.execute(request));
+        let deadline = std::time::Instant::now() + Duration::from_secs(3);
+        while !login.execution_status().unwrap().busy {
+            assert!(std::time::Instant::now() < deadline);
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        login
+            .control(crate::harness_codebuddy_login::Control::Logout {})
+            .unwrap();
+        assert_eq!(executing.join().unwrap().unwrap_err().code, "cancelled");
+        assert!(!fixture
+            .service
+            .with(|state| Ok(state.active.is_some()))
+            .unwrap());
+        assert!(!login.execution_status().unwrap().signed_in);
+    }
+
+    #[test]
+    fn adapter_selection_preserves_codex_subscription_and_survives_restart() {
+        let f = Fixture::new();
+        f.service.control(Control::Login).unwrap();
+        wait_login(&f.service);
+        let before = config_snapshot(&f.service);
+        let revision = before["revision"].as_u64().unwrap();
+        let selected = select_adapter(&f.service, "codebuddy", revision).unwrap();
+        assert_eq!(selected.adapter, "codebuddy");
+        assert_eq!(selected.mode, "harness");
+        assert!(!selected.ready);
+        let after = config_snapshot(&f.service);
+        for field in [
+            "model",
+            "timeoutSeconds",
+            "runtimePath",
+            "runtimeSource",
+            "verified",
+            "logoutPending",
+        ] {
+            assert_eq!(after[field], before[field], "selection changed {field}");
+        }
+        assert!(f.service.with(|state| Ok(state.subscription)).unwrap());
+        assert!(f.root.join("ai-execution/fake-subscription").is_file());
+        std::fs::write(
+            f.root.join("ai-execution/fake-status-stop-failed"),
+            b"fixture",
+        )
+        .unwrap();
+        let reopened = Harness::open(&f.root);
+        let restored = reopened.refresh().unwrap();
+        assert_eq!(restored.adapter, "codebuddy");
+        assert_eq!(restored.revision, selected.revision);
+        assert!(!restored.ready);
+        let deepseek = select_adapter(&f.service, "deepseek", selected.revision).unwrap();
+        assert!(deepseek.reason.contains("DeepSeek"));
+        let codex = select_adapter(&f.service, "codex", deepseek.revision).unwrap();
+        assert!(
+            codex.ready,
+            "switching back must retain the confirmed subscription"
+        );
+        assert!(f.root.join("ai-execution/fake-subscription").is_file());
+    }
+
+    #[test]
+    fn adapter_selection_needs_no_prepared_codex_component() {
+        let root = std::env::temp_dir().join(format!(
+            "shiroha-provider-selection-{}",
+            uuid::Uuid::new_v4()
+        ));
+        let service = Arc::new(Harness::open(&root));
+        let codebuddy = select_adapter(&service, "codebuddy", 0).unwrap();
+        assert_eq!(codebuddy.mode, "harness");
+        assert_eq!(codebuddy.runtime_state, RuntimeState::Unprepared);
+        assert_eq!(codebuddy.model, "deepseek-v4.1-flash");
+        let codex = select_adapter(&service, "codex", codebuddy.revision).unwrap();
+        assert!(codex.model.is_empty());
+        assert!(!codex.ready);
+        assert!(!root.join("ai-execution/fake-subscription").exists());
+    }
+
+    #[test]
+    fn selection_validates_revision_adapter_and_idle_without_mutating_previous_configuration() {
+        let f = Fixture::new();
+        let before = config_snapshot(&f.service);
+        let revision = before["revision"].as_u64().unwrap();
+        assert_eq!(
+            select_adapter(&f.service, "codebuddy", revision - 1)
+                .err()
+                .unwrap()
+                .code,
+            "harness_stale"
+        );
+        assert_eq!(
+            select_adapter(&f.service, "unknown", revision)
+                .err()
+                .unwrap()
+                .code,
+            "invalid_input"
+        );
+        for request in [
+            json!({"kind":"select_adapter","adapter":"codebuddy","revision":revision,"token":"fixture"}),
+            json!({"kind":"select_adapter","adapter":"codebuddy"}),
+            json!({"kind":"select_adapter","adapter":"codebuddy","revision":"1"}),
+        ] {
+            assert!(serde_json::from_value::<Control>(request).is_err());
+        }
+        let operation = f
+            .service
+            .with(|state| state.start(uuid::Uuid::new_v4().to_string(), false))
+            .unwrap();
+        assert_eq!(
+            select_adapter(&f.service, "codebuddy", revision)
+                .err()
+                .unwrap()
+                .code,
+            "harness_busy"
+        );
+        assert!(!operation.cancel.load(Ordering::Acquire));
+        f.service
+            .finish(&operation, Ok(()), |_, result| result)
+            .unwrap();
+        assert_eq!(config_snapshot(&f.service), before);
+    }
+
+    #[test]
+    fn failed_selection_write_preserves_mode_provider_and_revision() {
+        let f = Fixture::new();
+        let before = config_snapshot(&f.service);
+        f.service
+            .with(|state| {
+                state.db.execute_batch("PRAGMA query_only=ON;")?;
+                Ok(())
+            })
+            .unwrap();
+        assert!(select_adapter(
+            &f.service,
+            "codebuddy",
+            before["revision"].as_u64().unwrap()
+        )
+        .is_err());
+        assert_eq!(config_snapshot(&f.service), before);
+        f.service
+            .with(|state| {
+                state.db.execute_batch("PRAGMA query_only=OFF;")?;
+                Ok(())
+            })
+            .unwrap();
+    }
+
+    #[test]
+    fn non_codex_selection_rejects_codex_controls_and_cannot_borrow_codex_login() {
+        for adapter in ["codebuddy", "deepseek"] {
+            let f = Fixture::new();
+            f.service.control(Control::Login).unwrap();
+            wait_login(&f.service);
+            let old_request = request(&f.service);
+            let selected = select_adapter(&f.service, adapter, old_request.revision).unwrap();
+            let before = config_snapshot(&f.service);
+            std::fs::write(
+                f.root.join("ai-execution/fake-status-stop-failed"),
+                b"fixture",
+            )
+            .unwrap();
+            std::fs::write(f.root.join("ai-execution/fake-prepare-failed"), b"fixture").unwrap();
+            assert!(!f.service.refresh().unwrap().ready);
+            assert!(!f.service.control(Control::Status).unwrap().ready);
+            assert_eq!(
+                f.service.execute(old_request).unwrap_err().code,
+                "harness_stale"
+            );
+            assert_eq!(
+                f.service.execute(request(&f.service)).unwrap_err().code,
+                if adapter == "codebuddy" {
+                    "codebuddy_account_stale"
+                } else {
+                    "harness_provider_unavailable"
+                }
+            );
+            for control in [
+                Control::ChooseRuntime,
+                Control::Inspect,
+                Control::Login,
+                Control::Logout,
+                Control::Clear,
+            ] {
+                assert_eq!(
+                    f.service.control(control).err().unwrap().code,
+                    "harness_provider_unavailable"
+                );
+            }
+            if adapter == "deepseek" {
+                for control in [Control::PrepareRuntime {}, Control::UseManagedRuntime {}] {
+                    assert_eq!(
+                        f.service.control(control).err().unwrap().code,
+                        "harness_provider_unavailable"
+                    );
+                }
+            }
+            assert_eq!(config_snapshot(&f.service), before);
+            assert!(f.root.join("ai-execution/fake-subscription").is_file());
+            assert!(f
+                .service
+                .with(|state| Ok(state.subscription && state.active.is_none()))
+                .unwrap());
+            assert_eq!(
+                f.service.control(Control::Status).unwrap().revision,
+                selected.revision
+            );
+        }
+    }
+
+    #[test]
+    fn saving_non_codex_provider_or_api_preserves_codex_specific_configuration() {
+        let f = Fixture::new();
+        f.service.control(Control::Login).unwrap();
+        wait_login(&f.service);
+        let before = config_snapshot(&f.service);
+        std::fs::write(
+            f.root.join("ai-execution/fake-status-stop-failed"),
+            b"fixture",
+        )
+        .unwrap();
+        let mut revision = before["revision"].as_u64().unwrap();
+        for (mode, adapter) in [
+            ("harness", "codebuddy"),
+            ("harness", "deepseek"),
+            ("api", "deepseek"),
+        ] {
+            let saved = f
+                .service
+                .control(Control::Save {
+                    mode: mode.into(),
+                    adapter: adapter.into(),
+                    model: "not-a-codex-model".into(),
+                    timeout_seconds: 599,
+                    revision,
+                })
+                .unwrap();
+            revision = saved.revision;
+            assert_eq!(saved.mode, mode);
+            assert_eq!(saved.adapter, adapter);
+            assert!(!saved.ready);
+            let after = config_snapshot(&f.service);
+            for field in [
+                "model",
+                "timeoutSeconds",
+                "runtimePath",
+                "runtimeSource",
+                "verified",
+                "logoutPending",
+            ] {
+                assert_eq!(after[field], before[field], "saving changed {field}");
+            }
+            assert!(f.service.with(|state| Ok(state.subscription)).unwrap());
+            assert!(f.root.join("ai-execution/fake-subscription").is_file());
         }
     }
     #[test]
@@ -1613,5 +2534,156 @@ mod tests {
             reopened.refresh().unwrap().reason,
             failure("harness_auth_cleanup").message
         );
+    }
+
+    fn wait_for_codebuddy_lease(login: &Login) {
+        let deadline = std::time::Instant::now() + Duration::from_secs(3);
+        while !login.execution_status().unwrap().busy {
+            assert!(std::time::Instant::now() < deadline);
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    }
+
+    #[test]
+    fn codebuddy_cancel_all_preserves_login_and_the_prepared_component() {
+        let (fixture, login, account_revision) = codebuddy_fixture();
+        let before = fixture.service.control(Control::Status).unwrap();
+        let marker = fixture.root.join("ai-execution/fake-codebuddy-wait");
+        std::fs::write(&marker, b"fixture").unwrap();
+        let mut pending = request(&fixture.service);
+        pending.account_revision = Some(account_revision);
+        let service = Arc::clone(&fixture.service);
+        let executing = std::thread::spawn(move || service.execute(pending));
+        wait_for_codebuddy_lease(&login);
+
+        fixture.service.control(Control::CancelAll).unwrap();
+        assert_eq!(executing.join().unwrap().unwrap_err().code, "cancelled");
+        std::fs::remove_file(&marker).unwrap();
+        let account = login.execution_status().unwrap();
+        assert!(account.signed_in);
+        assert!(!account.busy);
+        assert_eq!(account.revision, account_revision);
+        let status = fixture.service.control(Control::Status).unwrap();
+        assert!(status.ready);
+        assert!(!status.busy);
+        assert!(status.revision > before.revision);
+        assert_eq!(status.runtime_state, RuntimeState::Ready);
+        assert_eq!(status.runtime_path, before.runtime_path);
+        assert!(!fixture
+            .service
+            .with(|state| Ok(state.active.is_some()))
+            .unwrap());
+
+        let mut retry = request(&fixture.service);
+        retry.account_revision = Some(account_revision);
+        assert!(fixture.service.execute(retry).is_ok());
+    }
+
+    #[test]
+    fn codebuddy_restore_cancels_execution_and_requires_component_preparation_again() {
+        let (fixture, login, account_revision) = codebuddy_fixture();
+        let marker = fixture.root.join("ai-execution/fake-codebuddy-wait");
+        std::fs::write(&marker, b"fixture").unwrap();
+        let mut queued = request(&fixture.service);
+        queued.account_revision = Some(account_revision);
+        let mut pending = request(&fixture.service);
+        pending.account_revision = Some(account_revision);
+        let service = Arc::clone(&fixture.service);
+        let executing = std::thread::spawn(move || service.execute(pending));
+        wait_for_codebuddy_lease(&login);
+
+        let restore = fixture.service.begin_restore().unwrap();
+        assert_eq!(executing.join().unwrap().unwrap_err().code, "cancelled");
+        std::fs::remove_file(&marker).unwrap();
+        let status = fixture.service.control(Control::Status).unwrap();
+        assert!(status.busy);
+        assert!(!status.ready);
+        assert_eq!(status.runtime_state, RuntimeState::Unprepared);
+        assert_eq!(
+            fixture
+                .service
+                .control(Control::PrepareRuntime {})
+                .err()
+                .unwrap()
+                .code,
+            "harness_busy"
+        );
+        assert!(login.execution_status().unwrap().signed_in);
+        assert_eq!(login.execution_status().unwrap().revision, account_revision);
+        drop(restore);
+
+        let status = fixture.service.control(Control::Status).unwrap();
+        assert!(!status.busy);
+        assert!(!status.ready);
+        assert_eq!(
+            fixture.service.execute(queued).unwrap_err().code,
+            "harness_stale"
+        );
+        let mut before_preparation = request(&fixture.service);
+        before_preparation.account_revision = Some(account_revision);
+        assert_eq!(
+            fixture
+                .service
+                .execute(before_preparation)
+                .unwrap_err()
+                .code,
+            "harness_not_ready"
+        );
+        fixture.service.control(Control::PrepareRuntime {}).unwrap();
+        wait_login(&fixture.service);
+        assert!(fixture.service.control(Control::Status).unwrap().ready);
+        let mut after_preparation = request(&fixture.service);
+        after_preparation.account_revision = Some(account_revision);
+        assert!(fixture.service.execute(after_preparation).is_ok());
+    }
+
+    #[test]
+    fn codebuddy_round_trip_selection_keeps_both_accounts_and_independent_runtimes() {
+        let (fixture, login, account_revision) = codebuddy_fixture();
+        let codebuddy = fixture.service.control(Control::Status).unwrap();
+        let codex = select_adapter(&fixture.service, "codex", codebuddy.revision).unwrap();
+        assert_eq!(codex.model, "gpt-6.1-sol");
+        assert_eq!(codex.runtime_source, RuntimeSource::Custom);
+        assert_ne!(codex.runtime_path, codebuddy.runtime_path);
+        fixture.service.control(Control::Login).unwrap();
+        wait_login(&fixture.service);
+        let codex = fixture.service.control(Control::Status).unwrap();
+        assert!(codex.ready);
+        let codex_configuration = config_snapshot(&fixture.service);
+        assert!(login.execution_status().unwrap().signed_in);
+        assert_eq!(login.execution_status().unwrap().revision, account_revision);
+
+        let selected = select_adapter(&fixture.service, "codebuddy", codex.revision).unwrap();
+        assert!(selected.ready);
+        assert_eq!(selected.model, "deepseek-v4.1-flash");
+        assert_eq!(selected.runtime_source, RuntimeSource::Managed);
+        assert_eq!(selected.runtime_state, RuntimeState::Ready);
+        assert_eq!(selected.runtime_path, codebuddy.runtime_path);
+        assert_eq!(selected.account_revision, Some(account_revision));
+        let restored = config_snapshot(&fixture.service);
+        for field in [
+            "model",
+            "timeoutSeconds",
+            "runtimePath",
+            "runtimeSource",
+            "verified",
+            "logoutPending",
+        ] {
+            assert_eq!(restored[field], codex_configuration[field]);
+        }
+        assert!(fixture
+            .service
+            .with(|state| Ok(state.subscription))
+            .unwrap());
+        assert!(fixture
+            .root
+            .join("ai-execution/fake-subscription")
+            .is_file());
+        let mut analysis = request(&fixture.service);
+        analysis.task = Task::QuestionAnalysis;
+        analysis.account_revision = Some(account_revision);
+        assert!(fixture.service.execute(analysis).is_ok());
+        assert!(login.execution_status().unwrap().signed_in);
+        assert!(!login.execution_status().unwrap().busy);
     }
 }

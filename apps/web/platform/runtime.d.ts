@@ -62,6 +62,7 @@ export interface HarnessStatus {
   credentialStatus:string; runtimePath:string; runtimeVersion:string; ready:boolean; reason:string; revision:number; busy:boolean;
   runtimeSource:'managed'|'custom'; runtimeState:'unprepared'|'preparing'|'ready'|'failed'|'cancelled'; runtimeReceivedBytes:number; runtimeTotalBytes:number;
   loginUrl?:string; userCode?:string;
+  accountRevision?:number;
 }
 export interface HarnessApi {
   initialize():Promise<void>;
@@ -70,6 +71,10 @@ export interface HarnessApi {
   execute(snapshot:Readonly<HarnessStatus>,task:AiTaskKind,messages:{role:'system'|'user'|'assistant';content:string}[],signal?:AbortSignal):Promise<{content:string}>;
   cancelAll():Promise<void>;
   formMode():'api'|'harness';
+  formAdapter():string;
+  selectAdapter(adapter:string):Promise<void>;
+  selectModel(model:string):Promise<void>;
+  codebuddyAccountChanged(account:{revision:number;phase:string;blocked:boolean}):void;
   saveMode(mode:'api'|'harness'):Promise<void>;
   clear():Promise<void>;
   test():Promise<void>;
