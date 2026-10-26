@@ -6149,7 +6149,24 @@ function isDefaultImageChoiceSetV589(q){
   const context=[q&&q.question,q&&q.analysis,q&&q.group,q&&q.category].map(x=>String(x||'')).join(' ');
   return hasQuestionImageContent(context)||/(?:图形|图表|纸盒|折叠|问号|资料分析|材料分析|根据下图|下图)/.test(context);
 }
+function repairCircledCombinationQuestion(q){
+  if(!q||!Array.isArray(q.options)||q.options.length<2||q.options.length>7||!/[（(]\s*[）)]/.test(q.question||''))return q;
+  // 旧解析器曾将无标号陈述与同键组合选项拼接；仅在完整顺序和引用均能核实时恢复显示，兼容旧题库期间保留。
+  const parts=[];
+  for(const [index,option] of q.options.entries()){
+    const match=String(option.text||'').trim().match(/^([①-⑳])([^①-⑳]+?)\s+([①-⑳]{2,})$/);
+    const expectedStatement=String.fromCharCode('①'.charCodeAt(0)+index);
+    if(option.key!==String.fromCharCode(65+index)||!match||match[1]!==expectedStatement||!/[\u4e00-\u9fffA-Za-z]/.test(match[2]))return q;
+    parts.push({statement:match[1]+match[2].trim(),combination:match[3]});
+  }
+  const markers=new Set(parts.map(part=>part.statement[0]));
+  if(parts.some(part=>[...part.combination].some(marker=>!markers.has(marker))))return q;
+  if(/[①-⑳]/.test(q.question))return q;
+  return {...q,question:[q.question,...parts.map(part=>part.statement)].join('\n'),options:q.options.map((option,index)=>({...option,text:parts[index].combination}))};
+}
 function displayOptionTextV589(q,o){
+  const repaired=repairCircledCombinationQuestion(q);
+  if(repaired!==q)o=repaired.options.find(option=>option.key===o.key)||o;
   const text=String(o&&o.text||'').trim();
   const key=String(o&&o.key||'').trim();
   if(text && key && text.toUpperCase()===key.toUpperCase() && isDefaultImageChoiceSetV589(q))return '';
@@ -7688,7 +7705,7 @@ function renderStructuredQuestionImagesV83(question,images){
   imgs.forEach((img,i)=>{const src=img.dataUrl||img.localPath;if(questionTextContainsDataUriV83(question,src))return;const alt=img.sourceName||('题目图片'+(i+1));rendered.push(`<figure class="question-media"><img class="question-image" src="${esc(src)}" alt="${esc(alt)}" loading="lazy"></figure>`)});
   return rendered.join('');
 }
-function renderQuestionBodyV83(q){return renderQuestionContent(q&&q.question)+renderStructuredQuestionImagesV83(q&&q.question,q&&q.images)}
+function renderQuestionBodyV83(q){q=repairCircledCombinationQuestion(q);return renderQuestionContent(q&&q.question)+renderStructuredQuestionImagesV83(q&&q.question,q&&q.images)}
 function exportQuestionImagesForCrossExportV83(q){
   const question=String(q&&q.question||'');
   const images=[];let order=1;
