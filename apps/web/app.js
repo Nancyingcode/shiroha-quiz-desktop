@@ -1240,12 +1240,15 @@ async function renderBankPreview(){
   updateSelection();
 }
 
-function bankQuestionPreviewSource(q){
+function bankQuestionPreview(q){
   const rich=q.richContent,fields=rich?.fields||rich,field=fields?.question;
   const candidates=typeof field==='string'?[field]:[field?.text,field?.markdown,field?.sourceText,field?.fallbackText,field?.plainText];
   candidates.push(q.question);
-  return stripUnsafeImageDataUrisV83(String(candidates.find(value=>value!=null&&String(value).trim())||''));
+  const question=stripUnsafeImageDataUrisV83(String(candidates.find(value=>value!=null&&String(value).trim())||''));
+  const options=Array.isArray(q.options)?q.options.map((option,index)=>({...option,text:pickRichOptionTextV57(q,index,option)})):[];
+  return repairCircledCombinationQuestion({...q,question,options});
 }
+function bankQuestionPreviewSource(q){return bankQuestionPreview(q).question}
 function bankQuestionCopyText(q){
   const seen=new Set();let hasImages=false;
   const imageText=(src,description)=>{hasImages=true;seen.add(src);const safe=String(description||'').replace(/(?:data:|file:|https?:|[a-z]:[\\/])\S*/gi,'').trim();return safe?'[图片：'+safe+']':'[图片]'};
@@ -1275,15 +1278,15 @@ function openBankQuestionDetail(bank,q,trigger,full){
     return;
   }
   closeBankQuestionDetail();
-  const copy=bankQuestionCopyText(q),answers=q.answer||q.answerKeys||[],options=Array.isArray(q.options)?q.options:[];
+  const preview=bankQuestionPreview(q),copy=bankQuestionCopyText(q),answers=q.answer||q.answerKeys||[],options=preview.options;
   const type=normalizeWebQuestionType(q.type);
   let empty='该题暂无选项，请检查题库内容';
   if(type==='judge')empty='该判断题未提供独立选项';
   if(type==='blank'||type==='short')empty='该题型无需选项';
   const detail=document.createElement('tr');detail.id='bank-question-detail';
-  detail.innerHTML='<td colspan="8"><section class="bank-detail" aria-labelledby="bank-detail-title"><div class="bank-detail-toolbar"><h3 id="bank-detail-title" tabindex="-1">完整题干</h3><div><button type="button" class="ghost mini-btn" data-copy-question>复制题干</button> <button type="button" class="ghost mini-btn" data-close-detail>收起详情</button></div></div><div class="bank-detail-status" role="status" aria-live="polite"></div><div class="bank-detail-body">'+(copy.text.trim()?renderQuestionBodyV83({...q,question:bankQuestionPreviewSource(q)}):'暂无题干')+'</div><h4>选项</h4>'+options.map((o,index)=>{
+  detail.innerHTML='<td colspan="8"><section class="bank-detail" aria-labelledby="bank-detail-title"><div class="bank-detail-toolbar"><h3 id="bank-detail-title" tabindex="-1">完整题干</h3><div><button type="button" class="ghost mini-btn" data-copy-question>复制题干</button> <button type="button" class="ghost mini-btn" data-close-detail>收起详情</button></div></div><div class="bank-detail-status" role="status" aria-live="polite"></div><div class="bank-detail-body">'+(copy.text.trim()?renderQuestionBodyV83(preview):'暂无题干')+'</div><h4>选项</h4>'+options.map(o=>{
     const matches=answers.includes(o.key)&&options.filter(item=>item.key===o.key).length===1;
-    return '<div class="bank-detail-option'+(matches?' is-answer':'')+'"><b>'+esc(o.key)+'</b><div>'+ (pickRichOptionTextV57(q,index,o)?renderQuestionContent(pickRichOptionTextV57(q,index,o)):'选项内容为空')+'</div>'+(matches?'<span>已存答案</span>':'')+'</div>';
+    return '<div class="bank-detail-option'+(matches?' is-answer':'')+'"><b>'+esc(o.key)+'</b><div>'+ (o.text?renderQuestionContent(o.text):'选项内容为空')+'</div>'+(matches?'<span>已存答案</span>':'')+'</div>';
   }).join('')+(!options.length?'<p class="muted">'+empty+'</p>':'')+'<p><b>已存答案：</b>'+esc(answers.length?answerDisplay(answers):'未提供答案')+'</p><div class="bank-manual-copy" hidden><label for="bank-question-manual-copy">完整题干纯文本</label><textarea id="bank-question-manual-copy" readonly></textarea><button type="button" class="ghost mini-btn" data-select-copy>全选文本</button> <button type="button" class="ghost mini-btn" data-hide-copy>收起手动复制区</button></div></section></td>';
   row.after(detail);
   // 表格横向滚动容器会限制 CSS sticky，工具栏只在本详情范围内平移，并随关闭释放监听。
