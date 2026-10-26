@@ -393,6 +393,32 @@ test('导出与重置失败可见，取消文件选择不修改数据',async t=>
   assert.match(await page.locator('#platform-status').textContent(),/reset failure/);
 });
 
+test('题库详情：旧组合题的陈述、选项和复制一致且不改写数据', async t => {
+  const initial = webState();
+  const statements = ['①有关法律、法规、规章和标准的规定', '②本地区的安全生产实际情况', '③人员职责明确并有落实措施', '④有明确的应急保障措施'];
+  const combinations = ['①②', '①②③', '②③④', '①②③④'];
+  const question = initial.banks[0].questions[0];
+  question.question = '应急预案应当符合下列（ ）基本要求。';
+  question.options = statements.map((text, i) => ({ key: 'ABCD'[i], text: text + ' ' + combinations[i] }));
+  question.answer = ['D'];
+  question.richContent = { fields: { question: { text: question.question }, options: question.options.map(option => ({ ...option })) } };
+  const page = await pageFor(t, JSON.stringify(initial));
+  await page.locator('.nav[data-view="banks"]').click();
+  const before = await saved(page);
+  await page.locator('[data-preview-question="same-id"]').click();
+  const body = await page.locator('.bank-detail-body').innerText();
+  for (const statement of statements) assert.ok(body.includes(statement), body);
+  assert.deepEqual(await page.locator('.bank-detail-option > div').allTextContents(), combinations);
+  assert.match(await page.locator('.bank-detail-option.is-answer').innerText(), /D/);
+  await page.evaluate(() => Object.defineProperty(globalThis.navigator, 'clipboard', { configurable: true, value: { writeText: async text => { globalThis.__copied = text; } } }));
+  await page.locator('[data-copy-question]').click();
+  assert.equal(await page.evaluate(() => globalThis.__copied), [question.question, ...statements].join('\n'));
+  await page.evaluate(() => { globalThis.navigator.clipboard.writeText = async () => { throw Error('denied'); }; });
+  await page.locator('[data-copy-question]').click();
+  assert.equal(await page.locator('#bank-question-manual-copy').inputValue(), [question.question, ...statements].join('\n'));
+  assert.equal(await saved(page), before);
+});
+
 test('题库详情：完整长题干复制、拒绝回退与选择隔离', async t => {
   const initial = webState();
   let full = '长题干材料。'.repeat(2000) + '\n第二段 $x^2$。';
