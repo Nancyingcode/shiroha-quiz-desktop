@@ -35,6 +35,37 @@ async function pageFor(t, raw, injection = '') {
 }
 const saved = page => page.evaluate(key => globalThis.localStorage.getItem(key), KEY);
 
+for (const mode of ['single', 'total', 'exam']) test(`${mode} 答错后保存当时选项，重载错题本仍标红`, async t => {
+  const initial = webState();
+  initial.banks = [initial.banks[0]];
+  initial.banks[0].questions = [initial.banks[0].questions[0]];
+  initial.wrongBook = {};
+  const page = await pageFor(t, JSON.stringify(initial));
+  const view = mode === 'exam' ? 'exam' : 'practice';
+  await page.locator(`.nav[data-view="${view}"]`).click();
+  if (mode !== 'exam') await page.locator('#practice-submit-mode').selectOption(mode);
+  await page.locator(`#start-${view}-btn`).click();
+  await page.locator(`#${view}-card .option[data-key="B"]`).click();
+  if (mode === 'single') {
+    await page.locator('#p-submit').click();
+    await page.locator('#practice-card .option.wrong').waitFor();
+    await page.locator('#p-next').click();
+  } else {
+    await page.locator(mode === 'exam' ? '#exam-submit-focus-bottom' : '#p-submit-all').click();
+  }
+  await page.locator(mode === 'exam' ? '#exam-back-setup' : '#back-practice-setup').waitFor();
+  assert.deepEqual(JSON.parse(await saved(page)).wrongBook['bank-a'][0].lastAnswer, ['B']);
+  await page.reload();
+  await page.locator('.nav[data-view="wrongbook"]').click();
+  const wrong = page.locator('#wrongbook-list .option.wrong');
+  await wrong.waitFor();
+  assert.equal(await wrong.getAttribute('data-key'), 'B');
+  assert.match(await wrong.innerText(), /✕ 当时选择/);
+  assert.match(await page.locator('#wrongbook-list .review-answer-summary').innerText(), /当时错误答案/);
+  await page.setViewportSize({ width: 390, height: 844 });
+  assert.equal(await page.evaluate(() => globalThis.document.documentElement.scrollWidth <= globalThis.innerWidth), true);
+});
+
 test('错题本显示完整题干、全部选项和已保存的错选标记', async t => {
   const initial = webState();
   const q = initial.banks[0].questions[0];
@@ -47,7 +78,7 @@ test('错题本显示完整题干、全部选项和已保存的错选标记', as
   assert.equal(await card.locator('.question-title').innerText(), q.question);
   assert.deepEqual(await card.locator('.option-text').allTextContents(), ['二', '三']);
   assert.match(await card.locator('.option.correct').innerText(), /正确答案/);
-  assert.match(await card.locator('.option.wrong').innerText(), /你的选择（错误）/);
+  assert.match(await card.locator('.option.wrong').innerText(), /✕ 当时选择/);
   assert.equal(await card.locator('input').count(), 0);
 });
 
@@ -119,7 +150,8 @@ test('总提交结果列出全部错题，保留跨库来源且不截断到八�
   const last = overview.locator('[data-wrong-question-index="12"]');
   assert.equal(await last.locator('.review-options .option').count(), 2);
   assert.match(await last.innerText(), /跨题库同ID/);
-  assert.match(await last.innerText(), /正确答案[：\s]*B[.\s]*三/);
+  assert.equal(await last.locator('.review-answer-correct .review-answer-value').innerText(), 'B');
+  assert.equal(await last.locator('.option.correct .option-text').innerText(), '三');
   assert.match(await last.innerText(), /未作答/);
   assert.equal(JSON.parse(await saved(page)).records[0].details.length, 13);
 });

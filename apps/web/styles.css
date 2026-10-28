@@ -390,6 +390,26 @@ td{
 .review-options .option{cursor:default}
 .review-options .option-text{flex:1;min-width:0;overflow-wrap:anywhere}
 .review-option-status{font-size:12px;flex-shrink:0}
+.option.correct .option-text,.review-answer-correct .review-answer-value{color:#15803d}
+.option.wrong .option-text,.review-answer-wrong .review-answer-value{color:#dc2626}
+.option.correct .option-key,.option.wrong .option-key,.review-options .option-key{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:32px;height:32px;flex:0 0 32px;border-radius:50%;
+}
+.review-options .option-key{background:var(--bg);border:1px solid var(--line)}
+.option.correct .option-key{background:#15803d;color:#fff;border:0}
+.option.wrong .option-key{background:#dc2626;color:#fff;border:0}
+.review-options .option{align-items:center}
+.review-options .option.correct{border-color:#16a34a;background:#f0fdf4}
+.review-options .option.wrong{border-color:#ef4444;background:#fff1f2}
+.review-options .correct .review-option-status{color:#15803d;background:#dcfce7}
+.review-options .wrong .review-option-status{color:#dc2626;background:#fee2e2}
+.review-option-status{padding:5px 8px;border-radius:8px}
+.review-answer-summary{display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:20px;margin:16px 0;border-radius:16px;background:var(--bg);text-align:center}
+.review-answer-summary>div{display:flex;flex-direction:column;gap:8px;min-width:0}
+.review-answer-summary>div+div{border-left:1px solid var(--line)}
+.review-answer-value{font-size:24px;overflow-wrap:anywhere}
+.review-answer-summary span{color:var(--muted);font-size:13px}
 @media(max-width:600px){
   .review-options .option{flex-wrap:wrap}
   .review-option-status{width:100%;padding-left:36px}

@@ -830,10 +830,10 @@ async function totalPracticeSmoke(page, bankName, origin) {
   await page.locator('#again-practice').waitFor();
   const metrics = await page.locator('#practice-card .metric b').allTextContents();
   assert.deepEqual(metrics, ['1', '0', '1', '0%']);
-  assert.match(await page.locator('#p-wrong-overview').innerText(), /你的答案[：\s]*B[.\s]*3/);
-  assert.match(await page.locator('#p-wrong-overview').innerText(), /正确答案[：\s]*A[.\s]*2/);
+  assert.equal(await page.locator('#p-wrong-overview .review-answer-wrong .review-answer-value').innerText(), 'B');
+  assert.equal(await page.locator('#p-wrong-overview .review-answer-correct .review-answer-value').innerText(), 'A');
   assert.deepEqual(await page.locator('#p-wrong-overview .option-text').allTextContents(), ['2', '3']);
-  assert.match(await page.locator('#p-wrong-overview .option.wrong').innerText(), /你的选择（错误）/);
+  assert.match(await page.locator('#p-wrong-overview .option.wrong').innerText(), /✕ 当时选择/);
   await page.screenshot({ path: path.join(path.dirname(SCREENSHOT_PATH), 'practice-wrong-overview.png'), fullPage: true });
   await page.locator('#again-practice').click();
   await page.locator('#practice-card .option[data-key="A"]').click();
@@ -843,7 +843,15 @@ async function totalPracticeSmoke(page, bankName, origin) {
   assert.match(await page.locator('#p-wrong-overview').innerText(), /本轮没有错题/);
   await page.locator('#back-practice-setup').click();
   await page.locator('#practice-submit-mode').selectOption('single');
-  return { mode: 'total', answered: 1, nativeAi: true, wrongOverview: true, allCorrect: true, saved: true };
+  await page.reload();
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.locator('.nav[data-view="wrongbook"]').click();
+  const originalWrong = page.locator('#wrongbook-list .wrong-item').filter({ hasText: FIXTURE_QUESTION });
+  await originalWrong.waitFor();
+  assert.equal(await originalWrong.locator('.option.wrong').getAttribute('data-key'), 'B');
+  assert.equal(await originalWrong.locator('.review-answer-wrong .review-answer-value').innerText(), 'B');
+  await page.screenshot({ path: path.join(path.dirname(SCREENSHOT_PATH), 'wrongbook-original-choice.png'), fullPage: true });
+  return { mode: 'total', answered: 1, nativeAi: true, wrongOverview: true, allCorrect: true, saved: true, originalWrongChoiceAfterReload: true };
 }
 
 async function main() {

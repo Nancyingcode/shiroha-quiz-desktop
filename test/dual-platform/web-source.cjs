@@ -9,7 +9,7 @@ const { webcrypto } = require('node:crypto');
 const sourcePath = path.resolve(__dirname, '../../apps/web/app.js');
 const source = readFileSync(sourcePath, 'utf8');
 const exportedNames = [
-  'renderReviewOptions', 'renderPracticeWrongOverview',
+  'renderReviewOptions', 'renderReviewAnswerSummary', 'renderPracticeWrongOverview',
   'repairCircledCombinationQuestion',
   'displayOptionTextV589',
   'normalizeQuestion', 'normalizeBackupPayloadV23', 'serializeBankForCrossExportV53',
