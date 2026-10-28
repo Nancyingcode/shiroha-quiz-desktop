@@ -7896,4 +7896,57 @@ body.practice-focus.practice-rail-collapsed-v34 #practice-card > .practice-side-
 #app-dialog :is(button,input):focus-visible{outline:3px solid #83b5ff;outline-offset:3px}
 #app-dialog [hidden]{display:none}
 @media(max-width:480px){#app-dialog{padding:24px 20px}#app-dialog button{padding:10px 14px}}
+
+.list-pagination{
+  container-type:inline-size;
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  justify-content:flex-end;
+  gap:12px 20px;
+  margin-top:20px;
+  min-width:0;
+  font-size:13px;
+  font-weight:400;
+}
+.list-pagination-status{margin-right:auto;color:var(--muted);font-size:12px;line-height:1.5}
+.list-pagination-controls{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:12px 20px;max-width:100%;min-width:0}
+.list-page-numbers{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:6px;min-width:0}
+.list-page-numbers.is-compact{display:none}
+.list-pagination .list-page-button,.list-pagination .list-page-gap{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  flex:0 0 auto;
+  width:32px;
+  height:32px;
+  min-height:32px;
+  padding:0;
+  border:1px solid transparent;
+  border-radius:6px;
+  background:transparent;
+  color:var(--ink);
+  box-shadow:none;
+  font-size:13px;
+  font-weight:400;
+  line-height:1;
+  transform:none;
+}
+.list-pagination .list-page-gap{color:#a8b0bc;width:24px}
+.list-pagination .list-page-button:hover:not(:disabled){border-color:var(--line);background:var(--blue2);color:var(--blue);transform:none;box-shadow:none}
+.list-pagination .list-page-button[aria-current="page"],.list-pagination .list-page-button[aria-current="page"]:hover{border-color:#1677ff;color:#1677ff;background:#fff;font-weight:600}
+.list-pagination .list-page-button:disabled{color:#c3c9d2;cursor:not-allowed;opacity:1}
+.list-pagination .list-page-button[data-page-control="previous"],.list-pagination .list-page-button[data-page-control="next"]{font-size:23px;font-weight:300}
+/* 历史移动端表单对高度与圆角使用 important；分页须保留紧凑尺寸。 */
+.list-pagination select.list-page-size{width:104px;min-height:32px !important;height:32px;padding:4px 8px;border:1px solid #d7dbe1;border-color:#d7dbe1 !important;border-radius:6px !important;background:#fff;color:var(--ink);font-size:13px;font-weight:400;box-shadow:none}
+.list-pagination :is(button,select):focus-visible{outline:2px solid var(--blue);outline-offset:3px}
+:is(#bank-list,#bank-preview,#wrongbook-list,#favorites-list-v596,#records-list,#p-wrong-overview-list){scroll-margin-top:76px}
+@container (max-width:440px){
+  .list-page-numbers.is-wide{display:none}
+  .list-page-numbers.is-compact{display:flex}
+  .list-pagination-controls{gap:10px 12px}
+  .list-page-numbers{gap:3px}
+  .list-pagination .list-page-button{width:28px;height:30px;min-height:30px}
+  .list-pagination .list-page-gap{width:20px}
+}
 @media(prefers-reduced-motion:no-preference){#app-dialog[open]{animation:app-dialog-enter .14s ease-out}@keyframes app-dialog-enter{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}}

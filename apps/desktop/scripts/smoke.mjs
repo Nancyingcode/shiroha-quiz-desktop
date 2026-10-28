@@ -1098,6 +1098,18 @@ async function main() {
       assert(!initialCalls.includes('local_read:')&&!initialCalls.includes('local_query:details'),'startup loaded bodies');
       await migratedRestart.page.locator('.nav[data-view="banks"]').click();
       await migratedRestart.page.locator('#bank-preview tbody tr').first().getByText('lazy-a 正文 0',{exact:true}).waitFor();
+      assert.equal(await migratedRestart.page.locator('#bank-preview tbody tr').count(),10);
+      const previewPager=migratedRestart.page.locator('#bank-preview-pager');
+      assert.equal(await previewPager.locator('select').inputValue(),'10');
+      await previewPager.locator('select').selectOption('20');
+      await migratedRestart.page.locator('[data-select-bank-question="q19"]').waitFor();
+      assert.equal(await migratedRestart.page.locator('#bank-preview tbody tr').count(),20);
+      await previewPager.getByRole('button',{name:'第 4 页',exact:true}).click();
+      await migratedRestart.page.locator('#bank-preview tbody tr').first().getByText('lazy-a 正文 60',{exact:true}).waitFor();
+      assert.equal(await migratedRestart.page.locator('#bank-preview tbody tr').count(),5);
+      assert(await previewPager.getByRole('button',{name:'下一页',exact:true}).isDisabled());
+      await previewPager.locator('select').selectOption('50');
+      await migratedRestart.page.locator('#bank-preview tbody tr').first().getByText('lazy-a 正文 0',{exact:true}).waitFor();
       assert.equal(await migratedRestart.page.locator('#bank-preview tbody tr').count(),50);
       await migratedRestart.page.locator('[data-preview-question]').first().click();
       assert.equal(await migratedRestart.page.locator('#bank-question-detail .bank-detail-body').innerText(),'lazy-a 正文 0');
@@ -1105,7 +1117,7 @@ async function main() {
       await migratedRestart.page.evaluate(()=>Object.defineProperty(window.navigator,'clipboard',{configurable:true,value:{writeText:async(/** @type {string} */ text)=>{Reflect.set(window,'__previewCopied',text)}}}));
       await migratedRestart.page.locator('[data-copy-question]').click();
       assert.equal(await migratedRestart.page.evaluate(()=>Reflect.get(window,'__previewCopied')),'lazy-a 正文 0');
-      await migratedRestart.page.locator('#bank-preview').locator('..').getByRole('button',{name:'下一页',exact:true}).last().click();
+      await previewPager.getByRole('button',{name:'下一页',exact:true}).click();
       await migratedRestart.page.locator('#bank-preview tbody tr').first().getByText('lazy-a 正文 50',{exact:true}).waitFor();
       assert.equal(await migratedRestart.page.locator('#bank-question-detail').count(),0);
       assert.equal(await migratedRestart.page.locator('#bank-preview tbody tr').count(),15);
@@ -1144,7 +1156,34 @@ async function main() {
         await storage.ensureAll?.(data);
         if(data.banks.some(bank=>bank.questions.some(q=>!q.question||!q.extension)))throw new Error('完整导出缺失正文或扩展');
       });
-      return {questions:130,pageSize:50,lastPage:15,initialBodies:0,crossBankIdentity:true};
+      return {questions:130,defaultPageSize:10,pageSizes:[20,50],directLastPage:5,lastPage:15,initialBodies:0,crossBankIdentity:true};
+    });
+    await check('本轮错题一览分页保留题号、全部选项和完整题量',async()=>{
+      const page=migratedRestart.page;
+      // 前一用例用独立快照读取完整导出；重载后页面与适配器重新共享同一读取基线。
+      await page.reload();await page.locator('body[data-storage-state="ready"]').waitFor();
+      await page.locator('.nav[data-view="practice"]').click();
+      await page.locator('#practice-submit-mode').selectOption('total');
+      await page.locator('#practice-start-mode-v58916').selectOption('custom');
+      await page.locator('#practice-number-range-v58916').fill('1-13');
+      await page.locator('#start-practice-btn').click();
+      await page.locator('#p-submit-all').click();
+      await page.locator('#app-dialog [data-dialog-accept]').click();
+      await page.locator('#again-practice').waitFor();
+      const overview=page.locator('#p-wrong-overview'),pager=page.locator('#p-wrong-overview-list-pager');
+      assert.equal(await overview.locator('[data-wrong-question-index]').count(),10);
+      assert.match(await overview.locator('h3').innerText(),/13/);
+      await pager.getByRole('button',{name:'第 2 页',exact:true}).click();
+      assert.equal(await overview.locator('[data-wrong-question-index]').count(),3);
+      assert.match(await overview.locator('[data-wrong-question-index="10"] .qmeta').innerText(),/第 11 题/);
+      assert.equal(await overview.locator('[data-wrong-question-index="12"] .option').count(),2);
+      await pager.locator('select').selectOption('20');
+      assert.equal(await overview.locator('[data-wrong-question-index]').count(),13);
+      assert.equal(await pager.locator('[aria-current="page"]:visible').innerText(),'1');
+      await page.locator('#back-practice-setup').click();
+      await page.locator('#practice-submit-mode').selectOption('single');
+      await page.locator('.nav[data-view="banks"]').click();
+      return {totalWrong:13,defaultPageSize:10,secondPage:3,expandedPageSize:20};
     });
     await check('题库预览四列文字与操作按钮保持单行',async()=>{
       const page=migratedRestart.page;
@@ -1183,6 +1222,7 @@ async function main() {
       const page=migratedRestart.page;
       await page.reload();await page.locator('body[data-storage-state="ready"]').waitFor();
       await page.locator('.nav[data-view="banks"]').click();
+      await page.locator('#bank-preview-pager select').selectOption('50');
       await page.locator('[data-select-bank-question="q0"]').check();
       await page.locator('#bank-preview-pager').getByRole('button',{name:'下一页',exact:true}).click();
       await page.locator('[data-select-bank-question="q50"]').waitFor();
