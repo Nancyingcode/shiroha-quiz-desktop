@@ -18,6 +18,26 @@ async function ready(h) {
 
 const cases = [
   ...['single', 'total'].map(mode => ({
+    name: `practice-clear-options-ai-draft-${mode}`,
+    async run(h) {
+      if (mode === 'total') await startTotal(h); else await h.start();
+      await h.page.locator('#practice-card .option[data-key="B"]').click();
+      await h.generate(analysis('BEFORE_CLEAR'));
+      const before = await snapshot(h.page);
+      const calls = h.mock.calls.length;
+      await h.page.locator('[data-clear-answer-options]').click();
+      await h.quiet();
+      assert.equal(h.mock.calls.length, calls);
+      const after = await snapshot(h.page);
+      assert.deepEqual(after.records, before.records);
+      assert.deepEqual(after.wrongBook, before.wrongBook);
+      assert((await h.page.locator(SEL.panel).innerText()).includes('BEFORE_CLEAR'));
+      const request = await h.generate(analysis('AFTER_CLEAR'), { regenerate: true });
+      assert(request.body.messages.find(message => message.role === 'user').content.includes('"userAnswer":[]'));
+      assert.equal((await snapshot(h.page)).practice.answered, 0);
+    },
+  })),
+  ...['single', 'total'].map(mode => ({
     name: `practice-review-ai-unsubmitted-${mode}`,
     async run(h) {
       if (mode === 'total') await startTotal(h); else await h.start();
@@ -82,8 +102,11 @@ const cases = [
       assert.equal(await overview.locator('[data-wrong-question-index]').count(), 5);
       const first = overview.locator('[data-wrong-question-index="0"]');
       assert.match(await first.innerText(), /SAFE_Q1/);
-      assert.match(await first.innerText(), /你的答案[：\s]*B[.．、\s]*5/);
-      assert.match(await first.innerText(), /正确答案[：\s]*A[.．、\s]*4/);
+      assert.equal(await first.locator('.review-answer-wrong .review-answer-value').innerText(), 'B');
+      assert.equal(await first.locator('.review-answer-correct .review-answer-value').innerText(), 'A');
+      assert.equal(await first.locator('.option.wrong .option-text').innerText(), '5');
+      assert.equal(await first.locator('.option.correct .option-text').innerText(), '4');
+      assert.match(await first.locator('.review-answer-wrong').innerText(), /当时错误答案/);
       assert.match(await overview.locator('[data-wrong-question-index="1"]').innerText(), /未作答/);
       assert.match(await overview.locator('[data-wrong-question-index="2"]').innerText(), /wrong/);
       assert.match(await overview.locator('[data-wrong-question-index="2"]').innerText(), /2 \/ two/);
