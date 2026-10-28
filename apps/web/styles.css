@@ -410,6 +410,16 @@ td{
 .review-answer-summary>div+div{border-left:1px solid var(--line)}
 .review-answer-value{font-size:24px;overflow-wrap:anywhere}
 .review-answer-summary span{color:var(--muted);font-size:13px}
+.review-analysis{margin-top:14px;padding:14px 16px;border-radius:12px;background:var(--blue2);color:var(--ink);font-size:14px;line-height:1.75;overflow-wrap:anywhere}
+.review-analysis.is-empty{background:var(--bg)}
+.review-analysis-title{color:var(--blue)}
+.review-analysis-head,.review-analysis-empty{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.review-analysis-empty,.review-analysis .q-multiline-text{margin-top:9px}
+.review-analysis .muted{font-size:13px;margin:9px 0 0}
+.review-analysis .actions{margin-top:12px;flex-wrap:wrap}
+.review-analysis-warning{color:#b91c1c;margin:9px 0 0}
+.review-analysis-saved{color:#15803d;font-size:13px}
+@media(max-width:520px){.review-analysis{padding:12px}.review-analysis .actions .mini-btn{flex:1 1 auto}}
 #p-wrong-overview{
   margin-top:24px
 }

@@ -82,8 +82,12 @@ const cases = [
       assert.equal(await overview.locator('[data-wrong-question-index]').count(), 5);
       const first = overview.locator('[data-wrong-question-index="0"]');
       assert.match(await first.innerText(), /SAFE_Q1/);
-      assert.match(await first.innerText(), /你的答案[：\s]*B[.．、\s]*5/);
-      assert.match(await first.innerText(), /正确答案[：\s]*A[.．、\s]*4/);
+      assert.equal(await first.locator('.review-answer-wrong .review-answer-value').innerText(), 'B');
+      assert.equal(await first.locator('.review-answer-correct .review-answer-value').innerText(), 'A');
+      assert.equal(await first.locator('.option[data-key="B"] .option-text').innerText(), '5');
+      assert.equal(await first.locator('.option[data-key="A"] .option-text').innerText(), '4');
+      assert.match(await first.locator('.option[data-key="B"] .review-option-status').innerText(), /当时选择/);
+      assert.match(await first.locator('.option[data-key="A"] .review-option-status').innerText(), /正确答案/);
       assert.match(await overview.locator('[data-wrong-question-index="1"]').innerText(), /未作答/);
       assert.match(await overview.locator('[data-wrong-question-index="2"]').innerText(), /wrong/);
       assert.match(await overview.locator('[data-wrong-question-index="2"]').innerText(), /2 \/ two/);

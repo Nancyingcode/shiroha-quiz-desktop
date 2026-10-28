@@ -15,7 +15,7 @@ function fixture(overrides = {}) {
     exam: { items: [], submitted: false }, ocrImportState: { running: false },
     practice: { items: [] }, totalPracticeFilledCount: () => 0,
     $: () => null,
-    webdavRuntimeV378: { busy: false }, aiImportRequestV99: { running: false }, aiPreviewRequestV991: { running: false }, aiSingleSessionsV613: new Map(),
+    webdavRuntimeV378: { busy: false }, aiImportRequestV99: { running: false }, aiPreviewRequestV991: { running: false }, aiSingleSessionsV613: new Map(), reviewAnalysisSessions: new Map(),
     confirm: message => { prompts.push(message); return false; }, platformStatus: message => status.push(message),
     ShirohaPlatform: { network: { cancelAll: async () => {} }, saves: { idle: async () => {} } }, ...overrides,
   });
@@ -37,6 +37,8 @@ test('unfinished exam, OCR and single-question AI can cancel exit', async () => 
     { exam: { items: [{}], submitted: false } },
     { ocrImportState: { running: true } },
     { aiSingleSessionsV613: new Map([['question', { loading: 'analysis' }]]) },
+    { reviewAnalysisSessions: new Map([['wrong-question', { loading: 'analysis' }]]) },
+    { reviewAnalysisSessions: new Map([['wrong-question', { saving: true }]]) },
   ]) {
     const f = fixture(override);
     assert.equal(await f.close(), false);

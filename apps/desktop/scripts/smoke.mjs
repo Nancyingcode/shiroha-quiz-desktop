@@ -805,8 +805,8 @@ async function practiceDeselectSmoke(page) {
   if (await page.locator('#p-total-status').count()) assert.match(await page.locator('#p-total-status').innerText(), /已填写 0 题/);
 }
 
-/** @param {Page} page @param {string} bankName */
-async function importAndPractice(page, bankName) {
+/** @param {Page} page @param {string} bankName @param {string} analysisText */
+async function importAndPractice(page, bankName, analysisText = '1 + 1 = 2') {
   // 用实际导入与练习控件证明业务保存链路，避免直接写入应用 state 掩盖绑定或持久化错误。
   await page.locator('.nav[data-view="import"]').click();
   await page.locator('#import-bank-name').fill(bankName);
@@ -815,7 +815,7 @@ async function importAndPractice(page, bankName) {
   await page.locator('#import-text').fill(JSON.stringify({ questions: [{
     type: 'single', question: FIXTURE_QUESTION,
     options: [{ key: 'A', text: '2' }, { key: 'B', text: '3' }],
-    answer: ['A'], analysis: '1 + 1 = 2',
+    answer: ['A'], analysis: analysisText,
   }] }));
   await page.locator('#parse-import-btn').click();
   await page.locator('#import-preview tbody tr').filter({ hasText: FIXTURE_QUESTION }).waitFor({ state: 'visible' });
@@ -876,6 +876,35 @@ async function totalPracticeSmoke(page, bankName, origin) {
   assert.equal(await originalWrong.locator('.review-answer-wrong .review-answer-value').innerText(), 'B');
   await page.screenshot({ path: path.join(path.dirname(SCREENSHOT_PATH), 'wrongbook-original-choice.png'), fullPage: true });
   return { mode: 'total', answered: 1, nativeAi: true, wrongOverview: true, allCorrect: true, saved: true, originalWrongChoiceAfterReload: true };
+}
+
+/** @param {Page} page */
+async function wrongAnalysisSmoke(page) {
+  const bankName = `错题解析验证-${randomUUID().slice(0, 8)}`;
+  await importAndPractice(page, bankName, '');
+  await page.locator('#practice-card .option[data-key="B"]').click();
+  await page.locator('#p-submit').click();
+  const panel = page.locator('#p-feedback [data-review-analysis]');
+  await panel.locator('[data-review-ai="generate"]').waitFor();
+  assert.match(await panel.innerText(), /暂无解析/);
+  assert.equal(await page.locator('#p-ai-v613 button').count(), 0);
+  await page.screenshot({ path: path.join(path.dirname(SCREENSHOT_PATH), 'wrong-analysis-empty.png'), fullPage: true });
+  await panel.locator('[data-review-ai="generate"]').click();
+  await panel.locator('.q-multiline-text').filter({ hasText: 'NATIVE_PRACTICE_AI' }).waitFor();
+  assert.match(await panel.innerText(), /草稿 · 未保存/);
+  await panel.locator('[data-review-ai="save"]').click();
+  await panel.locator('.review-analysis-saved').waitFor();
+  await page.screenshot({ path: path.join(path.dirname(SCREENSHOT_PATH), 'wrong-analysis-saved.png'), fullPage: true });
+  await page.locator('#p-next').click();
+  await page.locator('#back-practice-setup').click();
+  await page.reload();
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.locator('.nav[data-view="wrongbook"]').click();
+  const restored = page.locator('#wrongbook-list [data-review-analysis]').first();
+  await restored.locator('.q-multiline-text').filter({ hasText: 'NATIVE_PRACTICE_AI' }).waitFor();
+  assert.equal(await restored.locator('[data-review-ai="generate"]').count(), 0);
+  assert.equal(await page.locator('#wrongbook-list .review-answer-wrong .review-answer-value').innerText(), 'B');
+  return { emptyState: true, nativeAi: true, confirmedSave: true, persistedAfterReload: true };
 }
 
 async function main() {
@@ -1016,6 +1045,7 @@ async function main() {
       assert(networkMock.requests.some(request => request.url === '/practice-analysis' && request.authenticated), '答题 AI 未通过原生请求使用隔离假凭据');
       return result;
     });
+    await check('空解析错题主动 AI 生成、确认保存与原生重载', () => wrongAnalysisSmoke(page));
     await check('订阅 Harness 登录、既有 AI 任务与取消草稿保全',()=>harnessSmoke(page,()=>practiceImportedBank(page,bankName)));
     await check('Harness 下载中切换与组件缓存复用',()=>harnessSwitchingSmoke(page,profile));
     await check('CodeBuddy 登录、单题解析、追问与配置保全',()=>codebuddyLoginSmoke(page,()=>practiceImportedBank(page,bankName)));
