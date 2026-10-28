@@ -57,7 +57,10 @@
       buttons.forEach(button => { button.disabled = false; });
     }
   };
-  minimize.addEventListener('click', () => { void run(() => appWindow.minimize()); });
+  minimize.addEventListener('click', () => {
+    window.dispatchEvent(new Event('shiroha:practice-hidden'));
+    void run(() => appWindow.minimize());
+  });
   maximize.addEventListener('click', () => { void run(() => appWindow.toggleMaximize()); });
   close.addEventListener('click', () => { void run(() => appWindow.close()); });
   drag.addEventListener('mousedown', event => {

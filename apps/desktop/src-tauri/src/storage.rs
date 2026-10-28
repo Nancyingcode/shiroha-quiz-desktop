@@ -313,6 +313,7 @@ impl Store {
                 "passed",
                 "duration",
                 "scopeType",
+                "reviewSummary",
             ] {
                 if let Some(value) = source.get(key) {
                     summary.insert(key.into(), value.clone());

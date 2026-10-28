@@ -4,10 +4,10 @@ import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 
 const desktopRoot = fileURLToPath(new URL('..', import.meta.url));
-const entries = ['index.html', 'app.js', 'styles.css', 'question-bank.js', 'app-icon.png', 'data', 'media', 'libs', 'platform'];
+const entries = ['index.html', 'app.js', 'training.js', 'styles.css', 'question-bank.js', 'app-icon.png', 'data', 'media', 'libs', 'platform'];
 export const requiredAssets = [
   'platform/validation.js', 'platform/browser.js', 'platform/browser-network.js', 'platform/browser-credentials.js', 'platform/save-queue.js', 'platform/index.js',
-  'index.html', 'app.js', 'styles.css', 'question-bank.js', 'app-icon.png',
+  'index.html', 'app.js', 'training.js', 'styles.css', 'question-bank.js', 'app-icon.png',
   'libs/pdf.min.mjs', 'libs/pdf.worker.min.mjs',
   'libs/wasm/openjpeg.wasm', 'libs/standard_fonts/LiberationSans-Regular.ttf',
   'libs/cmaps/Adobe-GB1-UCS2.bcmap', 'libs/iccs/CGATS001Compat-v2-micro.icc',

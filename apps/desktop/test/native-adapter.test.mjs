@@ -5,6 +5,31 @@ import vm from 'node:vm';
 /** @param {object} scope @returns {{storage:{initialize():Promise<{state:string,error?:Error & {code?:string}}>,write(data:unknown,id:string,revision:number):Promise<unknown>,revision():number,getOperation(id:string):Promise<{revision:number}>}}} */
 function platform(scope) { return vm.runInNewContext('ShirohaPlatform', scope); }
 
+test('复盘正文惰性读取与释放保留轻量摘要，重读不产生写入',async()=>{
+  const source=await readFile(new URL('../frontend/adapter.js',import.meta.url),'utf8');
+  const metadata={version:1,completion:'ended_early',submitMode:'single',timing:'active',unanswered:1};
+  const full={id:'training',reviewSummary:metadata,review:{version:1,items:[{question:{id:'old',question:'历史正文'}}]},details:[]};
+  const index={schemaVersion:1,banks:[],records:[{id:'training',reviewSummary:metadata}],settings:{},wrongBook:{},favorites:{},crossPlatformMeta:{},activeBankId:''};
+  let detailReads=0;
+  const scope={ShirohaDesktopHost:{invoke:async(/** @type {string} */command,/** @type {{query?:{kind:string}}} */args)=>{
+    if(command==='local_initialize')return {revision:1,hasData:true};
+    if(args?.query?.kind==='summary')return {revision:1,snapshot:globalThis.structuredClone(index)};
+    if(args?.query?.kind==='details'){detailReads++;return [globalThis.structuredClone(full)];}
+    assert.fail('只读复盘不应写入：'+command);
+  }},ShirohaBrowser:{},ShirohaBrowserCredentials:{},ShirohaSaveQueue:{create:()=>({})},localStorage:{getItem:()=>null},structuredClone:globalThis.structuredClone};
+  vm.runInNewContext(source,scope);
+  const storage=/** @type {import('../../web/platform/runtime.d.ts').BrowserStorage} */(vm.runInNewContext('ShirohaPlatform.storage',scope));
+  await storage.initialize();const view=await storage.read();assert(view);
+  await storage.ensureRecords?.(view,['training']);
+  assert(view.records[0].review);
+  storage.releaseView?.(view,[]);
+  assert.equal(view.records[0].review,undefined);
+  assert.deepEqual(globalThis.structuredClone(view.records[0].reviewSummary),metadata);
+  await storage.ensureRecords?.(view,['training']);
+  assert.equal(detailReads,2);
+  assert(view.records[0].review);
+});
+
 for (const [code, expected] of /** @type {Array<[string,RegExp]>} */ ([
   ['storage_in_use', /其他 Shiroha Quiz 窗口.*原数据已保留.*关闭其他 Shiroha Quiz 窗口后重试/],
   ['permission_denied', /当前窗口.*本地访问.*未授权.*原数据已保留.*重新启动正确的 Shiroha Quiz 桌面程序/],

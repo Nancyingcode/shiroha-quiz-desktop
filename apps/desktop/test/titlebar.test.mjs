@@ -59,13 +59,14 @@ function fixture() {
     close: async () => { calls.push('close'); },
     startDragging: async () => { calls.push('drag'); },
   };
-  const host = { ShirohaDesktopHost: { window: api }, ResizeObserver, addEventListener() {}, setTimeout, clearTimeout };
+  /** @type {string[]} */ const events = [];
+  const host = { ShirohaDesktopHost: { window: api }, ResizeObserver, addEventListener() {}, dispatchEvent: (/** @type {Event} */ event) => { events.push(event.type); return true; }, setTimeout, clearTimeout };
   const document = {
     getElementById: (/** @type {string} */ id) => elements.get(id),
     body: { style: { setProperty: (/** @type {string} */ name, /** @type {string} */ value) => { properties.set(name, value); } } },
   };
-  const start = () => vm.runInNewContext(source, { window: host, document, ResizeObserver });
-  return { get, calls, api, start, host, label, properties, observed, resize: () => resize() };
+  const start = () => vm.runInNewContext(source, { window: host, document, ResizeObserver, Event: globalThis.Event });
+  return { get, calls, events, api, start, host, label, properties, observed, resize: () => resize() };
 }
 
 test('navigation toggle follows the title text when its measured width changes', () => {
@@ -87,6 +88,7 @@ test('window actions use only the current window and synchronize maximize/restor
   f.get('window-minimize').emit('click'); await setImmediate();
   f.get('window-close').emit('click'); await setImmediate();
   assert.deepEqual(f.calls, ['toggle', 'toggle', 'minimize', 'close']);
+  assert.deepEqual(f.events, ['shiroha:practice-hidden']);
 });
 
 test('title dragging ignores non-left buttons and handles double click without dragging again', async () => {

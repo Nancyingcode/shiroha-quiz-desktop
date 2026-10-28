@@ -21,6 +21,64 @@ const TYPE_LABEL={single:'单选题',multiple:'多选题',multi:'多选题',judg
 const state=blankState();
 let importCache=[];let tableImportResultV49=null;let importWarnings=[];let importReport='';let importDiagnostics=null;let importPreviewFilter='priority';let importSelected=new Set();let importSourceMetaV376={name:'',size:0,type:''};let bankEditSessionV45=null;let practiceEditSessionV120=null;let exportBankSelectedV23=new Set();let backupImportModeV23='merge';let ocrImportState={file:null,text:'',pages:[],running:false};let practice={items:[],idx:0,answered:0,correct:0,wrong:0,start:0};let exam={items:[],answers:{},start:0,timer:null,deadline:0,submitted:false};let editBlankGroupsV58914=[];let editMultiBlankEnabledV58914=false;let importCommitBusyV5911=false;let aiImportRequestV99={running:false,controller:null};let aiImportSilentCancelV99=false;let aiConnectionStateV99='idle';let aiDiagnosticsVisibleV375=false;let aiLastDiagnosticV375=null;let aiPreviewRequestV991={running:false,mode:'',cancelled:false,controller:null};let aiPreviewPanelModeV991='review';let aiReviewSuggestionsV991=new Map();let aiAnalysisSuggestionsV991=new Map();let aiImportTextSelectionV992={start:0,end:0,text:''};let webdavRuntimeV378={busy:false,action:'',backups:[],latestFile:'',status:'',statusKind:'',diagnostic:null,pendingRestore:null,formLoaded:false};
 const $=s=>document.querySelector(s);const $$=s=>[...document.querySelectorAll(s)];
+// 运行计时器和复盘视图仅归当前页面；换轮/重置释放计时器，离开复盘后释放快照引用。
+let practiceClockTimer=null,practicePauseDialog=null,trainingReview=null,trainingReviewRequest=0;
+const PRACTICE_CLOCK_REFRESH_MS=250;
+function trainingSessionItems(items){return items.map(item=>{
+  const bankId=practiceItemBankIdV8916(item),q=practiceQuestionV8916(item),bank=state.banks.find(value=>value.id===bankId);
+  const position=bank?.questions.findIndex(value=>value.id===q.id)??-1;
+  return {bankId,bankName:practiceItemBankNameV8916(item),bankQuestionNumber:position<0?null:position+1,question:JSON.parse(JSON.stringify(q))};
+})}
+function capturePracticeDraft(){
+  const item=currentPracticeItemV8916();if(!item||practice.completed)return;
+  const key=practiceItemKeyV8916(item),st=getPracticeAnswerStateV26(key);
+  if(!st.answered&&!st.revealed&&!practice.totalLocked&&$('#practice-card .question-title'))setPracticeAnswerStateV26(key,{chosen:collectAnswer('#practice-card',practiceQuestionV8916(item))});
+}
+function clearPracticeClockTimer(){if(practiceClockTimer!==null)clearInterval(practiceClockTimer);practiceClockTimer=null}
+function disposePracticeClock(){clearPracticeClockTimer();if(practicePauseDialog){practicePauseDialog.close();practicePauseDialog.remove();practicePauseDialog=null}}
+function updatePracticeClock(){
+  const elapsed=ShirohaTraining.elapsedClock(practice.clock,performance.now()),node=$('#p-clock');
+  if(node)node.textContent=ShirohaTraining.formatDuration(elapsed/1000);
+}
+function startPracticeClockTicker(){
+  clearPracticeClockTimer();
+  if(practice.clock?.state==='running'){
+    const owner=practice;
+    practiceClockTimer=setInterval(()=>{if(practice!==owner){clearPracticeClockTimer();return}updatePracticeClock()},PRACTICE_CLOCK_REFRESH_MS);
+  }
+  updatePracticeClock();
+}
+function showPracticePause(){
+  if(practicePauseDialog||practice.clock?.state!=='paused'||!$('#practice.active')||document.hidden||$('#app-dialog[open]'))return;
+  const owner=practice,dialog=document.createElement('dialog');practicePauseDialog=dialog;
+  dialog.id='practice-pause-dialog';dialog.className='practice-pause-dialog';dialog.setAttribute('aria-labelledby','practice-pause-title');
+  dialog.innerHTML=`<h2 id="practice-pause-title">练习已暂停</h2><p>暂停期间不计时，当前作答已保留。</p><strong id="practice-pause-time">${ShirohaTraining.formatDuration(ShirohaTraining.elapsedClock(owner.clock,performance.now())/1000)}</strong><button type="button" class="primary" id="practice-resume">继续练习</button>`;
+  const resume=()=>{if(practice!==owner||document.hidden)return;dialog.close();dialog.remove();practicePauseDialog=null;owner.clock=ShirohaTraining.transitionClock(owner.clock,'running',performance.now());refreshAnswerOptionControls();startPracticeClockTicker();$('#p-pause')?.focus({preventScroll:true})};
+  dialog.addEventListener('cancel',event=>{event.preventDefault();resume()});
+  dialog.addEventListener('keydown',event=>{event.stopPropagation();if(event.key==='Tab'){event.preventDefault();$('#practice-resume').focus()}});
+  dialog.querySelector('button').onclick=resume;document.body.appendChild(dialog);dialog.showModal();dialog.querySelector('button').focus();
+}
+function pausePracticeClock(show=true){
+  if(!practice.clock||practice.clock.state==='stopped')return;
+  capturePracticeDraft();practice.clock=ShirohaTraining.transitionClock(practice.clock,'paused',performance.now());clearPracticeClockTimer();updatePracticeClock();
+  if(show)showPracticePause();
+}
+function freezePracticeInputs(){if(practice.clock?.state==='stopped')$$('#practice-card input,#practice-card textarea,#p-submit,#p-reveal').forEach(node=>{node.disabled=true})}
+function stopPracticeClock(){capturePracticeDraft();practice.clock=ShirohaTraining.transitionClock(practice.clock,'stopped',performance.now());disposePracticeClock();freezePracticeInputs();refreshAnswerOptionControls();updatePracticeClock()}
+function mountPracticeClock(){
+  const head=$('#practice-card .practice-focus-head');if(!head||!practice.clock)return;
+  head.insertAdjacentHTML('beforeend',`<div class="practice-clock"><span>用时 <b id="p-clock" role="timer" aria-label="本轮有效练习用时" aria-live="off"></b></span><button type="button" class="ghost mini-btn" id="p-pause" ${practice.clock.state==='stopped'?'disabled':''}>暂停</button></div>`);
+  $('#p-pause').onclick=()=>pausePracticeClock();freezePracticeInputs();updatePracticeClock();
+  if(practice.clock.state==='paused')showPracticePause();
+}
+async function confirmPracticeAction(message,options){
+  const owner=practice,wasRunning=owner.clock?.state==='running';pausePracticeClock(false);
+  const accepted=await ShirohaDialogs.confirm(message,options);
+  if(!accepted&&practice===owner&&wasRunning&&!document.hidden){owner.clock=ShirohaTraining.transitionClock(owner.clock,'running',performance.now());startPracticeClockTicker()}
+  return accepted;
+}
+function attachTrainingReview(record,items,metadata){record.review=ShirohaTraining.buildReview(items,record.details||[],metadata);record.reviewSummary=ShirohaTraining.reviewSummary(record.review,record.details||[])}
+function practiceReviewItems(){return (practice.reviewItems||trainingSessionItems(practice.items)).map((item,index)=>{const answer=getPracticeAnswerStateV26(practiceItemKeyV8916(practice.items[index]));return {...item,chosen:answer.chosen||[],revealed:answer.revealed}})}
 function ensureDefaultBank(){if(!state.banks.length&&!state.settings?.suppressDefaultBank) state.banks.push(defaultBank()); if(!state.activeBankId) state.activeBankId=state.banks[0]?.id||'';}
 function blankState(){return {schemaVersion:CURRENT_SCHEMA_VERSION,banks:[],activeBankId:'',wrongBook:{},favorites:{},records:[],settings:{},crossPlatformMeta:{favoriteQuestions:{}}}}
 function warnDev(message,error){try{console.warn('[Shiroha Quiz]',message,error||'')}catch(_){}}
@@ -230,7 +288,7 @@ function updateShellLayoutByView(viewId){
   document.body.dataset.activeView=current;
   const topbar=$('.topbar');
   if(topbar){
-    const hideTopbar=['wrongbook','favorites','records','ai-settings','settings'].includes(current);
+    const hideTopbar=['wrongbook','favorites','records','training-review','ai-settings','settings'].includes(current);
     topbar.classList.toggle('is-hidden-by-view',hideTopbar);
   }
 }
@@ -239,6 +297,7 @@ function bindNav(){ $$('.nav').forEach(btn=>btn.onclick=async ()=>{
   const view=target&&$('#'+target);
   if(!view||view.classList.contains('active'))return;
   if(target!=='practice'&&!await canLeaveTotalPractice(target))return;
+  trainingReviewRequest++;trainingReview=null;$('#training-review-content')?.replaceChildren();
   if(document.body.classList.contains('practice-focus')&&target!=='practice')exitPracticeFocus();
   if(document.body.classList.contains('exam-focus')&&target!=='exam')exitExamFocus();
   if(aiImportRequestV99.running&&target!=='import')cancelAiImportRequestV99(true);
@@ -255,6 +314,12 @@ function bindNav(){ $$('.nav').forEach(btn=>btn.onclick=async ()=>{
 });}
 function bindEvents(){
 bindReviewAnalysisEvents();
+document.addEventListener('click',event=>{const button=event.target.closest?.('[data-training-review]');if(button&&!button.disabled)openTrainingReview(button.dataset.trainingReview)});
+document.addEventListener('visibilitychange',()=>{if(document.hidden)pausePracticeClock(false);else showPracticePause()});
+window.addEventListener('focus',showPracticePause);
+// WebView2 最小化/恢复不总派发可见性事件；仅补显已暂停状态，待这些路径稳定派发后可移除补显监听。
+window.addEventListener('shiroha:practice-hidden',()=>pausePracticeClock());
+window.addEventListener('resize',showPracticePause);
 $('#active-bank-select').onchange=async e=>{return runMutation(async()=>{setPracticeBankScopeV8916(e.target.value,true);await saveSilent();renderAll()});};const importNameInput=$('#import-bank-name');if(importNameInput)importNameInput.addEventListener('input',()=>{importNameInput.dataset.autoName='0'});$('#save-all-btn').onclick=saveState;
 $('#load-sample-btn').onclick=loadSample;$('#import-file').onchange=readImportFile;$('#parse-import-btn').onclick=parseImport;$('#confirm-import-btn').onclick=confirmImport;const findReplaceBtnV51=$('#find-replace-import-btn');if(findReplaceBtnV51)findReplaceBtnV51.onclick=openImportFindReplaceV51;const dualConfirmBtn=$('#dual-confirm-import-btn');if(dualConfirmBtn)dualConfirmBtn.onclick=confirmImport;const importTextAreaV49=$('#import-text');if(importTextAreaV49)importTextAreaV49.addEventListener('input',()=>{if(importTextAreaV49.dataset.tableImportV49==='1'){tableImportResultV49=null;delete importTextAreaV49.dataset.tableImportV49;}importSourceMetaV376={name:'手动文本',size:new Blob([importTextAreaV49.value||'']).size,type:'text'};syncAiImportActionV99();});const ocrStartBtn=$('#ocr-start-btn');if(ocrStartBtn)ocrStartBtn.onclick=startPdfOcrImport;const ocrUseBtn=$('#ocr-use-text-btn');if(ocrUseBtn)ocrUseBtn.onclick=applyOcrTextToImport;const ocrCopyBtn=$('#ocr-copy-btn');if(ocrCopyBtn)ocrCopyBtn.onclick=copyOcrText;const ocrDocxBtn=$('#ocr-download-docx-btn');if(ocrDocxBtn)ocrDocxBtn.onclick=downloadOcrDocx;$('#clear-import-btn').onclick=()=>{cancelAiImportRequestV99(true);cancelAiPreviewRequestV991(true);closeAiImportPanelV99();closeAiPreviewPanelV991();resetAiSuggestionsV991();$('#import-text').value='';if($('#import-text'))delete $('#import-text').dataset.tableImportV49;tableImportResultV49=null;importCache=[];importSelected.clear();importDiagnostics=null;importSourceMetaV376={name:'',size:0,type:''};resetOcrImportState();renderImportPreview([]);syncAiImportActionV99()};
 $('#dual-question-file').onchange=e=>readDualFile(e,'question');$('#dual-answer-file').onchange=e=>readDualFile(e,'answer');$('#parse-dual-import-btn').onclick=parseDualImport;$('#clear-dual-import-btn').onclick=()=>{cancelAiPreviewRequestV991(true);resetAiSuggestionsV991();$('#dual-question-text').value='';$('#dual-answer-text').value='';importCache=[];importSelected.clear();importDiagnostics=null;importSourceMetaV376={name:'',size:0,type:''};renderImportPreview([])};$('#dual-load-sample-btn').onclick=loadDualSample;$('#revalidate-import-btn').onclick=()=>renderImportPreview(importCache);
@@ -7394,6 +7459,7 @@ function enterPracticeFocus(){
   autoCollapseSidebarForFocusV47();
 }
 function exitPracticeFocus(){
+  pausePracticeClock(false);
   document.body.classList.remove('practice-focus','practice-rail-collapsed-v34');
   restoreSidebarAfterFocusV47();
 }
@@ -7883,7 +7949,8 @@ function refreshAnswerOptionControls(){
 }
 function canEditPracticeOptions(session,key){
   const current=currentPracticeItemV8916();
-  if(practice!==session||!current||practiceItemKeyV8916(current)!==key||practice.completed||mutationBusy)return false;
+  const clockLocked=practice.clock&&practice.clock.state!=='running';
+  if(practice!==session||!current||practiceItemKeyV8916(current)!==key||practice.completed||mutationBusy||clockLocked)return false;
   if(practice.submitMode==='total')return !practice.totalLocked&&!practice.confirmingTotal;
   const answer=getPracticeAnswerStateV26(key);
   return !answer.answered&&!answer.revealed;
@@ -7965,31 +8032,30 @@ function renderPracticeWrongPage(record){
   target.innerHTML=renderPracticeWrongRows(record,rows);
   updateReviewAnalysisPanels();
 }
-async function finishPractice(exited=false){return runMutation(async()=>{
+async function finishPractice(exited=false){
+  if(practice.submitMode==='total'&&(!practice.totalLocked||practice.answered!==practice.items.length))return;
+  stopPracticeClock();
+  return runMutation(async()=>{
   if(practice.completed||!practice.items.length)return;
   if(practice.submitMode==='total'&&(!practice.totalLocked||practice.answered!==practice.items.length))return;
   const total=practice.answered;
   const groupMode=practice.scopeType==='GROUP';const rec={id:makeId('rec','practice'),mode:'练习',bankId:groupMode?'':(practice.items[0]?.bankId||activeBank().id),bankName:groupMode?(practice.scopeName||'分组练习'):(practice.items[0]?.bankName||activeBank().name),scopeType:practice.scopeType||'BANK',scopeName:practice.scopeName||practiceItemBankNameV8916(practice.items[0]),total:practice.items.length,answered:total,correct:practice.correct,wrong:practice.wrong,accuracy:total?Math.round(practice.correct/total*100):0,score:null,date:now(),duration:Math.round((Date.now()-practice.start)/1000),details:practice.details||[]};
-  if(total||exited)state.records.unshift(rec);
+  rec.duration=Math.round(ShirohaTraining.elapsedClock(practice.clock,performance.now())/1000);
+  attachTrainingReview(rec,practiceReviewItems(),{completion:total<practice.items.length?'ended_early':'completed',submitMode:practice.submitMode||'single',timing:'active'});
+  state.records.unshift(rec);
   updatePracticeProgressV58916();
   await saveSilent();
   practice.completed=true;
   resetAiSinglePracticeV613();
-  if(exited){
-    exitPracticeFocus();
-    document.body.classList.remove('practice-rail-collapsed-v34');
-    $('#practice-card').innerHTML='<div class="empty">选择条件后点击“开始练习”。</div>';
-    $('#practice-progress').textContent='0 / 0';
-    practice={items:[],idx:0,answered:0,correct:0,wrong:0,start:0,details:[],answerState:{}};
-    toast(total?'已退出练习，作答记录已保存到记录页。':'已退出练习。','ok');
-    renderAll();
-    return;
-  }
+  if(exited)exitPracticeFocus();
   $('#practice-card').innerHTML=`<div class="score-card"><div class="metric"><span>已答</span><b>${total}</b></div><div class="metric"><span>正确</span><b>${practice.correct}</b></div><div class="metric"><span>错误</span><b>${practice.wrong}</b></div><div class="metric"><span>正确率</span><b>${rec.accuracy}%</b></div></div><div class="notice ok">本轮练习已完成，并已写入记录页。记录包含每题作答明细。</div><div class="actions"><button class="primary" id="back-practice-setup">返回练习设置</button><button class="ghost" id="again-practice">按当前条件再练一次</button></div>`;
   if(practice.submitMode==='total'){$('#practice-card').insertAdjacentHTML('beforeend',renderPracticeWrongOverview(rec,[]));renderPracticeWrongPage(rec)}
+  $('#practice-card > .notice').textContent=`${trainingCompletion(rec)}，记录已保存。可查看本轮全部题目的作答情况。`;
+  $('#practice-card .score-card').insertAdjacentHTML('afterend',`<p class="training-result-summary">${trainingCompletion(rec)} · 未作答 ${rec.reviewSummary.unanswered} 题 · 用时 ${ShirohaTraining.formatDuration(rec.duration)}</p><div class="actions"><button type="button" class="primary" id="practice-review-result">查看复盘</button></div>`);
+  $('#practice-review-result').onclick=()=>openTrainingReview(rec.id,'practice');
   $('#back-practice-setup').onclick=()=>exitPracticeFocus();
   $('#again-practice').onclick=()=>startPractice();
-  showNotice('练习完成',`已答 ${total} 道，正确率 ${rec.accuracy}%。`,'ok');
+  showNotice(trainingCompletion(rec),`已答 ${total} 道，正确率 ${rec.accuracy}%。`,'ok');
   renderAll();
 });}
 
@@ -8012,7 +8078,7 @@ async function renderRecords(){
   if(!nativeViewVisible('records'))return;
   const renderVersion=beginNativeRender('records');
   const list=$('#records-list');
-  let rows=[...state.records];
+  let rows=[...state.records].sort((a,b)=>Date.parse(b.date)-Date.parse(a.date));
   const mode=$('#record-mode-filter')?.value||'all';
   const detailFilter=$('#record-detail-filter-v385')?.value||'all';
   const wrongOnly=detailFilter==='wrong';
@@ -8030,13 +8096,87 @@ async function renderRecords(){
     const detail=filteredDetails.slice(0,8).map((d,i)=>`<tr><td>${i+1}</td><td>${esc(short(d.question,42))}${showSource&&d.sourceBankName?`<small class="record-source-v8916">来源：${esc(d.sourceBankName)}</small>`:''}</td><td>${renderRecordAnswerCellV58914(d,'user')}</td><td>${renderRecordAnswerCellV58914(d,'answer')}</td><td>${d.correct?'正确':'错误'}</td></tr>`).join('');
     const summary=`题数${r.total}｜已答${r.answered}｜正确${r.correct}｜错误${r.wrong}｜正确率${r.accuracy}%${r.score!=null?`｜得分${r.score}/${r.totalScore}${r.passScore!=null?`｜及格线${r.passScore}｜${r.passed?'合格':'未合格'}`:''}`:''}｜用时${r.duration}秒`;
     const detailSummary=ShirohaPlatform.storage.lazy&&!nativeOpenRecords.has(r.id)?'查看作答明细':wrongOnly?`查看错题明细（前8题 / 共${filteredDetails.length}道错题）`:`查看作答明细（前8题 / 共${allDetails.length}题）`;
-    return `<div class="record-item"><b>${esc(r.name||r.mode)}｜${esc(r.bankName)}｜${fmt(r.date)}</b><p class="muted">${summary}</p>${detail||ShirohaPlatform.storage.lazy?`<details data-native-record="${esc(r.id)}" ${nativeOpenRecords.has(r.id)?'open':''}><summary>${detailSummary}</summary><div class="table-wrap"><table><thead><tr><th>#</th><th>题干</th><th>你的答案</th><th>正确答案</th><th>结果</th></tr></thead><tbody>${detail}</tbody></table></div></details>`:''}</div>`;
+    return `<div class="record-item"><div class="training-history-row"><b>${esc(trainingTitle(r))}｜${esc(r.bankName)}｜${fmt(r.date)}</b><span>${trainingCompletion(r)}</span><button type="button" class="ghost mini-btn" data-training-review="${esc(r.id)}">查看复盘</button></div><p class="muted">${summary}</p>${detail||ShirohaPlatform.storage.lazy?`<details data-native-record="${esc(r.id)}" ${nativeOpenRecords.has(r.id)?'open':''}><summary>${detailSummary}</summary><div class="table-wrap"><table><thead><tr><th>#</th><th>题干</th><th>你的答案</th><th>正确答案</th><th>结果</th></tr></thead><tbody>${detail}</tbody></table></div></details>`:''}</div>`;
   }).join(''):(wrongOnly?'<p class="muted">当前筛选范围内暂无含错题的练习或考试记录。</p>':'<p class="muted">暂无练习或考试记录。</p>');
   if(ShirohaPlatform.storage.lazy)list.querySelectorAll('[data-native-record]').forEach(element=>element.ontoggle=()=>{const id=element.dataset.nativeRecord;if(element.open===nativeOpenRecords.has(id))return;if(element.open)nativeOpenRecords.add(id);else nativeOpenRecords.delete(id);renderRecords()});
 }
 /* SHIROHA_WEB_V38_5_RECORD_WRONG_ONLY_FILTER_END */
 async function exportRecords(){try{if(ShirohaPlatform.storage.ensureRecords&&!await readNative(()=>ShirohaPlatform.storage.ensureRecords(state,state.records.map(r=>r.id))))return;const text=JSON.stringify(state.records||[],null,2);$('#export-output')&&($('#export-output').value=text);await download('学习记录.json',text)}catch(error){platformStatus('导出失败：'+error.message,true);return false}}
 function fmt(s){return new Date(s).toLocaleString('zh-CN',{hour12:false})}
+function trainingCompletion(record){const completion=record.reviewSummary?.completion||record.review?.completion;if(completion==='completed')return '已完成';if(completion==='ended_early')return '提前结束';return '历史记录'}
+function trainingTitle(record){return record.name||record.scopeName||record.bankName||record.mode||'训练'}
+function renderRecentTraining(){
+  let box=$('#recent-training');
+  if(!box){box=document.createElement('section');box.id='recent-training';box.className='card recent-training';$('#dashboard')?.appendChild(box)}
+  const records=[...state.records].sort((a,b)=>Date.parse(b.date)-Date.parse(a.date)).slice(0,3);
+  box.innerHTML=`<div class="section-head"><h3>最近训练</h3><button type="button" class="ghost mini-btn" id="all-training-records">全部记录 →</button></div>${records.length?records.map(record=>`<article class="training-history-row"><div><b>${esc(trainingTitle(record))}</b><p class="muted">${esc(record.mode)} · ${esc(fmt(record.date))} · ${trainingCompletion(record)}</p><p>已答 ${record.answered}/${record.total} · 正确率 ${record.accuracy}% · 用时 ${ShirohaTraining.formatDuration(record.duration)}</p></div><button type="button" class="ghost mini-btn" data-training-review="${esc(record.id)}">查看复盘</button></article>`).join(''):'<p class="muted">还没有训练记录。开始练习后，可在这里查看每轮答题情况。</p>'}`;
+  $('#all-training-records').onclick=()=>switchViewV45('records');
+}
+async function openTrainingReview(id,origin){
+  const record=state.records.find(value=>value.id===id);if(!record)return;
+  const request=++trainingReviewRequest,from=origin||$('.view.active')?.id||'records';
+  const focus=document.activeElement,scroll={window:window.scrollY,main:$('.main')?.scrollTop||0};
+  if(ShirohaPlatform.storage.ensureRecords&&!await readNative(()=>ShirohaPlatform.storage.ensureRecords(state,[id]))){platformStatus('复盘加载失败，请再次点击查看复盘重试。',true);return}
+  if(request!==trainingReviewRequest||$('.view.active')?.id!==from)return;
+  trainingReview={record,origin:from,focus,scroll,filter:'all',index:0};
+  exitPracticeFocus();exitExamFocus();await switchViewV45('training-review');
+  if(!$('#training-review.active')){trainingReview=null;return}
+  renderTrainingReview();$('#training-review-back')?.focus({preventScroll:true});
+}
+async function closeTrainingReview(){
+  const view=trainingReview;if(!view)return;
+  trainingReview=null;trainingReviewRequest++;await switchViewV45(view.origin);
+  if(view.origin==='records')await renderRecords();
+  requestAnimationFrame(()=>{if($('.view.active')?.id!==view.origin)return;window.scrollTo({top:view.scroll.window,behavior:'instant'});const main=$('.main');if(main)main.scrollTop=view.scroll.main;const fallback=[...($('#'+view.origin)?.querySelectorAll('[data-training-review]')||[])].find(button=>button.dataset.trainingReview===view.record.id);const focus=view.focus?.isConnected?view.focus:fallback;focus?.focus({preventScroll:true})});
+}
+function renderTrainingQuestion(row){
+  if(!row?.question)return '<p class="notice">未记录原题快照，无法还原这道题。</p>';
+  const q={...row.question,type:normalizeWebQuestionType(row.question.type||row.detail?.type)},chosen=row.chosen||[],answer=q.answer||row.detail?.answer||[];
+  const title=row.roundNumber?`本轮第 ${row.roundNumber} 题`:`历史明细第 ${row.index+1} 条（原题序未记录）`;
+  const bankNumber=row.bankQuestionNumber?`题库第 ${row.bankQuestionNumber} 题`:'题库题号未记录';
+  const status={correct:'✓ 正确',wrong:'× 错误',unanswered:'— 未作答',unrecorded:'未记录'}[row.status];
+  const comparison=isMultiBlankQuestionV58914(q)?renderMultiBlankComparisonV58914(q.blankAnswers,chosen,true):`<div><b>你的答案：</b>${practiceReviewAnswerHtml(q,chosen)}</div><div class="training-reference-answer"><b>${q.type==='short'?'参考答案（人工自评）':'正确答案'}：</b>${hasAnswerValueV58914(answer)?practiceReviewAnswerHtml(q,answer):'题库未提供答案'}</div>`;
+  return `<article class="training-question-content"><div class="qmeta"><b>${title}</b><span class="pill">${bankNumber}</span><span>${esc(label(q.type))}</span><span>${esc(row.bankName)}</span><b class="training-status-${row.status}">${status}</b></div>${row.partial?'<p class="notice">旧记录未保存完整原题，以下仅为当时保存的摘要与答案。</p>':''}<div class="question-title">${renderQuestionBodyV83(q)}</div>${renderReviewOptions({...q,answer},chosen)}<div class="training-answer-comparison training-status-${row.status}">${comparison}</div>${row.revealed?'<p class="muted">本题曾查看答案，未正式提交。</p>':''}${hasAnswerValueV58914(row.draft)?`<div class="notice"><b>曾填写但未提交（不计成绩）：</b>${practiceReviewAnswerHtml(q,row.draft)}</div>`:''}<div class="training-analysis"><b>题目解析</b>${q.analysis?renderQuestionContent(q.analysis):'<p class="muted">题库未提供解析。</p>'}</div></article>`;
+}
+function renderTrainingReview(){
+  const view=trainingReview;if(!view||!$('#training-review.active'))return;
+  const record=view.record,rows=ShirohaTraining.reviewRows(record),counts={correct:0,wrong:0,unanswered:0,unrecorded:0};
+  rows.forEach(row=>counts[row.status]++);
+  const filtered=rows.filter(row=>view.filter==='all'||row.status===view.filter);
+  if(filtered.length&&!filtered.some(row=>row.index===view.index))view.index=filtered[0].index;
+  const position=filtered.findIndex(row=>row.index===view.index),selected=filtered[position];
+  const missing=Math.max(0,Number(record.total||0)-rows.length),meta=record.reviewSummary;
+  const denominator=meta?.submitMode==='single'?record.answered:record.total;
+  const box=$('#training-review-content');box.dataset.recordId=record.id;
+  const active=box.contains(document.activeElement)?document.activeElement:null;
+  const focused=active?.getAttribute('data-training-filter'),focusedQuestion=active?.getAttribute('data-training-question'),focusedPage=active?.dataset.pageControl;
+  box.innerHTML=`<button type="button" class="ghost mini-btn" id="training-review-back">← 返回${view.origin==='dashboard'?'首页':view.origin==='practice'||view.origin==='exam'?'训练结果':'训练记录'}</button><div class="section-head"><div><h2>${esc(trainingTitle(record))}</h2><p class="muted">${esc(fmt(record.date))} · ${esc(record.mode)} · ${meta?{single:'单题提交',total:'总提交',exam:'考试交卷'}[meta.submitMode]||'':''} · ${trainingCompletion(record)}</p></div></div><div class="score-card"><div class="metric"><span>正确</span><b>${counts.correct}</b></div><div class="metric"><span>错误（已作答）</span><b>${counts.wrong}</b></div><div class="metric"><span>未作答</span><b>${counts.unanswered}</b></div><div class="metric"><span>用时</span><b>${ShirohaTraining.formatDuration(record.duration)}</b></div></div><p class="muted">正确率 ${record.accuracy}%${meta?` · ${record.correct}/${denominator} 道${meta.submitMode==='single'?'已判定题':'本轮题目'}`:'（沿用历史统计）'} · ${meta?.timing==='active'?'已扣除暂停':'原记录用时，可能包含停留时间'}</p>${missing?`<p class="notice">另有 ${missing} 道题未记录原题快照，无法还原；旧明细顺序不代表本轮题序。</p>`:''}${meta&&meta.submitMode!=='single'&&counts.unanswered?'<p class="notice">未作答题已按本轮原规则计错；上方“错误（已作答）”只统计实际作答错误。</p>':''}<div class="training-filters" aria-label="复盘题目筛选">${[['all','全部题目',rows.length],['correct','正确',counts.correct],['wrong','错误',counts.wrong],['unanswered','未作答',counts.unanswered]].map(([key,text,count])=>`<button type="button" class="ghost mini-btn" data-training-filter="${key}" aria-pressed="${view.filter===key}">${text} ${count}</button>`).join('')}</div><div id="training-answer-card" class="training-answer-card" aria-label="本轮答题卡"></div><p class="muted">✓ 正确　× 错误　— 未作答</p><section id="training-question" aria-label="选中题目复盘">${selected?renderTrainingQuestion(selected):'<p class="empty" role="status">当前筛选没有题目。</p>'}</section><div class="actions"><button type="button" class="ghost" id="training-prev" ${position<=0?'disabled':''}>上一题</button><button type="button" class="ghost" id="training-next" ${position<0||position===filtered.length-1?'disabled':''}>下一题</button><button type="button" class="primary" id="training-retry" ${counts.wrong?'':'disabled'}>重练错题（${counts.wrong}）</button></div>`;
+  const card=$('#training-answer-card'),pageRows=nativePage(filtered,'training:'+record.id+':'+view.filter,card,renderTrainingReview);
+  card.innerHTML=pageRows.map(row=>`<button type="button" class="training-status-${row.status}" data-training-question="${row.index}" aria-label="${row.roundNumber?'第 '+row.roundNumber+' 题':'明细第 '+(row.index+1)+' 条'}，${{correct:'正确',wrong:'错误',unanswered:'未作答',unrecorded:'未记录'}[row.status]}" aria-pressed="${view.index===row.index}">${row.roundNumber||row.index+1} ${{correct:'✓',wrong:'×',unanswered:'—',unrecorded:'?'}[row.status]}</button>`).join('');
+  $('#training-review-back').onclick=closeTrainingReview;
+  $$('[data-training-filter]').forEach(button=>button.onclick=()=>{view.filter=button.dataset.trainingFilter;renderTrainingReview()});
+  $$('[data-training-question]').forEach(button=>button.onclick=()=>{view.index=Number(button.dataset.trainingQuestion);renderTrainingReview();$('#training-question')?.scrollIntoView({block:'nearest',behavior:'instant'})});
+  const jump=offset=>{const row=filtered[position+offset];if(!row)return;view.index=row.index;const page=nativePages.get(card.id);if(page)page.page=Math.floor((position+offset)/page.size);renderTrainingReview();$(offset>0?'#training-next':'#training-prev')?.focus({preventScroll:true})};
+  $('#training-prev').onclick=()=>jump(-1);$('#training-next').onclick=()=>jump(1);
+  $('#training-retry').onclick=async()=>{
+    const wrongRows=rows.filter(row=>row.status==='wrong');
+    const available=wrongRows.every(row=>state.banks.find(bank=>bank.id===row.bankId)?.questions.some(q=>q.id===row.question.id));
+    if(!available){toast('部分原题已删除，历史复盘保留；请先重新导入原题库后重练。','warn');return}
+    const first=wrongRows[0];if(!first)return;
+    const banks=state.banks.filter(bank=>wrongRows.some(row=>row.bankId===bank.id)),groups=new Set(banks.map(bankGroupNameV58));
+    if(banks.length>1&&groups.size!==1){toast('原题现已分散到不同分组，请分别选择题库重练；历史复盘仍保留。','warn');return}
+    await switchViewV45('practice');openQuickPracticeSetup();
+    if(banks.length===1)setPracticeBankScopeV8916(first.bankId);else setPracticeGroupScopeV8916([...groups][0]);
+    $('#practice-source').value='all';$('#practice-type').value='all';$('#practice-order').value='sequence';$('#practice-start-mode-v58916').value='custom';
+    const base=practiceBaseItemsV58916('all','all',practiceScopeV8916());
+    $('#practice-number-range-v58916').value=base.map((item,index)=>wrongRows.some(row=>row.bankId===practiceItemBankIdV8916(item)&&row.question.id===practiceQuestionV8916(item).id)?index+1:null).filter(Boolean).join(',');
+    renderPracticeScopeUiV8916();syncPracticeStartModeFieldsV58916();
+  };
+  if(focused)box.querySelector(`[data-training-filter="${focused}"]`)?.focus({preventScroll:true});
+  if(focusedQuestion)box.querySelector(`[data-training-question="${focusedQuestion}"]`)?.focus({preventScroll:true});
+  if(focusedPage){const controls=[...box.querySelectorAll('[data-page-control]')].filter(node=>node.getClientRects().length&&!node.disabled);(controls.find(node=>node.dataset.pageControl===focusedPage)||controls.find(node=>node.getAttribute('aria-current')==='page'))?.focus({preventScroll:true})}
+  scheduleMathJaxTypesetV56(box);
+}
 async function exportCurrentBank(){try{if(!await loadNativeBanks([activeBank().id]))return;const text=JSON.stringify(serializeBankForCrossExportV53(activeBank()),null,2);$('#export-output').value=text;await download(activeBank().name+'.json',text)}catch(error){platformStatus('导出失败：'+error.message,true);return false}}
 function exportAll(){exportAllBackupV23()}
 
@@ -8303,7 +8443,7 @@ function upgradeState(){
   ensurePracticeScopeV8916();
 }
 function serializeState(){return JSON.stringify({...state,schemaVersion:CURRENT_SCHEMA_VERSION,favorites:state.favorites||{}})}
-function renderAll(){ensureBankGroupUiV58();ensurePracticeScopeV8916();updateAiConnectionPillV99();syncAiImportActionV99();syncAiPreviewToolsV991();renderStats();renderBankSelect();renderMergeSelect();renderBankList();renderBankPreview();renderWrongBook();renderFavoritesPageV596();renderRecords();renderBankInputs();renderBuiltInPanelV252();renderPracticeScopeUiV8916();if(typeof renderExportBankSelectorV23==='function')renderExportBankSelectorV23();renderImportTargetBankOptionsV59();syncImportAppendUiV59();syncHomeVersionPromptV586();syncPracticeStartUiV58916(true);}
+function renderAll(){ensureBankGroupUiV58();ensurePracticeScopeV8916();updateAiConnectionPillV99();syncAiImportActionV99();syncAiPreviewToolsV991();renderStats();renderBankSelect();renderMergeSelect();renderBankList();renderBankPreview();renderWrongBook();renderFavoritesPageV596();renderRecords();renderRecentTraining();renderBankInputs();renderBuiltInPanelV252();renderPracticeScopeUiV8916();if(typeof renderExportBankSelectorV23==='function')renderExportBankSelectorV23();renderImportTargetBankOptionsV59();syncImportAppendUiV59();syncHomeVersionPromptV586();syncPracticeStartUiV58916(true);}
 function bindV25ToV28Events(){
   ['#load-built-in-bank-btn','#load-built-in-bank-btn-banks'].forEach(sel=>{const btn=$(sel);if(btn)btn.onclick=()=>loadBuiltInBankV252();});
 }
@@ -8486,20 +8626,23 @@ async function startPractice(scopeOverrideV8916){
   const scope=override||practiceScopeV8916();const source=$('#practice-source')?.value||'all';const type=$('#practice-type')?.value||'all';const order=$('#practice-order')?.value||'sequence';const selection=buildPracticeSelectionV58916(scope,source,type,order,limit,customCount);
   if(selection.error){$('#practice-card').innerHTML=`<div class="empty">${esc(selection.error)}</div>`;showNotice('无法开始练习',selection.error,'warn');return}
   if(!await loadNativeItems(selection.items)||request!==nativePracticeRequest)return;
-  resetAiSinglePracticeV613();
+  disposePracticeClock();resetAiSinglePracticeV613();
   practice={items:selection.items,idx:0,answered:0,correct:0,wrong:0,start:Date.now(),details:[],answerState:{},scopeType:scope.type===PRACTICE_SCOPE_GROUP_V8916?'GROUP':'BANK',scopeName:practiceScopeLabelV8916(scope),scopeValue:scope.value,source,type,order,startMode:selection.startMode,startIndex:selection.startIndex,progressKey:selection.progressKey,baseItemKeys:selection.baseItems.map(practiceItemKeyV8916)};
   practice.submitMode=$('#practice-submit-mode')?.value==='total'?'total':'single';
   if(!practice.items.length){$('#practice-card').innerHTML='<div class="empty">当前条件下没有题目。</div>';showNotice('无法开始练习','当前筛选条件下没有题目。','warn');return}
   if(practice.items.length>200&&(limit==='all'||limit==='half'||limit==='custom'||Number(limit)>200||selection.startMode===PRACTICE_START_CUSTOM_V58916)){const msg=practice.items.length>500?`本轮将练习 ${practice.items.length} 道题，题量很大，手机 WebView 可能明显卡顿，建议减少题量或使用电脑端。是否继续？`:`本轮将练习 ${practice.items.length} 道题，手机 WebView 可能出现轻微卡顿，是否继续？`;if(!await ShirohaDialogs.confirm(msg)){practice={items:[],idx:0,answered:0,correct:0,wrong:0,start:0,details:[],answerState:{}};return}}
   const startText=selection.startMode===PRACTICE_START_CONTINUE_V58916?` · 从第 ${selection.startIndex+1} 题继续`:selection.startMode===PRACTICE_START_CUSTOM_V58916?' · 自选题号':'';
+  practice.reviewItems=trainingSessionItems(practice.items);
   enterPracticeFocus();prewarmMathJaxV56();showNotice('练习开始',`${practice.scopeName}${startText} · 本轮共 ${practice.items.length} 道题。`,'ok');renderPracticeQuestion();
+  practice.clock=ShirohaTraining.createClock(performance.now());mountPracticeClock();startPracticeClockTicker();
 }
 function totalPracticeFilledCount(){return practice.items.filter(item=>hasAnswerValueV58914(getPracticeAnswerStateV26(practiceItemKeyV8916(item)).chosen)).length}
 async function canLeaveTotalPractice(target){
   if(practice.submitMode!=='total'||practice.completed)return true;
   if(target==='ai-settings')return true;
   if(practice.totalLocked){toast('请先完成简答题自评和总提交保存。','warn');return false}
-  if(totalPracticeFilledCount()>0&&!await ShirohaDialogs.confirm('本轮答案尚未提交，离开将放弃本轮草稿。确定离开？'))return false;
+  if(totalPracticeFilledCount()>0&&!await confirmPracticeAction('本轮答案尚未提交，离开将放弃本轮草稿。确定离开？'))return false;
+  disposePracticeClock();
   resetAiSinglePracticeV613();practice={items:[],idx:0,answered:0,correct:0,wrong:0,start:0,details:[],answerState:{}};
   $('#practice-card').innerHTML='<div class="empty">选择条件后点击“开始练习”。</div>';$('#practice-progress').textContent='0 / 0';return true;
 }
@@ -8525,8 +8668,8 @@ function renderTotalPracticeQuestion(){
   $('#p-favorite').onclick=async()=>{if(await toggleFavoriteV27(q.id,practiceItemBankIdV8916(item)))renderPracticeQuestion()};
   $('#p-prev').onclick=()=>{practice.idx--;renderPracticeQuestion()};$('#p-next').onclick=()=>{practice.idx++;renderPracticeQuestion()};
   $('#p-submit-all').onclick=submitTotalPractice;
-  $('#p-exit').onclick=async ()=>{if(!await ShirohaDialogs.confirm('本轮答案尚未提交。退出将放弃本轮草稿，不生成练习记录。确定退出？'))return;resetAiSinglePracticeV613();practice={items:[],idx:0,answered:0,correct:0,wrong:0,start:0,details:[],answerState:{}};exitPracticeFocus();$('#practice-card').innerHTML='<div class="empty">选择条件后点击“开始练习”。</div>';$('#practice-progress').textContent='0 / 0';$('#start-practice-btn').focus()};
-  bindPracticeNavV30();bindPracticeHotkeysV44();
+  $('#p-exit').onclick=async ()=>{if(!await confirmPracticeAction('本轮答案尚未提交。退出将放弃本轮草稿，不生成练习记录。确定退出？'))return;disposePracticeClock();resetAiSinglePracticeV613();practice={items:[],idx:0,answered:0,correct:0,wrong:0,start:0,details:[],answerState:{}};exitPracticeFocus();$('#practice-card').innerHTML='<div class="empty">选择条件后点击“开始练习”。</div>';$('#practice-progress').textContent='0 / 0';$('#start-practice-btn').focus()};
+  bindPracticeNavV30();bindPracticeHotkeysV44();mountPracticeClock();
   renderPracticeAiPanelV613();
   if(locked&&q.type==='short'&&hasAnswerValueV58914(st.chosen)&&typeof st.selfCorrect!=='boolean'){
     $('#p-feedback').innerHTML=`<div class="feedback warn"><b>请对照参考答案自评</b><p>你的作答：${renderQuestionContent(st.chosen.join('；'))}</p><p>参考答案：${renderQuestionContent(q.answer.join('；')||'未提供')}</p>${q.analysis?`<p>解析：${renderQuestionContent(q.analysis)}</p>`:''}<div class="actions"><button class="primary" id="p-self-right">判为正确</button><button class="danger" id="p-self-wrong">判为错误</button></div></div>`;
@@ -8542,9 +8685,10 @@ async function submitTotalPractice(){
   refreshAnswerOptionControls();
   try{
     if(!session.totalLocked){
-      if(!await ShirohaDialogs.confirm(`${totalPracticeStatus()}。总提交后不能修改答案；未填写题将按错误计入本轮，简答题需对照参考答案自评。确认总提交？`))return;
+      if(!await confirmPracticeAction(`${totalPracticeStatus()}。总提交后不能修改答案；未填写题将按错误计入本轮，简答题需对照参考答案自评。确认总提交？`))return;
       if(practice!==session)return;
       session.totalLocked=true;
+      stopPracticeClock();
     }
     return continueTotalPractice();
   }finally{delete session.confirmingTotal;refreshAnswerOptionControls()}
@@ -8567,13 +8711,13 @@ function renderPracticeQuestion(done=false){
   const item=currentPracticeItemV8916();const q=practiceQuestionV8916(item);const key=practiceItemKeyV8916(item);const bid=practiceItemBankIdV8916(item);const st=getPracticeAnswerStateV26(key);const fav=isFavoriteV27(q.id,bid);const groupTitle=practice.scopeType==='GROUP'?`${practice.scopeName} · 分组练习`:'刷题练习';
   $('#practice-card').innerHTML=`<div class="practice-focus-head"><b>${esc(groupTitle)}</b><span class="practice-round-progress">本轮进度 · 第 ${practice.idx+1} / ${practice.items.length} 题</span><div class="practice-tools-v26"><button class="ghost mini-btn" id="p-favorite">${fav?'取消收藏':'收藏题目'}</button><button class="ghost mini-btn" id="p-edit-v120">编辑题目</button><button class="ghost mini-btn" id="p-exit">退出练习</button></div></div>${questionHtml(q,false,0,item)}<div class="actions practice-actions-v44"><button class="ghost" id="p-prev" ${practice.idx===0?'disabled':''}>上一题</button><button class="ghost" id="p-next">${practice.idx>=practice.items.length-1?'完成练习':'下一题'}</button><button class="primary" id="p-submit" ${st.answered||st.revealed?'disabled':''}>提交答案</button><button class="ghost" id="p-reveal" ${st.answered||st.revealed?'disabled':''}>看答案</button></div><div id="p-feedback"></div><div id="p-ai-v613"></div>${renderPracticeNavV26()}<aside class="practice-side-v31">${renderPracticeStatsV30()}</aside>`;
   applyAnswerStateV26('#practice-card',q,st.chosen||[]);bindPracticeAnswerDraft(q,key,st);if(st.answered||st.revealed)showAnsweredStateV26(q,st);else renderPracticeAiPanelV613();
-  $('#p-exit').onclick=async ()=>{if(await ShirohaDialogs.confirm('已作答部分会保存为一条记录。',{title:'退出本轮练习？',cancelLabel:'继续练习',acceptLabel:'保存并退出'}))finishPractice(true)};
+  $('#p-exit').onclick=async ()=>{if(await confirmPracticeAction('已作答部分会保存为一条记录。',{title:'退出本轮练习？',cancelLabel:'继续练习',acceptLabel:'保存并退出'}))finishPractice(true)};
   $('#p-favorite').onclick=async()=>{if(await toggleFavoriteV27(q.id,bid))renderPracticeQuestion()};
   $('#p-edit-v120').onclick=()=>openPracticeEditQuestionV120();
   $('#p-prev').onclick=()=>{if(practice.idx>0){practice.idx--;renderPracticeQuestion()}};
   $('#p-submit').onclick=()=>submitPractice(item,false);$('#p-reveal').onclick=()=>submitPractice(item,true);
   $('#p-next').onclick=()=>{if(practice.idx>=practice.items.length-1)finishPractice();else{practice.idx++;renderPracticeQuestion()}};
-  bindPracticeNavV30();bindFocusRailToggleV34();bindPracticeHotkeysV44();updateReviewAnalysisPanels();
+  bindPracticeNavV30();bindFocusRailToggleV34();bindPracticeHotkeysV44();updateReviewAnalysisPanels();mountPracticeClock();
 }
 function bindPracticeHotkeysV44(){
   if(window.__shirohaPracticeHotkeysV44Bound)return;window.__shirohaPracticeHotkeysV44Bound=true;
@@ -9207,6 +9351,10 @@ function mergeBackupBanksV23(normalized){
     return {...r,
       bankId:mappedRecordBank?mappedRecordBank.id:r.bankId,
       bankName:mappedRecordBank?mappedRecordBank.name:r.bankName,
+      ...(r.review?.version===1&&Array.isArray(r.review.items)?{review:{...r.review,items:r.review.items.map(item=>{
+        const mapped=item.sourceBankId&&bankMap[item.sourceBankId];
+        return {...item,sourceBankId:mapped?mapped.id:item.sourceBankId,sourceBankName:mapped?mapped.name:item.sourceBankName};
+      })}}:{}),
       details:(r.details||[]).map(d=>{
         const mappedSource=d.sourceBankId&&bankMap[d.sourceBankId];
         return {...d,
@@ -9631,6 +9779,7 @@ async function startExam(){
   if(!selected.items.length){$('#exam-card').innerHTML='<div class="empty">当前考试范围下没有题目。</div>';return}
   if(!await loadNativeItems(selected.items)||request!==nativeExamRequest)return;
   clearInterval(exam.timer);exam=selected;
+  exam.reviewItems=trainingSessionItems(exam.items);
   const min=Number($('#exam-minutes').value)||0;
   if(min>0){exam.deadline=Date.now()+min*60000;clearInterval(exam.timer);exam.timer=setInterval(updateTimer,1000);updateTimer()}else $('#exam-timer').textContent='不限时';
   $('#submit-exam-btn').disabled=false;
@@ -9733,6 +9882,7 @@ async function submitExam(auto){if(auto&&mutationSaveError)return false;return r
   collectExamTextAnswers();exam.submitted=true;let got=0,total=0,correct=0;const details=[];const byType={};
   exam.items.forEach(item=>{const q=examQuestionV113(item),key=examItemKeyV113(item);const sc=scoreOf(q);total+=sc;const ans=exam.answers[key]||[];const ok=sameAnswerForQuestion(q,ans,q.answer);if(ok){got+=sc;correct++} addWrongOnExam(item,!ok,ans);details.push(makeAnswerDetail(item,ans,ok,sc,sc));const k=q.type||'single';byType[k]=byType[k]||{total:0,correct:0,score:0,fullScore:0};byType[k].total++;if(ok)byType[k].correct++;byType[k].score+=ok?sc:0;byType[k].fullScore+=sc;});
   const acc=Math.round(correct/exam.items.length*100);const groupMode=exam.scopeType==='GROUP';const firstItem=exam.items[0]||null;const rec={id:makeId('rec','exam'),name:exam.name||'模拟考试',mode:'考试',bankId:groupMode?'':(practiceItemBankIdV8916(firstItem)||activeBank().id),bankName:groupMode?(exam.scopeName||'分组考试'):(practiceItemBankNameV8916(firstItem)||activeBank().name),scopeType:exam.scopeType||'BANK',scopeName:exam.scopeName||practiceItemBankNameV8916(firstItem),total:exam.items.length,answered:examAnsweredCountV30(),correct,wrong:exam.items.length-correct,accuracy:acc,score:got,totalScore:total,passScore:exam.passScore,passed:got>=Number(exam.passScore||0),autoSubmitted:!!auto,date:now(),duration:Math.round((Date.now()-exam.start)/1000),details,byType};
+  attachTrainingReview(rec,exam.reviewItems||trainingSessionItems(exam.items),{completion:'completed',submitMode:'exam',timing:'wall'});
   state.records.unshift(rec);await saveSilent();clearInterval(exam.timer);$('#submit-exam-btn').disabled=true;$('#exam-timer').textContent=auto?'已自动交卷':'已交卷';renderExamResult(rec);renderAll();
 });}
 function renderExamResult(rec){
@@ -9740,6 +9890,8 @@ function renderExamResult(rec){
   let html=`<div class="exam-focus-head"><div><b>考试结果</b><span>${esc(rec.name||'模拟考试')}</span></div><div class="exam-head-actions"><button class="primary focus-mini-btn" id="exam-back-setup" type="button">返回考试设置</button></div></div><div class="score-card"><div class="metric"><span>得分</span><b>${rec.score}/${rec.totalScore}</b></div><div class="metric"><span>结果</span><b>${rec.passed?'合格':'未合格'}</b></div><div class="metric"><span>正确率</span><b>${rec.accuracy}%</b></div><div class="metric"><span>用时</span><b>${rec.duration}秒</b></div></div><div class="notice ${rec.passed?'ok':'warn'}">${esc(rec.name||'模拟考试')}：及格线 ${rec.passScore} 分，${rec.autoSubmitted?'系统已自动交卷。':'已交卷。'}</div>${typeRows?`<div class="table-wrap"><table><thead><tr><th>题型</th><th>正确</th><th>得分</th></tr></thead><tbody>${typeRows}</tbody></table></div>`:''}`;
   exam.items.forEach((item,i)=>{const q=examQuestionV113(item),key=examItemKeyV113(item),ans=exam.answers[key]||[];html+=`<div class="exam-q" data-result-qid="${esc(key)}">${questionHtml(examRenderQuestionV113(item),true,i+1)}<div class="feedback ${sameAnswerForQuestion(q,ans,q.answer)?'ok':'bad'}">${feedbackAnswerHtmlV58914(q,ans)}${sameAnswerForQuestion(q,ans,q.answer)?(q.analysis?'<br>解析：'+renderQuestionContent(q.analysis):''):renderReviewAnalysis(item,ans,'exam:'+rec.id)}</div></div>`});
   $('#exam-card').innerHTML=html;
+  $('#exam-card .exam-head-actions').insertAdjacentHTML('afterbegin',`<button type="button" class="ghost focus-mini-btn" id="exam-review-result">查看复盘</button>`);
+  $('#exam-review-result').onclick=()=>openTrainingReview(rec.id,'exam');
   updateReviewAnalysisPanels();
   $('#exam-back-setup').onclick=()=>exitExamFocus();
   exam.items.forEach(item=>{const q=examQuestionV113(item),key=examItemKeyV113(item);markOptions(`#exam-card [data-result-qid="${CSS.escape(key)}"]`,q,exam.answers[key]||[])});
@@ -9753,6 +9905,9 @@ async function switchViewV45(viewId){
   const view=viewId&&$('#'+viewId);
   if(!view)return;
   if(viewId!=='practice'&&!await canLeaveTotalPractice(viewId))return;
+  if(viewId!=='practice')exitPracticeFocus();
+  if(viewId!=='exam')exitExamFocus();
+  if(viewId!=='training-review'){trainingReviewRequest++;trainingReview=null;$('#training-review-content')?.replaceChildren()}
   $$('.nav').forEach(b=>b.classList.toggle('active',b.dataset.view===viewId));
   $$('.view').forEach(v=>v.classList.toggle('active',v===view));
   const nav=document.querySelector(`[data-view="${viewId}"]`);

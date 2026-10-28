@@ -18,6 +18,7 @@ const exportedNames = [
   'buildNativeInteropStateV24', 'readBackupFileV24', 'applyBackupAssetsV24',
   'countUnresolvedBackupImagesV24', 'parseZipEntries', 'unzipEntry', 'unzipEntryBytes', 'zipStoreFiles',
   'sameAnswerForQuestion', 'scoreOf', 'makeAnswerDetail', 'recordPracticeAnswer',
+  'mergeBackupBanksV23',
   'practiceItemKeyV8916', 'getPracticeAnswerStateV26', 'addWrong', 'markRight', 'getWrongEntries',
   'parseTextQuestions', 'parseAnswerEntries', 'mergeQuestionAnswers', 'upgradeState', 'serializeState',
 ];
@@ -70,6 +71,7 @@ function loadWeb({ state, local = {}, session = {}, scoreDefaults = {} } = {}) {
   vm.runInContext(readFileSync(path.resolve(__dirname, '../../apps/web/platform/validation.js'), 'utf8'), context);
   vm.runInContext(readFileSync(path.resolve(__dirname, '../../apps/web/platform/browser.js'), 'utf8'), context);
   context.ShirohaPlatform = { files: context.ShirohaBrowser.files, media: context.ShirohaBrowser.media };
+  vm.runInContext(readFileSync(path.resolve(__dirname, '../../apps/web/training.js'), 'utf8'), context);
   const startup = /\nstartApplication\(\);\s*\n\}\)\(\);/;
   assert.equal((source.match(new RegExp(startup.source, 'g')) || []).length, 1, '启动边界变化，请更新测试加载器。');
   // 在测试副本中取消页面启动；所有被测解析、评分、转换和 ZIP 代码仍来自真实业务源码。
