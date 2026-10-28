@@ -52,7 +52,9 @@ function makeId(prefix='id',...parts){
 }
 // 本页仅保存已读取正文；索引参与统计和组卷，读取完成后才能进入修改事务。
 const nativeReads=new Set();
+// 分页仅归当前页面会话；每个列表独立保存条数，切换范围或恢复数据时重置页码。
 const nativePages=new Map();
+const LIST_PAGE_SIZES=[10,20,50,100];
 const nativeOpenRecords=new Set();
 const nativeRenderVersions=new Map();
 // 选择仅归当前题库页面会话；切库或题目集合被替换后重置，不写入备份。
@@ -66,13 +68,75 @@ async function loadNativeItems(items){if(!ShirohaPlatform.storage.ensureQuestion
 async function loadNativeBanks(ids){return loadNativeItems(practiceSessionItemsForBanksV8916(state.banks.filter(bank=>ids.includes(bank.id))))}
 async function loadNativeAll(){if(!ShirohaPlatform.storage.ensureAll)return true;return readNative(()=>ShirohaPlatform.storage.ensureAll(state))}
 function nativeViewVisible(id){return !ShirohaPlatform.storage.lazy||(!mutationBusy&&document.getElementById(id)?.classList.contains('active'))}
-function nativePage(rows,key,target,render,alwaysPage=false){
-  if(!ShirohaPlatform.storage.lazy&&!alwaysPage)return rows;
-  const size=50,pages=Math.max(1,Math.ceil(rows.length/size));const page=Math.min(nativePages.get(key)||0,pages-1);nativePages.set(key,page);
-  const id=target.id+'-pager';let controls=document.getElementById(id);if(!controls){controls=document.createElement('div');controls.id=id;controls.className='actions';target.insertAdjacentElement('afterend',controls)}
-  controls.replaceChildren();controls.setAttribute('aria-label','列表分页');
-  for(const [text,step,disabled] of [['上一页',-1,page===0],['下一页',1,page===pages-1]]){const button=document.createElement('button');button.type='button';button.textContent=text;button.disabled=disabled;button.onclick=()=>{nativePages.set(key,page+step);render()};controls.appendChild(button)}
-  const label=document.createElement('span');label.textContent=`第 ${page+1} / ${pages} 页 · 共 ${rows.length} 项`;label.setAttribute('role','status');controls.appendChild(label);return rows.slice(page*size,(page+1)*size);
+function listPageRange(total,page,size){
+  const pages=Math.max(1,Math.ceil(total/size));
+  page=Math.max(0,Math.min(page,pages-1));
+  return {page,pages,start:page*size,end:Math.min(total,(page+1)*size)};
+}
+function listPageNumbers(page,pages,compact=false){
+  const radius=compact?1:2,windowSize=radius*2+1;
+  if(pages<=windowSize+2)return Array.from({length:pages},(_,i)=>i+1);
+  let start=Math.max(1,page-radius),end=Math.min(pages,page+radius);
+  if(page<=radius+1){start=1;end=windowSize}
+  else if(page>=pages-radius){start=pages-windowSize+1;end=pages}
+  const numbers=[1];
+  if(start===3)numbers.push(2);
+  else if(start>3)numbers.push('ellipsis');
+  for(let n=Math.max(2,start);n<=Math.min(pages-1,end);n++)numbers.push(n);
+  if(end===pages-2)numbers.push(pages-1);
+  else if(end<pages-2)numbers.push('ellipsis');
+  numbers.push(pages);return numbers;
+}
+function nativePage(rows,key,target,render){
+  let entry=nativePages.get(target.id);
+  if(!entry){entry={key,page:0,size:LIST_PAGE_SIZES[0]};nativePages.set(target.id,entry)}
+  if(entry.key!==key){entry.key=key;entry.page=0}
+  const {page,pages,start,end}=listPageRange(rows.length,entry.page,entry.size);
+  entry.page=page;
+  const id=target.id+'-pager';let controls=document.getElementById(id);
+  if(!controls){
+    controls=document.createElement('nav');controls.id=id;controls.className='list-pagination';
+    const anchor=target.closest('.table-wrap')||target;anchor.insertAdjacentElement('afterend',controls);
+  }
+  const focusKey=controls.contains(document.activeElement)?document.activeElement.dataset.pageControl:null;
+  const view=target.closest('.view');
+  const title=target.closest('.card')?.querySelector('h2')?.textContent||target.getAttribute('aria-label')||'列表';
+  controls.setAttribute('aria-label',title+'分页');controls.replaceChildren();
+  const status=document.createElement('span');status.className='list-pagination-status';status.setAttribute('role','status');
+  status.textContent=rows.length?`第 ${page+1} / ${pages} 页 · ${start+1}–${end} 项，共 ${rows.length} 项`:'共 0 项';controls.appendChild(status);
+  if(!rows.length)return [];
+  const changePage=async(next,size=entry.size)=>{
+    entry.page=next;entry.size=size;
+    await render();
+    const stillCurrent=entry.key===key&&entry.page===next&&entry.size===size&&target.isConnected;
+    if(stillCurrent&&(!view||view.classList.contains('active')))target.scrollIntoView({block:'start',behavior:'instant'});
+  };
+  const actions=document.createElement('div');actions.className='list-pagination-controls';controls.appendChild(actions);
+  const addButton=(group,text,name,value,disabled,control)=>{
+    const button=document.createElement('button');button.type='button';button.textContent=text;button.className='list-page-button';
+    button.setAttribute('aria-label',name);button.dataset.pageControl=control;button.disabled=disabled;
+    if(control==='page:'+page)button.setAttribute('aria-current','page');
+    button.onclick=()=>changePage(value);group.appendChild(button);
+  };
+  // 容器宽度决定显示哪组页码；窄卡片（含桌面侧栏布局）也保留首末页与键盘入口。
+  for(const compact of [false,true]){
+    const group=document.createElement('div');group.className='list-page-numbers '+(compact?'is-compact':'is-wide');actions.appendChild(group);
+    addButton(group,'‹','上一页',page-1,page===0,'previous');
+    for(const n of listPageNumbers(page+1,pages,compact)){
+      if(n==='ellipsis'){const gap=document.createElement('span');gap.className='list-page-gap';gap.textContent='…';gap.setAttribute('aria-hidden','true');group.appendChild(gap)}
+      else addButton(group,String(n),`第 ${n} 页`,n-1,false,'page:'+(n-1));
+    }
+    addButton(group,'›','下一页',page+1,page===pages-1,'next');
+  }
+  const select=document.createElement('select');select.className='list-page-size';select.setAttribute('aria-label',title+'每页条数');select.dataset.pageControl='size';
+  for(const size of LIST_PAGE_SIZES){const option=document.createElement('option');option.value=String(size);option.textContent=`${size} 条/页`;select.appendChild(option)}
+  select.value=String(entry.size);select.onchange=()=>changePage(0,Number(select.value));actions.appendChild(select);
+  if(focusKey){
+    const candidates=[...controls.querySelectorAll('[data-page-control]')].filter(node=>node.getClientRects().length&&!node.disabled);
+    const nextFocus=candidates.find(node=>node.dataset.pageControl===focusKey)||candidates.find(node=>node.getAttribute('aria-current')==='page');
+    nextFocus?.focus({preventScroll:true});
+  }
+  return rows.slice(start,end);
 }
 function releaseNativeView(){if(nativeReads.size||mutationBusy)return;ShirohaPlatform.storage.releaseView?.(state,[...(practice.items||[]),...(exam.items||[])].map(item=>({bankId:practiceItemBankIdV8916(item),questionId:practiceQuestionV8916(item).id})));nativeOpenRecords.clear()}
 function renderNativeView(){if(!ShirohaPlatform.storage.lazy)return;renderBankPreview();renderWrongBook();renderFavoritesPageV596();renderRecords()}
@@ -118,6 +182,7 @@ function practiceScopeSummaryV8916(scopeOverride){
 }
 function setPracticeBankScopeV8916(bankId,setActive=true){
   const bank=(state.banks||[]).find(b=>b.id===bankId);if(!bank)return false;
+  if(setActive&&state.activeBankId!==bank.id)for(const entry of nativePages.values())entry.page=0;
   if(setActive)state.activeBankId=bank.id;
   state.settings=state.settings&&typeof state.settings==='object'?state.settings:{};
   state.settings.practiceScope={type:PRACTICE_SCOPE_BANK_V8916,value:bank.id};return true;
@@ -1212,7 +1277,7 @@ async function renderBankPreview(){
   if(!nativeViewVisible('banks'))return;
   closeBankQuestionDetail();
   const renderVersion=beginNativeRender('banks');
-  const qs=nativePage(bank.questions,'preview:'+bank.id,document.getElementById('bank-preview'),renderBankPreview,true);
+  const qs=nativePage(bank.questions,'preview:'+bank.id,document.getElementById('bank-preview'),renderBankPreview);
   $('#bank-preview tbody').innerHTML='<tr><td colspan="8" role="status">正在加载题目……</td></tr>';
   for(const id of ['select-bank-question-page','clear-bank-question-selection','delete-selected-questions'])document.getElementById(id).disabled=true;
   if(!await loadNativeItems(practiceSessionItemsForBanksV8916([{...bank,questions:qs}]))){
@@ -7821,14 +7886,23 @@ function renderReviewOptions(q,chosen=[]){
     return `<div class="option ${className}" data-key="${esc(option.key)}"><span class="option-key">${esc(option.key)}</span><span class="option-text">${renderQuestionContent(text)}</span><span class="review-option-status">${status}</span></div>`;
   }).join('')}</div>`;
 }
-function renderPracticeWrongOverview(record){
-  const wrong=(record.details||[]).map((detail,index)=>({detail,index})).filter(({detail})=>!detail.correct);
-  const rows=wrong.map(({detail,index})=>{
+function practiceWrongRows(record){return (record.details||[]).map((detail,index)=>({detail,index})).filter(({detail})=>!detail.correct)}
+function renderPracticeWrongRows(record,items){
+  return items.map(({detail,index})=>{
     const q=detail.nativeQuestion||detail,chosen=blankUserAnswersFromDetailV58914(detail),answer=detail.answer||q.answer||[];
     const comparison=isMultiBlankQuestionV58914(q)?renderMultiBlankComparisonV58914(q.blankAnswers,chosen,true):`<div class="q-multiline-text"><b>你的答案：</b>${practiceReviewAnswerHtml(q,chosen)}</div><div class="q-multiline-text"><b>${q.type==='short'?'参考答案（自评）':'正确答案'}：</b>${hasAnswerValueV58914(answer)?practiceReviewAnswerHtml(q,answer):'题库未提供答案'}</div>`;
     return `<article class="exam-q" data-wrong-question-index="${index}"><div class="qmeta"><b>第 ${index+1} 题</b><span class="pill">${label(q.type)}</span><span>${esc(detail.sourceBankName||record.bankName||'')}</span></div><div class="question-title">${renderQuestionBodyV83(q)}</div>${renderReviewOptions({...q,answer},chosen)}${isTextType(q.type)?`<div class="feedback bad">${comparison}</div>`:renderReviewAnswerSummary({...q,answer},chosen,'未作答')}${q.analysis?`<div class="q-multiline-text"><b>解析：</b>${renderQuestionContent(q.analysis)}</div>`:''}</article>`;
   }).join('');
-  return `<section id="p-wrong-overview" aria-label="本轮错题一览"><h3>错题一览（${wrong.length}）</h3>${rows||'<div class="notice ok">本轮没有错题，全部答对了。</div>'}</section>`;
+}
+function renderPracticeWrongOverview(record,items=practiceWrongRows(record)){
+  const wrong=practiceWrongRows(record);
+  return `<section id="p-wrong-overview" aria-label="本轮错题一览"><h3>错题一览（${wrong.length}）</h3><div id="p-wrong-overview-list" aria-label="本轮错题一览">${wrong.length?renderPracticeWrongRows(record,items):'<div class="notice ok">本轮没有错题，全部答对了。</div>'}</div></section>`;
+}
+function renderPracticeWrongPage(record){
+  const target=document.getElementById('p-wrong-overview-list'),wrong=practiceWrongRows(record);
+  if(!target||!wrong.length)return;
+  const rows=nativePage(wrong,'practice-wrong:'+record.id,target,()=>renderPracticeWrongPage(record));
+  target.innerHTML=renderPracticeWrongRows(record,rows);
 }
 async function finishPractice(exited=false){return runMutation(async()=>{
   if(practice.completed||!practice.items.length)return;
@@ -7851,7 +7925,7 @@ async function finishPractice(exited=false){return runMutation(async()=>{
     return;
   }
   $('#practice-card').innerHTML=`<div class="score-card"><div class="metric"><span>已答</span><b>${total}</b></div><div class="metric"><span>正确</span><b>${practice.correct}</b></div><div class="metric"><span>错误</span><b>${practice.wrong}</b></div><div class="metric"><span>正确率</span><b>${rec.accuracy}%</b></div></div><div class="notice ok">本轮练习已完成，并已写入记录页。记录包含每题作答明细。</div><div class="actions"><button class="primary" id="back-practice-setup">返回练习设置</button><button class="ghost" id="again-practice">按当前条件再练一次</button></div>`;
-  if(practice.submitMode==='total')$('#practice-card').insertAdjacentHTML('beforeend',renderPracticeWrongOverview(rec));
+  if(practice.submitMode==='total'){$('#practice-card').insertAdjacentHTML('beforeend',renderPracticeWrongOverview(rec,[]));renderPracticeWrongPage(rec)}
   $('#back-practice-setup').onclick=()=>exitPracticeFocus();
   $('#again-practice').onclick=()=>startPractice();
   showNotice('练习完成',`已答 ${total} 道，正确率 ${rec.accuracy}%。`,'ok');
@@ -8142,6 +8216,7 @@ function defaultBank(){
   return {id:'default-c1',name:qs.length?(qb.meta?.title||'默认题库'):'内置题库（待加载）',groupName:'',createdAt:now(),updatedAt:now(),questions:qs.map(normalizeQuestion),builtInLazy:!qs.length};
 }
 function upgradeState(){
+  for(const entry of nativePages.values()){entry.page=0;entry.key=''}
   state.schemaVersion=CURRENT_SCHEMA_VERSION;
   state.banks=Array.isArray(state.banks)?state.banks:[];
   state.records=Array.isArray(state.records)?state.records:[];
@@ -8694,7 +8769,7 @@ async function renderFavoritesPageV596(){
   const countEl=$('#favorites-count-v596');if(countEl)countEl.textContent=`${allRows.length} 道`;
   const practiceBtn=$('#practice-favorites-btn-v596');if(practiceBtn)practiceBtn.disabled=!rows.length;
   const clearBtn=$('#clear-favorites-btn-v596');if(clearBtn)clearBtn.disabled=!rows.length;
-  box.innerHTML=rows.length?rows.map((q,idx)=>`<div class="favorite-item-v596"><div class="favorite-item-main-v596"><div class="favorite-item-title-v596"><span class="pill">${idx+1}</span><b>${label(q.type)}｜${esc(short(q.question,92))}</b></div><p class="muted">答案：${esc((q.answer||[]).join('')||'未提供')}${q.analysis?'｜解析：'+esc(short(q.analysis,96)):''}</p></div><div class="row-actions favorite-actions-v596"><button class="ghost mini-btn" data-practice-one-fav-v596="${esc(q.id)}" type="button">练习本题</button><button class="ghost danger mini-btn" data-unfav-v27="${esc(q.id)}" type="button">取消收藏</button></div></div>`).join(''):'<div class="empty">当前题库暂无收藏题。刷题时点击“收藏题目”，这里会集中显示。</div>';
+  box.innerHTML=rows.length?rows.map(q=>`<div class="favorite-item-v596"><div class="favorite-item-main-v596"><div class="favorite-item-title-v596"><span class="pill">${allRows.indexOf(q)+1}</span><b>${label(q.type)}｜${esc(short(q.question,92))}</b></div><p class="muted">答案：${esc((q.answer||[]).join('')||'未提供')}${q.analysis?'｜解析：'+esc(short(q.analysis,96)):''}</p></div><div class="row-actions favorite-actions-v596"><button class="ghost mini-btn" data-practice-one-fav-v596="${esc(q.id)}" type="button">练习本题</button><button class="ghost danger mini-btn" data-unfav-v27="${esc(q.id)}" type="button">取消收藏</button></div></div>`).join(''):'<div class="empty">当前题库暂无收藏题。刷题时点击“收藏题目”，这里会集中显示。</div>';
   $$('[data-unfav-v27]').forEach(btn=>btn.onclick=async()=>{if(await toggleFavoriteV27(btn.dataset.unfavV27))renderAll()});
   $$('[data-practice-one-fav-v596]').forEach(btn=>btn.onclick=()=>startSingleFavoritePracticeV596(btn.dataset.practiceOneFavV596));
 }

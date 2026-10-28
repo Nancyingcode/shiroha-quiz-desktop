@@ -35,6 +35,157 @@ async function pageFor(t, raw, injection = '') {
 }
 const saved = page => page.evaluate(key => globalThis.localStorage.getItem(key), KEY);
 
+test('列表分页：直接跳页、四档条数、跨页选择、键盘与窄屏', async t => {
+  const initial = webState();
+  initial.banks[0].questions = Array.from({ length: 503 }, (_, i) => ({ ...initial.banks[0].questions[0], id: 'page-' + i, question: '分页题干 ' + (i + 1) }));
+  const page = await pageFor(t, JSON.stringify(initial));
+  page.setDefaultTimeout(5000);
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.locator('.nav[data-view="banks"]').click();
+  const beforePaging = await saved(page);
+  const pager = page.locator('#bank-preview-pager');
+  const current = () => pager.locator('[aria-current="page"]:visible');
+  assert.equal(await page.locator('[data-select-bank-question]').count(), 10);
+  assert.equal(await pager.getByRole('button', { name: '上一页', exact: true }).isDisabled(), true);
+  assert.equal(await pager.locator('select').inputValue(), '10');
+  await page.locator('[data-select-bank-question="page-0"]').check();
+  await pager.getByRole('button', { name: '第 3 页', exact: true }).focus();
+  await page.keyboard.press('Enter');
+  assert.equal(await page.locator('#bank-preview tbody tr').first().locator('td').nth(1).innerText(), '21');
+  assert.equal(await current().innerText(), '3');
+  assert.equal(await current().evaluate(node => node === globalThis.document.activeElement), true);
+  await page.locator('[data-preview-question="page-20"]').click();
+  await pager.getByRole('button', { name: '第 51 页', exact: true }).click();
+  assert.equal(await page.locator('#bank-question-detail').count(), 0);
+  assert.equal(await page.locator('[data-select-bank-question]').count(), 3);
+  assert.equal(await pager.getByRole('button', { name: '下一页', exact: true }).isDisabled(), true);
+  for (const size of [20, 50, 100, 10]) {
+    await pager.locator('select').selectOption(String(size));
+    assert.equal(await page.locator('[data-select-bank-question]').count(), size);
+    assert.equal(await current().innerText(), '1');
+    assert.equal(await page.locator('[data-select-bank-question="page-0"]').isChecked(), true);
+  }
+  assert.equal(await saved(page), beforePaging);
+  await page.locator('#select-bank-question-page').click();
+  assert.match(await page.locator('#bank-question-selection').innerText(), /已选择 10/);
+  await pager.getByRole('button', { name: '下一页', exact: true }).click();
+  await page.locator('#select-bank-question-page').click();
+  assert.match(await page.locator('#bank-question-selection').innerText(), /已选择 20/);
+  await page.locator('[data-openbank="bank-b"]').click();
+  await page.locator('[data-openbank="bank-a"]').click();
+  assert.equal(await current().innerText(), '1');
+  await pager.getByRole('button', { name: '第 3 页', exact: true }).click();
+  for (const width of [390, 480, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    await pager.scrollIntoViewIfNeeded();
+    const layout = await pager.evaluate(node => ({ outsideTable: !node.closest('.table-wrap'), width: node.scrollWidth, available: node.clientWidth, left: node.getBoundingClientRect().left, right: node.getBoundingClientRect().right }));
+    assert.equal(layout.outsideTable, true);
+    assert.ok(layout.width <= layout.available + 1);
+    assert.ok(layout.left >= 0 && layout.right <= width);
+    const sizeStyle = await pager.locator('select').evaluate(node => ({ height: node.getBoundingClientRect().height, radius: globalThis.getComputedStyle(node).borderRadius }));
+    assert.equal(sizeStyle.height, 32);
+    assert.equal(sizeStyle.radius, '6px');
+    await current().focus();
+    await page.keyboard.press('Enter');
+    assert.equal(await current().innerText(), '3');
+  }
+});
+
+test('列表分页：浏览器题库、错题、收藏、记录独立分页和筛选回首页', async t => {
+  const initial = webState();
+  const bank = initial.banks[0];
+  bank.questions = Array.from({ length: 23 }, (_, i) => ({ ...bank.questions[0], id: 'list-' + i, question: '列表题干 ' + i }));
+  initial.banks.push(...Array.from({ length: 21 }, (_, i) => ({ ...initial.banks[1], id: 'bank-extra-' + i, name: '分页题库 ' + i })));
+  initial.wrongBook = { 'bank-a': bank.questions.map(q => ({ id: q.id, status: '未掌握', wrongCount: 1 })) };
+  initial.favorites = { 'bank-a': bank.questions.map(q => q.id) };
+  initial.records = Array.from({ length: 23 }, (_, i) => ({ ...initial.records[0], id: 'page-record-' + i, mode: i < 12 ? '考试' : '练习' }));
+  const page = await pageFor(t, JSON.stringify(initial));
+  page.setDefaultTimeout(5000);
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  for (const [view, id, row] of [['banks', 'bank-list', '.bank-item'], ['wrongbook', 'wrongbook-list', '.wrong-item'], ['favorites', 'favorites-list-v596', '.favorite-item-v596'], ['records', 'records-list', 'details']]) {
+    await page.locator(`.nav[data-view="${view}"]`).click();
+    const pager = page.locator('#' + id + '-pager');
+    assert.equal(await page.locator('#' + id).locator(row).count(), 10);
+    await pager.getByRole('button', { name: '第 3 页', exact: true }).click();
+    assert.equal(await page.locator('#' + id).locator(row).count(), 3);
+    if (view === 'favorites') assert.equal(await page.locator('.favorite-item-title-v596 .pill').first().innerText(), '21');
+    if (view === 'wrongbook') {
+      await page.locator('#wrong-sort-mode').selectOption('wrongCount');
+      assert.equal(await pager.locator('[aria-current="page"]:visible').innerText(), '1');
+      await pager.getByRole('button', { name: '第 3 页', exact: true }).click();
+      await page.locator('#wrong-sort-mode').selectOption('lastWrong');
+      assert.equal(await pager.locator('[aria-current="page"]:visible').innerText(), '1');
+      await page.locator('#wrong-status-filter').selectOption('已掌握');
+      assert.equal(await pager.getByRole('button').count(), 0);
+      assert.match(await page.locator('#wrongbook-list').innerText(), /暂无错题/);
+    }
+    if (view === 'records') {
+      await page.locator('#record-mode-filter').selectOption('练习');
+      assert.equal(await pager.locator('[aria-current="page"]:visible').innerText(), '1');
+      assert.match(await pager.innerText(), /共 11 项/);
+    }
+    if (await pager.locator('select').count()) await pager.locator('select').selectOption('20');
+  }
+  await page.locator('.nav[data-view="banks"]').click();
+  assert.equal(await page.locator('#bank-preview-pager select').inputValue(), '10');
+  assert.equal(await page.locator('#bank-list-pager select').inputValue(), '20');
+});
+
+test('列表分页：删掉末页后回退，空库保留空态', async t => {
+  const initial = webState();
+  initial.banks[0].questions = Array.from({ length: 21 }, (_, i) => ({ ...initial.banks[0].questions[0], id: 'delete-page-' + i }));
+  const page = await pageFor(t, JSON.stringify(initial));
+  page.setDefaultTimeout(5000);
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.locator('.nav[data-view="banks"]').click();
+  const pager = page.locator('#bank-preview-pager');
+  await pager.getByRole('button', { name: '第 3 页', exact: true }).click();
+  await page.locator('[data-delete-bank-question="delete-page-20"]').click();
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  assert.equal(await pager.locator('[aria-current="page"]:visible').innerText(), '2');
+  await pager.locator('select').selectOption('100');
+  await page.locator('#select-bank-question-page').click();
+  await page.locator('#delete-selected-questions').click();
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  assert.equal(await pager.getByRole('button').count(), 0);
+  assert.match(await pager.innerText(), /共 0 项/);
+  assert.match(await page.locator('#bank-preview').innerText(), /当前题库暂无试题/);
+});
+
+test('列表分页：快速翻页拒绝迟到正文，加载失败可在当前页重试', async t => {
+  const initial = webState();
+  initial.banks[0].questions = Array.from({ length: 41 }, (_, i) => ({ ...initial.banks[0].questions[0], id: 'delay-' + i, question: '异步分页 ' + i }));
+  const page = await pageFor(t, JSON.stringify(initial));
+  page.setDefaultTimeout(5000);
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.locator('.nav[data-view="banks"]').click();
+  await page.evaluate(() => {
+    globalThis.__pageLoads = [];
+    globalThis.ShirohaPlatform.storage.ensureQuestions = async (_snapshot, refs) => {
+      globalThis.__pageLoads.push(refs.map(ref => ref.questionId));
+      if (refs[0]?.questionId === 'delay-10') await new Promise(resolve => { globalThis.__finishPageLoad = resolve; });
+      if (refs[0]?.questionId === 'delay-30' && !globalThis.__allowRetry) throw Error('分页加载模拟失败');
+    };
+  });
+  const pager = page.locator('#bank-preview-pager');
+  await pager.getByRole('button', { name: '第 2 页', exact: true }).click();
+  await page.waitForFunction(() => globalThis.__finishPageLoad);
+  await pager.getByRole('button', { name: '第 3 页', exact: true }).click();
+  await page.locator('[data-select-bank-question="delay-20"]').waitFor();
+  await page.evaluate(() => globalThis.__finishPageLoad());
+  assert.equal(await page.locator('#bank-preview tbody tr').first().locator('td').nth(1).innerText(), '21');
+  await pager.getByRole('button', { name: '第 4 页', exact: true }).click();
+  await page.locator('#retry-bank-preview').waitFor();
+  assert.match(await page.locator('#bank-preview').innerText(), /题目加载失败/);
+  assert.equal(await page.locator('[data-select-bank-question]').count(), 0);
+  await page.evaluate(() => { globalThis.__allowRetry = true; });
+  await page.locator('#retry-bank-preview').click();
+  await page.locator('[data-select-bank-question="delay-30"]').waitFor();
+  assert.equal(await pager.locator('[aria-current="page"]:visible').innerText(), '4');
+  const loads = await page.evaluate(() => globalThis.__pageLoads);
+  assert.deepEqual(loads.map(refs => [refs[0], refs.length]), [['delay-10', 10], ['delay-20', 10], ['delay-30', 10], ['delay-30', 10]]);
+});
+
 for (const mode of ['single', 'total', 'exam']) test(`${mode} 答错后保存当时选项，重载错题本仍标红`, async t => {
   const initial = webState();
   initial.banks = [initial.banks[0]];
@@ -145,8 +296,10 @@ test('总提交结果列出全部错题，保留跨库来源且不截断到八�
   await page.locator('#p-submit-all').click();
   await page.locator('#again-practice').waitFor();
   const overview = page.locator('#p-wrong-overview');
-  assert.equal(await overview.locator('[data-wrong-question-index]').count(), 13);
+  assert.equal(await overview.locator('[data-wrong-question-index]').count(), 10);
   assert.match(await overview.locator('[data-wrong-question-index="0"]').innerText(), /阶段A全题型/);
+  await page.locator('#p-wrong-overview-list-pager').getByRole('button', { name: '第 2 页', exact: true }).click();
+  assert.equal(await overview.locator('[data-wrong-question-index]').count(), 3);
   const last = overview.locator('[data-wrong-question-index="12"]');
   assert.equal(await last.locator('.review-options .option').count(), 2);
   assert.match(await last.innerText(), /跨题库同ID/);
@@ -154,6 +307,14 @@ test('总提交结果列出全部错题，保留跨库来源且不截断到八�
   assert.equal(await last.locator('.option.correct .option-text').innerText(), '三');
   assert.match(await last.innerText(), /未作答/);
   assert.equal(JSON.parse(await saved(page)).records[0].details.length, 13);
+  const after = await saved(page);
+  await page.locator('#p-wrong-overview-list-pager select').selectOption('20');
+  assert.equal(await overview.locator('[data-wrong-question-index]').count(), 13);
+  assert.equal(await saved(page), after);
+  await page.locator('#again-practice').click();
+  await page.locator('#p-submit-all').click();
+  await page.locator('#p-wrong-overview').waitFor();
+  assert.equal(await page.locator('#p-wrong-overview-list-pager [aria-current="page"]:visible').innerText(), '1');
 });
 
 test('总提交：全题型、跨库同 ID、键盘与草稿不提前计分', async t => {
@@ -249,6 +410,7 @@ test('题库删除：单题取消、跨页批量、关联清理和重载保全',
   const baseline=JSON.parse(await saved(page));
   await page.locator('.nav[data-view="banks"]').click();
   await page.locator('[data-delete-bank-question="q0"]').waitFor();
+  await page.locator('#bank-preview-pager select').selectOption('50');
   page.removeAllListeners('app-dialog');page.once('app-dialog',dialog=>dialog.dismiss());
   await page.locator('[data-delete-bank-question="q0"]').click();
   assert.equal(JSON.parse(await saved(page)).banks[0].questions.length,302);
