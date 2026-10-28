@@ -832,6 +832,8 @@ async function totalPracticeSmoke(page, bankName, origin) {
   assert.deepEqual(metrics, ['1', '0', '1', '0%']);
   assert.match(await page.locator('#p-wrong-overview').innerText(), /你的答案[：\s]*B[.\s]*3/);
   assert.match(await page.locator('#p-wrong-overview').innerText(), /正确答案[：\s]*A[.\s]*2/);
+  assert.deepEqual(await page.locator('#p-wrong-overview .option-text').allTextContents(), ['2', '3']);
+  assert.match(await page.locator('#p-wrong-overview .option.wrong').innerText(), /你的选择（错误）/);
   await page.screenshot({ path: path.join(path.dirname(SCREENSHOT_PATH), 'practice-wrong-overview.png'), fullPage: true });
   await page.locator('#again-practice').click();
   await page.locator('#practice-card .option[data-key="A"]').click();

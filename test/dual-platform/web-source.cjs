@@ -9,6 +9,7 @@ const { webcrypto } = require('node:crypto');
 const sourcePath = path.resolve(__dirname, '../../apps/web/app.js');
 const source = readFileSync(sourcePath, 'utf8');
 const exportedNames = [
+  'renderReviewOptions', 'renderPracticeWrongOverview',
   'repairCircledCombinationQuestion',
   'displayOptionTextV589',
   'normalizeQuestion', 'normalizeBackupPayloadV23', 'serializeBankForCrossExportV53',
@@ -34,6 +35,10 @@ function loadWeb({ state, local = {}, session = {}, scoreDefaults = {} } = {}) {
   assert(storageKey, '主状态键变化，请更新测试加载器。');
   const logs = [];
   const document = {
+    getElementById(id) {
+      if (id === 'shiroha-rich-question-style-v55') return {};
+      return null;
+    },
     addEventListener() {},
     querySelector(selector) {
       if (selector.startsWith('#score-')) return { value: String(scoreDefaults[selector.slice(7)] ?? 1) };
@@ -50,6 +55,8 @@ function loadWeb({ state, local = {}, session = {}, scoreDefaults = {} } = {}) {
     }
   }
   const sandbox = {
+    // 字符串渲染测试不挂载 DOM；公式排版由浏览器回归验证。
+    requestAnimationFrame() { return 1; },
     structuredClone, Blob, TextEncoder, TextDecoder, Uint8Array, ArrayBuffer, DataView, Response, DecompressionStream,
     URL, atob, btoa, crypto: webcrypto, FileReader: TestFileReader, document,
     localStorage: memoryStorage({ ...local, ...(state ? { [storageKey]: JSON.stringify(state) } : {}) }),

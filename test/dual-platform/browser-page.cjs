@@ -35,6 +35,22 @@ async function pageFor(t, raw, injection = '') {
 }
 const saved = page => page.evaluate(key => globalThis.localStorage.getItem(key), KEY);
 
+test('错题本显示完整题干、全部选项和已保存的错选标记', async t => {
+  const initial = webState();
+  const q = initial.banks[0].questions[0];
+  q.question = '完整题干'.repeat(30);
+  initial.wrongBook = { [initial.banks[0].id]: [{ id: q.id, status: '未掌握', lastAnswer: ['B'], wrongCount: 1 }] };
+  const page = await pageFor(t, JSON.stringify(initial));
+  await page.locator('.nav[data-view="wrongbook"]').click();
+  const card = page.locator('#wrongbook-list .wrong-item').first();
+  await card.waitFor();
+  assert.equal(await card.locator('.question-title').innerText(), q.question);
+  assert.deepEqual(await card.locator('.option-text').allTextContents(), ['二', '三']);
+  assert.match(await card.locator('.option.correct').innerText(), /正确答案/);
+  assert.match(await card.locator('.option.wrong').innerText(), /你的选择（错误）/);
+  assert.equal(await card.locator('input').count(), 0);
+});
+
 test('旧组合题练习显示陈述与组合选项，作答仍使用原答案键', async t => {
   const initial = webState();
   const statements = ['①有关法律、法规、规章和标准的规定', '②本地区、本部门、本单位的安全生产实际情况', '③应急组织和人员的职责分工明确，并有具体的落实措施', '④有明确的应急保障措施'];
@@ -50,6 +66,7 @@ test('旧组合题练习显示陈述与组合选项，作答仍使用原答案�
   await page.locator('#practice-card .option[data-key="D"]').click();
   await page.locator('#p-submit').click();
   assert.match(await page.locator('#p-feedback').innerText(), /回答正确/);
+  assert.deepEqual(await page.locator('#practice-card .option-text').allTextContents(), combinations);
 });
 
 test('总提交结果列出全部错题，保留跨库来源且不截断到八题', async t => {
@@ -70,6 +87,7 @@ test('总提交结果列出全部错题，保留跨库来源且不截断到八�
   assert.equal(await overview.locator('[data-wrong-question-index]').count(), 13);
   assert.match(await overview.locator('[data-wrong-question-index="0"]').innerText(), /阶段A全题型/);
   const last = overview.locator('[data-wrong-question-index="12"]');
+  assert.equal(await last.locator('.review-options .option').count(), 2);
   assert.match(await last.innerText(), /跨题库同ID/);
   assert.match(await last.innerText(), /正确答案[：\s]*B[.\s]*三/);
   assert.match(await last.innerText(), /未作答/);
