@@ -783,6 +783,28 @@ async function practiceImportedBank(page, bankName) {
   return { bankId, question: FIXTURE_QUESTION };
 }
 
+/** @param {Page} page */
+async function practiceDeselectSmoke(page) {
+  const option = page.locator('#practice-card .option[data-key="A"]');
+  const input = option.locator('input');
+  for (const target of [option.locator('.option-text'), input]) {
+    await target.click();
+    assert(await input.isChecked());
+    await target.click();
+    assert(!(await input.isChecked()), '再次点击应取消选中');
+    assert.equal(await page.locator('#practice-card .option.selected').count(), 0);
+  }
+  await input.focus();
+  for (const key of ['Space', '1']) {
+    await page.keyboard.press(key);
+    assert(await input.isChecked());
+    await page.keyboard.press(key);
+    assert(!(await input.isChecked()), '键盘重复选择应取消选中');
+    assert.equal(await page.locator('#practice-card .option.selected').count(), 0);
+  }
+  if (await page.locator('#p-total-status').count()) assert.match(await page.locator('#p-total-status').innerText(), /已填写 0 题/);
+}
+
 /** @param {Page} page @param {string} bankName */
 async function importAndPractice(page, bankName) {
   // 用实际导入与练习控件证明业务保存链路，避免直接写入应用 state 掩盖绑定或持久化错误。
@@ -799,10 +821,11 @@ async function importAndPractice(page, bankName) {
   await page.locator('#import-preview tbody tr').filter({ hasText: FIXTURE_QUESTION }).waitFor({ state: 'visible' });
   await page.locator('#confirm-import-btn').click();
   const result = await practiceImportedBank(page, bankName);
+  await practiceDeselectSmoke(page);
   await page.locator('#app-toast .toast-item').first().waitFor({ state: 'hidden' });
   await mkdir(path.dirname(SCREENSHOT_PATH), { recursive: true });
   await page.screenshot({ path: SCREENSHOT_PATH, fullPage: true });
-  return { ...result, screenshot: SCREENSHOT_PATH };
+  return { ...result, deselect: true, screenshot: SCREENSHOT_PATH };
 }
 
 /** @param {Page} page @param {string} bankName @param {string} origin */
@@ -818,6 +841,7 @@ async function totalPracticeSmoke(page, bankName, origin) {
   await page.locator('.nav[data-view="practice"]').click();
   await page.locator('#practice-submit-mode').selectOption('total');
   await practiceImportedBank(page, bankName);
+  await practiceDeselectSmoke(page);
   await page.locator('#practice-card .option[data-key="B"]').click();
   assert.equal(await page.locator('#p-reveal, #p-submit').count(), 0);
   await page.locator('[data-ai-single-open-v613]').click();

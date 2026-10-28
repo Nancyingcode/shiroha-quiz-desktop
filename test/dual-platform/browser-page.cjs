@@ -186,6 +186,73 @@ test('列表分页：快速翻页拒绝迟到正文，加载失败可在当前�
   assert.deepEqual(loads.map(refs => [refs[0], refs.length]), [['delay-10', 10], ['delay-20', 10], ['delay-30', 10], ['delay-30', 10]]);
 });
 
+for (const mode of ['single', 'total']) for (const type of ['single', 'multiple', 'judge']) test(`${mode} 模式 ${type} 支持取消选中，切题后仍未作答`, async t => {
+  const initial = webState();
+  const question = initial.banks[0].questions.find(value => value.type === type);
+  initial.banks = [initial.banks[0]];
+  initial.banks[0].questions = [question, { ...initial.banks[0].questions[0], id: 'deselect-next' }];
+  initial.records = [];
+  initial.wrongBook = {};
+  const page = await pageFor(t, JSON.stringify(initial));
+  await page.locator('.nav[data-view="practice"]').click();
+  await page.locator('#practice-submit-mode').selectOption(mode);
+  await page.locator('#practice-limit').selectOption('all');
+  await page.locator('#start-practice-btn').click();
+  const option = key => page.locator(`#practice-card .option[data-key="${key}"]`);
+  const assertChosen = async expected => {
+    assert.deepEqual(await page.locator('#practice-card input:checked').evaluateAll(inputs => inputs.map(input => input.value)), expected);
+    assert.deepEqual(await page.locator('#practice-card .option.selected').evaluateAll(options => options.map(option => option.dataset.key)), expected);
+  };
+  await option('A').locator('.option-text').click();
+  await assertChosen(['A']);
+  await option('A').locator('input').click();
+  await assertChosen([]);
+  await page.locator('#p-next').click();
+  await page.locator('#p-prev').click();
+  await assertChosen([]);
+
+  await option('A').locator('input').focus();
+  await page.keyboard.press('Space');
+  await assertChosen(['A']);
+  await page.keyboard.press('Space');
+  await assertChosen([]);
+  await page.keyboard.press('1');
+  await assertChosen(['A']);
+  await page.keyboard.press('1');
+  await assertChosen([]);
+  await option('A').dblclick();
+  await assertChosen([]);
+
+  await option('A').click();
+  await option('B').click();
+  await assertChosen(type === 'multiple' ? ['A', 'B'] : ['B']);
+  await option('B').click();
+  await assertChosen(type === 'multiple' ? ['A'] : []);
+  if (type === 'multiple') await option('A').click();
+  await page.locator('#p-favorite').click();
+  await assertChosen([]);
+  if (mode === 'total') {
+    assert.match(await page.locator('#p-total-status').innerText(), /已填写 0.*未填写 2/);
+    assert.equal(await page.locator('#practice-nav-v26 .done').count(), 0);
+    await page.locator('#p-submit-all').click();
+    await page.locator('#back-practice-setup').waitFor();
+    const record = JSON.parse(await saved(page)).records[0];
+    assert.equal(record.correct, 0);
+    assert.deepEqual(record.details[0].chosen, []);
+  } else {
+    await page.locator('#p-submit').click();
+    assert.match(await page.locator('#p-feedback').innerText(), /请先作答/);
+    assert.deepEqual(JSON.parse(await saved(page)).records, []);
+    await option('A').click();
+    await page.locator('#p-submit').click();
+    await page.locator('#practice-card .option.correct').first().waitFor();
+    if (type !== 'multiple') {
+      await option('A').click();
+      await assertChosen(['A']);
+    }
+  }
+});
+
 for (const mode of ['single', 'total', 'exam']) test(`${mode} 答错后保存当时选项，重载错题本仍标红`, async t => {
   const initial = webState();
   initial.banks = [initial.banks[0]];
