@@ -48,6 +48,8 @@ npm run build
 
 ## 候选安装包与人工升级
 
+GitHub Release 支持通过 `desktop-v<major>.<minor>.<patch>` 标签复用 Windows 检查，在三种构建后分别保留独立 EXE、普通/离线安装包，生成 SHA-256 和构建记录，再创建预发布草稿。维护者核验后手动公开；首次公开前可能没有可下载附件。[本仓库桌面 Releases](https://github.com/Nancyingcode/shiroha-quiz-desktop/releases) 与上游 Web/Android 下载分开，操作、附件选择和失败恢复见[Windows 发布说明](../../.github/DESKTOP_RELEASE.md)。
+
 ```powershell
 npm run build:nsis
 npm run build:offline
@@ -78,7 +80,7 @@ npm run build:test
 npm run test:desktop
 ```
 
-文档回归自建文字 PDF、中文扫描 PDF、DOCX、XLSX，实际选择、解析、核对、导入、保存并重载检查题数和答案；外网阻断。扫描样本在测试中明确模拟人工核对，不声称 OCR 完全准确。真实系统文件对话框、长时间高负荷、所有覆盖层无障碍和正常发行制品仍有未验收项，详见[阶段验证记录](../../test/dual-platform/README.md)。Windows CI 与 Pages 独立，不发布或上传制品；托管 CI 不替代交互式 WebView2 验收。
+文档回归自建文字 PDF、中文扫描 PDF、DOCX、XLSX，实际选择、解析、核对、导入、保存并重载检查题数和答案；外网阻断。扫描样本在测试中明确模拟人工核对，不声称 OCR 完全准确。真实系统文件对话框、长时间高负荷、所有覆盖层无障碍和正常发行制品仍有未验收项，详见[阶段验证记录](../../test/dual-platform/README.md)。Windows CI 与 Pages 独立；普通 PR/main 检查不上传制品，桌面标签发布流程额外收集附件并创建草稿。托管 CI 不替代交互式 WebView2 验收。
 
 ## 资源与数据
 

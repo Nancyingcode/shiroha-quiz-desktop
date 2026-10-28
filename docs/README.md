@@ -61,6 +61,8 @@
 - [Harness 提供方选择与账户保留](./superpowers/plans/2026-10-25-harness-provider-selection.md)
 - [Codex 学习助手嵌入设计（暂缓）](./superpowers/specs/2026-10-24-codex-learning-assistant.md)
 - [Windows 候选安装包、人工升级和验收限制](../apps/desktop/README.md#候选安装包与人工升级)
+- [Windows GitHub Release 操作与附件校验](../.github/DESKTOP_RELEASE.md)
+- [Windows GitHub Release 实施与验证](./superpowers/plans/2026-10-29-windows-github-release.md)
 - [双端阶段验证记录（含阶段 E）](../test/dual-platform/README.md)
 - [双端详细实施计划](./superpowers/plans/2026-10-23-web-desktop-dual-platform.md)
 - [阶段 A 基线、测试入口与执行记录](../test/dual-platform/README.md)

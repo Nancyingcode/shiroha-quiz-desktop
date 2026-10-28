@@ -5,6 +5,16 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      collect_release:
+        description: Preserve verified Windows release assets for the caller
+        type: boolean
+        default: false
+      release_commit:
+        description: Resolved release commit from the caller's tag validation
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -14,6 +24,7 @@ jobs:
     runs-on: windows-2025
     env:
       HUSKY: '0'
+      RELEASE_COMMIT: ${{ inputs.release_commit }}
     defaults:
       run:
         working-directory: apps/desktop
@@ -21,12 +32,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ inputs.release_commit || github.sha }}
           fetch-depth: 0
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: '24.17.0'
           cache: npm
           cache-dependency-path: apps/desktop/package-lock.json
+      - name: Initialize release collection
+        if: inputs.collect_release == true
+        run: node scripts/release-artifacts.mjs init
       - name: Install recorded Rust toolchain
         run: |
           rustup toolchain install 1.99.1 --profile minimal --component rustfmt --component clippy
@@ -51,8 +67,30 @@ jobs:
       - run: cargo test --manifest-path src-tauri/Cargo.toml --locked
       - run: cargo test --manifest-path src-tauri/Cargo.toml --locked --features native-test
       - run: npm run build
+      - name: Preserve standalone executable
+        if: inputs.collect_release == true
+        run: node scripts/release-artifacts.mjs stage exe
       - run: npm run build:nsis
+      - name: Preserve online installer before offline build overwrites it
+        if: inputs.collect_release == true
+        run: node scripts/release-artifacts.mjs stage nsis
       - run: npm run build:offline
+      - name: Preserve offline installer and verify release assets
+        if: inputs.collect_release == true
+        run: |
+          node scripts/release-artifacts.mjs stage offline
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/release-artifacts.mjs finalize
+      - name: Upload verified release assets
+        if: inputs.collect_release == true
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-release-${{ github.run_id }}-${{ github.run_attempt }}
+          path: apps/desktop/.reports/desktop-release/${{ github.run_id }}-${{ github.run_attempt }}/
+          include-hidden-files: true
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
       - name: GUI acceptance remains a separate release gate
         run: |
           '### 尚待交互式 Windows 验收' >> $env:GITHUB_STEP_SUMMARY
