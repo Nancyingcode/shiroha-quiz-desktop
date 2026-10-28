@@ -910,6 +910,7 @@ mod tests {
         let mut child = fixture.spawn(&profile, "tree", 0);
         let mut stdin = child.take_stdin().unwrap();
         let stdout = child.take_stdout().unwrap();
+        let mut stderr = child.take_stderr().unwrap();
         let (ready_tx, ready_rx) = mpsc::channel();
         let reader = thread::spawn(move || {
             for line in BufReader::new(stdout).lines() {
@@ -919,7 +920,22 @@ mod tests {
                 }
             }
         });
-        let pid = ready_rx.recv_timeout(Duration::from_secs(15)).unwrap();
+        let errors = thread::spawn(move || {
+            let mut bytes = Vec::new();
+            stderr.read_to_end(&mut bytes).unwrap();
+            bytes
+        });
+        let pid = match ready_rx.recv_timeout(Duration::from_secs(15)) {
+            Ok(pid) => pid,
+            Err(error) => {
+                child.terminate_and_wait(CLEANUP_TIMEOUT).unwrap();
+                reader.join().unwrap();
+                panic!(
+                    "container descendant did not become ready ({error}): {}",
+                    String::from_utf8_lossy(&errors.join().unwrap())
+                );
+            }
+        };
         // SAFETY: PID 来自本次存活的测试子孙；保留句柄避免 PID 复用影响断言。
         let raw = unsafe { OpenProcess(PROCESS_SYNCHRONIZE, 0, pid) };
         assert!(!raw.is_null());
@@ -933,6 +949,11 @@ mod tests {
             thread::sleep(POLL_INTERVAL);
         }
         assert_eq!(child.try_wait().unwrap(), Some(true));
+        // SAFETY: 句柄来自本次测试；先证明直属 worker 退出后仍有存活后代，避免清理断言误通过。
+        assert_eq!(
+            unsafe { WaitForSingleObject(descendant.as_raw_handle(), 0) },
+            WAIT_TIMEOUT
+        );
         child.terminate_and_wait(CLEANUP_TIMEOUT).unwrap();
         // SAFETY: 句柄保持存活，仅查询本任务明确记录的进程是否已经退出。
         assert_eq!(
@@ -940,6 +961,7 @@ mod tests {
             WAIT_OBJECT_0
         );
         reader.join().unwrap();
+        assert!(errors.join().unwrap().is_empty());
         profile.close().unwrap();
     }
 
@@ -1044,6 +1066,7 @@ mod tests {
             }
         }
         if mode == "tree" {
+            // 隔离环境不保证能打开 NUL；本夹具不读取 stdin，继承已有管道即可验证后代清理。
             let child = std::process::Command::new(std::env::current_exe().unwrap())
                 .args([
                     "--exact",
@@ -1052,9 +1075,9 @@ mod tests {
                     "--nocapture",
                 ])
                 .env("SHIROHA_CONTAINER_FIXTURE", "wait")
-                .stdin(std::process::Stdio::null())
-                .stdout(std::process::Stdio::null())
-                .stderr(std::process::Stdio::null())
+                .stdin(std::process::Stdio::inherit())
+                .stdout(std::process::Stdio::inherit())
+                .stderr(std::process::Stdio::inherit())
                 .spawn()
                 .unwrap();
             println!("DESCENDANT:{}", child.id());
