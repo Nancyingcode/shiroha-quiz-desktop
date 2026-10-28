@@ -52,3 +52,9 @@
 ## 合并交付
 
 合并开始时，本地 `main` 为 `9d8095fb3f3e3983e710534b2bbc7ef6c8d07b03`，主工作树 `E:/Projects/shiroha-quiz-desktop` 干净。该目标比任务基线新增刷题取消选中和错题一览排版修复，需保留并联合验证。先在任务分支独立提交，再从目标建立 `codex/integrate-codebuddy-login-storage`，复用当前工作树及隔离验证环境；验证完成后再合入本地 `main`。
+
+- 来源提交：`d2cb52e4ac00cb33593646e820acd6a50087abe1`，分支 `codex/docs-codebuddy-login-storage`；本任务 18 份实现、测试与文档独立提交，正常运行 lint 和 commitlint hooks。
+- 整合与验证提交：`d14d0d090eb44ce2abadc2950d225e220a26ba68`，父提交为上述目标与来源。自动合并 `smoke.mjs`，没有冲突或联合测试修复。
+- 联合验证通过：npm 82 项桌面与 214 项共享测试、typecheck、lint；Web 平台浏览器 51 项；Rust fmt、默认/native-test Clippy、默认 318 项测试及 native-test 283 项单元测试；正式与隔离构建、36 项完整 WebView2 验收。忽略条件和真实账户未验收范围沿用上表。
+- 桌面套件同时覆盖 main 新增的鼠标与键盘取消选中，以及本任务的记住后恢复、关闭记住后重启未登录和退出后重启未登录。联合检查使用本工作树的隔离数据，没有复制其他任务的未提交文件。
+- 验证后只补本节交付记录，业务代码与验证提交一致。交付采用 main 快进到已验证整合及记录提交，保留来源和 merge 历史；不推送、不发布、不清理来源分支或工作树。
