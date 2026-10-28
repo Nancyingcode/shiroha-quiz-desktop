@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, readdir, rm, stat, symlink, utimes, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -31,6 +31,107 @@ async function fixture(t) {
   await writeFile(path.join(web, 'index.html'), html);
   return { root, web, desktop, html, desktopCss, dist: path.join(desktop, 'dist') };
 }
+
+/** @param {string} root */
+async function snapshot(root) {
+  /** @type {Record<string, string>} */
+  const files = {};
+  for (const entry of await readdir(root, { recursive: true, withFileTypes: true })) {
+    const file = path.join(entry.parentPath, entry.name);
+    files[path.relative(root, file)] = entry.isDirectory() ? 'directory' : (await readFile(file)).toString('base64');
+  }
+  return files;
+}
+
+test('unchanged outputs retain timestamps, including generated assets', async t => {
+  const f = await fixture(t);
+  await prepareWeb(f.web, f.desktop);
+  const before = await snapshot(f.dist);
+  const old = new Date('2001-01-01T00:00:00Z');
+  for (const name of Object.keys(before)) await utimes(path.join(f.dist, name), old, old);
+  await prepareWeb(f.web, f.desktop);
+  assert.deepEqual(await snapshot(f.dist), before);
+  for (const name of Object.keys(before)) assert.equal((await stat(path.join(f.dist, name))).mtimeMs, old.getTime(), name);
+});
+
+test('equal-size source changes with preserved timestamps update only affected outputs', async t => {
+  const f = await fixture(t);
+  await prepareWeb(f.web, f.desktop);
+  const old = new Date('2001-01-01T00:00:00Z');
+  for (const name of ['app.js', 'index.html', 'desktop.css']) await utimes(path.join(f.dist, name), old, old);
+  const input = path.join(f.web, 'app.js');
+  const metadata = await stat(input);
+  await writeFile(input, 'changed');
+  await utimes(input, metadata.atime, metadata.mtime);
+  await prepareWeb(f.web, f.desktop);
+  assert.equal(await readFile(path.join(f.dist, 'app.js'), 'utf8'), 'changed');
+  for (const name of ['index.html', 'desktop.css']) assert.equal((await stat(path.join(f.dist, name))).mtimeMs, old.getTime());
+  await writeFile(path.join(f.desktop, 'frontend/desktop.css'), 'body { color: red; }');
+  await prepareWeb(f.web, f.desktop);
+  assert.equal(await readFile(path.join(f.dist, 'desktop.css'), 'utf8'), 'body { color: red; }');
+});
+
+test('incremental cleanup and type changes match a clean generation', async t => {
+  const f = await fixture(t);
+  await mkdir(path.join(f.web, 'media'));
+  await writeFile(path.join(f.web, 'media/old.png'), 'old');
+  await writeFile(path.join(f.web, 'libs/switch'), 'file');
+  await mkdir(path.join(f.web, 'libs/reverse'));
+  await writeFile(path.join(f.web, 'libs/reverse/child'), 'child');
+  await prepareWeb(f.web, f.desktop);
+  await rm(path.join(f.web, 'media'), { recursive: true });
+  await rm(path.join(f.web, 'libs/switch'));
+  await mkdir(path.join(f.web, 'libs/switch'));
+  await writeFile(path.join(f.web, 'libs/switch/child'), 'new');
+  await rm(path.join(f.web, 'libs/reverse'), { recursive: true });
+  await writeFile(path.join(f.web, 'libs/reverse'), 'file');
+  await mkdir(path.join(f.dist, 'stale/empty'), { recursive: true });
+  await writeFile(path.join(f.dist, 'stale/old.js'), 'old');
+  await prepareWeb(f.web, f.desktop);
+  const incremental = await snapshot(f.dist);
+  await rm(f.dist, { recursive: true });
+  await prepareWeb(f.web, f.desktop);
+  assert.deepEqual(incremental, await snapshot(f.dist));
+});
+
+test('repairs missing and corrupt outputs without trusting target timestamps', async t => {
+  const f = await fixture(t);
+  await prepareWeb(f.web, f.desktop);
+  const before = await snapshot(f.dist);
+  await rm(path.join(f.dist, 'bridge.js'));
+  await writeFile(path.join(f.dist, 'app.js'), 'corrupt');
+  await writeFile(path.join(f.dist, 'index.html'), 'bad');
+  await prepareWeb(f.web, f.desktop);
+  assert.deepEqual(await snapshot(f.dist), before);
+});
+
+test('rebuilds bridge dependencies while preserving unrelated generated files', async t => {
+  const f = await fixture(t);
+  const frontend = path.join(f.desktop, 'frontend');
+  await writeFile(path.join(frontend, 'bridge.js'), 'import { value } from "./value.js"; console.log(value);');
+  await writeFile(path.join(frontend, 'value.js'), 'export const value = "before";');
+  await prepareWeb(f.web, f.desktop);
+  const old = new Date('2001-01-01T00:00:00Z');
+  await utimes(path.join(f.dist, 'index.html'), old, old);
+  await writeFile(path.join(frontend, 'value.js'), 'export const value = "after";');
+  await prepareWeb(f.web, f.desktop);
+  assert.match(await readFile(path.join(f.dist, 'bridge.js'), 'utf8'), /after/);
+  assert.equal((await stat(path.join(f.dist, 'index.html'))).mtimeMs, old.getTime());
+});
+
+test('reused output still rejects nested links before any writes', async t => {
+  const f = await fixture(t);
+  await prepareWeb(f.web, f.desktop);
+  const before = await readFile(path.join(f.dist, 'index.html'));
+  const outside = path.join(f.root, 'outside');
+  await mkdir(outside);
+  await writeFile(path.join(outside, 'keep'), 'keep');
+  await symlink(outside, path.join(f.dist, 'linked'), process.platform === 'win32' ? 'junction' : 'dir');
+  await writeFile(path.join(f.web, 'index.html'), f.html.replace('Go', 'Changed'));
+  await assert.rejects(prepareWeb(f.web, f.desktop), /link/i);
+  assert.deepEqual(await readFile(path.join(f.dist, 'index.html')), before);
+  assert.equal(await readFile(path.join(outside, 'keep'), 'utf8'), 'keep');
+});
 
 test('desktop startup omits splash resources but keeps navigation artwork available on demand', () => {
   const html = `<head><link rel="preload" as="image" href="./media/home_welcome_avatar.webp" />

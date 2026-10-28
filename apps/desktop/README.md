@@ -90,6 +90,8 @@ npm run test:desktop
 npm run prepare:web
 ```
 
+资源准备按内容增量同步：未变化文件保留时间戳，只更新新增或变化的资源，并清除失效文件和目录；输出缺失或损坏时会重新生成。每次仍执行离线资源、路径和链接校验及 bridge 打包，不依赖时间戳判断内容。资源准备与读取 `dist` 的构建应串行执行。该优化主要减少重复构建的资源写入，首次 Rust 编译与安装包下载、压缩耗时仍取决于环境。
+
 应用标识固定为 `com.yiqiu.shirohaquiz.desktop`。桌面题库与学习数据使用 Rust 独占的 SQLite，图片按内容哈希保存，普通保存通过业务增量 IPC 提交；不会在原生服务失败时回退 localStorage 写入。桌面 AI/WebDAV 通过 Rust 的受控业务命令请求，HTTPS 使用系统证书校验，重定向限制来源与目录；Web 端仍保持浏览器请求及跨域限制。记住的 AI Key/WebDAV 密码写入 Windows 凭据管理器，未记住只在当前进程内存，页面只读取状态。MinerU 不属于本次迁移范围。
 
 正常发行数据位于 `%LOCALAPPDATA%/com.yiqiu.shirohaquiz.desktop/local-data`，开发数据使用同级 `development`。目录内包含 `library.sqlite3`、WAL、媒体、恢复点和进程写入锁；不要在运行时只复制 SQLite 主文件充当备份。覆盖、重置及恢复前会先创建并验证包含媒体的恢复点；设置页可读取并选择恢复点。恢复点和未引用媒体目前均保守保留，不自动删除，磁盘空间不足时操作失败并保留原数据。
