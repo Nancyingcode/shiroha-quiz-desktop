@@ -42,6 +42,15 @@ test('CodeBuddy freezes both revisions for its three tasks without consulting Co
   assert.equal(calls.some(call=>['login','inspect','choose_runtime','use_managed_runtime'].includes(call.kind)),false);
 });
 
+test('CodeBuddy connection requests a bare exact JSON object without extra formatting',async()=>{
+  const calls=[];const f=fixture(async(command,{request})=>{if(command==='harness_execute'){calls.push(request);return {content:'{"ok":true}'};}return {...ready};});
+  await f.api.initialize();await f.api.test();
+  assert.equal(calls.length,1);assert.equal(calls[0].task,'connection_test');
+  assert.match(calls[0].messages[0].content,/不要 Markdown/);
+  assert.match(calls[0].messages[0].content,/不要额外字段/);
+  assert.equal(calls[0].messages[1].content,'回复 {"ok":true}');
+});
+
 test('CodeBuddy explicitly rejects batch/import and missing or stale account revisions before IPC',async()=>{
   const calls=[];const f=fixture(async(command,{request})=>{calls.push({command,...request});return {...ready};});await f.api.initialize();
   for(const task of ['import_organize','batch_review','batch_analysis'])await assert.rejects(f.api.execute(f.api.snapshot(),task,[]),/批量|导入/);
@@ -245,6 +254,7 @@ test('shared connection button reaches CodeBuddy test without reading hidden Cod
 
 test('known CodeBuddy failures retain one fixed diagnostic code through repeated wrapping',async()=>{
   const codes=['codebuddy_request_denied','codebuddy_request_budget','codebuddy_upstream_unverified','codebuddy_candidate_rejected','codebuddy_business_json','codebuddy_frame_invalid','codebuddy_output_invalid','codebuddy_pipe_closed','codebuddy_worker_failed','codebuddy_isolation_failed','codebuddy_cleanup_failed','codebuddy_profile_cleanup_failed','codebuddy_relay_io_failed','codebuddy_relay_peer_closed','codebuddy_relay_start_failed','codebuddy_auth_network','codebuddy_runtime_integrity','codebuddy_account_stale','codebuddy_upstream_length','codebuddy_upstream_content_filter','codebuddy_upstream_tool_call','codebuddy_upstream_unknown_field','codebuddy_upstream_incomplete'];
+  codes.push('codebuddy_business_limit','codebuddy_connection_result','codebuddy_analysis_result','codebuddy_followup_result');
   for(const code of codes){
     const message='CodeBuddy 未确认任务成功。';
     const f=fixture(async command=>{if(command==='harness_execute')throw {code,message,detail:'synthetic-private-body',cause:{message:'C:\\private\\synthetic-token'}};return {...ready};});

@@ -93,6 +93,10 @@ fn probe() -> Result<(), &'static str> {
         "stop",
         "analysis",
         "followup",
+        "connection_fenced",
+        "analysis_fenced",
+        "followup_fenced",
+        "connection_encoded",
         "reasoning",
         "empty_fields",
         "gateway_fields",
@@ -221,7 +225,8 @@ fn probe() -> Result<(), &'static str> {
         let passed = match (scenario, &output) {
             (
                 "stop" | "analysis" | "followup" | "reasoning" | "empty_fields" | "gateway_fields"
-                | "terminal_delta",
+                | "terminal_delta" | "connection_fenced" | "analysis_fenced" | "followup_fenced"
+                | "connection_encoded",
                 Ok(text),
             ) => text == &expected && requests == 1,
             ("eof", Err(error)) => error.code == "codebuddy_upstream_incomplete" && requests == 1,
@@ -360,6 +365,10 @@ fn offline_candidate(scenario: &str) -> String {
     use serde_json::json;
     let analysis = "合成数学题：已知 x = 2，求 y = x² + 1。\n代入公式：\\[y = 2^2 + 1 = 5\\]。\n分式写作 \\frac{1}{2}，保留反斜线、中文标点和换行。\n".repeat(60);
     match scenario {
+        "connection_fenced" => "```json\n{\"ok\":true}\n```".into(),
+        "analysis_fenced" => format!("```json\n{}\n```", offline_candidate("analysis")),
+        "followup_fenced" => format!("```json\n{}\n```", offline_candidate("followup")),
+        "connection_encoded" => serde_json::to_string(r#"{"ok":true}"#).expect("固定合成字符串可序列化"),
         "analysis" => json!({"analysis":analysis,"suggestedAnswer":"B","matchesLocalAnswer":true,"confidence":"HIGH","needsReview":true,"warning":"离线合成内容，待人工核对。"}).to_string(),
         "followup" => json!({"reply":"可以，逐步核对如下。\n\\[2^2+1=5\\]。\n".repeat(80),"revisedAnalysis":analysis,"confidence":"HIGH","needsReview":true,"warning":"保留旧稿，确认后才能采用新稿。"}).to_string(),
         _ => "{\"ok\":true}".into(),

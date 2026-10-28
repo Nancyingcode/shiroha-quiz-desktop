@@ -62,6 +62,7 @@
     'codebuddy_auth_network','codebuddy_auth_personal_required','codebuddy_auth_required','codebuddy_auth_response',
     'codebuddy_auth_session','codebuddy_auth_state','codebuddy_auth_timeout','codebuddy_auth_token_domain',
     'codebuddy_auth_token_expiry','codebuddy_auth_token_shape','codebuddy_auth_url','codebuddy_business_json',
+    'codebuddy_business_limit','codebuddy_connection_result','codebuddy_analysis_result','codebuddy_followup_result',
     'codebuddy_candidate_rejected','codebuddy_cleanup_failed','codebuddy_cli_finished','codebuddy_config_invalid',
     'codebuddy_container_required','codebuddy_frame_invalid','codebuddy_isolation_failed','codebuddy_login_browser',
     'codebuddy_login_busy','codebuddy_login_not_pending','codebuddy_login_not_ready','codebuddy_login_stale',
@@ -593,7 +594,8 @@
       if (codexSelected() && ((input('ai-harness-model')?.value.trim() || '') !== current.model || Number(input('ai-harness-timeout')?.value || 120) !== current.timeoutSeconds)) throw new Error('配置草稿尚未保存，请先保存后再测试。');
       notice('正在执行固定测试任务，将使用当前订阅额度……');
       try {
-        const result = await api.execute(api.snapshot(),'connection_test',[{role:'system',content:'只回复一个 JSON 对象。'},{role:'user',content:'回复 {"ok":true}'}]);
+        const system = current.adapter === 'codebuddy' ? '只回复 {"ok":true} 这一个 JSON 对象，不要 Markdown 代码块，不要额外字段、解释或其他文字。' : '只回复一个 JSON 对象。';
+        const result = await api.execute(api.snapshot(),'connection_test',[{role:'system',content:system},{role:'user',content:'回复 {"ok":true}'}]);
         let value; try { value = JSON.parse(result.content); } catch { throw new Error(`${providerLabel()} 返回的测试结果不是有效 JSON。`); }
         if (!value || value.ok !== true || (current.adapter === 'codebuddy' && (Array.isArray(value) || Object.keys(value).length !== 1))) throw new Error(`${providerLabel()} 测试结果校验失败。`);
         notice('测试执行成功，结果已通过校验。');

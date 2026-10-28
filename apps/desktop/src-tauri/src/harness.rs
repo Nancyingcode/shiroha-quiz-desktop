@@ -1589,7 +1589,11 @@ pub(crate) fn failure(code: &'static str) -> Error {
         "codebuddy_isolation_failed" | "codebuddy_container_required" => "CodeBuddy 隔离环境未通过检查，本次任务已停止。",
         "codebuddy_worker_failed" | "codebuddy_worker_environment" | "codebuddy_worker_path" | "codebuddy_config_invalid" => "CodeBuddy 隔离组件未能完成执行，本次任务已停止。",
         "codebuddy_cleanup_failed" | "codebuddy_profile_cleanup_failed" => "CodeBuddy 隔离环境清理未完成，结果未被采纳。",
-        "codebuddy_business_json" => "CodeBuddy 未返回完整的解析或追问 JSON，结果未被采纳；请主动重试。",
+        "codebuddy_business_json" => "CodeBuddy 已返回模型响应，但正文不是单个完整有效的 JSON（或包含重复字段），结果未被采纳；不会自动重试。",
+        "codebuddy_business_limit" => "CodeBuddy 返回的正文或业务文本超过长度限制，结果未被采纳；请缩小题目或追问范围。",
+        "codebuddy_connection_result" => "CodeBuddy 已返回模型响应，但连接测试结果不符合 {\"ok\":true}，结果未被采纳。",
+        "codebuddy_analysis_result" => "CodeBuddy 已返回 JSON，但缺少有效的 analysis 解析文本或附加字段类型不正确，结果未被采纳。",
+        "codebuddy_followup_result" => "CodeBuddy 已返回 JSON，但缺少有效的 reply、revisedAnalysis 或附加字段类型不正确，结果未被采纳。",
         code if code.starts_with("codebuddy_") => "CodeBuddy 未确认任务成功，请检查组件、账户权限和连接后重试；不会自动重新生成。",
         "harness_provider_unavailable" => "当前所选 Harness 尚未开放模型执行，请查看对应提供方的说明。",
         "harness_auth" => {
