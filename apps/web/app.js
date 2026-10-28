@@ -1227,6 +1227,7 @@ async function renderBankPreview(){
   $$('[data-preview-full]').forEach(button=>button.onclick=()=>openBankQuestionDetail(bank,qs.find(q=>q.id===button.dataset.previewFull),button,true));
   const updateSelection=()=>{
     $('#bank-question-selection').textContent=`已选择 ${selected.size} 道试题`;
+    $('#bank-question-selection').hidden=selected.size===0;
     $('#delete-selected-questions').disabled=!selected.size;
     $('#clear-bank-question-selection').disabled=!selected.size;
     $('#select-bank-question-page').disabled=!qs.length;
