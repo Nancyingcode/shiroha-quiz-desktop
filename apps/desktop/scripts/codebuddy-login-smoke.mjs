@@ -6,7 +6,7 @@ const LOGIN_POLL_MS = 50;
 
 /** @typedef {import('playwright-core').Page} Page */
 /** @typedef {import('../../web/platform/runtime.d.ts').HarnessStatus} HarnessStatus */
-/** @typedef {{phase:string,revision:number,loginUrl:string,message:string,browserOpened:boolean,busy:boolean}} LoginStatus */
+/** @typedef {{phase:string,revision:number,loginUrl:string,message:string,browserOpened:boolean,busy:boolean,rememberLogin:boolean,persistenceState:string,persistenceErrorCode:string|null}} LoginStatus */
 
 /** @param {Page} page @returns {Promise<LoginStatus>} */
 async function status(page) {
@@ -63,7 +63,7 @@ async function waitForPhase(page, phase) {
   // Playwright 的页面谓词会把 Promise 当真值；异步 IPC 必须在 Node 侧等待已匹配的快照。
   while (true) {
     const current = await status(page);
-    if (current.phase === phase) return current;
+    if (current.phase === phase && !current.busy) return current;
     assert(Date.now() < deadline, `等待 ${phase} 超时，当前为 ${current.phase}`);
     await delay(LOGIN_POLL_MS);
   }
@@ -202,7 +202,7 @@ export async function codebuddyLoginSmoke(page,startPractice) {
   assert(loggedIn.revision > initial.revision);
   assert.equal(loggedIn.busy, false, `登录完成后不应仍繁忙：${loggedIn.phase}`);
   assert.equal(loggedIn.loginUrl, '');
-  assert.deepEqual(Object.keys(loggedIn).sort(), ['phase','revision','loginUrl','message','browserOpened','busy'].sort(), '登录状态不得公开令牌或个人标识');
+  assert.deepEqual(Object.keys(loggedIn).sort(), ['phase','revision','loginUrl','message','browserOpened','busy','rememberLogin','persistenceState','persistenceErrorCode'].sort(), '登录状态不得公开令牌或个人标识');
   await page.waitForFunction(()=>{
     const platform=/** @type {import('../../web/platform/runtime.d.ts').BrowserGlobals['ShirohaPlatform']} */ (Reflect.get(window,'ShirohaPlatform'));
     const current=platform.harness?.status();return current?.adapter==='codebuddy'&&current.ready&&!current.busy;
@@ -290,7 +290,7 @@ export async function codebuddyLoginSmoke(page,startPractice) {
 
 /** @param {Page} page */
 export async function codebuddyLoginAfterRestart(page) {
-  const restarted = await status(page);
+  const restarted = await waitForPhase(page, 'signed_out');
   assert.equal(restarted.phase, 'signed_out', '仅内存登录不应在重启后恢复');
   assert.equal(restarted.loginUrl, '');
   assert.equal(restarted.busy, false);
@@ -314,4 +314,53 @@ export async function codebuddyLoginAfterRestart(page) {
   });
   await page.locator('.nav[data-view="dashboard"]').click();
   return {signedOutAfterRestart:true,selectedProviderPersisted:true,selectedModelPersisted:true};
+}
+
+/** @param {Page} page @param {()=>Promise<Page>} restart */
+export async function codebuddyLoginPersistenceSmoke(page, restart) {
+  await page.locator('.nav[data-view="ai-settings"]').click();
+  await page.locator('#ai-execution-harness').check();
+  await page.locator('#ai-save-settings-v99').click();
+  await page.waitForFunction(() => Reflect.get(window,'ShirohaPlatform')?.harness?.status().mode === 'harness');
+  await selectProvider(page, 'codebuddy');
+  assert.equal(await page.locator('#ai-codebuddy-remember').isChecked(), false);
+  await page.locator('#ai-codebuddy-remember').check();
+  await page.locator('#ai-codebuddy-login').click();
+  const saved = await waitForPhase(page, 'signed_in');
+  assert.equal(saved.persistenceState, 'saved');
+  assert.equal(saved.rememberLogin, true);
+  assert.doesNotMatch(await persistedState(page), /synthetic-memory-session|synthetic-user|tokenSha256|recordId/);
+
+  page = await restart();
+  const restored = await waitForPhase(page, 'signed_in');
+  assert.equal(restored.persistenceState, 'saved');
+  assert.equal(restored.rememberLogin, true);
+  await page.locator('.nav[data-view="ai-settings"]').click();
+  await page.locator('#ai-codebuddy-settings').waitFor({state:'visible'});
+  await page.waitForFunction(() => /** @type {HTMLInputElement|null} */ (document.getElementById('ai-codebuddy-remember'))?.checked === true);
+  await page.locator('#ai-codebuddy-remember').uncheck();
+  const end = Date.now() + LOGIN_TIMEOUT_MS;
+  while ((await status(page)).persistenceState !== 'none') { assert(Date.now() < end); await delay(LOGIN_POLL_MS); }
+  assert.equal((await status(page)).phase, 'signed_in', '关闭记住应保留当前内存会话');
+
+  page = await restart();
+  await waitForPhase(page, 'signed_out');
+  await page.locator('.nav[data-view="ai-settings"]').click();
+  await page.locator('#ai-codebuddy-settings').waitFor({state:'visible'});
+  await page.locator('#ai-codebuddy-remember').check();
+  await page.locator('#ai-codebuddy-login').click();
+  assert.equal((await waitForPhase(page, 'signed_in')).persistenceState, 'saved');
+  await page.locator('#ai-codebuddy-logout').click();
+  assert.equal((await waitForPhase(page, 'signed_out')).persistenceState, 'none');
+
+  page = await restart();
+  assert.equal((await waitForPhase(page, 'signed_out')).rememberLogin, false);
+  await page.locator('.nav[data-view="ai-settings"]').click();
+  // 后续题库恢复用例以未授权的假 Codex 为前置，保持其提供方隔离断言。
+  await selectProvider(page, 'codex');
+  await page.locator('#ai-execution-api').check();
+  await page.locator('#ai-save-settings-v99').click();
+  await page.waitForFunction(() => Reflect.get(window,'ShirohaPlatform')?.harness?.status().mode === 'api');
+  await page.locator('.nav[data-view="dashboard"]').click();
+  return {optIn:true,rememberedAfterRestart:true,memoryKeptAfterDisable:true,disabledAfterRestart:true,logoutSurvivesRestart:true,noSecretsInSnapshot:true};
 }

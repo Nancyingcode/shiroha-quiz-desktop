@@ -8,12 +8,15 @@ use std::sync::{
 };
 use std::time::{Duration, Instant};
 use uuid::Uuid;
+#[path = "harness_codebuddy_login_store.rs"]
+mod persistence;
+use persistence::{Job, PersistenceState};
 
 const LOGIN_PREFIX: &str = "https://copilot.tencent.com/login?";
 const SIGNED_OUT_MESSAGE: &str = "尚未登录 CodeBuddy。";
 const PREPARING_MESSAGE: &str = "正在准备 CodeBuddy 登录页面…";
 const WAITING_MESSAGE: &str = "请在浏览器中完成 CodeBuddy 登录。";
-const SIGNED_IN_MESSAGE: &str = "CodeBuddy 已登录，可准备组件并使用当前订阅。";
+const SIGNED_IN_MESSAGE: &str = "CodeBuddy 已登录，仅本次使用。";
 const EXPIRED_MESSAGE: &str = "CodeBuddy 登录已过期，请重新登录。";
 const CANCELLED_MESSAGE: &str = "已取消 CodeBuddy 登录。";
 const FAILED_MESSAGE: &str = "CodeBuddy 登录未完成，请稍后重试。";
@@ -25,7 +28,18 @@ const MAX_LOGIN_URL_BYTES: usize = 1024;
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Control {
     Status {},
-    Login { revision: u64 },
+    Login {
+        revision: u64,
+        #[serde(default)]
+        remember: bool,
+    },
+    SetRemember {
+        revision: u64,
+        remember: bool,
+    },
+    RetryRestore {
+        revision: u64,
+    },
     OpenLogin {},
     Cancel {},
     Logout {},
@@ -36,6 +50,7 @@ pub enum Control {
 enum Phase {
     SignedOut,
     Authenticating,
+    Restoring,
     SignedIn,
     Expired,
     Failed,
@@ -51,11 +66,16 @@ pub struct Status {
     message: String,
     browser_opened: bool,
     busy: bool,
+    remember_login: bool,
+    persistence_state: PersistenceState,
+    persistence_error_code: Option<&'static str>,
 }
 
-// 状态、challenge 与会话只属于当前应用进程，退出/取消以 revision 失效旧任务。
+// 运行状态、challenge 与会话属于当前进程；存储线程串行保存，revision 隔离旧任务。
 pub struct Login {
     inner: Mutex<Inner>,
+    worker: Mutex<Option<std::thread::JoinHandle<()>>>,
+    root: Option<std::path::PathBuf>,
 }
 
 pub(crate) struct ExecutionStatus {
@@ -74,6 +94,10 @@ struct Inner {
     cancel: Option<Arc<AtomicBool>>,
     session: Option<MemorySession>,
     lease: Option<ActiveLease>,
+    remember_login: bool,
+    persistence_state: PersistenceState,
+    persistence_error_code: Option<&'static str>,
+    store: Option<std::sync::mpsc::Sender<Job>>,
 }
 
 struct ActiveLease {
@@ -153,15 +177,21 @@ impl Login {
                 cancel: None,
                 session: None,
                 lease: None,
+                remember_login: false,
+                persistence_state: PersistenceState::None,
+                persistence_error_code: None,
+                store: None,
             }),
+            worker: Mutex::new(None),
+            root: None,
         }
     }
 
     pub(crate) fn control(self: &Arc<Self>, request: Control) -> Result<Status> {
         match request {
             Control::Status {} => self.status(),
-            Control::Login { revision } => {
-                let attempt = self.start(revision)?;
+            Control::Login { revision, remember } => {
+                let attempt = self.start_remembered(revision, remember)?;
                 let initial = self.status()?;
                 let service = Arc::clone(self);
                 tauri::async_runtime::spawn(async move {
@@ -173,6 +203,8 @@ impl Login {
             Control::OpenLogin {} => self.open_current(None),
             Control::Cancel {} => self.clear(Phase::Cancelled),
             Control::Logout {} => self.clear(Phase::SignedOut),
+            Control::SetRemember { revision, remember } => self.set_remember(revision, remember),
+            Control::RetryRestore { revision } => self.retry_restore(revision),
         }
     }
 
@@ -194,7 +226,7 @@ impl Login {
         Ok(ExecutionStatus {
             revision: state.revision,
             signed_in: state.has_account(),
-            busy: state.phase == Phase::Authenticating || state.lease.is_some(),
+            busy: state.operation_busy(),
             message: state.message,
         })
     }
@@ -277,6 +309,7 @@ impl Login {
         })
     }
 
+    #[cfg(test)]
     fn start(&self, expected_revision: u64) -> Result<Attempt> {
         let mut state = self
             .inner
@@ -333,6 +366,9 @@ impl Login {
                 state.phase = Phase::SignedIn;
                 state.message = SIGNED_IN_MESSAGE;
                 state.session = Some(session);
+                if state.remember_login {
+                    state.schedule_save()?;
+                }
             }
             Err(error) => {
                 state.phase = match error.code {
@@ -464,7 +500,9 @@ impl Login {
 
 impl Inner {
     fn has_account(&self) -> bool {
-        self.phase == Phase::SignedIn && (self.session.is_some() || self.lease.is_some())
+        self.phase == Phase::SignedIn
+            && !self.storage_blocked()
+            && (self.session.is_some() || self.lease.is_some())
     }
 
     fn owns_lease(&self, revision: u64, id: Uuid) -> bool {
@@ -496,6 +534,12 @@ impl Inner {
     }
 
     fn clear(&mut self, phase: Phase) -> Result<()> {
+        let cancelling_restore = phase == Phase::Cancelled && self.phase == Phase::Restoring;
+        let must_revoke = !cancelling_restore
+            && self.store.is_some()
+            && (self.remember_login
+                || self.persistence_state != PersistenceState::None
+                || phase == Phase::SignedOut);
         let revision = self
             .revision
             .checked_add(1)
@@ -514,6 +558,9 @@ impl Inner {
         self.message = message_for(phase);
         self.login_url.clear();
         self.browser_opened = false;
+        if must_revoke {
+            self.schedule_revoke()?;
+        }
         Ok(())
     }
 
@@ -522,9 +569,12 @@ impl Inner {
             phase: self.phase,
             revision: self.revision,
             login_url: self.login_url.clone(),
-            message: self.message.to_owned(),
+            message: self.persistence_message().to_owned(),
             browser_opened: self.browser_opened,
-            busy: self.phase == Phase::Authenticating,
+            busy: self.busy(),
+            remember_login: self.remember_login,
+            persistence_state: self.persistence_state,
+            persistence_error_code: self.persistence_error_code,
         }
     }
 }
@@ -821,6 +871,7 @@ fn message_for(phase: Phase) -> &'static str {
     match phase {
         Phase::SignedOut => SIGNED_OUT_MESSAGE,
         Phase::Authenticating => PREPARING_MESSAGE,
+        Phase::Restoring => "正在恢复 CodeBuddy 登录…",
         Phase::SignedIn => SIGNED_IN_MESSAGE,
         Phase::Expired => EXPIRED_MESSAGE,
         Phase::Failed => FAILED_MESSAGE,
@@ -927,6 +978,349 @@ mod tests {
 
     const FIXTURE_URL: &str = "https://copilot.tencent.com/login?platform=CLI&state=fixture-state";
 
+    async fn settled(service: &Arc<Login>) -> Status {
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            let status = service.status().unwrap();
+            if !status.busy {
+                return status;
+            }
+            assert!(Instant::now() < deadline, "账户操作未收敛");
+            tokio::task::yield_now().await;
+        }
+    }
+
+    #[test]
+    fn remembered_login_survives_restart_and_logout_removes_it() {
+        tauri::async_runtime::block_on(async {
+            let root =
+                std::env::temp_dir().join(format!("shiroha-codebuddy-login-{}", Uuid::new_v4()));
+            let provider = Arc::new(Mutex::new(crate::credentials::FakeProvider::default()));
+            let service = Login::open_with_provider(&root, provider.clone());
+            let initial = settled(&service).await;
+            assert!(!initial.remember_login);
+            service
+                .control(Control::Login {
+                    revision: initial.revision,
+                    remember: true,
+                })
+                .unwrap();
+            let logged_in = settled(&service).await;
+            assert_eq!(logged_in.phase, Phase::SignedIn);
+            assert_eq!(logged_in.persistence_state, PersistenceState::Saved);
+            service.close_store_for_test();
+            drop(service);
+            let restored = Login::open_with_provider(&root, provider.clone());
+            assert_eq!(settled(&restored).await.phase, Phase::SignedIn);
+            restored.control(Control::Logout {}).unwrap();
+            let logged_out = settled(&restored).await;
+            assert_eq!(logged_out.phase, Phase::SignedOut);
+            assert!(provider.lock().unwrap().values.is_empty());
+            restored.close_store_for_test();
+            drop(restored);
+            let reopened = Login::open_with_provider(&root, provider);
+            assert_eq!(settled(&reopened).await.phase, Phase::SignedOut);
+            reopened.close_store_for_test();
+            drop(reopened);
+            std::fs::remove_dir_all(root).unwrap();
+        });
+    }
+
+    #[test]
+    fn another_instance_cannot_revoke_the_owners_saved_account() {
+        tauri::async_runtime::block_on(async {
+            let root =
+                std::env::temp_dir().join(format!("shiroha-codebuddy-login-{}", Uuid::new_v4()));
+            let provider = Arc::new(Mutex::new(crate::credentials::FakeProvider::default()));
+            let owner = Login::open_with_provider(&root, provider.clone());
+            let initial = settled(&owner).await;
+            owner
+                .control(Control::Login {
+                    revision: initial.revision,
+                    remember: true,
+                })
+                .unwrap();
+            assert_eq!(
+                settled(&owner).await.persistence_state,
+                PersistenceState::Saved
+            );
+            let other = Login::open_with_provider(&root, provider.clone());
+            assert!(other.invalidate_for_restore().await.is_err());
+            other.control(Control::Logout {}).unwrap();
+            let deadline = Instant::now() + Duration::from_secs(5);
+            while other.status().unwrap().persistence_state == PersistenceState::Clearing {
+                assert!(Instant::now() < deadline);
+                tokio::task::yield_now().await;
+            }
+            assert_eq!(
+                other.status().unwrap().persistence_error_code,
+                Some("codebuddy_store_in_use")
+            );
+            assert!(other.invalidate_for_restore().await.is_err());
+            assert!(!root.join("codebuddy-account-revoked").exists());
+            other.close_store_for_test();
+            drop(other);
+            owner.close_store_for_test();
+            drop(owner);
+            let reopened = Login::open_with_provider(&root, provider);
+            assert_eq!(settled(&reopened).await.phase, Phase::SignedIn);
+            reopened.control(Control::Logout {}).unwrap();
+            settled(&reopened).await;
+            reopened.close_store_for_test();
+            drop(reopened);
+            std::fs::remove_dir_all(root).unwrap();
+        });
+    }
+
+    #[test]
+    fn saving_is_opt_in_and_disabling_remember_keeps_only_the_current_session() {
+        tauri::async_runtime::block_on(async {
+            let root =
+                std::env::temp_dir().join(format!("shiroha-codebuddy-login-{}", Uuid::new_v4()));
+            let provider = Arc::new(Mutex::new(crate::credentials::FakeProvider::default()));
+            let service = Login::open_with_provider(&root, provider.clone());
+            let initial = settled(&service).await;
+            service
+                .control(Control::Login {
+                    revision: initial.revision,
+                    remember: false,
+                })
+                .unwrap();
+            let logged_in = settled(&service).await;
+            assert_eq!(logged_in.phase, Phase::SignedIn);
+            assert!(provider.lock().unwrap().values.is_empty());
+            let lease = service
+                .lease(logged_in.revision, Arc::new(AtomicBool::new(false)))
+                .unwrap();
+            assert!(service
+                .control(Control::SetRemember {
+                    revision: logged_in.revision,
+                    remember: true
+                })
+                .is_err());
+            drop(lease);
+            service
+                .control(Control::SetRemember {
+                    revision: logged_in.revision,
+                    remember: true,
+                })
+                .unwrap();
+            let saved = settled(&service).await;
+            assert_eq!(saved.persistence_state, PersistenceState::Saved);
+            service
+                .control(Control::SetRemember {
+                    revision: saved.revision,
+                    remember: false,
+                })
+                .unwrap();
+            let memory = settled(&service).await;
+            assert_eq!(memory.phase, Phase::SignedIn);
+            assert!(!memory.remember_login);
+            assert!(service
+                .lease(memory.revision, Arc::new(AtomicBool::new(false)))
+                .is_ok());
+            assert!(provider.lock().unwrap().values.is_empty());
+            service.close_store_for_test();
+            drop(service);
+            let reopened = Login::open_with_provider(&root, provider);
+            assert_eq!(settled(&reopened).await.phase, Phase::SignedOut);
+            reopened.close_store_for_test();
+            drop(reopened);
+            std::fs::remove_dir_all(root).unwrap();
+        });
+    }
+
+    #[test]
+    fn failed_save_keeps_memory_and_failed_logout_blocks_until_explicit_retry() {
+        tauri::async_runtime::block_on(async {
+            let root =
+                std::env::temp_dir().join(format!("shiroha-codebuddy-login-{}", Uuid::new_v4()));
+            let provider = Arc::new(Mutex::new(crate::credentials::FakeProvider::default()));
+            let service = Login::open_with_provider(&root, provider.clone());
+            let initial = settled(&service).await;
+            provider.lock().unwrap().fail_write = true;
+            service
+                .control(Control::Login {
+                    revision: initial.revision,
+                    remember: true,
+                })
+                .unwrap();
+            let failed = settled(&service).await;
+            assert_eq!(failed.phase, Phase::SignedIn);
+            assert_eq!(failed.persistence_state, PersistenceState::Error);
+            provider.lock().unwrap().fail_write = false;
+            service
+                .control(Control::SetRemember {
+                    revision: failed.revision,
+                    remember: true,
+                })
+                .unwrap();
+            let saved = settled(&service).await;
+            assert_eq!(saved.persistence_state, PersistenceState::Saved);
+            provider.lock().unwrap().fail_delete = true;
+            service.control(Control::Logout {}).unwrap();
+            let deadline = Instant::now() + Duration::from_secs(5);
+            loop {
+                let status = service.status().unwrap();
+                if status.persistence_state == PersistenceState::CleanupRequired {
+                    break;
+                }
+                assert!(Instant::now() < deadline);
+                tokio::task::yield_now().await;
+            }
+            assert!(!service.execution_status().unwrap().signed_in);
+            assert!(
+                !service.execution_status().unwrap().busy,
+                "清理失败不能永久阻止切换其他提供方"
+            );
+            assert!(service
+                .control(Control::Login {
+                    revision: service.status().unwrap().revision,
+                    remember: false
+                })
+                .is_err());
+            provider.lock().unwrap().fail_delete = false;
+            service.control(Control::Logout {}).unwrap();
+            assert_eq!(
+                settled(&service).await.persistence_state,
+                PersistenceState::None
+            );
+            service.close_store_for_test();
+            drop(service);
+            std::fs::remove_dir_all(root).unwrap();
+        });
+    }
+
+    #[test]
+    fn unauthorized_execution_revokes_the_saved_account_and_data_restore_does_too() {
+        tauri::async_runtime::block_on(async {
+            let root =
+                std::env::temp_dir().join(format!("shiroha-codebuddy-login-{}", Uuid::new_v4()));
+            let provider = Arc::new(Mutex::new(crate::credentials::FakeProvider::default()));
+            let service = Login::open_with_provider(&root, provider.clone());
+            let initial = settled(&service).await;
+            service
+                .control(Control::Login {
+                    revision: initial.revision,
+                    remember: true,
+                })
+                .unwrap();
+            let saved = settled(&service).await;
+            service
+                .inner
+                .lock()
+                .unwrap()
+                .session
+                .as_mut()
+                .unwrap()
+                .model_fixture = ModelFixture::Unauthorized;
+            let mut lease = service
+                .lease(saved.revision, Arc::new(AtomicBool::new(false)))
+                .unwrap();
+            assert!(lease
+                .model(json!({}), &AtomicBool::new(false))
+                .await
+                .is_err());
+            drop(lease);
+            let expired = settled(&service).await;
+            assert_eq!(expired.phase, Phase::Expired);
+            assert!(provider.lock().unwrap().values.is_empty());
+            service
+                .control(Control::Login {
+                    revision: expired.revision,
+                    remember: true,
+                })
+                .unwrap();
+            settled(&service).await;
+            service.invalidate_for_restore().await.unwrap();
+            assert_eq!(settled(&service).await.phase, Phase::SignedOut);
+            assert!(provider.lock().unwrap().values.is_empty());
+            service.close_store_for_test();
+            drop(service);
+            std::fs::remove_dir_all(root).unwrap();
+        });
+    }
+
+    #[derive(Clone)]
+    struct BlockingProvider {
+        base: Arc<Mutex<crate::credentials::FakeProvider>>,
+        started: std::sync::mpsc::Sender<()>,
+        release: Arc<Mutex<std::sync::mpsc::Receiver<()>>>,
+        blocked: Arc<AtomicBool>,
+    }
+
+    impl crate::credentials::Provider for BlockingProvider {
+        fn read(&mut self, target: &str) -> Result<Option<String>> {
+            self.base.read(target)
+        }
+        fn write(&mut self, target: &str, value: &str) -> Result<()> {
+            if !self.blocked.swap(true, Ordering::AcqRel) {
+                self.started
+                    .send(())
+                    .map_err(|_| Error::new("fixture_closed"))?;
+                self.release
+                    .lock()
+                    .unwrap()
+                    .recv_timeout(Duration::from_secs(10))
+                    .map_err(|_| Error::new("fixture_closed"))?;
+            }
+            self.base.write(target, value)
+        }
+        fn delete(&mut self, target: &str) -> Result<()> {
+            self.base.delete(target)
+        }
+    }
+
+    #[test]
+    fn logout_does_not_wait_for_credential_io_and_late_save_cannot_revive_the_account() {
+        tauri::async_runtime::block_on(async {
+            let root =
+                std::env::temp_dir().join(format!("shiroha-codebuddy-login-{}", Uuid::new_v4()));
+            let base = Arc::new(Mutex::new(crate::credentials::FakeProvider::default()));
+            let (started, observed) = std::sync::mpsc::channel();
+            let (release, waiting) = std::sync::mpsc::channel();
+            let provider = BlockingProvider {
+                base: base.clone(),
+                started,
+                release: Arc::new(Mutex::new(waiting)),
+                blocked: Arc::new(AtomicBool::new(false)),
+            };
+            let service = Login::open_with_provider(&root, provider);
+            let initial = settled(&service).await;
+            service
+                .control(Control::Login {
+                    revision: initial.revision,
+                    remember: true,
+                })
+                .unwrap();
+            tauri::async_runtime::spawn_blocking(move || {
+                observed.recv_timeout(Duration::from_secs(5)).unwrap()
+            })
+            .await
+            .unwrap();
+            let logout = service.control(Control::Logout {}).unwrap();
+            assert_eq!(logout.phase, Phase::SignedOut);
+            assert!(
+                logout.busy,
+                "未释放系统写入前只能承诺内存已阻断，不能承诺清理已完成"
+            );
+            assert!(!service.execution_status().unwrap().signed_in);
+            release.send(()).unwrap();
+            assert_eq!(
+                settled(&service).await.persistence_state,
+                PersistenceState::None
+            );
+            assert!(base.lock().unwrap().values.is_empty());
+            service.close_store_for_test();
+            drop(service);
+            let reopened = Login::open_with_provider(&root, base);
+            assert_eq!(settled(&reopened).await.phase, Phase::SignedOut);
+            reopened.close_store_for_test();
+            drop(reopened);
+            std::fs::remove_dir_all(root).unwrap();
+        });
+    }
+
     fn signed_in_service() -> (Arc<Login>, u64) {
         let service = Arc::new(Login::new());
         let attempt = service.start(0).unwrap();
@@ -967,7 +1361,10 @@ mod tests {
         assert!(execution.busy);
         assert_eq!(execution.revision, revision);
         assert_eq!(service.status().unwrap().phase, Phase::SignedIn);
-        assert!(!service.status().unwrap().busy);
+        assert!(
+            service.status().unwrap().busy,
+            "执行租约期间不得修改记住登录设置"
+        );
         assert_eq!(
             service
                 .lease(revision, Arc::new(AtomicBool::new(false)))
@@ -1361,6 +1758,7 @@ mod tests {
         let service = Arc::new(Login::new());
         let pending_login = Control::Login {
             revision: service.status().unwrap().revision,
+            remember: false,
         };
         let cancelled = service.control(Control::Cancel {}).unwrap();
         assert!(service.control(pending_login).is_err());
@@ -1430,7 +1828,10 @@ mod tests {
         let service = Arc::new(Login::new());
         assert_eq!(
             service
-                .control(Control::Login { revision: 0 })
+                .control(Control::Login {
+                    revision: 0,
+                    remember: false
+                })
                 .unwrap()
                 .phase,
             Phase::Authenticating
@@ -1451,7 +1852,12 @@ mod tests {
     #[test]
     fn cancelling_synthetic_background_login_cannot_resurrect_it() {
         let service = Arc::new(Login::new());
-        service.control(Control::Login { revision: 0 }).unwrap();
+        service
+            .control(Control::Login {
+                revision: 0,
+                remember: false,
+            })
+            .unwrap();
         let cancelled = service.control(Control::Cancel {}).unwrap();
         std::thread::sleep(Duration::from_millis(800));
         let status = service.status().unwrap();
@@ -1476,7 +1882,7 @@ mod tests {
         let status = serde_json::to_value(service.status().unwrap()).unwrap();
         assert_eq!(
             status,
-            json!({"phase":"signed_out","revision":0,"loginUrl":"","message":SIGNED_OUT_MESSAGE,"browserOpened":false,"busy":false})
+            json!({"phase":"signed_out","revision":0,"loginUrl":"","message":SIGNED_OUT_MESSAGE,"browserOpened":false,"busy":false,"rememberLogin":false,"persistenceState":"none","persistenceErrorCode":null})
         );
     }
 
@@ -1536,7 +1942,7 @@ mod tests {
         assert!(status.login_url.is_empty());
         assert_eq!(
             serde_json::to_value(&status).unwrap(),
-            json!({"phase":"signed_in","revision":current.revision,"loginUrl":"","message":SIGNED_IN_MESSAGE,"browserOpened":false,"busy":false})
+            json!({"phase":"signed_in","revision":current.revision,"loginUrl":"","message":SIGNED_IN_MESSAGE,"browserOpened":false,"busy":false,"rememberLogin":false,"persistenceState":"none","persistenceErrorCode":null})
         );
         let serialized = serde_json::to_string(&status).unwrap();
         for forbidden in [

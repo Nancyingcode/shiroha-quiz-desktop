@@ -24,6 +24,7 @@ pub mod harness_codebuddy_login;
 mod harness_codebuddy_protocol;
 #[cfg(any(test, not(feature = "native-test")))]
 mod harness_codebuddy_runtime;
+mod harness_codebuddy_store;
 #[cfg(all(
     windows,
     any(test, feature = "codebuddy-prototype", not(feature = "native-test"))

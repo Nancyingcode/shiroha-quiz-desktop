@@ -413,7 +413,9 @@ C. 判断题
               </div>
               <div id="ai-codebuddy-settings" class="notice" role="group" aria-labelledby="ai-codebuddy-title" hidden>
                 <div class="section-head"><h3 id="ai-codebuddy-title">CodeBuddy 个人账户</h3><span id="ai-codebuddy-phase" class="pill">读取中</span></div>
-                <p>登录状态仅保留在本次应用运行期间，关闭应用后需要重新登录。</p>
+                <p>未开启记住登录时，关闭应用后需要重新登录；已保存的登录过期后仍需重新授权。</p>
+                <label class="ai-checkbox-row-v99"><input id="ai-codebuddy-remember" type="checkbox" disabled aria-describedby="ai-codebuddy-remember-help" />在此设备记住登录</label>
+                <p id="ai-codebuddy-remember-help" class="muted">主动开启后安全保存到本机。下次启动会联网核验登录状态，不会自动调用模型。</p>
                 <p class="muted">CodeBuddy 当前支持连接测试、单题解析和追问；暂不支持导入与批量任务。每次最多等待 120 秒。执行会使用当前个人账户并消耗账户用量。</p>
                 <label for="ai-codebuddy-model">CodeBuddy 模型</label>
                 <select id="ai-codebuddy-model" aria-describedby="ai-codebuddy-model-status"><option value="deepseek-v4.1-flash">DeepSeek V4.1 Flash</option><option value="hy4-preview">Hy4 preview</option><option value="hy3">Hy3</option><option value="default">Default（服务端默认）</option></select>
@@ -434,6 +436,7 @@ C. 判断题
                   <div class="actions"><button id="ai-codebuddy-open-login" class="ghost" type="button">重新打开授权页</button><button id="ai-codebuddy-copy-link" class="ghost" type="button">复制登录链接</button></div>
                 </div>
                 <p id="ai-codebuddy-status" class="notice" role="status" aria-live="polite">正在读取 CodeBuddy 登录状态…</p>
+                <div class="actions"><button id="ai-codebuddy-retry-restore" class="ghost" type="button" hidden>重试恢复登录</button><button id="ai-codebuddy-retry-save" class="ghost" type="button" hidden>重试保存登录</button></div>
                 <p id="ai-codebuddy-execution-status" class="notice" role="status" aria-live="polite">请准备组件并完成登录。</p>
               </div>
               <div id="ai-deepseek-settings" class="notice" role="group" aria-labelledby="ai-deepseek-title" hidden>

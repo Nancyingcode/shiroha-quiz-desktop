@@ -24,7 +24,7 @@ const MAX_TOKEN_BYTES: usize = 16 * 1024;
 const TOKEN_PENDING: i64 = 11217;
 const ACCOUNT_PENDING: i64 = 12151;
 
-// 每个客户端与 challenge 只属于本次登录；会话不克隆、不序列化、不落盘。
+// 每个客户端与 challenge 只属于本次登录；仅受控存储可导出恢复所需凭据。
 pub struct Client {
     id: Uuid,
     http: reqwest::Client,
@@ -75,6 +75,24 @@ impl SessionExpiry {
 }
 
 impl AuthenticatedAccount {
+    pub(crate) fn saved(&self) -> Result<crate::harness_codebuddy_store::SavedSession> {
+        let token = self
+            .session
+            .token
+            .as_ref()
+            .ok_or_else(|| Error::new("codebuddy_auth_expired"))?;
+        token.require_valid()?;
+        let saved = crate::harness_codebuddy_store::SavedSession {
+            access_token: token.access_token.clone(),
+            uid: self.session.identity.uid.clone(),
+            domain: token.domain.clone(),
+            expires_at_ms: token.expires_at_ms,
+            saved_at_ms: Clock::now()?.unix_ms,
+        };
+        saved.validate()?;
+        Ok(saved)
+    }
+
     pub async fn model(&mut self, body: Value, cancel: &AtomicBool) -> Result<Vec<u8>> {
         self.client.model(&mut self.session, body, cancel).await
     }
@@ -125,6 +143,61 @@ impl Session {
 }
 
 impl Client {
+    pub(crate) async fn restore(
+        self,
+        saved: crate::harness_codebuddy_store::SavedSession,
+        cancel: &AtomicBool,
+    ) -> Result<AuthenticatedAccount> {
+        saved.validate()?;
+        let clock = Clock::now()?;
+        let remaining = saved
+            .expires_at_ms
+            .checked_sub(clock.unix_ms)
+            .filter(|value| *value > 0)
+            .ok_or_else(|| Error::new("codebuddy_auth_expired"))?;
+        let deadline = clock
+            .monotonic
+            .checked_add(Duration::from_millis(remaining))
+            .ok_or_else(|| Error::new("codebuddy_auth_expired"))?;
+        let token = Token {
+            access_token: saved.access_token,
+            domain: saved.domain,
+            expires_at_ms: saved.expires_at_ms,
+            deadline,
+        };
+        let request_deadline = deadline.min(clock.monotonic + AUTH_REQUEST_TIMEOUT);
+        ensure_active(cancel, request_deadline, Instant::now())?;
+        let response = self
+            .send(
+                self.request(Endpoint::Accounts, None, Some(&token))?,
+                ResponseKind::Json,
+                cancel,
+                request_deadline,
+            )
+            .await?;
+        require_success_status(response.status)?;
+        let account = Account {
+            uid: saved.uid,
+            kind: "personal".to_owned(),
+            enterprise_id: None,
+            nickname: None,
+            plugin_enabled: None,
+        };
+        let identity = personal_identity(account, &response.body)?;
+        ensure_active(cancel, request_deadline, Instant::now())?;
+        token.require_valid()?;
+        // 新进程必须重新建立 owner，绝对期限保持原值，不续算旧 expiresIn。
+        let session = Session {
+            owner: self.id,
+            token: Some(token),
+            identity,
+        };
+        Ok(AuthenticatedAccount {
+            client: self,
+            session,
+        })
+    }
+
     pub fn new() -> Result<Self> {
         Ok(Self {
             id: Uuid::new_v4(),
@@ -845,6 +918,75 @@ mod tests {
 
     fn account() -> Account {
         serde_json::from_value(json!({"uid":"fixture-user", "type":"personal"})).unwrap()
+    }
+
+    fn saved_session() -> crate::harness_codebuddy_store::SavedSession {
+        let now = Clock::now().unwrap().unix_ms;
+        crate::harness_codebuddy_store::SavedSession {
+            access_token: "fixture-secret".into(),
+            uid: "fixture-user".into(),
+            domain: DOMAIN.into(),
+            expires_at_ms: now + 60_000,
+            saved_at_ms: now,
+        }
+    }
+
+    #[test]
+    fn restored_account_uses_one_identity_request_and_a_new_owner_without_extending_expiry() {
+        let fixture = Fixture::new(vec![Reply::json(
+            json!({"data":{"accounts":[{"uid":"fixture-user","type":"personal","pluginEnabled":true}]}}),
+        )]);
+        let client = mock_client(fixture.client.mock_origin.as_ref().unwrap().as_str());
+        let owner = client.id;
+        let saved = saved_session();
+        let expiry = saved.expires_at_ms;
+        let restored = run(client.restore(saved, &AtomicBool::new(false))).unwrap();
+        assert_eq!(restored.session.owner, owner);
+        assert_ne!(owner, fixture.client.id);
+        assert_eq!(restored.saved().unwrap().expires_at_ms, expiry);
+        let requests: Vec<_> = fixture.received.try_iter().collect();
+        assert_eq!(requests.len(), 1);
+        assert!(requests[0].starts_with("GET /v2/plugin/accounts "));
+        assert!(!requests[0].contains("/chat/"));
+    }
+
+    #[test]
+    fn restore_rejects_expiry_clock_rollback_and_cancellation_before_network() {
+        let fixture = Fixture::new(vec![]);
+        for (expired, rollback, cancelled) in [
+            (true, false, false),
+            (false, true, false),
+            (false, false, true),
+        ] {
+            let client = mock_client(fixture.client.mock_origin.as_ref().unwrap().as_str());
+            let mut saved = saved_session();
+            if expired {
+                saved.expires_at_ms = 0;
+            }
+            if rollback {
+                saved.saved_at_ms += 120_000;
+            }
+            assert!(run(client.restore(saved, &AtomicBool::new(cancelled))).is_err());
+        }
+        assert_eq!(fixture.received.try_iter().count(), 0);
+    }
+
+    #[test]
+    fn restore_requires_the_same_unique_enabled_personal_identity() {
+        for accounts in [
+            json!([]),
+            json!([{"uid":"another","type":"personal","pluginEnabled":true}]),
+            json!([{"uid":"fixture-user","type":"enterprise","pluginEnabled":true}]),
+            json!([{"uid":"fixture-user","type":"personal","pluginEnabled":false}]),
+            json!([{"uid":"fixture-user","type":"personal","pluginEnabled":true},{"uid":"fixture-user","type":"personal","pluginEnabled":true}]),
+        ] {
+            let fixture = Fixture::new(vec![Reply::json(json!({"data":{"accounts":accounts}}))]);
+            let client = mock_client(fixture.client.mock_origin.as_ref().unwrap().as_str());
+            assert_eq!(
+                failure_code(run(client.restore(saved_session(), &AtomicBool::new(false)))),
+                "codebuddy_auth_personal_required"
+            );
+        }
     }
 
     #[test]
