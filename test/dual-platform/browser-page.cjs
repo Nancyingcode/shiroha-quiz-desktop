@@ -184,6 +184,26 @@ test('收藏单题快捷入口先选择提交方式，并保留单题范围', as
   assert.equal(JSON.parse(await saved(page)).records[0].correct, 1);
 });
 
+test('题库批量操作栏保留表格间距，选择提示居中且零选择隐藏', async t => {
+  const page = await pageFor(t, JSON.stringify(webState()));
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.locator('.nav[data-view="banks"]').click();
+  const selection = page.locator('#bank-question-selection');
+  const button = page.locator('#select-bank-question-page');
+  await button.waitFor();
+  assert.equal(await selection.isVisible(), false);
+  await button.click();
+  assert.equal(await selection.isVisible(), true);
+  const textBox = await selection.boundingBox();
+  const buttonBox = await button.boundingBox();
+  assert.ok(Math.abs(textBox.y + textBox.height / 2 - buttonBox.y - buttonBox.height / 2) < 2);
+  const toolbar = await page.locator('[aria-label="试题批量管理"]').boundingBox();
+  const table = await page.locator('#bank-preview').boundingBox();
+  assert.ok(table.y - toolbar.y - toolbar.height >= 12);
+  await page.locator('#clear-bank-question-selection').click();
+  assert.equal(await selection.isVisible(), false);
+});
+
 test('题库删除：单题取消、跨页批量、关联清理和重载保全', async t => {
   const initial=webState();
   initial.banks[0].questions=Array.from({length:302},(_,i)=>({...initial.banks[0].questions[0],id:'q'+i,number:'原'+i,question:'删除回归 '+i,extensions:{preserve:i}}));
