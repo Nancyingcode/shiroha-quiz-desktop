@@ -1,4 +1,4 @@
-import { cp, lstat, mkdir, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
@@ -23,13 +23,15 @@ function contains(parent, child) {
   return relative === '' || (!relative.startsWith(`..${path.sep}`) && relative !== '..' && !path.isAbsolute(relative));
 }
 
-/** @param {string} target */
-async function rejectLinks(target) {
+/** @param {string} target @param {Map<string, import('node:fs').Stats>} [inspected] */
+async function rejectLinks(target, inspected = new Map()) {
   const stat = await lstat(target);
   if (stat.isSymbolicLink()) throw new Error(`Linked assets/output are not supported: ${target}`);
+  inspected.set(target, stat);
   if (stat.isDirectory()) {
-    for (const name of await readdir(target)) await rejectLinks(path.join(target, name));
+    for (const name of await readdir(target)) await rejectLinks(path.join(target, name), inspected);
   }
+  return inspected;
 }
 
 /** @param {string} html */
@@ -86,6 +88,65 @@ function applyDesktopStyles(html) {
     });
 }
 
+/** @typedef {{ source?: string, contents?: Uint8Array | string } | null} Asset */
+
+/** @param {string} source @param {Map<string, import('node:fs').Stats>} inspected @param {Map<string, Asset>} expected */
+function collectAssets(source, inspected, expected) {
+  // 安全扫描按父目录优先遍历，复用其结果以免再次逐文件查询元数据。
+  for (const [input, metadata] of inspected) {
+    const name = path.relative(source, input);
+    if (!entries.includes(name.split(path.sep)[0])) continue;
+    const parent = path.dirname(name);
+    if (parent !== '.' && !expected.has(parent)) continue;
+    const basename = path.basename(input);
+    const license = /^(?:licen[cs]e|copying|notice)(?:\.|$)/i.test(basename);
+    const tooling = /\.(?:ps1|cmd|md|map)$/i.test(input) || /^readme(?:\.|$)/i.test(basename) || basename === 'package.json';
+    if (!license && tooling) continue;
+    expected.set(name, metadata.isDirectory() ? null : { source: input });
+  }
+}
+
+/** @param {string} file */
+async function statIfPresent(file) {
+  try { return await lstat(file); }
+  catch (error) {
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return undefined;
+    throw error;
+  }
+}
+
+/** @param {string} output @param {Map<string, Asset>} expected */
+async function synchronizeAssets(output, expected) {
+  const root = await statIfPresent(output);
+  if (root && !root.isDirectory()) await rm(output);
+  await mkdir(output, { recursive: true });
+  // 调用方已检查整棵树；同步与编译必须串行，不能让另一个进程同时修改生成目录。
+  /** @param {string} directory */
+  async function prune(directory) {
+    for (const entry of await readdir(directory, { withFileTypes: true })) {
+      const file = path.join(directory, entry.name);
+      const name = path.relative(output, file);
+      const wanted = expected.get(name);
+      const wrongType = expected.has(name) && entry.isDirectory() !== (wanted === null);
+      if (!expected.has(name) || wrongType) await rm(file, { recursive: true, force: true });
+      else if (entry.isDirectory()) await prune(file);
+    }
+  }
+  await prune(output);
+  for (const [name, asset] of expected) {
+    const file = path.join(output, name);
+    if (asset === null) {
+      await mkdir(file, { recursive: true });
+      continue;
+    }
+    // 按文件比较字节，不信任时间戳；未变化输出的 mtime 用于避免下游重复构建。
+    const contents = asset.source ? await readFile(asset.source) : Buffer.from(asset.contents ?? '');
+    const metadata = await statIfPresent(file);
+    if (metadata?.size === contents.length && contents.equals(await readFile(file))) continue;
+    await writeFile(file, contents);
+  }
+}
+
 /** @param {string} sourceDir @param {string} projectDir */
 export async function prepareWeb(sourceDir, projectDir) {
   const source = await realpath(sourceDir);
@@ -93,7 +154,7 @@ export async function prepareWeb(sourceDir, projectDir) {
   if (contains(source, project) || contains(project, source)) throw new Error('Source and desktop directories must not overlap');
   const output = path.resolve(project, 'dist');
   if (path.dirname(output) !== project) throw new Error('Output must stay within the desktop project');
-  await rejectLinks(source);
+  const sourceFiles = await rejectLinks(source);
   try { await rejectLinks(output); }
   catch (error) { if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error; }
   for (const name of requiredAssets) {
@@ -123,9 +184,8 @@ export async function prepareWeb(sourceDir, projectDir) {
     .replace(/<script src="\.\/(?:platform\/index|app)\.js"><\/script>/, script => `<script src="./bridge.js"></script>\n<script src="./adapter.js"></script>\n<script src="./harness.js"></script>\n<script src="./codebuddy-login.js"></script>\n${script}`)
     .replace(/<body\b[^>]*>/i, body => `${body}\n${titlebarAssets.get('titlebar.html')}`)
     .replace(/<\/body>/i, '  <script src="./titlebar.js"></script>\n</body>');
-  // Only this fixed generated directory is removed, after overlap, link and input checks above.
-  await rm(output, { recursive: true, force: true });
-  await mkdir(output);
+  /** @type {Map<string, Asset>} */
+  const expected = new Map();
   for (const name of entries) {
     const input = path.join(source, name);
     try { await lstat(input); }
@@ -133,20 +193,17 @@ export async function prepareWeb(sourceDir, projectDir) {
       if (error instanceof Error && 'code' in error && error.code === 'ENOENT' && ['data', 'media'].includes(name)) continue;
       throw error;
     }
-    await cp(input, path.join(output, name), {
-      recursive: true,
-      filter: (file) => /^(?:licen[cs]e|copying|notice)(?:\.|$)/i.test(path.basename(file))
-        || (!/\.(?:ps1|cmd|md|map)$/i.test(file) && !/^readme(?:\.|$)/i.test(path.basename(file)) && path.basename(file) !== 'package.json'),
-    });
   }
-  await writeFile(path.join(output, 'index.html'), desktopHtml);
-  await writeFile(path.join(output, 'desktop.css'), desktopCss);
-  await writeFile(path.join(output, 'titlebar.js'), titlebarAssets.get('titlebar.js') ?? '');
-  await writeFile(path.join(output, 'desktop-events.js'), transformed.script);
-  await writeFile(path.join(output, 'bridge.js'), bridge.outputFiles[0].contents);
-  await writeFile(path.join(output, 'adapter.js'), titlebarAssets.get('adapter.js') ?? '');
-  await writeFile(path.join(output, 'harness.js'), titlebarAssets.get('harness.js') ?? '');
-  await writeFile(path.join(output, 'codebuddy-login.js'), titlebarAssets.get('codebuddy-login.js') ?? '');
+  collectAssets(source, sourceFiles, expected);
+  expected.set('index.html', { contents: desktopHtml });
+  expected.set('desktop.css', { contents: desktopCss });
+  expected.set('desktop-events.js', { contents: transformed.script });
+  expected.set('bridge.js', { contents: bridge.outputFiles[0].contents });
+  for (const name of ['titlebar.js', 'adapter.js', 'harness.js', 'codebuddy-login.js']) {
+    expected.set(name, { contents: titlebarAssets.get(name) ?? '' });
+  }
+  // Only entries within this fixed generated directory are removed, after overlap, link and input checks above.
+  await synchronizeAssets(output, expected);
   return output;
 }
 
