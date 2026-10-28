@@ -7,6 +7,7 @@
     "node": ">=24"
   },
   "scripts": {
+    "prepare": "cd ../.. && husky",
     "dev": "tauri dev --port 51736",
     "prepare:web": "node scripts/prepare-web.mjs",
     "test": "node --test test/*.test.mjs && npm run test:shared",
@@ -14,9 +15,11 @@
     "test:documents": "node --test ../../test/dual-platform/document-page.cjs",
     "test:shared": "node --test ../../test/dual-platform/*.test.cjs",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.platform.json",
-    "lint": "eslint scripts test eslint.config.mjs eslint.platform.config.mjs && npm run lint:platform && npm run lint:docs",
+    "lint": "npm run lint:eslint && npm run lint:platform && npm run lint:docs",
+    "lint:eslint": "eslint scripts test eslint.config.mjs eslint.platform.config.mjs commitlint.config.mjs --max-warnings 0",
     "lint:platform": "node scripts/lint-platform.mjs",
     "lint:docs": "node scripts/check-docs.mjs",
+    "commitlint": "commitlint --cwd ../.. --config apps/desktop/commitlint.config.mjs",
     "build": "tauri build --no-bundle",
     "build:nsis": "tauri build --config src-tauri/tauri.nsis.conf.json --target x86_64-pc-windows-msvc",
     "build:offline": "tauri build --config src-tauri/tauri.offline.conf.json --target x86_64-pc-windows-msvc",
@@ -26,12 +29,15 @@
     "bench:desktop": "node scripts/benchmark.mjs"
   },
   "devDependencies": {
+    "@commitlint/cli": "21.2.4",
+    "@commitlint/config-conventional": "21.2.4",
     "@eslint/js": "10.0.1",
     "@tauri-apps/api": "2.12.4",
     "@tauri-apps/cli": "2.12.4",
     "@types/node": "^24.0.0",
     "esbuild": "0.28.2",
     "eslint": "10.13.0",
+    "husky": "9.1.7",
     "playwright-core": "^1.58.0",
     "typescript": "7.0.2"
   }

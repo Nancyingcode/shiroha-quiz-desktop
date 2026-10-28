@@ -1,5 +1,6 @@
 test/native-parser-regression/samples/* linguist-vendored
 test/native-parser-regression/expected/* linguist-vendored
+.husky/* text eol=lf
 
 # 固定第三方许可原文的字节，避免 Windows 检出转换行尾后无法核对上游摘要。
 apps/desktop/third-party/codex/LICENSE -text

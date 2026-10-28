@@ -12,12 +12,16 @@ permissions:
 jobs:
   checks:
     runs-on: windows-2025
+    env:
+      HUSKY: '0'
     defaults:
       run:
         working-directory: apps/desktop
         shell: pwsh
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: '24.17.0'
@@ -28,6 +32,12 @@ jobs:
           rustup toolchain install 1.99.1 --profile minimal --component rustfmt --component clippy
           rustup default 1.99.1
       - run: npm ci --no-audit --no-fund
+      - name: Check pull request commit messages
+        if: github.event_name == 'pull_request'
+        env:
+          COMMITLINT_FROM: ${{ github.event.pull_request.base.sha }}
+          COMMITLINT_TO: ${{ github.event.pull_request.head.sha }}
+        run: npm run commitlint -- --from "$env:COMMITLINT_FROM" --to "$env:COMMITLINT_TO" --verbose
       - run: npm run typecheck
       - run: npm run lint
       - run: npm test
