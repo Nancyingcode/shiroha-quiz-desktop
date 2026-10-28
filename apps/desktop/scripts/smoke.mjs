@@ -944,6 +944,39 @@ async function main() {
     const visualRuntime = runtime;
     await check('沉浸标题栏原生窗口操作', () => titlebarSmoke(visualRuntime));
     await check('雾蓝首页、导入与原生窗口尺寸', () => desktopVisualSmoke(visualRuntime));
+    await check('原生 WebView2 下拉样式、鼠标与键盘选择', async () => {
+      await page.locator('.nav[data-view="practice"]').click();
+      const select = page.locator('#practice-type');
+      const original = await select.inputValue();
+      try {
+        const style = await select.evaluate(element => ({
+          appearance: window.getComputedStyle(element).appearance,
+          radius: window.getComputedStyle(element).borderRadius,
+          popupRadius: window.getComputedStyle(element, '::picker(select)').borderRadius,
+        }));
+        assert.equal(style.appearance, 'base-select');
+        assert.equal(style.radius, '6px');
+        assert.equal(style.popupRadius, '8px');
+        await select.click();
+        assert(await select.evaluate(element => element.matches(':open')));
+        await select.evaluate(element => Promise.all(element.getAnimations({ subtree: true }).map(animation => animation.finished)));
+        await page.screenshot({ path: path.join(path.dirname(SCREENSHOT_PATH), 'select-menu.png') });
+        await select.getByRole('option', { name: '多选兼容', exact: true }).click();
+        assert.equal(await select.inputValue(), 'multi');
+        await page.keyboard.press('Space');
+        await page.keyboard.press('ArrowUp');
+        await page.keyboard.press('Enter');
+        assert.equal(await select.inputValue(), 'multiple');
+        await page.keyboard.press('Space');
+        await page.keyboard.press('ArrowUp');
+        await page.keyboard.press('Escape');
+        assert.equal(await select.inputValue(), 'multiple');
+        return { ...style, mouse: true, keyboard: true, escape: true };
+      } finally {
+        await page.keyboard.press('Escape');
+        await select.selectOption(original);
+      }
+    });
     await check('雾蓝全局通知与键盘操作', () => notificationVisualSmoke(page));
     const marker = { key: `${PROFILE_PREFIX}${randomUUID()}`, value: randomUUID() };
     const bankName = `桌面原型验证-${randomUUID().slice(0, 8)}`;
