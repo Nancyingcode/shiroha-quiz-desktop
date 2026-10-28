@@ -41,3 +41,13 @@
 日志位于本工作树 `apps/desktop/.reports/codebuddy-cleanup-*.log`，不纳入提交。发布候选仍须以已提交的最终 SHA 在 GitHub Actions 构建，不能使用本地验证产物替代。
 
 测试修复独立提交为 `f378f97ae2e044dc94931a4f4ab0daa8657d7de0`，版本准备另行提交。最终候选提交与远端工作流结果以标签及 Release 构建元数据为准。
+
+## 云端发现的暂停按钮遮挡回归
+
+版本准备提交 `d9c191ffda58de5524bde6f92a82f28bc9e3ce47` 与测试修复已通过 `7e63e7ce52fe8d6082057b47aaae80d0d6165046` 合入并推送 `main`。[该次 Windows 检查](https://github.com/Nancyingcode/shiroha-quiz-desktop/actions/runs/40765231386)在 Rust 检查前，被训练暂停按钮的真实鼠标点击回归阻断：统计栏拦截指针事件，3 秒后超时。没有创建新标签或草稿。
+
+本地测量确认 1280px 下主卡片右边界为 1146px，而固定统计栏从 1044px 开始，暂停按钮位于重叠区；原测试的快速点击可偶然成功，不能证明布局正确。新增宽屏几何及实际点击回归，在修改 CSS 前稳定失败于 1280px 重叠断言；修复将宽屏主卡片限制在页面已有内容区宽度内，避免主卡片溢出，不重复压缩内容区或修改统计栏权限。修复后 1280、1440、1600px 均通过，原有两种暂停模式也通过。没有使用强制点击、跳过检查或提高超时掩盖遮挡。
+
+本次追加的共享 CSS 和浏览器回归作为独立适配修复提交；保持 `0.1.1` 尚未打标签的候选版本，补跑完整浏览器、npm、正常及隔离测试构建和 WebView2 验证后再推送。
+
+最终宽度约束的完整浏览器回归为 78 项全部通过；npm 321 项、typecheck、lint 通过。最终资源重新生成后，`npm run build`、`npm run build:test` 和 `npm run test:desktop` 均通过，WebView2 38 项检查成功，包含真实本地文档/OCR 管线、离线资源、训练复盘、原生 IPC 及隔离数据重启恢复。日志使用 `apps/desktop/.reports/codebuddy-cleanup-final-*.log`。该结果仍不替代正常安装包的干净系统新装、升级与卸载验收。

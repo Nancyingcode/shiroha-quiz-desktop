@@ -35,6 +35,28 @@ async function pageFor(t, raw, injection = '') {
 }
 const saved = page => page.evaluate(key => globalThis.localStorage.getItem(key), KEY);
 
+test('训练计时：宽屏统计栏不遮挡暂停按钮', async t => {
+  const initial = webState(); initial.records = [];
+  initial.banks = [initial.banks[0]];
+  initial.banks[0].questions = initial.banks[0].questions.filter(q => q.type === 'single').slice(0, 1);
+  const page = await pageFor(t, JSON.stringify(initial)); page.setDefaultTimeout(3000);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.locator('.nav[data-view="practice"]').click();
+  await page.locator('#start-practice-btn').click();
+  await page.locator('.toast-item button').evaluateAll(buttons => buttons.forEach(button => button.click()));
+  for (const width of [1280, 1440, 1600]) {
+    await page.setViewportSize({ width, height: 720 });
+    const overlap = await page.evaluate(() => {
+      const button = globalThis.document.querySelector('#p-pause').getBoundingClientRect();
+      const rail = globalThis.document.querySelector('.practice-side-v31').getBoundingClientRect();
+      return button.left < rail.right && button.right > rail.left && button.top < rail.bottom && button.bottom > rail.top;
+    });
+    assert.equal(overlap, false, `${width}px 下统计栏不能覆盖暂停按钮`);
+    await page.locator('#p-pause').click();
+    await page.locator('#practice-resume').click();
+  }
+});
+
 for (const mode of ['single', 'total']) test(`训练计时：${mode} 暂停保留作答、阻止快捷键并恢复焦点`, async t => {
   const initial = webState(); initial.records = [];
   initial.banks = [initial.banks[0]]; initial.banks[0].questions = initial.banks[0].questions.filter(q => q.type === 'single').slice(0, 1);
