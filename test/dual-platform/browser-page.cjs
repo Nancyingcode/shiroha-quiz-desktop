@@ -35,6 +35,221 @@ async function pageFor(t, raw, injection = '') {
 }
 const saved = page => page.evaluate(key => globalThis.localStorage.getItem(key), KEY);
 
+for (const mode of ['single', 'total', 'exam']) for (const type of ['single', 'multiple', 'judge']) test(`清空选项：${mode} ${type} 同步草稿、统计与键盘焦点`, async t => {
+  const initial = webState();
+  const question = initial.banks[0].questions.find(value => value.type === type);
+  initial.banks = [initial.banks[0]];
+  initial.banks[0].questions = [question, { ...initial.banks[0].questions[0], id: 'clear-next' }];
+  initial.records = [];
+  const page = await pageFor(t, JSON.stringify(initial));
+  page.setDefaultTimeout(3000);
+  const view = mode === 'exam' ? 'exam' : 'practice';
+  await page.locator(`.nav[data-view="${view}"]`).click();
+  if (mode === 'exam') {
+    await page.locator('#exam-count').fill('2');
+    await page.locator('#exam-minutes').fill('0');
+    await page.locator('#exam-order').selectOption('sequence');
+  } else {
+    await page.locator('#practice-submit-mode').selectOption(mode);
+    await page.locator('#practice-limit').selectOption('all');
+  }
+  await page.locator(`#start-${view}-btn`).click();
+  const root = mode === 'exam' ? page.locator('#exam-card .exam-q').first() : page.locator('#practice-card');
+  const clear = root.getByRole('button', { name: '清空第 1 题选项', exact: true });
+  assert.equal(await clear.count(), 1);
+  assert(await clear.isDisabled());
+  const before = await saved(page);
+  const choose = key => root.locator(`.option[data-key="${key}"]`).click();
+  await choose('A');
+  if (type === 'multiple') await choose('C');
+  assert(!(await clear.isDisabled()));
+  if (mode === 'exam') {
+    await page.locator('#exam-card .exam-q').nth(1).locator('.option[data-key="B"]').click();
+  } else {
+    await page.locator('#p-next').click();
+    await page.locator('#practice-card .option[data-key="B"]').click();
+    await page.locator('#p-prev').click();
+  }
+  await clear.focus();
+  await page.keyboard.press(mode === 'exam' ? 'Space' : 'Enter');
+  assert.equal(await root.locator('input:checked, .option.selected').count(), 0);
+  assert(await clear.isDisabled());
+  assert.equal(await root.locator('.option input').first().evaluate(node => node === globalThis.document.activeElement), true);
+  assert.match(await root.locator('[data-answer-options-status]').innerText(), /已清空本题选项/);
+  assert.equal(await page.locator('#app-dialog').count(), 0);
+  assert.equal(await saved(page), before, '清空不持久化学习数据或改历史错选');
+  if (mode === 'exam') {
+    assert.match(await page.locator('#exam-answer-card-v30').innerText(), /已答 1 \/ 2，未答 1/);
+    assert(await page.locator('#exam-card .exam-q').nth(1).locator('.option[data-key="B"] input').isChecked());
+  } else {
+    await page.locator('#p-next').click();
+    assert(await page.locator('#practice-card .option[data-key="B"] input').isChecked());
+    await page.locator('#p-prev').click();
+    assert.equal(await root.locator('input:checked, .option.selected').count(), 0);
+    await page.locator('#p-favorite').click();
+    assert.equal(await root.locator('input:checked, .option.selected').count(), 0);
+    if (mode === 'total') assert.match(await page.locator('#p-total-status').innerText(), /已填写 1.*未填写 1/);
+  }
+  await choose('A');
+  assert(!(await clear.isDisabled()));
+  await clear.click();
+  if (mode === 'single') {
+    await page.locator('#p-submit').click();
+    assert.match(await page.locator('#p-feedback').innerText(), /请先作答/);
+    await choose('A');
+    await page.locator('#p-submit').click();
+    assert(await clear.isDisabled());
+    assert(await root.locator('.option input').first().isDisabled());
+    await clear.evaluate(node => node.click());
+    assert(await root.locator('.option[data-key="A"] input').isChecked());
+  } else {
+    await page.locator(mode === 'exam' ? '#exam-submit-focus-bottom' : '#p-submit-all').click();
+    await page.locator(mode === 'exam' ? '#exam-back-setup' : '#back-practice-setup').waitFor();
+    const record = JSON.parse(await saved(page)).records[0];
+    assert.deepEqual(record.details[0].chosen, []);
+    assert.deepEqual(record.details[1].chosen, ['B']);
+    assert.equal(await page.locator('[data-clear-answer-options]').count(), 0);
+  }
+});
+
+test('清空选项：看答案与总提交确认/自评锁定，取消确认后恢复', async t => {
+  const initial = webState();
+  initial.banks = [initial.banks[0]];
+  initial.banks[0].questions = [initial.banks[0].questions[0], initial.banks[0].questions[4]];
+  const page = await pageFor(t, JSON.stringify(initial));
+  page.setDefaultTimeout(3000);
+  await page.locator('.nav[data-view="practice"]').click();
+  await page.locator('#start-practice-btn').click();
+  const clear = page.locator('[data-clear-answer-options]');
+  await page.locator('#practice-card .option[data-key="B"]').click();
+  await page.locator('#p-reveal').click();
+  assert(await clear.isDisabled());
+  await clear.evaluate(node => node.click());
+  assert(await page.locator('#practice-card .option[data-key="B"] input').isChecked());
+  await page.locator('#p-exit').focus();
+  await page.keyboard.press('Enter');
+  await page.locator('#start-practice-btn').waitFor({ state: 'visible' });
+  await page.locator('#app-toast .toast-item').last().waitFor({ state: 'hidden', timeout: 10000 });
+  await page.locator('#practice-submit-mode').selectOption('total');
+  await page.locator('#practice-limit').selectOption('all');
+  await page.locator('#practice-start-mode-v58916').selectOption('from_start');
+  await page.locator('#start-practice-btn').click();
+  await page.locator('#practice-card .option[data-key="A"]').click();
+  page.removeAllListeners('app-dialog');
+  await page.locator('#p-submit-all').click();
+  await page.locator('#app-dialog[open]').waitFor();
+  assert(await clear.isDisabled());
+  await clear.evaluate(node => node.click());
+  assert(await page.locator('#practice-card .option[data-key="A"] input').isChecked());
+  await page.locator('#app-dialog [data-dialog-cancel]').click();
+  assert(!(await clear.isDisabled()));
+  await clear.click();
+  await page.locator('#p-next').click();
+  assert.equal(await clear.count(), 0, '简答题不显示清空选项');
+  await page.locator('#practice-card textarea').fill('待自评草稿');
+  await page.locator('#p-prev').click();
+  await page.locator('#p-submit-all').click();
+  await page.locator('#app-dialog [data-dialog-accept]').click();
+  await page.locator('#p-self-right').waitFor();
+  await page.locator('#p-self-right').click();
+  await page.locator('#back-practice-setup').waitFor();
+  assert.deepEqual(JSON.parse(await saved(page)).records[0].details[0].chosen, []);
+});
+
+for (const type of ['single', 'judge', 'multiple']) test(`清空选项：考试 ${type} 再次选择取消并同步未答`, async t => {
+  const initial = webState();
+  initial.banks = [initial.banks[0]];
+  initial.banks[0].questions = [initial.banks[0].questions.find(value => value.type === type)];
+  const page = await pageFor(t, JSON.stringify(initial));
+  await page.locator('.nav[data-view="exam"]').click();
+  await page.locator('#exam-minutes').fill('0');
+  await page.locator('#start-exam-btn').click();
+  const input = page.locator('#exam-card .option[data-key="A"] input');
+  await input.focus();
+  for (let index = 0; index < 2; index++) {
+    await page.keyboard.press('Space');
+    assert(await input.isChecked());
+    await page.keyboard.press('Space');
+    assert(!(await input.isChecked()));
+    assert(await page.locator('[data-clear-answer-options]').isDisabled());
+    assert.match(await page.locator('#exam-answer-card-v30').innerText(), /已答 0 \/ 1，未答 1/);
+  }
+  const option = page.locator('#exam-card .option[data-key="A"]');
+  await option.locator('.option-text').click();
+  await option.click();
+  assert(!(await input.isChecked()));
+});
+
+for (const mode of ['total', 'exam']) test(`清空选项：${mode} 跨库同 ID 与迟到旧控件隔离`, async t => {
+  const initial = webState();
+  initial.banks[0].questions = [initial.banks[0].questions[0]];
+  initial.settings.practiceScope = { type: 'group', value: '自建样本' };
+  const page = await pageFor(t, JSON.stringify(initial));
+  const view = mode === 'exam' ? 'exam' : 'practice';
+  await page.locator(`.nav[data-view="${view}"]`).click();
+  if (mode === 'exam') {
+    await page.locator('#exam-order').selectOption('sequence');
+    await page.locator('#exam-minutes').fill('0');
+  } else {
+    await page.locator('#practice-submit-mode').selectOption('total');
+    await page.locator('#practice-limit').selectOption('all');
+  }
+  await page.locator(`#start-${view}-btn`).click();
+  const first = mode === 'exam' ? page.locator('#exam-card .exam-q').nth(0) : page.locator('#practice-card');
+  await first.locator('.option[data-key="A"]').click();
+  if (mode === 'total') {
+    await first.locator('[data-clear-answer-options]').evaluate(node => { globalThis.__oldClearOptions = node; });
+    await page.locator('#p-next').click();
+    await page.evaluate(() => globalThis.__oldClearOptions.click());
+  }
+  const second = mode === 'exam' ? page.locator('#exam-card .exam-q').nth(1) : page.locator('#practice-card');
+  await second.locator('.option[data-key="B"]').click();
+  await second.locator('[data-clear-answer-options]').click();
+  if (mode === 'total') await page.locator('#p-prev').click();
+  assert(await first.locator('.option[data-key="A"] input').isChecked());
+  await page.locator(mode === 'exam' ? '#exam-submit-focus-bottom' : '#p-submit-all').click();
+  await page.locator(mode === 'exam' ? '#exam-back-setup' : '#back-practice-setup').waitFor();
+  const details = JSON.parse(await saved(page)).records[0].details;
+  assert.deepEqual(details.map(detail => [detail.sourceBankId, detail.chosen]), [['bank-a', ['A']], ['bank-b', []]]);
+});
+
+test('清空选项：考试到时交卷及保存失败重试保留空答案，忙碌和迟到事件不能改卷', async t => {
+  const initial = webState();
+  initial.banks = [initial.banks[0]];
+  initial.banks[0].questions = [initial.banks[0].questions[0]];
+  const page = await pageFor(t, JSON.stringify(initial));
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.clock.install();
+  await page.locator('.nav[data-view="exam"]').click();
+  await page.locator('#exam-minutes').fill('1');
+  await page.locator('#start-exam-btn').click();
+  await page.locator('#exam-card .option[data-key="A"]').click();
+  await page.locator('[data-clear-answer-options]').click();
+  await page.locator('[data-clear-answer-options]').evaluate(node => { globalThis.__oldClearOptions = node; });
+  await page.evaluate(() => {
+    const write = globalThis.ShirohaPlatform.storage.write;
+    globalThis.__resumeExamWrite = () => { globalThis.ShirohaPlatform.storage.write = write; };
+    globalThis.ShirohaPlatform.storage.write = () => new Promise((_resolve, reject) => { globalThis.__failExamWrite = () => reject(new Error('Synthetic exam write failure')); });
+  });
+  await page.clock.fastForward(60001);
+  await page.locator('body[data-storage-state="pending"]').waitFor();
+  assert(await page.locator('[data-clear-answer-options]').isDisabled());
+  await page.evaluate(() => globalThis.__oldClearOptions.click());
+  assert.equal(await page.locator('#exam-card input:checked').count(), 0);
+  await page.evaluate(() => globalThis.__failExamWrite());
+  await page.locator('#platform-status.failed').waitFor();
+  assert.equal(JSON.parse(await saved(page)).records.length, initial.records.length);
+  await page.evaluate(() => globalThis.__resumeExamWrite());
+  await page.locator('#platform-status button').click();
+  await page.locator('#exam-back-setup').waitFor();
+  await page.evaluate(() => globalThis.__oldClearOptions.click());
+  const records = JSON.parse(await saved(page)).records;
+  assert.equal(records.length, initial.records.length + 1);
+  assert.equal(records[0].autoSubmitted, true);
+  assert.equal(records[0].answered, 0);
+  assert.deepEqual(records[0].details[0].chosen, []);
+});
+
 test('列表分页：直接跳页、四档条数、跨页选择、键盘与窄屏', async t => {
   const initial = webState();
   initial.banks[0].questions = Array.from({ length: 503 }, (_, i) => ({ ...initial.banks[0].questions[0], id: 'page-' + i, question: '分页题干 ' + (i + 1) }));
@@ -247,7 +462,8 @@ for (const mode of ['single', 'total']) for (const type of ['single', 'multiple'
     await page.locator('#p-submit').click();
     await page.locator('#practice-card .option.correct').first().waitFor();
     if (type !== 'multiple') {
-      await option('A').click();
+      assert(await option('A').locator('input').isDisabled());
+      await option('A').evaluate(node => node.click());
       await assertChosen(['A']);
     }
   }

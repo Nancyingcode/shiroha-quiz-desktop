@@ -7847,6 +7847,39 @@ function bindOptionSelect(root,q,canDeselect=()=>false){
     });
   });
 }
+function bindAnswerOptionControls(root,q,number,canEdit,capture){
+  const box=$(root),options=box?.querySelector('.options');
+  if(!options||!options.querySelector('input'))return;
+  options.insertAdjacentHTML('beforebegin',`<div class="answer-options-tools"><b>选项</b><button type="button" class="ghost mini-btn" data-clear-answer-options aria-label="清空第 ${number} 题选项" disabled>清空选项</button></div>`);
+  options.insertAdjacentHTML('afterend','<p class="answer-options-status" data-answer-options-status role="status" aria-live="polite"></p>');
+  const button=box.querySelector('[data-clear-answer-options]'),status=box.querySelector('[data-answer-options-status]');
+  const refresh=()=>{
+    const editable=canEdit();
+    button.disabled=!editable||!hasAnswerValueV58914(collectAnswer(root,q));
+    options.querySelectorAll('input').forEach(input=>{input.disabled=!editable});
+  };
+  const changed=()=>{if(!canEdit())return;capture();status.textContent='';refresh()};
+  bindOptionSelect(root,q,canEdit);
+  options.querySelectorAll('input').forEach(input=>input.addEventListener('input',changed));
+  button.addEventListener('refresh-answer-options',refresh);
+  button.onclick=()=>{
+    if(!canEdit()||!hasAnswerValueV58914(collectAnswer(root,q)))return;
+    applyAnswerStateV26(root,q,[]);changed();status.textContent='已清空本题选项';
+    options.querySelector('input:not(:disabled)')?.focus({preventScroll:true});
+  };
+  refresh();
+}
+function refreshAnswerOptionControls(){
+  // 确认、保存和回滚可能不重绘题目，控件仍须跟随同一可编辑条件更新。
+  $$('[data-clear-answer-options]').forEach(button=>button.dispatchEvent(new Event('refresh-answer-options')));
+}
+function canEditPracticeOptions(session,key){
+  const current=currentPracticeItemV8916();
+  if(practice!==session||!current||practiceItemKeyV8916(current)!==key||practice.completed||mutationBusy)return false;
+  if(practice.submitMode==='total')return !practice.totalLocked&&!practice.confirmingTotal;
+  const answer=getPracticeAnswerStateV26(key);
+  return !answer.answered&&!answer.revealed;
+}
 function selectedKeys(root){return $$(root+' input:checked').map(x=>x.value).sort()}
 function textAnswer(root,q){const el=$(root+' .text-answer');if(!el)return[];const value=normalizeWebQuestionType(q&&q.type)==='short'?trimMultilineBoundaryV5910(el.value):String(el.value||'').trim();return value.trim()?[value]:[]}
 function multiBlankAnswerV58914(root){return $$(root+' .multi-blank-answer-input-v58914').map(input=>String(input.value||'').trim())}
@@ -8471,11 +8504,14 @@ function renderTotalPracticeQuestion(){
   const q=practiceQuestionV8916(item),key=practiceItemKeyV8916(item),st=getPracticeAnswerStateV26(key),locked=!!practice.totalLocked;
   $('#practice-progress').textContent=`${practice.idx+1} / ${practice.items.length}`;
   $('#practice-card').innerHTML=`<div class="practice-focus-head"><b>${esc(practice.scopeName||'刷题练习')} · 总提交</b><span>${practice.idx+1} / ${practice.items.length}</span><div class="practice-tools-v26"><button class="ghost mini-btn" id="p-favorite">${isFavoriteV27(q.id,practiceItemBankIdV8916(item))?'取消收藏':'收藏题目'}</button><button class="ghost mini-btn" id="p-edit-v120" disabled title="本轮总提交结束后可编辑题目">编辑题目</button><button class="ghost mini-btn" id="p-exit" ${locked?'disabled':''}>退出练习</button></div></div>${questionHtml(q,false)}<div class="actions practice-actions-v44"><button class="ghost" id="p-prev" ${locked||practice.idx===0?'disabled':''}>上一题</button><button class="ghost" id="p-next" ${locked||practice.idx===practice.items.length-1?'disabled':''}>下一题</button><button class="primary" id="p-submit-all">${locked?'继续提交':'总提交'}</button></div><p id="p-total-status" role="status">${totalPracticeStatus()}${locked?' · 答案已锁定，请完成自评与保存。':' · 提交前可修改答案。'}</p><div id="p-feedback" role="status"></div><div id="p-ai-v613"></div>${renderTotalPracticeNav()}`;
-  bindOptionSelect('#practice-card',q,()=>!practice.totalLocked);applyAnswerStateV26('#practice-card',q,st.chosen||[]);
+  applyAnswerStateV26('#practice-card',q,st.chosen||[]);
+  const session=practice;
+  const capture=()=>{setPracticeAnswerStateV26(key,{chosen:collectAnswer('#practice-card',q)});$('#p-total-status').textContent=totalPracticeStatus()+' · 提交前可修改答案。';$('#practice-nav-v26').outerHTML=renderTotalPracticeNav();bindPracticeNavV30()};
+  bindAnswerOptionControls('#practice-card',q,practice.idx+1,()=>canEditPracticeOptions(session,key),capture);
   // 草稿属于本轮，不写入学习记录；输入时采集可覆盖切题、收藏重绘和键盘操作。
-  $$('#practice-card input, #practice-card textarea').forEach(input=>{
+  $$('#practice-card .text-answer').forEach(input=>{
     input.disabled=locked;
-    if(!locked){const capture=()=>{setPracticeAnswerStateV26(key,{chosen:collectAnswer('#practice-card',q)});$('#p-total-status').textContent=totalPracticeStatus()+' · 提交前可修改答案。';$('#practice-nav-v26').outerHTML=renderTotalPracticeNav();bindPracticeNavV30()};input.addEventListener('input',capture)}
+    if(!locked)input.addEventListener('input',capture);
   });
   $('#p-favorite').onclick=async()=>{if(await toggleFavoriteV27(q.id,practiceItemBankIdV8916(item)))renderPracticeQuestion()};
   $('#p-prev').onclick=()=>{practice.idx--;renderPracticeQuestion()};$('#p-next').onclick=()=>{practice.idx++;renderPracticeQuestion()};
@@ -8494,6 +8530,7 @@ async function submitTotalPractice(){
   const session=practice;
   // 异步确认期间尚未进入保存事务；本轮临时标记阻止连击排入第二次提交，结束后释放。
   session.confirmingTotal=true;
+  refreshAnswerOptionControls();
   try{
     if(!session.totalLocked){
       if(!await ShirohaDialogs.confirm(`${totalPracticeStatus()}。总提交后不能修改答案；未填写题将按错误计入本轮，简答题需对照参考答案自评。确认总提交？`))return;
@@ -8501,7 +8538,7 @@ async function submitTotalPractice(){
       session.totalLocked=true;
     }
     return continueTotalPractice();
-  }finally{delete session.confirmingTotal}
+  }finally{delete session.confirmingTotal;refreshAnswerOptionControls()}
 }
 function continueTotalPractice(){
   const index=totalPracticePendingSelfIndex();
@@ -8520,7 +8557,7 @@ function renderPracticeQuestion(done=false){
   if(done||practice.idx>=practice.items.length){finishPractice();return}
   const item=currentPracticeItemV8916();const q=practiceQuestionV8916(item);const key=practiceItemKeyV8916(item);const bid=practiceItemBankIdV8916(item);const st=getPracticeAnswerStateV26(key);const fav=isFavoriteV27(q.id,bid);const groupTitle=practice.scopeType==='GROUP'?`${practice.scopeName} · 分组练习`:'刷题练习';
   $('#practice-card').innerHTML=`<div class="practice-focus-head"><b>${esc(groupTitle)}</b><span>${practice.idx+1} / ${practice.items.length}</span><div class="practice-tools-v26"><button class="ghost mini-btn" id="p-favorite">${fav?'取消收藏':'收藏题目'}</button><button class="ghost mini-btn" id="p-edit-v120">编辑题目</button><button class="ghost mini-btn" id="p-exit">退出练习</button></div></div>${questionHtml(q,false)}<div class="actions practice-actions-v44"><button class="ghost" id="p-prev" ${practice.idx===0?'disabled':''}>上一题</button><button class="ghost" id="p-next">${practice.idx>=practice.items.length-1?'完成练习':'下一题'}</button><button class="primary" id="p-submit" ${st.answered||st.revealed?'disabled':''}>提交答案</button><button class="ghost" id="p-reveal" ${st.answered||st.revealed?'disabled':''}>看答案</button></div><div id="p-feedback"></div><div id="p-ai-v613"></div>${renderPracticeNavV26()}<aside class="practice-side-v31">${renderPracticeStatsV30()}</aside>`;
-  bindOptionSelect('#practice-card',q,()=>{const current=getPracticeAnswerStateV26(key);return !current.answered&&!current.revealed});applyAnswerStateV26('#practice-card',q,st.chosen||[]);bindPracticeAnswerDraft(q,key,st);if(st.answered||st.revealed)showAnsweredStateV26(q,st);else renderPracticeAiPanelV613();
+  applyAnswerStateV26('#practice-card',q,st.chosen||[]);bindPracticeAnswerDraft(q,key,st);if(st.answered||st.revealed)showAnsweredStateV26(q,st);else renderPracticeAiPanelV613();
   $('#p-exit').onclick=async ()=>{if(await ShirohaDialogs.confirm('已作答部分会保存为一条记录。',{title:'退出本轮练习？',cancelLabel:'继续练习',acceptLabel:'保存并退出'}))finishPractice(true)};
   $('#p-favorite').onclick=async()=>{if(await toggleFavoriteV27(q.id,bid))renderPracticeQuestion()};
   $('#p-edit-v120').onclick=()=>openPracticeEditQuestionV120();
@@ -8539,7 +8576,12 @@ function bindPracticeNavV30(){$$('#practice-card [data-practice-jump]').forEach(
 function getPracticeAnswerStateV26(id){practice.answerState=practice.answerState||{};return practice.answerState[id]||{chosen:[],answered:false,revealed:false,correct:null}}
 function setPracticeAnswerStateV26(id,next){practice.answerState=practice.answerState||{};practice.answerState[id]={...getPracticeAnswerStateV26(id),...next}}
 function applyAnswerStateV26(root,q,chosen){if(isMultiBlankQuestionV58914(q)){$$(root+' .multi-blank-answer-input-v58914').forEach((input,index)=>{input.value=String((chosen||[])[index]||'')});return}if(isTextType(q.type)){const el=$(root+' .text-answer');if(el)el.value=(chosen||[]).join('；');return}$$(root+' input').forEach(input=>{input.checked=(chosen||[]).includes(input.value)});$$(root+' .option').forEach(o=>o.classList.toggle('selected',o.querySelector('input').checked))}
-function bindPracticeAnswerDraft(q,key,stateValue){if(stateValue.answered||stateValue.revealed)return;$$('#practice-card .options input, #practice-card .text-answer').forEach(input=>{input.oninput=()=>setPracticeAnswerStateV26(key,{chosen:collectAnswer('#practice-card',q)})})}
+function bindPracticeAnswerDraft(q,key,stateValue){
+  const session=practice,capture=()=>setPracticeAnswerStateV26(key,{chosen:collectAnswer('#practice-card',q)});
+  bindAnswerOptionControls('#practice-card',q,practice.idx+1,()=>canEditPracticeOptions(session,key),capture);
+  if(stateValue.answered||stateValue.revealed)return;
+  $$('#practice-card .text-answer').forEach(input=>{input.oninput=capture});
+}
 function renderPracticeNavV26(){const buttons=(practice.items||[]).map((item,i)=>{const q=practiceQuestionV8916(item),st=getPracticeAnswerStateV26(practiceItemKeyV8916(item)),cls=[i===practice.idx?'current':'',st.answered?'done':'',st.correct===true?'ok':st.correct===false?'bad':'',isFavoriteV27(q.id,practiceItemBankIdV8916(item))?'favorite':''].filter(Boolean).join(' ');return `<button type="button" class="${cls}" data-practice-jump="${i}" title="第${i+1}题">${i+1}</button>`}).join('');return `<div id="practice-nav-v26" class="practice-nav-v26"><b>答题卡</b><div class="practice-nav-grid-v26">${buttons}</div></div>`}
 async function submitPractice(item,reveal){return runMutation(async()=>{const q=practiceQuestionV8916(item),key=practiceItemKeyV8916(item);const chosen=collectAnswer('#practice-card',q);if(!hasAnswerValueV58914(chosen)&&!reveal){$('#p-feedback').innerHTML='<div class="feedback warn">请先作答，再提交。</div>';return}if(q.type==='short'){showSubjectiveFeedback(item,chosen,reveal);return}const ok=!reveal&&sameAnswerForQuestion(q,chosen,q.answer);if(!reveal)recordPracticeAnswer(item,chosen,ok);else setPracticeAnswerStateV26(key,{chosen,revealed:true,correct:null});await saveSilent();markOptions('#practice-card',q,chosen);showAnsweredStateV26(q,getPracticeAnswerStateV26(key));refreshPracticeStatsV30();renderStats()});}
 function showAnsweredStateV26(q,st){markOptions('#practice-card',q,st.chosen||[]);$('#p-feedback').innerHTML=`<div class="feedback ${st.revealed?'warn':st.correct?'ok':'bad'}"><b>${st.revealed?'已显示参考答案':st.correct?'✓ 回答正确':'✕ 这题要再看一遍'}</b>${isMultiBlankQuestionV58914(q)?renderMultiBlankComparisonV58914(q.blankAnswers,st.chosen||[],true):'｜'+feedbackAnswerHtmlV58914(q,st.chosen||[])}${q.analysis?'<br>解析：'+renderQuestionContent(q.analysis):''}</div>`;const sub=$('#p-submit'),rev=$('#p-reveal');if(sub)sub.disabled=true;if(rev)rev.disabled=true;renderPracticeAiPanelV613()}
@@ -9500,7 +9542,12 @@ function renderExamPaper(){
   };
   bindExamAnswerCardV30();
   bindFocusRailToggleV34();
-  $$('#exam-card .option').forEach(opt=>{opt.onclick=()=>setTimeout(()=>{const box=opt.closest('.exam-q');const id=box.dataset.qid;exam.answers[id]=selectedKeys(`[data-qid="${CSS.escape(id)}"]`);box.querySelectorAll('.option').forEach(o=>o.classList.toggle('selected',o.querySelector('input').checked));refreshExamAnswerCardV30();},0)});
+  const session=exam;
+  exam.items.forEach((item,index)=>{
+    const q=examQuestionV113(item),key=examItemKeyV113(item),root=`#exam-card [data-qid="${CSS.escape(key)}"]`;
+    applyAnswerStateV26(root,q,exam.answers[key]||[]);
+    bindAnswerOptionControls(root,q,index+1,()=>exam===session&&!session.submitted&&!mutationBusy,()=>{session.answers[key]=collectAnswer(root,q);refreshExamAnswerCardV30()});
+  });
   $$('#exam-card .text-answer').forEach(el=>{el.oninput=()=>{const box=el.closest('.exam-q');if(box){const item=examItemByKeyV113(box.dataset.qid);if(item)exam.answers[box.dataset.qid]=collectTextAnswerFromElementV58914(box,examQuestionV113(item));refreshExamAnswerCardV30();}}});
 }
 function examAnsweredCountV30(){return (exam.items||[]).filter(item=>hasAnswerValueV58914((exam.answers||{})[examItemKeyV113(item)]||[])).length;}
@@ -9706,7 +9753,7 @@ function platformStatus(message,failed=false){
   el.textContent=message;el.className='platform-status'+(failed?' failed':'');el.hidden=!message;
   if(failed&&retryMutation){const retry=document.createElement('button');retry.textContent='重试';retry.onclick=()=>retryMutation();el.appendChild(retry)}
 }
-function lockApplication(locked){document.querySelector('.app')?.toggleAttribute('inert',locked);document.body.dataset.storageState=locked?'pending':'ready'}
+function lockApplication(locked){document.querySelector('.app')?.toggleAttribute('inert',locked);document.body.dataset.storageState=locked?'pending':'ready';refreshAnswerOptionControls()}
 function mutationCheckpoint(roots){
   const seen=new Set(),entries=[];
   const visit=value=>{if(!value||typeof value!=='object'||seen.has(value)||(!Array.isArray(value)&&Object.getPrototypeOf(value)!==Object.prototype))return;seen.add(value);const fields=Object.entries(value);entries.push({value,fields,length:Array.isArray(value)?value.length:null});fields.forEach(([,child])=>visit(child))};

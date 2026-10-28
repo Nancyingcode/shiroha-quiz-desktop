@@ -358,6 +358,23 @@ td{
   flex-wrap:wrap;
   margin-bottom:8px
 }
+.answer-options-tools{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  flex-wrap:wrap;
+  gap:8px;
+  margin-top:12px;
+  color:var(--muted)
+}
+.answer-options-status{
+  margin:4px 0;
+  color:var(--muted);
+  font-size:13px
+}
+.answer-options-status:empty{
+  margin:0
+}
 .option{
   display:flex;
   gap:10px;

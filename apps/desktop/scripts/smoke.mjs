@@ -615,7 +615,7 @@ async function focusVisualSmoke(runtime, mode) {
       const question = page.locator(`#${mode}-card .question-title`).first();
       await question.scrollIntoViewIfNeeded();
       assert.match(await question.innerText(), /TAURI PROTOTYPE 1\+1 = \?/);
-      const controls = mode === 'practice' ? ['#p-submit', '#p-exit'] : ['#exam-submit-focus', '#exam-exit-focus'];
+      const controls = mode === 'practice' ? ['#p-submit', '#p-exit', '[data-clear-answer-options]'] : ['#exam-submit-focus', '#exam-exit-focus', '[data-clear-answer-options]'];
       for (const selector of controls) {
         const control = page.locator(selector);
         await control.scrollIntoViewIfNeeded();
@@ -666,6 +666,11 @@ async function practiceAndExamFocusSmoke(runtime) {
   await page.locator('#exam-minutes').fill('0');
   await page.locator('#exam-type').selectOption('all');
   await page.locator('#start-exam-btn').click();
+  const examOption = page.locator('#exam-card .option[data-key="A"]').first();
+  await examOption.click();
+  await page.locator('[data-clear-answer-options]').click();
+  assert.equal(await page.locator('#exam-card input:checked, #exam-card .option.selected').count(), 0);
+  assert.match(await page.locator('#exam-answer-card-v30').innerText(), /已答 0 \/ 1，未答 1/);
   const exam = await focusVisualSmoke(runtime, 'exam');
   await page.locator('#exam-exit-focus').click();
   await page.locator('#app-dialog [data-dialog-accept]').click();
@@ -787,6 +792,16 @@ async function practiceImportedBank(page, bankName) {
 async function practiceDeselectSmoke(page) {
   const option = page.locator('#practice-card .option[data-key="A"]');
   const input = option.locator('input');
+  const clear = page.getByRole('button', { name: '清空第 1 题选项', exact: true });
+  assert(await clear.isDisabled());
+  await option.click();
+  assert(!(await clear.isDisabled()));
+  await clear.focus();
+  await page.keyboard.press('Enter');
+  assert(!(await input.isChecked()));
+  assert(await clear.isDisabled());
+  assert.equal(await input.evaluate(node => node === document.activeElement), true);
+  assert.match(await page.locator('[data-answer-options-status]').innerText(), /已清空本题选项/);
   for (const target of [option.locator('.option-text'), input]) {
     await target.click();
     assert(await input.isChecked());
