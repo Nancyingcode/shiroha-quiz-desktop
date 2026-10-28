@@ -120,6 +120,26 @@ test('跨题库同 ID 保持独立练习标识和错题状态', () => {
   assert.equal(api.getWrongEntries('bank-a').find(entry => entry.id === 'same-id').status, '已掌握');
 });
 
+test('错题保存错误选择副本，正确复习不覆盖，重新答错更新且跨库隔离', () => {
+  const initial = webState();
+  initial.wrongBook = {};
+  const { api } = loadWeb({ state: initial });
+  const chosen = ['B'];
+  api.addWrong('same-id', 'bank-a', chosen);
+  chosen.push('C');
+  assert.deepEqual(plain(api.getWrongEntries('bank-a')[0].lastAnswer), ['B']);
+  api.markRight('same-id', 'bank-a');
+  assert.deepEqual(plain(api.getWrongEntries('bank-a')[0].lastAnswer), ['B']);
+  api.addWrong('same-id', 'bank-b', ['A']);
+  assert.deepEqual(plain(api.getWrongEntries('bank-b')[0].lastAnswer), ['A']);
+  api.addWrong('same-id', 'bank-a', ['C', 'D']);
+  assert.deepEqual(plain(api.getWrongEntries('bank-a')[0].lastAnswer), ['C', 'D']);
+  const restored = loadWeb({ state: api.snapshot() }).api;
+  assert.deepEqual(plain(restored.getWrongEntries('bank-a')[0].lastAnswer), ['C', 'D']);
+  api.addWrong('same-id', 'bank-a', []);
+  assert.deepEqual(plain(api.getWrongEntries('bank-a')[0].lastAnswer), []);
+});
+
 test('现有富文本公式和所有可显示图片位置保持在解析后的题目文本中', () => {
   const { api } = loadWeb();
   const question = api.normalizeQuestion(questions()[6]);
