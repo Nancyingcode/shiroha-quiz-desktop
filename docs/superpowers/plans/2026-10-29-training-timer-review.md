@@ -36,5 +36,9 @@
 
 - 目标为 `E:/Projects/shiroha-quiz-desktop` 的本地 `main`，合并前工作树干净，起点为 `e4595e3b59e13244c0e2284677bdf9fdcd911ce3`。
 - 主线新增 Windows Release 工作流、脚本、测试和说明；业务源码与本任务没有重叠，桌面说明的不同段落保留两方修改。
-- 在来源任务分支独立提交，再使用当前工作树的 `codex/integrate-training-review` 完成整合与联合检查；提交和最终验证结果在合入前补充。
+- 来源任务提交：`03a2395e15134a13aa3c82f85e406aa73d196e19`（`feat(training): 增加刷题计时暂停与完整训练复盘`），保留 `codex/web-training-review` 分支。
+- 整合提交：`1629c46f875f2ab982ffebafc4879344d4777688`（`chore(merge): 整合训练复盘与 Windows Release 支持`），位于当前工作树的 `codex/integrate-training-review`。自动合并说明文档，无内容冲突，无需业务修复或联合适配提交。
+- 整合后验证：`npm test` 桌面 99 项、共享 222 项全部通过，包含主线新增的发布测试；`npm run typecheck`、`npm run lint`、8 份整合相关文档的 UTF-8/围栏/本地链接检查和 `git diff --check` 均通过。
+- 通过 Git 树差异确认，整合与来源任务在 `apps/web`、桌面 frontend、Rust/Cargo、依赖清单/锁文件、资源生成器和桌面 smoke 上完全一致；此前的 Rust 检查、生产/隔离构建、77 项浏览器回归与 38 项 WebView2 验收对应同一运行时源码。主线新增的发布脚本与 CI 通过此次联合检查覆盖。
+- 合入前再次确认 `main` 主工作树干净，目标仍为上述起点；使用快进接收已验证整合与本验证记录提交，最终 main SHA 在交付报告列出。
 - 不推送、不发布、不删除来源分支或工作树，不改写已合入的历史。
