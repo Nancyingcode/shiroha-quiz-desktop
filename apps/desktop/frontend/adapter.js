@@ -164,7 +164,7 @@
         Object.assign(bank,{questions:bank.questions.map(q=>replacements.get(q.id)||q)});
         Object.assign(previous,{questions:previous.questions.map(q=>structuredClone(replacements.get(q.id)||q))});
       }
-      const keys=['id','mode','name','bankName','date','total','answered','correct','wrong','accuracy','score','totalScore','passScore','passed','duration','scopeType'];
+      const keys=['id','mode','name','bankName','date','total','answered','correct','wrong','accuracy','score','totalScore','passScore','passed','duration','scopeType','reviewSummary'];
       const summaries=new Map();
       for(const record of snapshot.records)if(loadedRecords.has(record.id)&&equal(record,baseline.records.find(r=>r.id===record.id))){summaries.set(record.id,Object.fromEntries(Object.entries(record).filter(([key])=>keys.includes(key))));loadedRecords.delete(record.id);}
       Object.assign(snapshot,{records:snapshot.records.map(r=>summaries.get(r.id)||r)});

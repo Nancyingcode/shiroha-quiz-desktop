@@ -23,7 +23,25 @@ export interface Question extends JsonObject {
   readonly answer: readonly string[];
 }
 export interface Bank extends JsonObject { readonly id: string; readonly name: string; readonly questions: readonly Question[] }
-export interface StudyRecord extends JsonObject { readonly id: string }
+export interface TrainingReviewSummary extends JsonObject {
+  readonly version: 1;
+  readonly completion: 'completed' | 'ended_early';
+  readonly submitMode: 'single' | 'total' | 'exam';
+  readonly timing: 'active' | 'wall';
+  readonly unanswered: number;
+}
+export interface TrainingReview extends JsonObject {
+  readonly version: 1;
+  readonly completion: 'completed' | 'ended_early';
+  readonly submitMode: 'single' | 'total' | 'exam';
+  readonly timing: 'active' | 'wall';
+  readonly items: readonly JsonObject[];
+}
+export interface StudyRecord extends JsonObject {
+  readonly id: string;
+  readonly review?: TrainingReview;
+  readonly reviewSummary?: TrainingReviewSummary;
+}
 export interface Snapshot extends JsonObject {
   readonly schemaVersion: 1;
   readonly banks: readonly Bank[];

@@ -437,12 +437,14 @@ async function scrollbarSmoke(page) {
       const thumb = window.getComputedStyle(element, '::-webkit-scrollbar-thumb');
       const track = window.getComputedStyle(element, '::-webkit-scrollbar-track');
       const button = window.getComputedStyle(element, '::-webkit-scrollbar-button');
-      return { element: element.tagName, width: Number.parseFloat(scrollbar.width), color: thumb.backgroundColor, radius: Number.parseFloat(thumb.borderRadius), track: track.backgroundColor, buttonDisplay: button.display };
+      return { element: element.tagName, width: Number.parseFloat(scrollbar.width), inset:Number.parseFloat(thumb.borderLeftWidth), clip:thumb.backgroundClip, color: thumb.backgroundColor, radius: Number.parseFloat(thumb.borderRadius), track: track.backgroundColor, buttonDisplay: button.display };
     }));
     for (const style of styles) {
-      assert(style.width > 0 && style.width <= 10, `${style.element} 滚动条过宽或被隐藏`);
-      const channels = style.color.match(/[\d.]+/g)?.map(Number).slice(0, 3) ?? [];
-      assert(channels.length === 3 && Math.min(...channels) >= 150 && Math.max(...channels) <= 230 && Math.max(...channels) - Math.min(...channels) <= 20, `${style.element} 滑块未使用浅灰色`);
+      assert.equal(style.width,12,`${style.element} 滚动条未保留完整拖动区域`);
+      assert.equal(style.width-style.inset*2,4,`${style.element} 可见滑块宽度不正确`);
+      assert.equal(style.clip,'content-box');
+      const channels = style.color.match(/[\d.]+/g)?.map(Number) ?? [];
+      assert(channels.length===4&&channels[0]<channels[2]&&channels[3]>=0.3&&channels[3]<=0.6,`${style.element} 滑块未使用半透明灰蓝色`);
       assert(style.radius > 0, `${style.element} 滑块缺少圆角`);
       assert(['transparent', 'rgba(0, 0, 0, 0)'].includes(style.track), `${style.element} 滚动轨道不透明`);
       assert.equal(style.buttonDisplay, 'none', `${style.element} 滚动条仍显示箭头按钮`);
@@ -451,12 +453,17 @@ async function scrollbarSmoke(page) {
     await input.hover();
     await page.mouse.wheel(0, 360);
     await page.waitForFunction(() => (document.getElementById('import-text')?.scrollTop ?? 0) > 0);
+    await input.evaluate(node=>{node.scrollTop=0});
+    const bounds=await input.boundingBox();assert(bounds);
+    await page.mouse.move(bounds.x+bounds.width-6,bounds.y+18);await page.mouse.down();
+    await page.mouse.move(bounds.x+bounds.width-6,bounds.y+80,{steps:8});await page.mouse.up();
+    await page.waitForFunction(()=>(document.getElementById('import-text')?.scrollTop??0)>0);
     await page.evaluate(() => window.scrollTo(0, 0));
     const viewport = page.viewportSize() ?? await page.evaluate(() => ({ width: window.innerWidth, height: window.innerHeight }));
     await page.mouse.move(viewport.width - 30, viewport.height / 2);
     await page.mouse.wheel(0, 360);
     await page.waitForFunction(() => (document.scrollingElement?.scrollTop ?? 0) > 0);
-    return { styles, pageScrolled: true, textareaScrolled: true };
+    return { styles, pageScrolled: true, textareaScrolled: true, thumbDragged:true };
   } finally {
     await input.fill(original);
     await page.evaluate(top => window.scrollTo(0, top), scrollTop);
@@ -844,8 +851,9 @@ async function importAndPractice(page, bankName, analysisText = '1 + 1 = 2') {
   return { ...result, deselect: true, screenshot: SCREENSHOT_PATH };
 }
 
-/** @param {Page} page @param {string} bankName @param {string} origin */
-async function totalPracticeSmoke(page, bankName, origin) {
+/** @param {Runtime} runtime @param {string} bankName @param {string} origin */
+async function totalPracticeSmoke(runtime, bankName, origin) {
+  const {page}=runtime;
   await page.locator('.nav[data-view="ai-settings"]').click();
   await page.locator('#ai-provider-v99').selectOption('custom');
   await page.locator('#ai-endpoint-v99').fill(origin + '/practice-analysis');
@@ -859,6 +867,19 @@ async function totalPracticeSmoke(page, bankName, origin) {
   await practiceImportedBank(page, bankName);
   await practiceDeselectSmoke(page);
   await page.locator('#practice-card .option[data-key="B"]').click();
+  await page.locator('#p-pause').click();
+  const pausedTime=await page.locator('#practice-pause-time').innerText();
+  await delay(1100);
+  assert.equal(await page.locator('#practice-pause-time').innerText(),pausedTime);
+  await page.keyboard.press('ArrowRight');
+  await page.locator('#practice-resume').click();
+  assert(await page.locator('#practice-card .option[data-key="B"] input').isChecked());
+  await page.locator('#desktop-window-minimize').click();
+  assert.equal((await nativeWindowState(runtime)).minimized,true);
+  await nativeWindowState(runtime,true);
+  await page.locator('#practice-pause-dialog[open]').waitFor();
+  await page.locator('#practice-resume').click();
+  assert(await page.locator('#practice-card .option[data-key="B"] input').isChecked());
   assert.equal(await page.locator('#p-reveal, #p-submit').count(), 0);
   await page.locator('[data-ai-single-open-v613]').click();
   await page.waitForFunction(() => document.querySelector('#p-ai-v613')?.textContent?.includes('NATIVE_PRACTICE_AI'));
@@ -875,6 +896,12 @@ async function totalPracticeSmoke(page, bankName, origin) {
   assert.deepEqual(await page.locator('#p-wrong-overview .option-text').allTextContents(), ['2', '3']);
   assert.match(await page.locator('#p-wrong-overview .option.wrong').innerText(), /✕ 当时选择/);
   await page.screenshot({ path: path.join(path.dirname(SCREENSHOT_PATH), 'practice-wrong-overview.png'), fullPage: true });
+  await page.locator('#practice-review-result').click();
+  await page.locator('#training-question .option.wrong[data-key="B"]').waitFor();
+  assert.equal(await page.locator('#training-question .option.correct').getAttribute('data-key'),'A');
+  assert.equal(await page.locator('#training-question .training-reference-answer').evaluate(node=>window.getComputedStyle(node).color),'rgb(35, 114, 79)');
+  await page.screenshot({path:path.join(path.dirname(SCREENSHOT_PATH),'training-review.png'),fullPage:true});
+  await page.locator('#training-review-back').click();
   await page.locator('#again-practice').click();
   await page.locator('#practice-card .option[data-key="A"]').click();
   await page.locator('#p-submit-all').click();
@@ -891,7 +918,7 @@ async function totalPracticeSmoke(page, bankName, origin) {
   assert.equal(await originalWrong.locator('.option.wrong').getAttribute('data-key'), 'B');
   assert.equal(await originalWrong.locator('.review-answer-wrong .review-answer-value').innerText(), 'B');
   await page.screenshot({ path: path.join(path.dirname(SCREENSHOT_PATH), 'wrongbook-original-choice.png'), fullPage: true });
-  return { mode: 'total', answered: 1, nativeAi: true, wrongOverview: true, allCorrect: true, saved: true, originalWrongChoiceAfterReload: true };
+  return { mode: 'total', answered: 1, nativeAi: true, wrongOverview: true, allCorrect: true, saved: true, originalWrongChoiceAfterReload: true, pausePreservedAnswer:true, minimizePause:true, fullReview:true };
 }
 
 /** @param {Page} page */
@@ -957,6 +984,7 @@ async function main() {
   process.once('SIGINT', interrupt); process.once('SIGTERM', interrupt);
   /** @param {string} name @param {() => Promise<unknown>} action */
   const check = async (name, action) => {
+    console.log('正在验证：'+name);
     try { checks.push({ name, ok: true, detail: await deadline(action(), RESOURCE_TIMEOUT_MS) }); }
     catch (error) { checks.push({ name, ok: false, error: errorText(error) }); }
   };
@@ -1057,7 +1085,7 @@ async function main() {
     await check('界面导入题库并练习', () => importAndPractice(page, bankName));
     await check('练习与考试专注布局、进入及退出', () => practiceAndExamFocusSmoke(visualRuntime));
     await check('总提交错题对照、答题 AI 与原生记录保存', async () => {
-      const result = await totalPracticeSmoke(page, bankName, networkMock.origin);
+      const result = await totalPracticeSmoke(visualRuntime, bankName, networkMock.origin);
       assert(networkMock.requests.some(request => request.url === '/practice-analysis' && request.authenticated), '答题 AI 未通过原生请求使用隔离假凭据');
       return result;
     });
@@ -1111,6 +1139,16 @@ async function main() {
       }, marker);
       assert.deepEqual(restarted.errors, [], '重启出现 JS 错误');
       return { persisted: true };
+    });
+    await check('重启后复盘快照按需读取且保留原错选答案',async()=>{
+      const page=restarted.page;
+      await page.locator('.nav[data-view="records"]').click();
+      await page.locator('#records .record-item').filter({hasText:/错误[1-9]/}).first().locator('[data-training-review]').click();
+      await page.locator('#training-question .option.wrong[data-key="B"]').waitFor();
+      assert.equal(await page.locator('#training-question .option.correct').getAttribute('data-key'),'A');
+      await page.locator('#training-review-back').click();
+      await page.locator('.nav[data-view="dashboard"]').click();
+      return {persisted:true,lazyReview:true};
     });
     await check('重启后题库仍可练习', async () => {
       const result = await practiceImportedBank(restarted.page, bankName);

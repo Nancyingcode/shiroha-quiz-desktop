@@ -9,7 +9,7 @@ const rules = {
 
 export default [
   {
-    files: ['apps/web/platform/**/*.js', 'apps/desktop/frontend/**/*.js'],
+    files: ['apps/web/platform/**/*.js', 'apps/web/training.js', 'apps/desktop/frontend/**/*.js'],
     languageOptions: {
       ecmaVersion: 'latest',
       sourceType: 'module',

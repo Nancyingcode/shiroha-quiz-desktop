@@ -12,7 +12,7 @@ const root = path.resolve(desktop, '../..');
 
 test('browser boundaries reject Node globals and var in Web and desktop frontend', async () => {
   const lint = new ESLint({ cwd: root, overrideConfigFile: path.join(desktop, 'eslint.platform.config.mjs') });
-  for (const filePath of ['apps/web/platform/probe.js', 'apps/desktop/frontend/probe.js']) {
+  for (const filePath of ['apps/web/platform/probe.js', 'apps/web/training.js', 'apps/desktop/frontend/probe.js']) {
     const [valid] = await lint.lintText('window.document.title = "测试";', { filePath });
     assert.equal(valid.errorCount, 0);
     assert.equal(valid.warningCount, 0, '边界文件不能被忽略');
@@ -33,6 +33,7 @@ test('platform lint accepts a CSS-only desktop frontend and still checks nested 
   const script = path.join(temporary, 'apps/desktop/scripts/lint-platform.mjs');
   await copyFile(path.join(desktop, 'scripts/lint-platform.mjs'), script);
   await copyFile(path.join(desktop, 'eslint.platform.config.mjs'), path.join(temporary, 'apps/desktop/eslint.platform.config.mjs'));
+  await copyFile(path.join(root, 'apps/web/training.js'), path.join(temporary, 'apps/web/training.js'));
   await writeFile(path.join(temporary, 'apps/web/platform/probe.js'), 'window.document.title = "测试";');
   await writeFile(path.join(temporary, 'test/dual-platform/probe.cjs'), 'console.log("fixture");');
   await writeFile(path.join(temporary, 'apps/desktop/frontend/desktop.css'), 'body { color: #223344; }');

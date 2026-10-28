@@ -35,6 +35,95 @@ async function pageFor(t, raw, injection = '') {
 }
 const saved = page => page.evaluate(key => globalThis.localStorage.getItem(key), KEY);
 
+for (const mode of ['single', 'total']) test(`训练计时：${mode} 暂停保留作答、阻止快捷键并恢复焦点`, async t => {
+  const initial = webState(); initial.records = [];
+  initial.banks = [initial.banks[0]]; initial.banks[0].questions = initial.banks[0].questions.filter(q => q.type === 'single').slice(0, 1);
+  const page = await pageFor(t, JSON.stringify(initial)); page.setDefaultTimeout(3000);
+  await page.locator('.nav[data-view="practice"]').click();
+  await page.locator('#practice-submit-mode').selectOption(mode);
+  await page.locator('#start-practice-btn').click();
+  await page.locator('.toast-item button').evaluateAll(buttons=>buttons.forEach(button=>button.click()));
+  await page.locator('#practice-card .option[data-key="B"]').click();
+  await page.locator('#p-pause').click();
+  const time = await page.locator('#practice-pause-time').textContent();
+  await page.keyboard.press('2'); await page.keyboard.press('ArrowRight');
+  assert.equal(await page.locator('#practice-pause-time').textContent(), time);
+  await page.locator('#practice-resume').click();
+  assert(await page.locator('#practice-card input[value="B"]').isChecked());
+  assert(await page.locator('#p-pause').evaluate(node => node === globalThis.document.activeElement));
+  await page.locator('#p-pause').click(); await page.keyboard.press('Escape');
+  assert.equal(await page.locator('#practice-pause-dialog').count(), 0);
+});
+
+test('训练复盘：提前结束保留全部快照，选错与未答可筛选，重开后仍能复盘', async t => {
+  const initial = webState(); initial.records = [];
+  const q = initial.banks[0].questions.find(value => value.type === 'single');
+  initial.banks = [initial.banks[0]];
+  initial.banks[0].questions = Array.from({length:12}, (_, i) => ({...q,id:'training-'+i,question:'历史快照第'+(i+1)+'题',answer:['A']}));
+  const page = await pageFor(t, JSON.stringify(initial)); page.setDefaultTimeout(5000);
+  await page.locator('.nav[data-view="practice"]').click();
+  await page.locator('#practice-limit').selectOption('all'); await page.locator('#start-practice-btn').click();
+  await page.locator('.toast-item button').evaluateAll(buttons=>buttons.forEach(button=>button.click()));
+  await page.locator('#practice-card .option[data-key="B"]').click(); await page.locator('#p-submit').click();
+  await page.locator('#p-exit').click(); await page.locator('#practice-review-result').click();
+  assert.match(await page.locator('#training-review').textContent(), /提前结束/);
+  await page.locator('[data-training-filter="wrong"]').click();
+  assert.match(await page.locator('#training-question .option.wrong').textContent(), /B/);
+  assert.match(await page.locator('#training-question .option.correct').textContent(), /A/);
+  await page.locator('[data-training-filter="unanswered"]').click();
+  assert.match(await page.locator('#training-question').textContent(), /未作答/);
+  await page.locator('[data-training-filter="all"]').click();
+  await page.locator('#training-answer-card-pager .is-wide [aria-label="下一页"]').click();
+  await page.locator('[data-training-question="11"]').click();
+  assert.match(await page.locator('#training-question').textContent(), /历史快照第12题/);
+  await page.setViewportSize({width:320,height:900});
+  const layout=await page.locator('#training-review-content').evaluate(node=>({width:node.clientWidth,scrollWidth:node.scrollWidth}));
+  assert(layout.scrollWidth<=layout.width+1,'320px 复盘内容不能水平溢出');
+  await page.setViewportSize({width:1280,height:720});
+  await page.locator('#training-review-back').click();
+  await page.waitForFunction(()=>globalThis.document.activeElement?.id==='practice-review-result');
+  const snapshot = JSON.parse(await saved(page));
+  assert.equal(snapshot.records[0].details.length,1);
+  assert.equal(snapshot.records[0].review.items.length,12);
+  snapshot.banks[0].questions = [];
+  await page.evaluate(({key,value})=>globalThis.localStorage.setItem(key,JSON.stringify(value)),{key:KEY,value:snapshot});
+  await page.reload(); await page.locator('.nav[data-view="records"]').click();
+  await page.locator('#records [data-training-review]').first().click();
+  assert.match(await page.locator('#training-question').textContent(), /历史快照第1题/);
+});
+
+for(const mode of ['single','total']) test(`训练计时：${mode} 设置往返暂停、保存失败重试保持冻结用时`, async t => {
+  const initial = webState(); initial.records = [];
+  initial.settings.aiImportV99={};
+  initial.banks = [initial.banks[0]]; initial.banks[0].questions = [initial.banks[0].questions[0]];
+  const page = await pageFor(t, JSON.stringify(initial)); page.setDefaultTimeout(5000);
+  await page.clock.install();
+  await page.locator('.nav[data-view="practice"]').click(); await page.locator('#practice-submit-mode').selectOption(mode); await page.locator('#start-practice-btn').click();
+  await page.locator('.toast-item button').evaluateAll(buttons=>buttons.forEach(button=>button.click()));
+  await page.locator('#practice-card .option[data-key="B"]').click();
+  await page.clock.fastForward(2000);
+  await page.locator('[data-ai-single-open-v613]').click();await page.locator('[data-ai-single-settings-v613]').click(); await page.clock.fastForward(60000);
+  await page.locator('.nav[data-view="practice"]').click();
+  assert.equal(await page.locator('#practice-pause-time').textContent(),'00:02');
+  await page.locator('#practice-resume').click();
+  assert(await page.locator('#practice-card input[value="B"]').isChecked());
+  assert(!(await page.locator('#practice-card input[value="B"]').isDisabled()));
+  await page.evaluate(()=>{const write=globalThis.ShirohaPlatform.storage.write;globalThis.__resumeTrainingWrite=()=>{globalThis.ShirohaPlatform.storage.write=write};globalThis.ShirohaPlatform.storage.write=async()=>{throw new Error('Synthetic training failure')};});
+  await page.clock.fastForward(1000);
+  await page.locator(mode==='single'?'#p-next':'#p-submit-all').click();
+  await page.locator('#platform-status.failed button').waitFor();
+  assert(await page.locator('#practice-card input[value="B"]').isDisabled());
+  assert.equal(JSON.parse(await saved(page)).records.length,0);
+  await page.clock.fastForward(120000);
+  await page.evaluate(()=>globalThis.__resumeTrainingWrite());
+  await page.locator('#platform-status button').click();
+  await page.locator('#practice-review-result').waitFor();
+  const record=JSON.parse(await saved(page)).records[0];
+  assert.equal(record.duration,3);
+  assert.equal(record.reviewSummary.unanswered,mode==='single'?1:0);
+  assert.equal(JSON.parse(await saved(page)).records.length,1);
+});
+
 for (const mode of ['single', 'total', 'exam']) for (const type of ['single', 'multiple', 'judge']) test(`清空选项：${mode} ${type} 同步草稿、统计与键盘焦点`, async t => {
   const initial = webState();
   const question = initial.banks[0].questions.find(value => value.type === type);
@@ -899,7 +988,7 @@ test('题库删除：进行中练习阻止删除和编辑绕过，其他题库�
   await page.locator('body[data-storage-state="ready"]').waitFor();
   assert.equal(JSON.parse(await saved(page)).banks[1].questions.length,0);
   await page.locator('[data-openbank="bank-a"]').click();
-  await page.locator('.nav[data-view="practice"]').click();await page.locator('#p-next').click();
+  await page.locator('.nav[data-view="practice"]').click();await page.locator('#practice-resume').click();await page.locator('#p-next').click();
   await page.locator('body[data-storage-state="ready"]').waitFor();
   await page.locator('.nav[data-view="banks"]').dispatchEvent('click');
   await page.locator('[data-delete-bank-question="same-id"]').click();

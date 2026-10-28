@@ -101,6 +101,24 @@ fn summary_and_batch_details_preserve_scope_without_loading_bodies() {
 }
 
 #[test]
+fn training_summary_preserves_metadata_and_loads_review_only_on_demand() {
+    let f = Fixture::new();
+    let mut data = snapshot();
+    let metadata = json!({"version":1,"completion":"ended_early","submitMode":"single","timing":"active","unanswered":1});
+    data["records"] = json!([{"id":"training","reviewSummary":metadata,"review":{"version":1,"items":[{"question":{"id":"q","question":"historical question","options":[],"answer":[]}}]},"details":[]}]);
+    let mut store = Store::open(&f.0).unwrap();
+    store.write("training", 0, &data).unwrap();
+    let summary = store.summary().unwrap().unwrap();
+    assert_eq!(summary["records"][0]["reviewSummary"], metadata);
+    assert!(summary["records"][0].get("review").is_none());
+    let details = store
+        .details("records", "", &["training".into()], 1)
+        .unwrap();
+    assert_eq!(details[0]["review"], data["records"][0]["review"]);
+    assert_eq!(store.read().unwrap(), Some(data));
+}
+
+#[test]
 fn persists_rich_fields_and_deduplicates_operations_after_restart() {
     let f = Fixture::new();
     let mut store = Store::open(&f.0).unwrap();
