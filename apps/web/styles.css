@@ -7852,6 +7852,9 @@ body.practice-focus.practice-rail-collapsed-v34 #practice-card > .practice-side-
 .bank-detail-toolbar{position:relative;z-index:2;border-bottom:1px solid var(--line)}
 .bank-detail-toolbar button:focus-visible{outline:2px solid #2457a7;outline-offset:3px}
 #bank-preview th:last-child,#bank-preview > tbody > tr:not(#bank-question-detail) > td:last-child{min-width:108px}
+#bank-preview > thead > tr > :is(:nth-child(3),:nth-child(6),:nth-child(7),:nth-child(8)),
+#bank-preview > tbody > tr:not(#bank-question-detail) > :is(:nth-child(3),:nth-child(6),:nth-child(7),:nth-child(8)){width:1%;white-space:nowrap}
+#bank-preview [data-delete-bank-question]{white-space:nowrap}
 #bank-preview [data-preview-question],#bank-preview [data-preview-full]{white-space:nowrap}
 .bank-detail{position:sticky;left:0;box-sizing:border-box;max-width:100%}
 

@@ -1073,6 +1073,7 @@ async function main() {
         const host=(/** @type {NativeTestWindow} */(window)).ShirohaDesktopHost;if(!host)throw new Error('bridge');
         const current=/** @type {{revision:number}} */(await host.invoke('local_initialize'));
         const banks=['lazy-a','lazy-b'].map(id=>({id,name:id,groupName:'C8',questions:Array.from({length:65},(_,i)=>({id:'q'+i,number:i+1,type:'single',question:id+' 正文 '+i,options:[{key:'A',text:'正确'},{key:'B',text:'错误'}],answer:['A'],extension:{preserved:true}}))}));
+        Object.assign(banks[0].questions[0],{category:'较长的分类名称：综合基础知识',score:12.5});
         await host.invoke('local_replace',{operationId:'lazy-fixture',expectedRevision:current.revision,snapshot:{schemaVersion:1,banks,activeBankId:'lazy-a',wrongBook:{},favorites:{},records:[{id:'old-record',mode:'practice',name:'历史记录',bankName:'已删除题库',date:'2026-10-23T00:00:00Z',total:1,answered:1,correct:0,wrong:1,accuracy:0,duration:1,details:[{question:'已删除题目的历史正文',type:'single',chosen:['B'],answer:['A'],correct:false}]}],settings:{},crossPlatformMeta:{}}});
       });
       await migratedRestart.page.addInitScript(()=>{
@@ -1136,6 +1137,39 @@ async function main() {
         if(data.banks.some(bank=>bank.questions.some(q=>!q.question||!q.extension)))throw new Error('完整导出缺失正文或扩展');
       });
       return {questions:130,pageSize:50,lastPage:15,initialBodies:0,crossBankIdentity:true};
+    });
+    await check('题库预览四列文字与操作按钮保持单行',async()=>{
+      const page=migratedRestart.page;
+      const original=await page.evaluate(()=>({width:window.innerWidth,height:window.innerHeight}));
+      await page.reload();await page.locator('body[data-storage-state="ready"]').waitFor();
+      await page.locator('.nav[data-view="banks"]').click();
+      await page.locator('#bank-preview').getByText('较长的分类名称：综合基础知识',{exact:true}).waitFor();
+      try {
+        for(const size of VISUAL_WINDOW_SIZES){
+          await resizeTestWindow(migratedRestart,size);
+          const failures=await page.locator('#bank-preview').evaluate(table=>{
+            const failures=[];
+            for(const row of /** @type {HTMLTableElement} */(table).rows){
+              for(const index of [2,5,6,7]){
+                const cell=row.cells[index];
+                if(!cell)continue;
+                const nodes=index===7&&cell.querySelector('button')?[...cell.querySelectorAll('button')]:[cell];
+                const tops=new Set();
+                for(const node of nodes){
+                  const range=document.createRange();range.selectNodeContents(node);
+                  for(const rect of range.getClientRects())tops.add(Math.round(rect.top));
+                }
+                if(tops.size>1||cell.scrollWidth>cell.clientWidth+1)failures.push(cell.textContent);
+              }
+            }
+            return failures;
+          });
+          assert.deepEqual(failures,[],size.name);
+          await page.locator('#bank-preview thead').scrollIntoViewIfNeeded();
+          await page.screenshot({path:path.join(path.dirname(SCREENSHOT_PATH),`bank-preview-${size.name}.png`)});
+        }
+      } finally { await resizeTestWindow(migratedRestart,original); }
+      return {sizes:VISUAL_WINDOW_SIZES};
     });
     await check('题库试题跨页批量删除、未加载正文保全与持久化',async()=>{
       const page=migratedRestart.page;

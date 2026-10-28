@@ -51,6 +51,36 @@ test('错题本显示完整题干、全部选项和已保存的错选标记', as
   assert.equal(await card.locator('input').count(), 0);
 });
 
+test('题库预览的题型、分类、分值与操作在宽窄窗口均保持单行', async t => {
+  const initial = webState();
+  initial.banks[0].questions[0].category = '较长的分类名称：综合基础知识';
+  const page = await pageFor(t, JSON.stringify(initial));
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.locator('.nav[data-view="banks"]').click();
+  for (const width of [480, 900, 1280, 1600]) {
+    await page.setViewportSize({ width, height: 900 });
+    const failures = await page.locator('#bank-preview').evaluate(table => {
+      const failures = [];
+      for (const row of table.rows) {
+        for (const index of [2, 5, 6, 7]) {
+          const cell = row.cells[index];
+          if (!cell) continue;
+          const nodes = index === 7 && cell.querySelector('button') ? [...cell.querySelectorAll('button')] : [cell];
+          const tops = new Set();
+          for (const node of nodes) {
+            const range = globalThis.document.createRange();
+            range.selectNodeContents(node);
+            for (const rect of range.getClientRects()) tops.add(Math.round(rect.top));
+          }
+          if (tops.size !== 1 || cell.scrollWidth > cell.clientWidth + 1) failures.push(cell.textContent);
+        }
+      }
+      return failures;
+    });
+    assert.deepEqual(failures, [], `窗口宽度 ${width}`);
+  }
+});
+
 test('旧组合题练习显示陈述与组合选项，作答仍使用原答案键', async t => {
   const initial = webState();
   const statements = ['①有关法律、法规、规章和标准的规定', '②本地区、本部门、本单位的安全生产实际情况', '③应急组织和人员的职责分工明确，并有具体的落实措施', '④有明确的应急保障措施'];
