@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 const root = fileURLToPath(new URL('..', import.meta.url));
 const documents = [
   'README.md',
+  '../../CONTRIBUTING.md',
   '../../AGENTS.md',
   '../../rules/rust-style-guide.md',
   '../../docs/AGENTS-适配说明.md',

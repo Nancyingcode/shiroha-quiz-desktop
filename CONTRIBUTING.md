@@ -38,6 +38,39 @@
 
 项目名称统一使用 `Shiroha Quiz`。
 
+### 代码检查与提交规范
+
+开发工具统一安装在 `apps/desktop`，使用现有 npm 锁文件。安装依赖前，先关闭使用当前工作区依赖的开发服务和桌面窗口，详见[桌面开发说明](./apps/desktop/README.md#开发与构建)。
+
+```powershell
+cd apps/desktop
+npm ci
+npm run typecheck
+npm run lint
+npm test
+```
+
+`npm ci` / `npm install` 会通过 `prepare` 在仓库根目录安装 Husky hooks；已有依赖时可运行 `npm run prepare` 重新安装。每个 worktree 都需安装自己的依赖和 hooks。根目录没有 `package.json`，不要在根目录直接运行 npm 脚本。
+
+提交时，`pre-commit` 自动运行 `npm run lint`：ESLint 检查桌面脚本、测试、配置、Web 平台适配与桌面前端，文档检查验证 UTF-8、代码围栏和本地链接。任何错误或警告都会阻止提交；检查只读取文件，不自动修复或改写暂存区，首次提交适用同样的检查。历史 `apps/web/app.js`、`question-bank.js`、其他测试目录、第三方库与生成资源不在当前 ESLint 覆盖范围内；相关业务变更仍须执行对应回归。
+
+`commit-msg` 使用 commitlint 的 `@commitlint/config-conventional` 校验提交信息，格式为 `type(scope): 描述`，其中 scope 可省略，描述支持中文。例如：
+
+```text
+feat(web): 支持题库详情预览
+fix(desktop): 修复窗口位置恢复
+docs: 补充开发说明
+```
+
+允许的 type 为 `build`、`chore`、`ci`、`docs`、`feat`、`fix`、`perf`、`refactor`、`revert`、`style`、`test`，标题最多 100 个字符。Git 自动生成的标准 merge/revert 信息遵循 commitlint 默认忽略规则。可在 `apps/desktop` 手动验证消息或提交范围：
+
+```powershell
+'fix(web): 修复题库预览' | npm run commitlint -- --verbose
+npm run commitlint -- --from main --to HEAD --verbose
+```
+
+Windows CI 继续运行相同的 ESLint 检查，并在 Pull Request 中校验 base 到 head 的提交信息；CI 通过 `HUSKY=0` 跳过本地 hooks 安装，单独执行检查。
+
 ## 贡献者与致谢
 
 无论以何种形式参与，只要对项目有帮助，都会被记录在 [README 的「贡献者」章节](./README.md#贡献者)，例如：

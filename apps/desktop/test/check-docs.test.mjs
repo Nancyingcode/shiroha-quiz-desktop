@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-const ruleDocuments = ['AGENTS.md', 'rules/rust-style-guide.md', 'docs/AGENTS-适配说明.md'];
+const ruleDocuments = ['AGENTS.md', 'CONTRIBUTING.md', 'rules/rust-style-guide.md', 'docs/AGENTS-适配说明.md'];
 const platformDocuments = [
   'docs/superpowers/specs/2026-10-23-web-desktop-dual-platform-design.md',
   'docs/superpowers/plans/2026-10-23-web-desktop-dual-platform.md',
