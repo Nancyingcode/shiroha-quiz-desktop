@@ -1,0 +1,73 @@
+name: Windows desktop release draft
+
+on:
+  push:
+    tags: ['desktop-v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: windows-2025
+    outputs:
+      commit: ${{ steps.identity.outputs.commit }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.17.0'
+      - name: Validate tag, commit and recorded versions
+        id: identity
+        working-directory: apps/desktop
+        shell: pwsh
+        run: |
+          $checkedOutCommit = git rev-parse 'HEAD^{commit}'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $eventCommit = git rev-parse "$($env:GITHUB_SHA)^{commit}"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ($checkedOutCommit -ne $eventCommit) { throw 'Checked out commit differs from release event' }
+          $env:RELEASE_COMMIT = $checkedOutCommit
+          node scripts/release-artifacts.mjs validate
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "commit=$checkedOutCommit" >> $env:GITHUB_OUTPUT
+
+  checks:
+    needs: validate
+    uses: ./.github/workflows/desktop.yml
+    with:
+      collect_release: true
+      release_commit: ${{ needs.validate.outputs.commit }}
+
+  draft:
+    needs: [validate, checks]
+    runs-on: windows-2025
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate.outputs.commit }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.17.0'
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-release-${{ github.run_id }}-${{ github.run_attempt }}
+          path: apps/desktop/.reports/desktop-release/${{ github.run_id }}-${{ github.run_attempt }}/
+      - name: Verify assets and create an unpublished prerelease
+        working-directory: apps/desktop
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_COMMIT: ${{ needs.validate.outputs.commit }}
+        run: node scripts/release-github.mjs

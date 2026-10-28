@@ -32,10 +32,10 @@ Shiroha Quiz 是一个轻量、开源的刷题工具，支持自导入题库、�
 | --- | --- | --- |
 | Android 手机 | 原生版 APK，文件名以 `-native-release.apk` 结尾 | [下载](https://github.com/reiqr/shiroha-quiz/releases/latest) |
 | Windows 电脑，使用 Web 版 | Web ZIP，解压后双击 `打开Shiroha Quiz.cmd` | [下载](https://github.com/reiqr/shiroha-quiz/releases/latest) |
-| Windows 电脑，体验桌面预览版 | 独立 EXE 或普通 / 离线 NSIS 候选安装包；尚未完成正式发行验收 | [构建与体验说明](apps/desktop/README.md) |
+| Windows 电脑，体验桌面预览版 | 独立 EXE 或普通 / 离线 NSIS 候选安装包；尚未完成正式发行验收 | [桌面 Releases](https://github.com/Nancyingcode/shiroha-quiz-desktop/releases) / [构建说明](apps/desktop/README.md) |
 | 先体验一下 | 在线版，免安装 | [打开在线版](https://reiqr.github.io/shiroha-quiz) |
 
-> 各端使用独立版本号，不是新旧关系。**下载时认文件名即可**，已发布制品以 [Releases/latest](https://github.com/reiqr/shiroha-quiz/releases/latest) 为准；桌面候选构建的状态见[桌面说明](apps/desktop/README.md)。
+> 各端使用独立版本号，不是新旧关系。**下载时认文件名即可**，Web/Android 制品以[上游 Releases/latest](https://github.com/reiqr/shiroha-quiz/releases/latest) 为准；Windows 桌面预发布使用本仓库 Releases 列表。首次公开草稿前可能尚无桌面附件，候选状态见[桌面说明](apps/desktop/README.md)。
 
 > **当前仍处于测试阶段**，不建议用于高风险正式考试场景。**重要题库请定期备份。**
 
@@ -324,12 +324,13 @@ Windows 桌面预览版新增 **CodeBuddy Harness**。此次 WorkBuddy 接入在
 
 ## 下载与更新
 
-- [最新 Release](https://github.com/reiqr/shiroha-quiz/releases/latest)
-- [全部 Releases](https://github.com/reiqr/shiroha-quiz/releases)
+- [Windows 桌面预发布与附件](https://github.com/Nancyingcode/shiroha-quiz-desktop/releases)
+- [Web / Android 最新 Release](https://github.com/reiqr/shiroha-quiz/releases/latest)
+- [Web / Android 全部 Releases](https://github.com/reiqr/shiroha-quiz/releases)
 - [在线体验](https://reiqr.github.io/shiroha-quiz)
 - [CHANGELOG](./CHANGELOG.md)
 
-每次正式发布通常提供 Android 原生 APK 与 Web ZIP。Windows 桌面版当前为预览工程，已提供 EXE 与普通 / 离线 NSIS 构建入口；具体可下载文件以 Release 附件为准，不把本地候选构建等同正式发布。近期功能变化以 Release 说明、CHANGELOG 和桌面阶段记录为准。
+上游正式发布通常提供 Android 原生 APK 与 Web ZIP。Windows 桌面版使用独立的 `desktop-v<版本>` 发布流程，检查通过后生成预发布草稿，维护者核验后才公开附件。下载 `windows-x64-setup.exe` 普通包，或 `windows-x64-offline-setup.exe` 离线安装包；独立 `windows-x64.exe` 需要系统已有 WebView2。每次附带 `SHA256SUMS.txt` 和构建元数据，选择及校验方法见[Windows 发布说明](.github/DESKTOP_RELEASE.md)。首次公开前可能尚无桌面附件；具体变化与验收范围以各次 Release 说明和桌面阶段记录为准。
 
 Web ZIP 不包含约 88 MB 的 PDF.js / MathJax / Tesseract 离线扩展资源，可在 `apps/web/libs/` 下按需下载；联网时也可使用 CDN 兜底。桌面构建要求这些离线资源齐备并一同打包，运行时仅执行本地脚本。
 
