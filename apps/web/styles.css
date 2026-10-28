@@ -7950,3 +7950,149 @@ body.practice-focus.practice-rail-collapsed-v34 #practice-card > .practice-side-
   .list-pagination .list-page-gap{width:20px}
 }
 @media(prefers-reduced-motion:no-preference){#app-dialog[open]{animation:app-dialog-enter .14s ease-out}@keyframes app-dialog-enter{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}}
+
+/* 保留原生表单与键盘语义；旧浏览器继续使用系统弹层，支持 base-select 时再增强列表样式。 */
+body select:not([multiple]):not([size]){
+  --select-arrow:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='m2 4 4 4 4-4' fill='none' stroke='%238c8c8c' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  appearance:none;
+  min-width:0;
+  padding:7px 34px 7px 12px;
+  border:1px solid #d9d9d9;
+  /* 历史移动端规则使用 important，统一选择器外观时仍保留其触控高度。 */
+  border-color:#d9d9d9 !important;
+  border-radius:6px !important;
+  background-color:#fff;
+  background-image:var(--select-arrow);
+  background-repeat:no-repeat;
+  background-position:right 12px center;
+  color:var(--ink);
+  font-size:14px;
+  font-weight:400;
+  line-height:1.5715;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  cursor:pointer;
+  box-shadow:none;
+}
+body select:not([multiple]):not([size]):enabled:hover{
+  border-color:#4096ff !important;
+}
+body select:not([multiple]):not([size]):enabled:is(:focus,:open){
+  border-color:#1677ff !important;
+  outline:none;
+  box-shadow:0 0 0 2px rgba(5,145,255,.1);
+}
+body select:not([multiple]):not([size]):disabled{
+  background-color:#f5f5f5;
+  color:#8c8c8c;
+  cursor:not-allowed;
+  opacity:1;
+}
+body .list-pagination select.list-page-size{
+  padding:4px 28px 4px 10px;
+  background-position:right 9px center;
+  font-size:13px;
+}
+@supports (appearance:base-select) and selector(::picker(select)){
+  body select:not([multiple]):not([size]),
+  body select:not([multiple]):not([size])::picker(select){
+    appearance:base-select;
+  }
+  body select:not([multiple]):not([size]){
+    /* 原生回填区域无法单独设置样式；固定箭头列避免长名称挤出或覆盖箭头。 */
+    display:grid;
+    grid-template-columns:minmax(0,1fr) 32px;
+    align-items:center;
+    padding-right:0;
+    background-image:none;
+    overflow:hidden;
+  }
+  body select:not([multiple]):not([size])::picker-icon{
+    content:"";
+    grid-column:2;
+    align-self:stretch;
+    width:32px;
+    height:100%;
+    margin:0;
+    background-color:inherit;
+    background-image:var(--select-arrow);
+    background-repeat:no-repeat;
+    background-position:center;
+    rotate:0deg;
+  }
+  body select:not([multiple]):not([size]):open::picker-icon{
+    rotate:180deg;
+  }
+  body select:not([multiple]):not([size])::picker(select){
+    width:anchor-size(self-inline);
+    max-width:calc(100vw - 16px);
+    max-height:min(256px,calc(100dvh - 16px));
+    position-try-order:normal;
+    margin-block:4px;
+    padding:4px;
+    border:1px solid #f0f0f0;
+    border-radius:8px;
+    background:#fff;
+    color:var(--ink);
+    box-shadow:0 6px 16px rgba(0,0,0,.08),0 3px 6px -4px rgba(0,0,0,.12),0 9px 28px 8px rgba(0,0,0,.05);
+    font-size:14px;
+    font-weight:400;
+    overflow:auto;
+    overscroll-behavior:contain;
+    scrollbar-width:thin;
+  }
+  body select:not([multiple]):not([size]) option{
+    min-height:32px;
+    padding:5px 12px;
+    gap:8px;
+    border:0;
+    border-radius:4px;
+    background:transparent;
+    color:var(--ink);
+    font-weight:400;
+    line-height:22px;
+    white-space:normal;
+    overflow-wrap:anywhere;
+    cursor:pointer;
+  }
+  body select:not([multiple]):not([size]) option:enabled:is(:hover,:focus){
+    background:#f5f5f5;
+    outline:none;
+  }
+  body select:not([multiple]):not([size]) option:checked,
+  body select:not([multiple]):not([size]) option:checked:enabled:is(:hover,:focus){
+    background:#e6f4ff;
+    font-weight:600;
+  }
+  body select:not([multiple]):not([size]) option::checkmark{
+    content:"✓";
+    order:1;
+    margin-left:auto;
+    color:#1677ff;
+  }
+  body select:not([multiple]):not([size]) option:disabled{
+    color:#bfbfbf;
+    cursor:not-allowed;
+  }
+  body .list-pagination select.list-page-size{
+    grid-template-columns:minmax(0,1fr) 24px;
+    padding-right:0;
+  }
+  body .list-pagination select.list-page-size::picker-icon{
+    width:24px;
+  }
+}
+@media(prefers-reduced-motion:no-preference){
+  body select:not([multiple]):not([size]){
+    transition:border-color .15s,box-shadow .15s;
+  }
+  body select:not([multiple]):not([size])::picker-icon{
+    transition:rotate .15s;
+  }
+}
+@media(forced-colors:active){
+  body select:not([multiple]):not([size]):enabled:is(:focus,:open){
+    outline:2px solid Highlight;
+    outline-offset:2px;
+  }
+}
