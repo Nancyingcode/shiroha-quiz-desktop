@@ -681,6 +681,11 @@ for (const mode of ['single', 'total']) test(`刷题题号：${mode} 模式按�
     assert.equal(await page.locator('#practice-card .practice-source-number').innerText(), `题库第 ${multiple ? 2 : 1} 题`);
     assert.match(await page.locator('#practice-card .practice-source-bank').innerText(), multiple ? /阶段A全题型/ : /跨题库同ID/);
     assert.equal(await page.locator('.practice-focus-head > .practice-round-progress').innerText(), `本轮进度 · 第 ${index + 1} / 2 题`);
+    await page.locator('#practice-card .option').first().click();
+    await page.getByRole('button', { name: `清空第 ${index + 1} 题选项`, exact: true }).click();
+    assert.equal(await page.locator('#practice-card input:checked').count(), 0);
+    assert.equal(await page.locator('#practice-card .practice-source-number').innerText(), `题库第 ${multiple ? 2 : 1} 题`);
+    assert.equal(await page.locator('.practice-focus-head > .practice-round-progress').innerText(), `本轮进度 · 第 ${index + 1} / 2 题`);
   }
 });
 
