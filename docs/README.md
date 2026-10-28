@@ -56,6 +56,8 @@
 - [CodeBuddy 模型响应兼容与执行前置验证](./superpowers/plans/2026-10-25-codebuddy-model-compatibility.md)
 - [CodeBuddy 客户端正式执行设计](./superpowers/specs/2026-10-25-codebuddy-client-execution.md)
 - [CodeBuddy 单题解析与追问接入计划](./superpowers/plans/2026-10-25-codebuddy-client-execution.md)
+- [CodeBuddy 登录状态存储设计（已批准）](./superpowers/specs/2026-10-28-codebuddy-login-storage.md)
+- [CodeBuddy 登录状态存储实施与验证](./superpowers/plans/2026-10-28-codebuddy-login-storage.md)
 - [Harness 提供方选择与账户保留](./superpowers/plans/2026-10-25-harness-provider-selection.md)
 - [Codex 学习助手嵌入设计（暂缓）](./superpowers/specs/2026-10-24-codex-learning-assistant.md)
 - [Windows 候选安装包、人工升级和验收限制](../apps/desktop/README.md#候选安装包与人工升级)

@@ -3,7 +3,7 @@ import { markNativeIsolation } from './native-isolation.mjs';
 import { createNativeMock, nativeServiceSmoke } from './network-smoke.mjs';
 import { documentSmoke } from './document-smoke.mjs';
 import { harnessSmoke, harnessSwitchingSmoke } from './harness-smoke.mjs';
-import { codebuddyLoginSmoke, codebuddyLoginAfterRestart } from './codebuddy-login-smoke.mjs';
+import { codebuddyLoginSmoke, codebuddyLoginAfterRestart, codebuddyLoginPersistenceSmoke } from './codebuddy-login-smoke.mjs';
 import { spawn, execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { mkdir, mkdtemp, realpath, rm, stat, readFile, writeFile } from 'node:fs/promises';
@@ -1041,8 +1041,15 @@ async function main() {
     });
     await stop(runtime); runtime = undefined;
     runtime = await launch(executable, profile, proxyPort);
+    const memoryRestart = runtime;
+    await check('CodeBuddy 仅内存登录在重启后清除',()=>codebuddyLoginAfterRestart(memoryRestart.page));
+    await check('CodeBuddy 记住登录、关闭记住与退出跨重启验证',()=>codebuddyLoginPersistenceSmoke(memoryRestart.page, async()=>{
+      assert(runtime);
+      await stop(runtime); runtime = undefined;
+      runtime = await launch(executable, profile, proxyPort);
+      return runtime.page;
+    }));
     const restarted = runtime;
-    await check('CodeBuddy 仅内存登录在重启后清除',()=>codebuddyLoginAfterRestart(restarted.page));
     await check('重启按保存位置和尺寸创建普通窗口', async () => {
       const size = await restarted.page.evaluate(() => ({ width: window.innerWidth, height: window.innerHeight }));
       assert.deepEqual(size, { width: 1100, height: 760 });

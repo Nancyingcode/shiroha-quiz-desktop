@@ -43,8 +43,7 @@ fn main() {
                     .map_err(|error| std::io::Error::other(error.code))?,
             ));
             app.manage(shiroha_quiz_desktop::tasks::Tasks::default());
-            let codebuddy_login =
-                Arc::new(shiroha_quiz_desktop::harness_codebuddy_login::Login::new());
+            let codebuddy_login = shiroha_quiz_desktop::harness_codebuddy_login::Login::open(&root);
             app.manage(codebuddy_login.clone());
             app.manage(Arc::new(
                 shiroha_quiz_desktop::harness::Harness::open_with_codebuddy(&root, codebuddy_login),

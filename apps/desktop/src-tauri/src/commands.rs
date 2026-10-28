@@ -114,6 +114,7 @@ pub async fn local_query(
         let guard = tauri::async_runtime::spawn_blocking(move || execution.begin_restore())
             .await
             .map_err(|_| Error::new("harness_unavailable"))??;
+        harness.invalidate_codebuddy_for_restore().await?;
         services.invalidate()?;
         Some(guard)
     } else {
@@ -379,6 +380,7 @@ pub async fn local_replace(
     let restore_guard = tauri::async_runtime::spawn_blocking(move || execution.begin_restore())
         .await
         .map_err(|_| Error::new("harness_unavailable"))??;
+    harness.invalidate_codebuddy_for_restore().await?;
     services.invalidate()?;
     run(state.inner().clone(), move |store| {
         let _restore_guard = restore_guard;

@@ -9,6 +9,7 @@ const source = await readFile(new URL('../frontend/codebuddy-login.js', import.m
 class Element {
   hidden = true;
   disabled = false;
+  checked = false;
   textContent = '';
   value = '';
   /** @type {Record<string,string>} */ dataset = {};
@@ -23,12 +24,12 @@ class Element {
 
 /** @param {string} [phase] @param {number} [revision] */
 function status(phase = 'signed_out', revision = 0) {
-  return { phase, revision, loginUrl: phase === 'authenticating' ? 'https://copilot.tencent.com/login?platform=CLI&state=synthetic' : '', message: `合成状态：${phase}`, browserOpened: phase === 'authenticating', busy: phase === 'authenticating' };
+  return { phase, revision, loginUrl: phase === 'authenticating' ? 'https://copilot.tencent.com/login?platform=CLI&state=synthetic' : '', message: `合成状态：${phase}`, browserOpened: phase === 'authenticating', busy: ['authenticating','restoring'].includes(phase), rememberLogin:false, persistenceState:'none', persistenceErrorCode:null };
 }
 
 /** @param {{desktop?:boolean,loading?:boolean}} [options] */
 function fixture(options = {}) {
-  const names = ['settings', 'phase', 'status', 'login', 'details', 'login-url', 'browser-status', 'open-login', 'copy-link', 'refresh', 'cancel', 'logout'];
+  const names = ['settings', 'phase', 'status', 'login', 'details', 'login-url', 'browser-status', 'open-login', 'copy-link', 'refresh', 'cancel', 'logout', 'remember', 'retry-restore', 'retry-save'];
   const elements = new Map(names.map(name => [`ai-codebuddy-${name}`, new Element()]));
   /** @param {string} name */
   const get = name => { const element = elements.get(`ai-codebuddy-${name}`); assert(element); return element; };
@@ -73,6 +74,51 @@ test('initial account query shows loading rather than signed out', async () => {
   assert.equal(f.get('login').disabled, true);
   resolve(status()); await setImmediate();
   assert.equal(f.get('phase').textContent, '尚未登录');
+});
+
+test('remember defaults off and login sends the explicitly chosen value', async () => {
+  const f=fixture(); f.start(); await setImmediate();
+  assert.equal(f.get('remember').checked,false);
+  f.get('remember').checked=true;
+  f.get('remember').listeners.get('change')?.();
+  f.respond(async()=>({...status('authenticating',1),rememberLogin:true}));
+  f.get('login').click(); await setImmediate();
+  assert.equal(f.calls.at(-1)?.request.remember,true);
+  assert.equal(f.get('remember').disabled,true);
+});
+
+test('restoring is observed and can be retried without opening a login page', async () => {
+  const f=fixture(); f.respond(async()=>({...status('restoring',1),rememberLogin:true,persistenceState:'saved'})); f.start(); await setImmediate();
+  assert.equal(f.get('phase').textContent,'正在恢复登录');
+  assert.equal(f.get('login').disabled,true);
+  f.respond(async()=>({...status('failed',1),rememberLogin:true,persistenceState:'saved'})); await f.tick();
+  assert.equal(f.get('retry-restore').hidden,false);
+  f.get('retry-restore').click(); await setImmediate();
+  assert.equal(f.calls.at(-1)?.request.kind,'retry_restore');
+  assert.equal(f.calls.at(-1)?.request.revision,1);
+  assert.equal(f.calls.some(call=>call.request.kind==='login'),false);
+});
+
+test('clearing is observed until confirmed and cleanup failure offers logout retry', async () => {
+  const f=fixture(); f.respond(async()=>({...status('signed_in',1),rememberLogin:true,persistenceState:'saved'}));f.start();await setImmediate();
+  f.respond(async()=>({...status('signed_out',2),persistenceState:'clearing',busy:true}));
+  f.get('logout').click();await setImmediate();
+  assert.equal(f.get('login').disabled,true);
+  f.respond(async()=>({...status('signed_out',2),persistenceState:'cleanup_required',busy:true,persistenceErrorCode:'codebuddy_store_unavailable'}));await f.tick();
+  assert.equal(f.get('logout').hidden,false);
+  assert.equal(f.get('logout').disabled,false);
+  f.respond(async()=>status('signed_out',2));f.get('logout').click();await setImmediate();
+  assert.equal(f.get('login').disabled,false);
+});
+
+test('save errors retain current login and allow explicit save retry', async () => {
+  const f=fixture();f.respond(async()=>({...status('signed_in',1),rememberLogin:true,persistenceState:'error',persistenceErrorCode:'codebuddy_store_unavailable'}));f.start();await setImmediate();
+  assert.equal(f.get('retry-save').hidden,false);
+  f.respond(async()=>({...status('signed_in',2),rememberLogin:true,persistenceState:'saving',busy:true}));
+  f.get('retry-save').click();await setImmediate();
+  assert.deepEqual(JSON.parse(JSON.stringify(f.calls.at(-1)?.request)),{kind:'set_remember',revision:1,remember:true});
+  f.respond(async()=>({...status('signed_in',2),rememberLogin:true,persistenceState:'saved'}));await f.tick();
+  assert.equal(f.get('retry-save').hidden,true);
 });
 
 test('account read timeout permits retry and ignores the late original response', async () => {
@@ -135,7 +181,7 @@ test('login uses only fixed account actions, prevents double submit and stops po
   assert.equal(f.timers.size, 0);
   for (const call of f.calls) {
     assert.equal(call.command, 'codebuddy_control');
-    assert.deepEqual(Object.keys(call.request), call.request.kind === 'login' ? ['kind', 'revision'] : ['kind']);
+    assert.deepEqual(Object.keys(call.request), call.request.kind === 'login' ? ['kind', 'revision', 'remember'] : ['kind']);
   }
 });
 
@@ -245,7 +291,7 @@ test('model account invalidation requests a readonly card refresh without restar
   assert.equal(f.calls.length,2);
 });
 
-test('shared HTML keeps the account card hidden and clearly limits this entry to memory login', async () => {
+test('shared HTML keeps the account card hidden and makes remembered login opt-in', async () => {
   const html = await readFile(new URL('../../web/index.html', import.meta.url), 'utf8');
   assert.match(html, /id="ai-codebuddy-settings"[^>]*hidden/);
   assert.match(html, /id="ai-codebuddy-status"[^>]*role="status"[^>]*aria-live="polite"/);
@@ -258,6 +304,9 @@ test('shared HTML keeps the account card hidden and clearly limits this entry to
   assert.match(html, /id="ai-codebuddy-model-status"[^>]*role="status"[^>]*aria-live="polite"/);
   assert.match(html, /id="ai-codebuddy-model-retry"[^>]*hidden/);
   assert.match(html, /关闭应用后需要重新登录/);
+  assert.match(html, /id="ai-codebuddy-remember"[^>]*type="checkbox"/);
+  assert.doesNotMatch(html, /id="ai-codebuddy-remember"[^>]*\bchecked\b/);
+  assert.match(html, /下次启动会联网核验登录状态，不会自动调用模型/);
   assert.doesNotMatch(html, /<script[^>]*codebuddy-login\.js/);
   for (const provider of ['codex','codebuddy','deepseek']) assert.match(html, new RegExp(`<option value="${provider}">`, 'i'));
   assert.match(html, /id="ai-codex-settings"[^>]*class="notice"/);

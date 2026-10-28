@@ -277,6 +277,8 @@ impl Drop for RestoreGuard {
 // 本进程拥有配置与唯一模型/授权任务；组件任务按提供方独立，取消等待所有目标任务退出。
 pub struct Harness {
     inner: Mutex<Result<Inner>>,
+    // 账户服务与执行配置独立，配置损坏时仍须完成题库恢复的账户屏障。
+    codebuddy_login: Arc<Login>,
     idle: Condvar,
     downloads: tokio::sync::Mutex<()>,
 }
@@ -286,7 +288,8 @@ impl Harness {
     }
     pub fn open_with_codebuddy(root: &Path, login: Arc<Login>) -> Self {
         Self {
-            inner: Mutex::new(Inner::open(&root.join("ai-execution"), login)),
+            inner: Mutex::new(Inner::open(&root.join("ai-execution"), login.clone())),
+            codebuddy_login: login,
             idle: Condvar::new(),
             downloads: tokio::sync::Mutex::new(()),
         }
@@ -407,6 +410,10 @@ impl Harness {
         }
         Ok(state.status())
     }
+    pub(crate) async fn invalidate_codebuddy_for_restore(&self) -> Result<()> {
+        self.codebuddy_login.invalidate_for_restore().await
+    }
+
     pub(crate) fn begin_restore(self: &Arc<Self>) -> Result<RestoreGuard> {
         // 独立执行配置损坏时没有可启动的 Harness，不能阻断题库自身的恢复路径。
         let enabled = {
@@ -1945,7 +1952,10 @@ mod tests {
             .unwrap();
         let revision = login.execution_status().unwrap().revision;
         login
-            .control(crate::harness_codebuddy_login::Control::Login { revision })
+            .control(crate::harness_codebuddy_login::Control::Login {
+                revision,
+                remember: false,
+            })
             .unwrap();
         let deadline = std::time::Instant::now() + Duration::from_secs(5);
         while !login.execution_status().unwrap().signed_in {
@@ -2725,6 +2735,7 @@ mod tests {
         assert!(!f.service.refresh().unwrap().busy);
         *f.service.inner.lock().unwrap() = Err(failure("storage_unavailable"));
         assert!(f.service.begin_restore().is_ok());
+        tauri::async_runtime::block_on(f.service.invalidate_codebuddy_for_restore()).unwrap();
     }
     #[test]
     fn status_queries_do_not_invalidate_frozen_configuration_when_auth_is_unchanged() {
