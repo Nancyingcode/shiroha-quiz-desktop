@@ -387,6 +387,13 @@ td{
   background:var(--red2);
   border-color:var(--red)
 }
+.review-options .option{cursor:default}
+.review-options .option-text{flex:1;min-width:0;overflow-wrap:anywhere}
+.review-option-status{font-size:12px;flex-shrink:0}
+@media(max-width:600px){
+  .review-options .option{flex-wrap:wrap}
+  .review-option-status{width:100%;padding-left:36px}
+}
 .option-key{
   font-weight:900;
   min-width:26px
