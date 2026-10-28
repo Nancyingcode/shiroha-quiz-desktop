@@ -59,7 +59,7 @@ npm run build:nsis
 npm run build:offline
 ```
 
-两个命令均生成 x64 NSIS，目标为 `src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/Shiroha Quiz_0.1.0_x64-setup.exe`。第二次构建会覆盖同名文件，需要在构建下一种制品前另存并记录 SHA-256。普通配置缺少 WebView2 时联网下载；离线配置嵌入完整 WebView2 安装程序，构建阶段仍需联网下载运行时。不得把普通包标记为离线包。配置遵循 [Tauri Windows 安装说明](https://v2.tauri.app/distribute/windows-installer/)。
+两个命令均生成 x64 NSIS，目标为 `src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/Shiroha Quiz_0.1.1_x64-setup.exe`。第二次构建会覆盖同名文件，需要在构建下一种制品前另存并记录 SHA-256。普通配置缺少 WebView2 时联网下载；离线配置嵌入完整 WebView2 安装程序，构建阶段仍需联网下载运行时。不得把普通包标记为离线包。配置遵循 [Tauri Windows 安装说明](https://v2.tauri.app/distribute/windows-installer/)。
 
 离线 NSIS 仅包含 WebView2 离线安装程序，不包含 Codex 运行组件。首次使用 Codex Harness 仍需联网准备组件；已缓存且校验通过的组件可在本机复用，订阅登录与 AI 任务仍需联网。
 
