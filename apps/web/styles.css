@@ -8148,6 +8148,10 @@ body .list-pagination select.list-page-size{
 .practice-clock{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-left:auto;white-space:nowrap}
 .practice-clock b{font-variant-numeric:tabular-nums;display:inline-block;min-width:5ch}
 body.practice-focus .practice-focus-head{flex-wrap:wrap}
+@media(min-width:1280px){
+  /* 遵守已有内容区宽度，避免主卡片越界后被固定统计栏遮挡。 */
+  body.practice-focus #practice-card{width:min(920px,100%) !important}
+}
 .practice-pause-dialog{width:min(460px,calc(100vw - 32px));max-height:calc(100vh - 48px);overflow:auto;border:1px solid var(--line);border-radius:20px;padding:40px 28px;text-align:center;color:var(--ink);background:var(--card)}
 .practice-pause-dialog::backdrop{background:var(--bg)}
 .practice-pause-dialog h2{margin:0 0 12px}
