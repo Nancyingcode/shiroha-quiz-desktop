@@ -33,4 +33,6 @@ node ./test/web-ai-practice/runner.cjs --self-test
 
 全题型、跨库同 ID、超过八题的完整错题一览和收藏单题入口另由 `apps/desktop` 下的 `npm run test:web-platform` 覆盖。隔离 WebView2 的 `npm run test:desktop` 使用原生 mock 服务验证答题 AI、错题对照、全对提示与原生保存，不调用真实收费服务。
 
+`--filter wrong-analysis` 验证错题本、逐题答错反馈、总提交错题一览和考试结果的空解析入口，覆盖主动生成、停止及迟到响应隔离、重新生成失败保留草稿、放弃草稿、配置缺失、保存失败回滚与重试、来源题删除，以及保存只改来源解析、不重写历史快照。使用 `emptyAnalysis` 自建 fixture；未确认保存前不写入题库。桌面 smoke 另通过真实界面导入空解析题目，使用原生 mock 生成、保存并重载验证。
+
 状态适配集中在 `harness.cjs`：优先直接读取页面 global lexical `state/practice`；当前应用若仍有最外层 IIFE，仅在浏览器脚本响应内注入只读快照函数，报告 `readOnlyIifeBridge: true`，磁盘源码和业务函数不改。现有启动归一化会丢弃 richContent，富文本专测在启动后仅为自建题目初始化富字段，随后真实点击练习/保存。迟到响应用例仅对 mock fetch 去掉 abort signal，模拟取消后的响应竞态，验证会话身份保护。已有解析保存时自动确认覆写（拒绝覆写专测除外）。

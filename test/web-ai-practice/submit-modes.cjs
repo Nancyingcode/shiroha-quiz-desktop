@@ -107,6 +107,8 @@ const cases = [
       assert.equal(await first.locator('.option.wrong .option-text').innerText(), '5');
       assert.equal(await first.locator('.option.correct .option-text').innerText(), '4');
       assert.match(await first.locator('.review-answer-wrong').innerText(), /当时错误答案/);
+      assert.match(await first.locator('.option[data-key="B"] .review-option-status').innerText(), /当时选择/);
+      assert.match(await first.locator('.option[data-key="A"] .review-option-status').innerText(), /正确答案/);
       assert.match(await overview.locator('[data-wrong-question-index="1"]').innerText(), /未作答/);
       assert.match(await overview.locator('[data-wrong-question-index="2"]').innerText(), /wrong/);
       assert.match(await overview.locator('[data-wrong-question-index="2"]').innerText(), /2 \/ two/);

@@ -175,7 +175,7 @@ async function bounded(promise, timeout, message) {
   finally { clearTimeout(timer); }
 }
 
-async function setup(browser, url, keys, { configured = true, rich = false, ignoreAbort = false, timeout = 10000 } = {}) {
+async function setup(browser, url, keys, { configured = true, rich = false, emptyAnalysis = false, ignoreAbort = false, timeout = 10000 } = {}) {
   const context = await browser.newContext({ serviceWorkers: 'block', viewport: { width: 1440, height: 1000 }, acceptDownloads: false });
   const mock = new MockAi();
   const blocked = [];
@@ -233,7 +233,7 @@ async function setup(browser, url, keys, { configured = true, rich = false, igno
         return original(input, target?.startsWith('https://mock-ai.invalid/') ? { ...options, signal: undefined } : options);
       };
     }
-  }, { keys, initial: fixture({ configured, rich }), key: FAKE_KEY, ignoreAbort });
+  }, { keys, initial: fixture({ configured, rich, emptyAnalysis }), key: FAKE_KEY, ignoreAbort });
 
   const harness = {
     page, context, mock, blocked, pageErrors, timeout, keys,
