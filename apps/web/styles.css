@@ -7889,6 +7889,16 @@ body.practice-focus.practice-rail-collapsed-v34 #practice-card > .practice-side-
 #bank-preview [data-delete-bank-question]{white-space:nowrap}
 #bank-preview [data-preview-question],#bank-preview [data-preview-full]{white-space:nowrap}
 .bank-detail{position:sticky;left:0;box-sizing:border-box;max-width:100%}
+.bank-detail-analysis{line-height:1.8;white-space:pre-wrap;overflow-wrap:anywhere}
+.bank-detail-analysis img{max-width:100%;height:auto}
+#favorites-list-v596 .favorite-question-number{color:var(--blue);font-weight:700}
+#favorites-list-v596 > thead > tr > :is(:nth-child(1),:nth-child(2),:nth-child(4),:nth-child(5),:nth-child(6),:nth-child(7)),
+#favorites-list-v596 > tbody > .favorite-question-row > :is(:nth-child(1),:nth-child(2),:nth-child(4),:nth-child(5),:nth-child(6),:nth-child(7)){width:1%;white-space:nowrap}
+.favorite-question-actions{display:flex;flex-wrap:wrap;gap:6px;min-width:110px}
+.favorite-question-actions button{white-space:nowrap}
+#practice-card .practice-source-number{color:var(--blue);background:var(--blue2);font-weight:800}
+#practice-card .practice-source-bank{color:var(--muted);font-size:13px;overflow-wrap:anywhere}
+#practice-card .practice-round-progress{font-size:13px;white-space:normal}
 
 /* 原生 dialog 的顶层模态隔离背景；独立 ID 避免历史主题规则改变确认框布局。 */
 #app-dialog{position:fixed;inset:0;margin:auto;width:440px;max-width:calc(100% - 32px);max-height:calc(100% - 32px);padding:28px;border:1px solid #d5e2f0;border-radius:20px;background:#fff;color:#193553;box-shadow:0 24px 70px #19355330;overflow:auto;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif;text-align:left;box-sizing:border-box}

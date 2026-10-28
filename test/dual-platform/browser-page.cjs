@@ -102,13 +102,13 @@ test('列表分页：浏览器题库、错题、收藏、记录独立分页和�
   const page = await pageFor(t, JSON.stringify(initial));
   page.setDefaultTimeout(5000);
   await page.locator('body[data-storage-state="ready"]').waitFor();
-  for (const [view, id, row] of [['banks', 'bank-list', '.bank-item'], ['wrongbook', 'wrongbook-list', '.wrong-item'], ['favorites', 'favorites-list-v596', '.favorite-item-v596'], ['records', 'records-list', 'details']]) {
+  for (const [view, id, row] of [['banks', 'bank-list', '.bank-item'], ['wrongbook', 'wrongbook-list', '.wrong-item'], ['favorites', 'favorites-list-v596', '.favorite-question-row'], ['records', 'records-list', 'details']]) {
     await page.locator(`.nav[data-view="${view}"]`).click();
     const pager = page.locator('#' + id + '-pager');
     assert.equal(await page.locator('#' + id).locator(row).count(), 10);
     await pager.getByRole('button', { name: '第 3 页', exact: true }).click();
     assert.equal(await page.locator('#' + id).locator(row).count(), 3);
-    if (view === 'favorites') assert.equal(await page.locator('.favorite-item-title-v596 .pill').first().innerText(), '21');
+    if (view === 'favorites') assert.equal(await page.locator('.favorite-question-number').first().innerText(), '21');
     if (view === 'wrongbook') {
       await page.locator('#wrong-sort-mode').selectOption('wrongCount');
       assert.equal(await pager.locator('[aria-current="page"]:visible').innerText(), '1');
@@ -431,17 +431,132 @@ test('收藏单题快捷入口先选择提交方式，并保留单题范围', as
   const page = await pageFor(t, JSON.stringify(initial));
   await page.locator('body[data-storage-state="ready"]').waitFor();
   await page.locator('.nav[data-view="favorites"]').click();
+  await page.locator('#favorites-list-v596 [data-preview-question="judge"]').click();
   await page.locator('[data-practice-one-fav-v596="judge"]').click();
   await page.locator('#practice-submit-mode').waitFor({ state: 'visible' });
+  assert.equal(await page.locator('#bank-question-detail').count(), 0);
   assert.equal(await page.locator('#practice-number-range-v58916').inputValue(), '2');
   await page.locator('#practice-submit-mode').selectOption('total');
   await page.locator('#start-practice-btn').click();
   assert.equal(await page.locator('[data-practice-jump]').count(), 1);
+  assert.equal(await page.locator('#practice-card .practice-source-number').innerText(), '题库第 3 题');
   assert.match(await page.locator('#practice-card').innerText(), /一加一等于二/);
   await page.locator('#practice-card .option[data-key="A"]').click();
   await page.locator('#p-submit-all').click();
   await page.locator('#again-practice').waitFor();
   assert.equal(JSON.parse(await saved(page)).records[0].correct, 1);
+});
+
+for (const mode of ['single', 'total']) test(`刷题题号：${mode} 模式按所属题库定位，独立于本轮和导入题号`, async t => {
+  const initial = webState();
+  initial.settings.practiceScope = { type: 'group', value: '自建样本' };
+  const page = await pageFor(t, JSON.stringify(initial));
+  page.setDefaultTimeout(5000);
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.locator('.nav[data-view="practice"]').click();
+  await page.locator('#practice-submit-mode').selectOption(mode);
+  await page.locator('#practice-order').selectOption('random');
+  await page.locator('#practice-start-mode-v58916').selectOption('custom');
+  await page.locator('#practice-number-range-v58916').fill('2,8');
+  await page.locator('#start-practice-btn').click();
+  for (const index of [0, 1]) {
+    await page.locator(`[data-practice-jump="${index}"]`).click();
+    const multiple = (await page.locator('#practice-card .question-title').innerText()).includes('偶数');
+    assert.equal(await page.locator('#practice-card .practice-source-number').innerText(), `题库第 ${multiple ? 2 : 1} 题`);
+    assert.match(await page.locator('#practice-card .practice-source-bank').innerText(), multiple ? /阶段A全题型/ : /跨题库同ID/);
+    assert.equal(await page.locator('.practice-focus-head > .practice-round-progress').innerText(), `本轮进度 · 第 ${index + 1} / 2 题`);
+  }
+});
+
+test('收藏详情：题库题号、完整选项解析、键盘关闭和只读查看', async t => {
+  const initial = webState();
+  initial.favorites['bank-a'] = ['rich', 'multiple', 'blank', 'same-id'];
+  const page = await pageFor(t, JSON.stringify(initial));
+  page.setDefaultTimeout(5000);
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.locator('.nav[data-view="favorites"]').click();
+  const before = await saved(page);
+  assert.deepEqual(await page.locator('#favorites-list-v596 .favorite-question-number').allTextContents(), ['7', '2', '4', '1']);
+  await page.locator('#favorites-list-v596 [data-preview-question="multiple"]').focus();
+  await page.keyboard.press('Enter');
+  const detail = page.locator('#bank-question-detail');
+  assert.equal(await detail.locator('.bank-detail-option').count(), 3);
+  assert.equal(await detail.locator('.bank-detail-option.is-answer').count(), 2);
+  assert.match(await detail.locator('.bank-detail-analysis').innerText(), /二和四是偶数/);
+  await detail.locator('[data-close-detail]').click();
+  assert.equal(await page.locator('#favorites-list-v596 [data-preview-question="multiple"]').evaluate(node => node === globalThis.document.activeElement), true);
+  await page.locator('#favorites-list-v596 [data-preview-question="rich"]').click();
+  assert.equal(await detail.locator('.bank-detail-option img').count(), 1);
+  await page.locator('#favorites-list-v596 [data-preview-question="blank"]').click();
+  assert.equal(await detail.count(), 1);
+  assert.match(await detail.innerText(), /该题型无需选项/);
+  assert.equal(await saved(page), before);
+  await page.locator('#favorites-list-v596 [data-unfav-v27="multiple"]').click();
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  assert.equal(await detail.count(), 0);
+  const after = JSON.parse(await saved(page));
+  assert.deepEqual(after.favorites['bank-a'], ['rich', 'blank', 'same-id']);
+  assert.equal(after.banks[0].questions.length, initial.banks[0].questions.length);
+  await page.locator('#favorites-list-v596 [data-preview-question="blank"]').click();
+  await page.locator('#practice-favorites-btn-v596').click();
+  assert.equal(await page.locator('#bank-question-detail').count(), 0);
+});
+
+test('收藏详情：翻页、切库与窄屏工具栏', async t => {
+  const initial = webState();
+  const bank = initial.banks[0];
+  bank.questions = Array.from({ length: 21 }, (_, index) => ({ ...bank.questions[0], id: 'favorite-' + index }));
+  initial.favorites = { 'bank-a': bank.questions.map(question => question.id), 'bank-b': ['same-id'] };
+  const page = await pageFor(t, JSON.stringify(initial));
+  page.setDefaultTimeout(5000);
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.locator('.nav[data-view="favorites"]').click();
+  await page.locator('#favorites-list-v596 [data-preview-question="favorite-0"]').click();
+  const pager = page.locator('#favorites-list-v596-pager');
+  await pager.getByRole('button', { name: '第 3 页', exact: true }).click();
+  assert.equal(await page.locator('#bank-question-detail').count(), 0);
+  assert.equal(await page.locator('#favorites-list-v596 .favorite-question-number').innerText(), '21');
+  assert.equal(await pager.evaluate(node => !node.closest('.table-wrap')), true);
+  await page.locator('#favorites-list-v596 [data-preview-question="favorite-20"]').click();
+  await page.setViewportSize({ width: 390, height: 900 });
+  await page.locator('#bank-question-detail').scrollIntoViewIfNeeded();
+  const layout = await page.locator('#bank-question-detail .bank-detail').evaluate(node => ({ width: node.getBoundingClientRect().width, available: node.closest('.table-wrap').clientWidth }));
+  assert.ok(layout.width <= layout.available + 1);
+  const button = page.locator('#bank-question-detail [data-close-detail]');
+  await button.scrollIntoViewIfNeeded();
+  const bounds = await button.boundingBox();
+  assert.ok(bounds.x >= 0 && bounds.x + bounds.width <= 390);
+  await page.locator('#active-bank-select').selectOption('bank-b');
+  assert.equal(await page.locator('#bank-question-detail').count(), 0);
+  assert.equal(await page.locator('#favorites-list-v596 .favorite-question-number').innerText(), '1');
+});
+
+test('收藏详情：迟到正文不覆盖当前页，失败可重试', async t => {
+  const initial = webState();
+  const bank = initial.banks[0];
+  bank.questions = Array.from({ length: 21 }, (_, index) => ({ ...bank.questions[0], id: 'favorite-load-' + index }));
+  initial.favorites = { 'bank-a': bank.questions.map(question => question.id) };
+  const page = await pageFor(t, JSON.stringify(initial));
+  page.setDefaultTimeout(5000);
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.locator('.nav[data-view="favorites"]').click();
+  await page.evaluate(() => {
+    globalThis.ShirohaPlatform.storage.ensureQuestions = async (_snapshot, refs) => {
+      if (refs[0]?.questionId === 'favorite-load-10') await new Promise(resolve => { globalThis.__finishFavoriteLoad = resolve; });
+      if (refs[0]?.questionId === 'favorite-load-20' && !globalThis.__favoriteRetry) throw Error('收藏加载模拟失败');
+    };
+  });
+  const pager = page.locator('#favorites-list-v596-pager');
+  await pager.getByRole('button', { name: '第 2 页', exact: true }).click();
+  await page.waitForFunction(() => globalThis.__finishFavoriteLoad);
+  await pager.getByRole('button', { name: '第 3 页', exact: true }).click();
+  await page.locator('#retry-favorites').waitFor();
+  assert.match(await page.locator('#favorites-list-v596').innerText(), /收藏题加载失败/);
+  await page.evaluate(() => { globalThis.__favoriteRetry = true; });
+  await page.locator('#retry-favorites').click();
+  await page.locator('[data-preview-question="favorite-load-20"]').waitFor();
+  await page.evaluate(() => globalThis.__finishFavoriteLoad());
+  assert.equal(await page.locator('.favorite-question-number').innerText(), '21');
 });
 
 test('题库批量操作栏保留表格间距，选择提示居中且零选择隐藏', async t => {
