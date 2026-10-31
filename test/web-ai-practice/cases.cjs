@@ -26,6 +26,7 @@ async function saveAndCheck(h, expected) {
 }
 
 const cases = [
+  ...require('./saved-analysis.cjs').cases,
   ...require('./wrong-analysis.cjs').cases,
   ...require('./submit-modes.cjs').cases,
   {
@@ -144,7 +145,7 @@ const cases = [
       await h.start(); await h.reveal();
       const original = await snapshot(h.page);
       const pending = h.mock.enqueue('analysis', analysis('DELAYED_Q1_DRAFT'), { hold: true });
-      await h.page.locator(SEL.open).click();
+      await h.requestAnalysis();
       const call = await h.waitCall(pending);
       assertPayload(call, 'SAFE_Q1', ['SAFE_Q2']);
       await h.jump(1); await h.reveal();
@@ -181,7 +182,7 @@ const cases = [
     async run(h) {
       await h.start(); await h.reveal();
       const pending = h.mock.enqueue('analysis', analysis('STALE_OLD_SESSION_RESULT'), { hold: true });
-      await h.page.locator(SEL.open).click(); await h.waitCall(pending);
+      await h.requestAnalysis(); await h.waitCall(pending);
       if (mode === 'exit') { await h.page.locator('#p-exit').click(); await h.start(); }
       else {
         // The focus layout hides setup controls; reveal layout only, then use the real handlers.
@@ -296,7 +297,7 @@ const cases = [
       await h.start(); await h.reveal();
       const before = await snapshot(h.page);
       const failure = h.mock.enqueue('analysis', '', { status: 503 });
-      await h.page.locator(SEL.open).click(); await h.waitCall(failure); await h.idle();
+      await h.requestAnalysis(); await h.waitCall(failure); await h.idle();
       assert.deepEqual(await snapshot(h.page), before);
       const pending = h.mock.enqueue('analysis', analysis('STOPPED_INITIAL_ANALYSIS'), { hold: true });
       await h.page.locator(SEL.regenerate).click(); await h.waitCall(pending);

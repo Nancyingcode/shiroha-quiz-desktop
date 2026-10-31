@@ -221,10 +221,13 @@ async function setup(browser, url, keys, { configured = true, rich = false, empt
   await page.route('https://mock-ai.invalid/**', route => mock.handle(route));
   if (typeof context.routeWebSocket === 'function') await context.routeWebSocket('**/*', socket => { blocked.push({ url: socket.url(), type: 'websocket' }); socket.close(); });
   await context.addInitScript(({ keys: storage, initial, key, ignoreAbort: ignore }) => {
-    localStorage.clear();
-    sessionStorage.clear();
-    localStorage.setItem(storage.state, JSON.stringify(initial));
-    sessionStorage.setItem(storage.session, key);
+    if (!sessionStorage.getItem('__webAiPracticeSeeded')) {
+      localStorage.clear();
+      sessionStorage.clear();
+      localStorage.setItem(storage.state, JSON.stringify(initial));
+      sessionStorage.setItem(storage.session, key);
+      sessionStorage.setItem('__webAiPracticeSeeded', '1');
+    }
     if (ignore) {
       // Fault injection: emulate a response that races with abort, exercising session identity guards.
       const original = window.fetch.bind(window);
@@ -257,7 +260,7 @@ async function setup(browser, url, keys, { configured = true, rich = false, empt
       await page.locator('#practice-start-mode-v58916').selectOption('from_start');
       await page.locator('#practice-limit').selectOption('all');
       await page.locator('#start-practice-btn').click();
-      await page.locator('#p-reveal').waitFor();
+      await page.locator('#p-next').waitFor();
     },
     async jump(index) { await page.locator(`[data-practice-jump="${index}"]`).click(); },
     async reveal() { await page.locator('#p-reveal').click(); },
@@ -281,9 +284,14 @@ async function setup(browser, url, keys, { configured = true, rich = false, empt
       await page.waitForFunction(({ selector, expected: text }) => document.querySelector(selector)?.textContent.includes(text), { selector: `${SEL.panel} ${SEL.text}`, expected }, { timeout });
       await harness.idle();
     },
+    async requestAnalysis({ regenerate = false } = {}) {
+      const opensSaved = !regenerate && !!String((await snapshot(page)).question.analysis || '').trim();
+      await page.locator(regenerate ? SEL.regenerate : SEL.open).click();
+      if (opensSaved) await page.locator(SEL.regenerate).click();
+    },
     async generate(result, { regenerate = false, status = 200, raw = false, visibleText } = {}) {
       const entry = mock.enqueue('analysis', result, { status, raw });
-      await page.locator(regenerate ? SEL.regenerate : SEL.open).click();
+      await harness.requestAnalysis({ regenerate });
       const call = await harness.waitCall(entry);
       if (status === 200 && !raw) await harness.text(visibleText || result.analysis);
       else await harness.idle();

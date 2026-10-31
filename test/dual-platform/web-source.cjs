@@ -10,7 +10,7 @@ const sourcePath = path.resolve(__dirname, '../../apps/web/app.js');
 const source = readFileSync(sourcePath, 'utf8');
 const exportedNames = [
   'listPageNumbers', 'listPageRange',
-  'renderReviewOptions', 'renderReviewAnswerSummary', 'renderPracticeWrongOverview',
+  'renderReviewOptions', 'renderReviewAnswerSummary', 'renderPracticeWrongOverview', 'renderTrainingQuestion',
   'repairCircledCombinationQuestion',
   'displayOptionTextV589',
   'normalizeQuestion', 'normalizeBackupPayloadV23', 'serializeBankForCrossExportV53',
