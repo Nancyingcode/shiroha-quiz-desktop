@@ -76,3 +76,25 @@ test('缺少 nativeQuestion 的旧错题按 questionId 补读，未知来源不�
   assert.equal(new Set(keys).size, 2);
   assert.doesNotMatch(api.renderPracticeWrongOverview({ ...record, bankId: '' }), /one解析|two解析/);
 });
+
+test('训练复盘补读明确来源的已保存解析，快照已有解析或来源缺失时保留历史语义', () => {
+  const q = { id: 'same-id', type: 'single', question: '当前题干', options: [], answer: ['A'], analysis: '来源题库解析' };
+  const { api } = loadWeb({ state: { banks: [{ id: 'source', questions: [q] }, { id: 'other', questions: [{ ...q, analysis: '其他题库解析' }] }], activeBankId: 'other' } });
+  const row = { index: 0, bankId: 'source', bankName: '来源', status: 'wrong', chosen: ['B'], question: { ...q, question: '历史题干', analysis: ' \n ' } };
+  const before = JSON.stringify(row);
+  const html = api.renderTrainingQuestion(row);
+  assert.match(html, /来源题库解析/);
+  assert.match(html, /历史题干/);
+  assert.doesNotMatch(html, /其他题库解析/);
+  assert.equal(JSON.stringify(row), before);
+  row.question.analysis = '历史原解析';
+  const historical = api.renderTrainingQuestion(row);
+  assert.match(historical, /历史原解析/);
+  assert.doesNotMatch(historical, /来源题库解析/);
+  row.question.analysis = '';
+  for (const bankId of ['', 'deleted-source']) {
+    const missing = api.renderTrainingQuestion({ ...row, bankId });
+    assert.match(missing, /题库未提供解析/);
+    assert.doesNotMatch(missing, /来源题库解析|其他题库解析/);
+  }
+});

@@ -189,6 +189,14 @@ const cases = [
       const after = await stored(h);
       assert.deepEqual(after.records, before.records);
       assert.equal(after.banks[0].questions.filter(q => q.analysis === 'EXAM_RESULT_DRAFT').length, 1);
+      await h.page.locator('#exam-review-result').click();
+      await h.page.locator('#training-question .training-analysis').filter({ hasText: 'EXAM_RESULT_DRAFT' }).waitFor();
+      await h.page.reload();
+      await h.page.locator('body[data-storage-state="ready"]').waitFor();
+      await h.page.locator('.nav[data-view="records"]').click();
+      await h.page.locator('#records [data-training-review]').first().click();
+      await h.page.locator('#training-question .training-analysis').filter({ hasText: 'EXAM_RESULT_DRAFT' }).waitFor();
+      assert.deepEqual((await stored(h)).records, before.records);
     },
   },
 ];

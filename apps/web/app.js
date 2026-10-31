@@ -8121,7 +8121,8 @@ async function openTrainingReview(id,origin){
   trainingReview={record,origin:from,focus,scroll,filter:'all',index:0};
   exitPracticeFocus();exitExamFocus();await switchViewV45('training-review');
   if(!$('#training-review.active')){trainingReview=null;return}
-  renderTrainingReview();$('#training-review-back')?.focus({preventScroll:true});
+  await renderTrainingReview();
+  if(trainingReview?.record===record)$('#training-review-back')?.focus({preventScroll:true});
 }
 async function closeTrainingReview(){
   const view=trainingReview;if(!view)return;
@@ -8132,19 +8133,27 @@ async function closeTrainingReview(){
 function renderTrainingQuestion(row){
   if(!row?.question)return '<p class="notice">未记录原题快照，无法还原这道题。</p>';
   const q={...row.question,type:normalizeWebQuestionType(row.question.type||row.detail?.type)},chosen=row.chosen||[],answer=q.answer||row.detail?.answer||[];
+  const analysis=reviewAnalysisText({bankId:row.bankId,question:q});
   const title=row.roundNumber?`本轮第 ${row.roundNumber} 题`:`历史明细第 ${row.index+1} 条（原题序未记录）`;
   const bankNumber=row.bankQuestionNumber?`题库第 ${row.bankQuestionNumber} 题`:'题库题号未记录';
   const status={correct:'✓ 正确',wrong:'× 错误',unanswered:'— 未作答',unrecorded:'未记录'}[row.status];
   const comparison=isMultiBlankQuestionV58914(q)?renderMultiBlankComparisonV58914(q.blankAnswers,chosen,true):`<div><b>你的答案：</b>${practiceReviewAnswerHtml(q,chosen)}</div><div class="training-reference-answer"><b>${q.type==='short'?'参考答案（人工自评）':'正确答案'}：</b>${hasAnswerValueV58914(answer)?practiceReviewAnswerHtml(q,answer):'题库未提供答案'}</div>`;
-  return `<article class="training-question-content"><div class="qmeta"><b>${title}</b><span class="pill">${bankNumber}</span><span>${esc(label(q.type))}</span><span>${esc(row.bankName)}</span><b class="training-status-${row.status}">${status}</b></div>${row.partial?'<p class="notice">旧记录未保存完整原题，以下仅为当时保存的摘要与答案。</p>':''}<div class="question-title">${renderQuestionBodyV83(q)}</div>${renderReviewOptions({...q,answer},chosen)}<div class="training-answer-comparison training-status-${row.status}">${comparison}</div>${row.revealed?'<p class="muted">本题曾查看答案，未正式提交。</p>':''}${hasAnswerValueV58914(row.draft)?`<div class="notice"><b>曾填写但未提交（不计成绩）：</b>${practiceReviewAnswerHtml(q,row.draft)}</div>`:''}<div class="training-analysis"><b>题目解析</b>${q.analysis?renderQuestionContent(q.analysis):'<p class="muted">题库未提供解析。</p>'}</div></article>`;
+  return `<article class="training-question-content"><div class="qmeta"><b>${title}</b><span class="pill">${bankNumber}</span><span>${esc(label(q.type))}</span><span>${esc(row.bankName)}</span><b class="training-status-${row.status}">${status}</b></div>${row.partial?'<p class="notice">旧记录未保存完整原题，以下仅为当时保存的摘要与答案。</p>':''}<div class="question-title">${renderQuestionBodyV83(q)}</div>${renderReviewOptions({...q,answer},chosen)}<div class="training-answer-comparison training-status-${row.status}">${comparison}</div>${row.revealed?'<p class="muted">本题曾查看答案，未正式提交。</p>':''}${hasAnswerValueV58914(row.draft)?`<div class="notice"><b>曾填写但未提交（不计成绩）：</b>${practiceReviewAnswerHtml(q,row.draft)}</div>`:''}<div class="training-analysis"><b>题目解析</b>${analysis?renderQuestionContent(analysis):'<p class="muted">题库未提供解析。</p>'}</div></article>`;
 }
-function renderTrainingReview(){
+async function renderTrainingReview(){
   const view=trainingReview;if(!view||!$('#training-review.active'))return;
+  const renderVersion=beginNativeRender('training-review');
   const record=view.record,rows=ShirohaTraining.reviewRows(record),counts={correct:0,wrong:0,unanswered:0,unrecorded:0};
   rows.forEach(row=>counts[row.status]++);
   const filtered=rows.filter(row=>view.filter==='all'||row.status===view.filter);
   if(filtered.length&&!filtered.some(row=>row.index===view.index))view.index=filtered[0].index;
   const position=filtered.findIndex(row=>row.index===view.index),selected=filtered[position];
+  const needsSourceAnalysis=selected?.question&&selected.bankId&&!String(selected.question.analysis||'').trim();
+  if(needsSourceAnalysis){
+    // 桌面摘要不含解析；只补读当前选题，切题或离开后的迟到读取不能重绘旧页面。
+    if(!await loadNativeItems([{bankId:selected.bankId,question:selected.question}]))return;
+    if(trainingReview!==view||renderVersion!==nativeRenderVersions.get('training-review')||!$('#training-review.active'))return;
+  }
   const missing=Math.max(0,Number(record.total||0)-rows.length),meta=record.reviewSummary;
   const denominator=meta?.submitMode==='single'?record.answered:record.total;
   const box=$('#training-review-content');box.dataset.recordId=record.id;
@@ -8155,8 +8164,8 @@ function renderTrainingReview(){
   card.innerHTML=pageRows.map(row=>`<button type="button" class="training-status-${row.status}" data-training-question="${row.index}" aria-label="${row.roundNumber?'第 '+row.roundNumber+' 题':'明细第 '+(row.index+1)+' 条'}，${{correct:'正确',wrong:'错误',unanswered:'未作答',unrecorded:'未记录'}[row.status]}" aria-pressed="${view.index===row.index}">${row.roundNumber||row.index+1} ${{correct:'✓',wrong:'×',unanswered:'—',unrecorded:'?'}[row.status]}</button>`).join('');
   $('#training-review-back').onclick=closeTrainingReview;
   $$('[data-training-filter]').forEach(button=>button.onclick=()=>{view.filter=button.dataset.trainingFilter;renderTrainingReview()});
-  $$('[data-training-question]').forEach(button=>button.onclick=()=>{view.index=Number(button.dataset.trainingQuestion);renderTrainingReview();$('#training-question')?.scrollIntoView({block:'nearest',behavior:'instant'})});
-  const jump=offset=>{const row=filtered[position+offset];if(!row)return;view.index=row.index;const page=nativePages.get(card.id);if(page)page.page=Math.floor((position+offset)/page.size);renderTrainingReview();$(offset>0?'#training-next':'#training-prev')?.focus({preventScroll:true})};
+  $$('[data-training-question]').forEach(button=>button.onclick=async()=>{const index=Number(button.dataset.trainingQuestion);view.index=index;await renderTrainingReview();if(trainingReview===view&&view.index===index)$('#training-question')?.scrollIntoView({block:'nearest',behavior:'instant'})});
+  const jump=async offset=>{const row=filtered[position+offset];if(!row)return;view.index=row.index;const page=nativePages.get(card.id);if(page)page.page=Math.floor((position+offset)/page.size);await renderTrainingReview();if(trainingReview===view&&view.index===row.index)$(offset>0?'#training-next':'#training-prev')?.focus({preventScroll:true})};
   $('#training-prev').onclick=()=>jump(-1);$('#training-next').onclick=()=>jump(1);
   $('#training-retry').onclick=async()=>{
     const wrongRows=rows.filter(row=>row.status==='wrong');
@@ -8848,10 +8857,16 @@ function renderPracticeAiPanelV613(){
   const inlineWrongAnalysis=st.answered&&st.correct===false&&(!String(q.analysis||'').trim()||!!review?.analysis);
   if(inlineWrongAnalysis){box.innerHTML='';return}
   const session=aiSingleSessionV613(key),result=session.analysis,busy=!!session.loading;
-  if(!session.expanded){box.className='practice-ai-entry-v613';box.innerHTML=`<button class="ghost mini-btn" type="button" data-ai-single-open-v613="1" aria-expanded="false">${busy?'AI 解析中……':result?'查看 AI 解析':'AI 解析'}</button>`;bindPracticeAiPanelV613();return}
+  const savedAnalysis=String(q.analysis||'').trim();
+  const hasSavedAnalysis=!result&&!!savedAnalysis;
+  const entryText=result||hasSavedAnalysis?'查看 AI 解析':'AI 解析';
+  let panelStatus=result?'已生成':'按需生成';
+  if(hasSavedAnalysis)panelStatus='已保存';
+  if(busy)panelStatus=session.loading==='followUp'?'追问中……':'生成中……';
+  if(!session.expanded){box.className='practice-ai-entry-v613';box.innerHTML=`<button class="ghost mini-btn" type="button" data-ai-single-open-v613="1" aria-expanded="false">${busy?'AI 解析中……':entryText}</button>`;bindPracticeAiPanelV613();return}
   box.className='practice-ai-panel-v613';
   const {configured,config}=aiSingleConfigV613();
-  const blocks=[`<div class="practice-ai-head-v613"><div><b>AI 单题解析</b><span>${configured||config.execution?.mode==='harness'?esc(aiExecutionLabelV99(config))+(config.model?' · '+esc(config.model):''):'尚未配置 AI 服务'}</span></div><span class="pill practice-ai-status-v613${busy?' is-busy':''}">${busy?(session.loading==='followUp'?'追问中……':'生成中……'):result?'已生成':'按需生成'}</span></div>`];
+  const blocks=[`<div class="practice-ai-head-v613"><div><b>AI 单题解析</b><span>${configured||config.execution?.mode==='harness'?esc(aiExecutionLabelV99(config))+(config.model?' · '+esc(config.model):''):'尚未配置 AI 服务'}</span></div><span class="pill practice-ai-status-v613${busy?' is-busy':''}">${panelStatus}</span></div>`];
   blocks.push(`<div class="actions practice-ai-actions-v613"><button class="ghost mini-btn" type="button" data-ai-single-close-v613="1" aria-expanded="true">收起 AI 面板</button>${busy?'<button class="ghost mini-btn" type="button" data-ai-single-stop-v613="1">停止请求</button>':''}</div>`);
   if(aiSingleHasImagesV613(item))blocks.push('<p class="practice-ai-warn-v613">本次仅发送文字，未发送题目图片；AI 无法读取图表细节，请人工核对。</p>');
   if(config.execution?.mode==='harness')blocks.push(`<p class="practice-ai-hint-v613">${esc(aiHarnessPrivacyV99(config,'本题文字、参考答案、作答及追问记录'))}</p>`);
@@ -8863,6 +8878,9 @@ function renderPracticeAiPanelV613(){
     if(result.needsReview)blocks.push('<p class="practice-ai-warn-v613">需要人工确认：AI 对本题答案没有把握，请自行核对后再决定是否写入题库。</p>');
     if(result.warning)blocks.push(`<p class="practice-ai-note-v613">${esc(result.warning)}</p>`);
     blocks.push(`<div class="actions practice-ai-actions-v613"><button class="primary mini-btn" type="button" data-ai-single-save-v613="1" ${(!result.analysis||busy||saved)?'disabled':''}>${saved?'已写入题库解析':'保存到题库解析'}</button><button class="ghost mini-btn" type="button" data-ai-single-analysis-v613="1" ${(!configured||busy)?'disabled':''}>重新生成</button><button class="ghost mini-btn" type="button" data-ai-single-follow-v613="1" ${busy?'disabled':''}>${session.followUpOpen?'收起追问':'追问'}</button></div>`);
+  }else if(hasSavedAnalysis){
+    blocks.push(`<p class="practice-ai-hint-v613">题库已保存解析</p><div class="practice-ai-text-v613">${renderQuestionContent(savedAnalysis)}</div>`);
+    blocks.push(`<div class="actions practice-ai-actions-v613"><button class="ghost mini-btn" type="button" data-ai-single-analysis-v613="1" ${(!configured||busy)?'disabled':''}>重新生成</button>${configured?'':'<button class="ghost mini-btn" type="button" data-ai-single-settings-v613="1">前往 AI 设置</button>'}</div>`);
   }else{
     blocks.push('<p class="practice-ai-hint-v613">只把当前这道题的题干、选项、答案和你的作答发给 AI，生成一段简短解析；结果先作为草稿，确认后再写入题库。</p>');
     blocks.push(`<div class="actions practice-ai-actions-v613"><button class="primary mini-btn" type="button" data-ai-single-analysis-v613="1" ${(!configured||busy)?'disabled':''}>${busy?'生成中……':'AI 解析'}</button>${configured?'':'<button class="ghost mini-btn" type="button" data-ai-single-settings-v613="1">前往 AI 设置</button>'}</div>`);
@@ -8875,7 +8893,7 @@ function renderPracticeAiPanelV613(){
   bindPracticeAiPanelV613();
 }
 function bindPracticeAiPanelV613(){
-  const open=$('#p-ai-v613 [data-ai-single-open-v613]');if(open)open.onclick=()=>{const session=aiSingleSessionV613(practiceItemKeyV8916(currentPracticeItemV8916()));session.expanded=true;renderPracticeAiPanelV613();if(!session.analysis&&!session.loading)runAiSingleAnalysisV613()};
+  const open=$('#p-ai-v613 [data-ai-single-open-v613]');if(open)open.onclick=()=>{const item=currentPracticeItemV8916(),session=aiSingleSessionV613(practiceItemKeyV8916(item));session.expanded=true;renderPracticeAiPanelV613();if(!session.analysis&&!session.loading&&!String(practiceQuestionV8916(item).analysis||'').trim())runAiSingleAnalysisV613()};
   const close=$('#p-ai-v613 [data-ai-single-close-v613]');if(close)close.onclick=()=>{aiSingleSessionV613(practiceItemKeyV8916(currentPracticeItemV8916())).expanded=false;renderPracticeAiPanelV613()};
   const stop=$('#p-ai-v613 [data-ai-single-stop-v613]');if(stop)stop.onclick=()=>{const session=aiSingleSessionV613(practiceItemKeyV8916(currentPracticeItemV8916()));session.requestId++;session.controller?.abort();session.controller=null;session.loading='';session.notice='已请求停止，已有解析和草稿已保留；请等待任务结束后重试。';renderPracticeAiPanelV613()};
   const analysis=$('#p-ai-v613 [data-ai-single-analysis-v613]');if(analysis)analysis.onclick=()=>runAiSingleAnalysisV613();

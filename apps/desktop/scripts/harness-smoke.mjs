@@ -92,6 +92,7 @@ export async function harnessSmoke(page,startPractice) {
     await page.locator('#practice-card .option[data-key="B"]').click();
     const beforeAi = await persistedState(page);
     await page.locator('[data-ai-single-open-v613]').click();
+    await page.locator('[data-ai-single-analysis-v613]').click();
     await page.waitForFunction(()=>document.querySelector('#p-ai-v613 .practice-ai-text-v613')?.textContent?.includes('隔离 Harness 测试解析。'));
     assert(await page.locator('#practice-card .option[data-key="B"] input').isChecked(),'AI 改变了作答草稿');
     assert.match(await page.locator('#p-total-status').innerText(),/已填写 1 题/);

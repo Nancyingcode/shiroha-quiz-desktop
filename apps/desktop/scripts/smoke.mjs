@@ -882,6 +882,7 @@ async function totalPracticeSmoke(runtime, bankName, origin) {
   assert(await page.locator('#practice-card .option[data-key="B"] input').isChecked());
   assert.equal(await page.locator('#p-reveal, #p-submit').count(), 0);
   await page.locator('[data-ai-single-open-v613]').click();
+  await page.locator('[data-ai-single-analysis-v613]').click();
   await page.waitForFunction(() => document.querySelector('#p-ai-v613')?.textContent?.includes('NATIVE_PRACTICE_AI'));
   assert(await page.locator('#practice-card .option[data-key="B"] input').isChecked());
   assert.match(await page.locator('#p-total-status').innerText(), /已填写 1 题/);
@@ -942,12 +943,26 @@ async function wrongAnalysisSmoke(page) {
   await page.locator('#back-practice-setup').click();
   await page.reload();
   await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.locator('.nav[data-view="records"]').click();
+  await page.locator('#records .record-item').filter({ hasText: bankName }).first().locator('[data-training-review]').click();
+  await page.locator('#training-question .training-analysis').filter({ hasText: 'NATIVE_PRACTICE_AI' }).waitFor();
+  await page.screenshot({ path: path.join(path.dirname(SCREENSHOT_PATH), 'saved-analysis-review.png'), fullPage: true });
+  await page.locator('#training-review-back').click();
+  await page.locator('.nav[data-view="practice"]').click();
+  await page.locator('#start-practice-btn').click();
+  await page.locator('[data-ai-single-open-v613]').click();
+  await page.locator('#p-ai-v613 .practice-ai-text-v613').filter({ hasText: 'NATIVE_PRACTICE_AI' }).waitFor();
+  assert.equal(await page.locator('[data-ai-single-save-v613]').count(), 0);
+  await page.screenshot({ path: path.join(path.dirname(SCREENSHOT_PATH), 'saved-analysis-practice.png'), fullPage: true });
+  await page.locator('#p-exit').click();
+  await page.locator('#app-dialog [data-dialog-accept]').click();
+  await page.locator('#back-practice-setup').click();
   await page.locator('.nav[data-view="wrongbook"]').click();
   const restored = page.locator('#wrongbook-list [data-review-analysis]').first();
   await restored.locator('.q-multiline-text').filter({ hasText: 'NATIVE_PRACTICE_AI' }).waitFor();
   assert.equal(await restored.locator('[data-review-ai="generate"]').count(), 0);
   assert.equal(await page.locator('#wrongbook-list .review-answer-wrong .review-answer-value').innerText(), 'B');
-  return { emptyState: true, nativeAi: true, confirmedSave: true, persistedAfterReload: true };
+  return { emptyState: true, nativeAi: true, confirmedSave: true, persistedAfterReload: true, sourceAnalysisInReview: true, savedPracticePanel: true };
 }
 
 async function main() {

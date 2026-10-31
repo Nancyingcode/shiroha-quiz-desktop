@@ -83,6 +83,7 @@ const cases = [
       assert(await h.page.locator('#practice-card .option[data-key="B"] input').isChecked());
       assert.deepEqual((await snapshot(h.page)).records, before.records);
       assert.equal(h.mock.calls.length, 0);
+      await h.page.locator('#practice-resume').click();
       await h.generate(analysis('AI_AFTER_SETTINGS'), { regenerate: true });
       assert.equal((await snapshot(h.page)).practice.answered, 0);
     },

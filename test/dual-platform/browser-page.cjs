@@ -35,6 +35,56 @@ async function pageFor(t, raw, injection = '') {
 }
 const saved = page => page.evaluate(key => globalThis.localStorage.getItem(key), KEY);
 
+test('训练复盘：按选题补读保存解析，离开页面后忽略迟到渲染', async t => {
+  const initial = webState();
+  const bank = initial.banks[0];
+  bank.questions = bank.questions.slice(0, 2).map(q => ({ ...q, analysis: '' }));
+  initial.banks = [bank];
+  initial.records = [{ ...initial.records[0], bankId: bank.id, details: bank.questions.map(q => ({ questionId: q.id, sourceBankId: bank.id, nativeQuestion: q, chosen: ['B'], correct: false })) }];
+  const page = await pageFor(t, JSON.stringify(initial)); page.setDefaultTimeout(5000);
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  const before = JSON.parse(await saved(page)).records;
+  await page.evaluate(() => {
+    globalThis.__reviewReads = [];
+    globalThis.ShirohaPlatform.storage.ensureQuestions = async (snapshot, refs) => {
+      globalThis.__reviewReads.push(refs);
+      await new Promise(resolve => { globalThis.__finishReviewRead = resolve; });
+      for (const ref of refs) snapshot.banks.find(bank => bank.id === ref.bankId).questions.find(q => q.id === ref.questionId).analysis = '已保存的来源解析：' + ref.questionId;
+    };
+  });
+  await page.locator('.nav[data-view="records"]').click();
+  await page.locator('#records [data-training-review]').click();
+  await page.waitForFunction(() => globalThis.__reviewReads.length === 1);
+  assert.deepEqual(await page.evaluate(() => globalThis.__reviewReads), [[{ bankId: bank.id, questionId: bank.questions[0].id }]]);
+  await page.evaluate(() => globalThis.__finishReviewRead());
+  await page.locator('.training-analysis').filter({ hasText: '已保存的来源解析：' + bank.questions[0].id }).waitFor();
+  await page.waitForFunction(() => globalThis.document.activeElement?.id === 'training-review-back');
+  await page.locator('#training-next').click();
+  await page.waitForFunction(() => globalThis.__reviewReads.length === 2);
+  await page.locator('.nav[data-view="dashboard"]').click();
+  await page.evaluate(() => globalThis.__finishReviewRead());
+  await page.waitForTimeout(100);
+  assert.equal(await page.locator('#training-review-content').innerHTML(), '');
+  assert.equal(await page.locator('#dashboard.active').count(), 1);
+  assert.deepEqual(JSON.parse(await saved(page)).records, before);
+});
+
+test('训练复盘：未知来源不读取当前题库的同 ID 解析', async t => {
+  const initial = webState();
+  const q = { ...initial.banks[0].questions[0], analysis: '' };
+  initial.records = [{ ...initial.records[0], bankId: '', details: [{ questionId: q.id, nativeQuestion: q, chosen: ['B'], correct: false }] }];
+  const page = await pageFor(t, JSON.stringify(initial)); page.setDefaultTimeout(3000);
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.evaluate(() => {
+    globalThis.__unknownSourceReads = 0;
+    globalThis.ShirohaPlatform.storage.ensureQuestions = async () => { globalThis.__unknownSourceReads++; throw new Error('未知来源不能补读当前库'); };
+  });
+  await page.locator('.nav[data-view="records"]').click();
+  await page.locator('#records [data-training-review]').click();
+  await page.locator('#training-question .training-analysis').filter({ hasText: '题库未提供解析。' }).waitFor();
+  assert.equal(await page.evaluate(() => globalThis.__unknownSourceReads), 0);
+});
+
 test('训练计时：宽屏统计栏不遮挡暂停按钮', async t => {
   const initial = webState(); initial.records = [];
   initial.banks = [initial.banks[0]];

@@ -93,6 +93,7 @@ async function questionSmoke(page,startPractice) {
     await page.locator('#practice-card .option[data-key="B"]').click();
     const before=await persistedState(page);
     await page.locator('[data-ai-single-open-v613]').click();
+    await page.locator('[data-ai-single-analysis-v613]').click();
     await page.waitForFunction(()=>document.querySelector('.practice-ai-text-v613')?.textContent?.includes('隔离 CodeBuddy 测试解析。'));
     assert(await page.locator('#practice-card .option[data-key="B"] input').isChecked(),'CodeBuddy 不能改动答题草稿');
     assert.match(await page.locator('#p-ai-v613').innerText(),/CodeBuddy Harness/);
