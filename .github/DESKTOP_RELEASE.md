@@ -53,7 +53,11 @@ gh workflow run desktop-release.yml --repo Nancyingcode/shiroha-quiz-desktop --r
 
 ## 检查与草稿
 
-构建复用现有 Node.js 24.17.0、Rust 1.99.1 和 `windows-2025`，执行现有 JavaScript、浏览器、Rust 两种 feature 检查及三种构建。普通安装包在离线构建前另存，避免同名文件被覆盖。正常 PR/main 检查默认不收集附件，也不创建草稿。
+构建复用现有 Node.js 24.17.0、Rust 1.99.1 和 `windows-2025`，执行现有 JavaScript、浏览器、Rust 两种 feature 检查。通过 `npm run build -- --target x86_64-pc-windows-msvc` 编译一次正常发行 EXE，再依次执行 `npm run bundle:nsis`、`npm run bundle:offline` 生成两种安装包；两者只切换打包配置，不重新编译。独立 EXE 在打包器修改二进制的安装类型标记前另存，普通安装包在离线打包前另存，避免同名文件被覆盖。正常 PR/main 检查默认不收集附件，也不创建草稿。
+
+Rust 依赖缓存由 [rust-cache](https://github.com/Swatinem/rust-cache) 按工具链、Cargo 清单和锁文件等构建输入区分，main 检查成功后保存，后续 Release 可以恢复主线缓存；不缓存工作区自身的应用制品，不跳过检查。首次缓存未命中时仍正常编译。上述 `bundle:*` 命令遵循 [Tauri 分离编译与打包的流程](https://v2.tauri.app/distribute/)，仅用于已对当前提交完成 x64 编译的目录；单独在本地生成安装包仍可使用原有 `build:nsis`、`build:offline` 命令。
+
+[优化前的 0.1.1 Release 运行](https://github.com/Nancyingcode/shiroha-quiz-desktop/actions/runs/40769313633) 总耗时约 28 分 54 秒，其中普通安装包重复编译耗时 5 分 02 秒，离线安装包再次编译耗时 1 分 36 秒。本次移除这两次编译并加入依赖缓存；实际总耗时还受运行器、缓存恢复、离线运行时下载与压缩影响，需在更新后的 Actions 运行中测量。
 
 本次运行的制品名为 `windows-release-<run_id>-<run_attempt>`，保留 14 天，包含五个 Release 附件和 `release-notes.md`。暂存目录为 `apps/desktop/.reports/desktop-release/<run_id>-<run_attempt>/`；本地和 CI 均拒绝同名覆盖、链接路径、空文件、附件清单异常和摘要不符。独立 EXE 与安装包只来自正常 release 输出，测试 feature 制品不进入分发。
 

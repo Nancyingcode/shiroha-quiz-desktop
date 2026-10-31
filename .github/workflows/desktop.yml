@@ -47,6 +47,13 @@ jobs:
         run: |
           rustup toolchain install 1.99.1 --profile minimal --component rustfmt --component clippy
           rustup default 1.99.1
+      - name: Restore Rust dependency cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri -> target
+          shared-key: windows-2025-x64
+          cache-bin: false
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: npm ci --no-audit --no-fund
       - name: Check pull request commit messages
         if: github.event_name == 'pull_request'
@@ -66,15 +73,15 @@ jobs:
       - run: cargo clippy --manifest-path src-tauri/Cargo.toml --locked --all-targets --features native-test -- -D warnings
       - run: cargo test --manifest-path src-tauri/Cargo.toml --locked
       - run: cargo test --manifest-path src-tauri/Cargo.toml --locked --features native-test
-      - run: npm run build
+      - run: npm run build -- --target x86_64-pc-windows-msvc
       - name: Preserve standalone executable
         if: inputs.collect_release == true
         run: node scripts/release-artifacts.mjs stage exe
-      - run: npm run build:nsis
+      - run: npm run bundle:nsis
       - name: Preserve online installer before offline build overwrites it
         if: inputs.collect_release == true
         run: node scripts/release-artifacts.mjs stage nsis
-      - run: npm run build:offline
+      - run: npm run bundle:offline
       - name: Preserve offline installer and verify release assets
         if: inputs.collect_release == true
         run: |
