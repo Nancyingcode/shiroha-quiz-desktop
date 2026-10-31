@@ -128,7 +128,7 @@ export async function stageArtifact(root, context, kind) {
   if (kind !== 'exe') await nonemptyFile(path.join(output, names.exe));
   if (kind === 'offline') await nonemptyFile(path.join(output, names.nsis));
   const source = kind === 'exe'
-    ? path.join(root, 'src-tauri/target/release/shiroha-quiz-desktop.exe')
+    ? path.join(root, 'src-tauri/target/x86_64-pc-windows-msvc/release/shiroha-quiz-desktop.exe')
     : path.join(root, `src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/Shiroha Quiz_${context.version}_x64-setup.exe`);
   const destination = path.join(output, names[kind]);
   await nonemptyFile(source);

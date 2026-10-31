@@ -12,7 +12,7 @@ const input = {
   ref: 'refs/tags/desktop-v0.1.0', commit: 'a'.repeat(40),
   repository: 'example/quiz', runId: '1234', runAttempt: '1',
 };
-const executable = 'src-tauri/target/release/shiroha-quiz-desktop.exe';
+const executable = 'src-tauri/target/x86_64-pc-windows-msvc/release/shiroha-quiz-desktop.exe';
 const installer = 'src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/Shiroha Quiz_0.1.0_x64-setup.exe';
 
 /** @param {import('node:test').TestContext} t */
@@ -103,6 +103,8 @@ test('rejects duplicate runs and files, missing or empty output, and unexpected 
   const f = await fixture(t);
   await initializeRelease(f.root, f.context);
   await assert.rejects(initializeRelease(f.root, f.context), /EEXIST/);
+  await f.put('src-tauri/target/release/shiroha-quiz-desktop.exe', 'MZ stale host build');
+  await f.put('src-tauri/target/native-test/release/shiroha-quiz-desktop.exe', 'MZ test build');
   await assert.rejects(stageArtifact(f.root, f.context, 'exe'), /ENOENT/);
   await f.put(executable, '');
   await assert.rejects(stageArtifact(f.root, f.context, 'exe'), /empty|非空/i);
@@ -259,7 +261,7 @@ test('post-upload verification rejects public or incomplete releases without mod
 test('workflow preserves the online build before overwrite and gates writes behind checks', async () => {
   const checks = await readFile(new URL('../../../.github/workflows/desktop.yml', import.meta.url), 'utf8');
   const release = await readFile(new URL('../../../.github/workflows/desktop-release.yml', import.meta.url), 'utf8');
-  const sequence = ['npm run build\n', 'release-artifacts.mjs stage exe', 'npm run build:nsis', 'release-artifacts.mjs stage nsis', 'npm run build:offline', 'release-artifacts.mjs stage offline', 'release-artifacts.mjs finalize', 'uses: actions/upload-artifact@'];
+  const sequence = ['npm run build -- --target x86_64-pc-windows-msvc\n', 'release-artifacts.mjs stage exe', 'npm run bundle:nsis', 'release-artifacts.mjs stage nsis', 'npm run bundle:offline', 'release-artifacts.mjs stage offline', 'release-artifacts.mjs finalize', 'uses: actions/upload-artifact@'];
   let previous = -1;
   for (const step of sequence) {
     const position = checks.replace(/\r\n/g, '\n').indexOf(step);
@@ -274,4 +276,30 @@ test('workflow preserves the online build before overwrite and gates writes behi
   assert.match(release, /draft:\s+needs: \[validate, checks\][\s\S]*?permissions:\s+contents: write/);
   assert.equal((release.match(/contents: write/g) ?? []).length, 1);
   assert.doesNotMatch(release, /always\(\)|continue-on-error/);
+});
+
+test('installer packaging reuses one x64 build and only changes bundle settings', async () => {
+  const checks = await readFile(new URL('../../../.github/workflows/desktop.yml', import.meta.url), 'utf8');
+  const { scripts } = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
+  assert.equal((checks.match(/- run: npm run build\b/g) ?? []).length, 1);
+  assert.doesNotMatch(checks, /npm run build:(?:nsis|offline)/);
+  for (const [kind, mode] of [['nsis', 'downloadBootstrapper'], ['offline', 'offlineInstaller']]) {
+    assert.equal(scripts[`bundle:${kind}`], `tauri bundle --config src-tauri/tauri.${kind}.conf.json --target x86_64-pc-windows-msvc`);
+    const config = JSON.parse(await readFile(new URL(`../src-tauri/tauri.${kind}.conf.json`, import.meta.url), 'utf8'));
+    assert.deepEqual(Object.keys(config).sort(), ['$schema', 'bundle']);
+    assert.equal(config.bundle.active, true);
+    assert.deepEqual(config.bundle.targets, ['nsis']);
+    assert.equal(config.bundle.windows.webviewInstallMode.type, mode);
+  }
+});
+
+test('Rust dependency cache is restored after selecting the toolchain and shared with releases', async () => {
+  const checks = await readFile(new URL('../../../.github/workflows/desktop.yml', import.meta.url), 'utf8');
+  const cache = checks.indexOf('uses: Swatinem/rust-cache@');
+  assert.ok(cache > checks.indexOf('rustup default 1.99.1'));
+  assert.ok(cache < checks.indexOf('cargo clippy'));
+  assert.match(checks, /workspaces: apps\/desktop\/src-tauri -> target/);
+  assert.match(checks, /shared-key: windows-2025-x64/);
+  assert.match(checks, /save-if: \$\{\{ github\.ref == 'refs\/heads\/main' \}\}/);
+  assert.doesNotMatch(checks, /cache-workspace-crates: ['"]?true|cache-on-failure: ['"]?true/);
 });
