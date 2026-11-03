@@ -3250,7 +3250,7 @@ function tryParseAutoJsonImportV58922(text){
     return data&&typeof data==='object'?data:null;
   }catch(_){return null}
 }
-function parseImport(){
+async function parseImport(){
   cancelAiPreviewRequestV991(true);
   resetAiSuggestionsV991();
   closeAiPreviewPanelV991();
@@ -3267,7 +3267,21 @@ function parseImport(){
     const explicitJson=$('#import-mode').value==='json';
     const autoJson=explicitJson?null:tryParseAutoJsonImportV58922(text);
     if(explicitJson||autoJson!==null){
-      const data=explicitJson?JSON.parse(text):autoJson;const arr=Array.isArray(data)?data:(data.questions||[]);
+      const data=explicitJson?JSON.parse(text):autoJson;
+      if(Array.isArray(data.banks)){
+        const normalized=normalizeBackupPayloadV23(data,importSourceMetaV376.name||'导入备份.json');
+        if(!normalized.banks.length){showNotice('识别失败','备份中没有可导入的题库。','danger');return}
+        const total=normalized.banks.reduce((n,bank)=>n+bank.questions.length,0);
+        const accepted=await ShirohaDialogs.confirm(`识别到备份：${normalized.banks.length} 个题库，${total} 道题，${normalized.records.length} 条学习记录。将按原分组合并导入题库、错题、收藏和学习记录，保留当前数据；同名题库会自动重命名。确定导入？`);
+        if(!accepted)return;
+        await runMutation(async()=>{
+          await applyBackupImportV23(normalized,'merge',countUnresolvedBackupImagesV24(data));
+          importCache=[];importSelected.clear();renderImportPreview([]);
+          showNotice('备份导入完成',`已合并导入 ${normalized.banks.length} 个题库、${total} 道题及对应的错题、收藏和学习记录。`,'ok');
+        });
+        return;
+      }
+      const arr=Array.isArray(data)?data:(data.questions||[]);
       importCache=arr.map(normalizeQuestion).filter(q=>q.question);importReport='解析策略：JSON结构化导入。';importDiagnostics={mode:'JSON结构化导入',strategy:'JSON结构化导入',profile:{},candidates:[{name:'JSON结构化导入',questions:importCache.length,score:importCache.length*10,warnings:collectImportWarnings(importCache)}],expected:{total:0,types:{}},stats:countTypes(importCache)};
     }else importCache=parseTextQuestions(text,strategy);
     importSelected.clear();
@@ -9476,6 +9490,27 @@ function applyBackupAssetsV24(value,assets,seen=new Set()){
 }
 function countUnresolvedBackupImagesV24(value,seen=new Set()){if(!value||typeof value!=='object'||seen.has(value))return 0;seen.add(value);if(Array.isArray(value))return value.reduce((n,x)=>n+countUnresolvedBackupImagesV24(x,seen),0);let count=0;if(Array.isArray(value.images))count+=value.images.filter(img=>{const src=String(img&& (img.dataUrl||img.localPath)||'');return src&&!/^data:image\//i.test(src)}).length;for(const [k,x] of Object.entries(value)){if(k!=='images')count+=countUnresolvedBackupImagesV24(x,seen)}return count}
 
+// 调用方须先进入页面写入事务，确保两个导入入口共用保存和失败回滚边界。
+async function applyBackupImportV23(normalized,mode,unresolvedImageCount=0){
+  if(unresolvedImageCount&&ShirohaPlatform.storage.checkpoint)throw new Error('备份缺少图片，尚未更改本地数据。请补齐原始图片后重试。');
+  if(!normalized.banks.length){toast('没有在 JSON 中找到可导入的题库。','warn');return}
+  const previousStateJson=JSON.stringify(state);
+  if(mode==='overwrite'){
+    if(!await ShirohaDialogs.confirm(`覆盖恢复会清空当前本地数据，并导入 ${normalized.banks.length} 个题库。确定继续？`))return;
+    if(!await loadNativeAll())throw new Error('恢复前读取失败，原数据已保留。');
+    await ShirohaPlatform.storage.checkpoint?.();
+    await ShirohaPlatform.harness?.cancelAll();
+    if(ShirohaPlatform.credentials.native)await ShirohaPlatform.credentials.reset();
+    const previousWebSettings=state.settings&&typeof state.settings==='object'?state.settings:{};state.schemaVersion=CURRENT_SCHEMA_VERSION;state.banks=normalized.banks.map(b=>({...b,groupName:normalizeBankGroupNameV58(b.groupName)}));state.activeBankId=normalized.activeBankId||state.banks[0]?.id||'';state.wrongBook=normalized.wrongBook||{};state.favorites=normalized.favorites||{};state.records=Array.isArray(normalized.records)?normalized.records:[];state.settings=normalized.hasWebSettings&&normalized.settings&&typeof normalized.settings==='object'?normalized.settings:previousWebSettings;state.crossPlatformMeta=normalized.crossPlatformMeta&&typeof normalized.crossPlatformMeta==='object'?normalized.crossPlatformMeta:{favoriteQuestions:{}};
+  }else{
+    mergeBackupBanksV23(normalized);
+  }
+  upgradeState();ensureDefaultBank();
+  try{await saveSilent()}catch(storageError){const previous=JSON.parse(previousStateJson);Object.keys(state).forEach(k=>delete state[k]);Object.assign(state,previous);upgradeState();throw new Error('导入内容超过浏览器本地存储容量，已恢复导入前数据。可减少图片后重试，或只导入部分题库。')}
+  renderAll();setupEnhancedDataToolsV23();
+  const total=normalized.banks.reduce((n,b)=>n+(b.questions||[]).length,0);
+  toast(`导入完成：${normalized.banks.length} 个题库，${total} 道题。${unresolvedImageCount?` 另有 ${unresolvedImageCount} 张图片未包含在备份文件中，Web 端无法显示。`:''}`,unresolvedImageCount?'warn':'ok');
+}
 function importBackupJsonFileV23(e){
   const file=e.target.files&&e.target.files[0];if(!file)return;
   (async()=>{return runMutation(async()=>{
@@ -9483,25 +9518,7 @@ function importBackupJsonFileV23(e){
       const loaded=await readBackupFileV24(file);const text=loaded.text;
       setBackupPreviewV23(text);
       const data=JSON.parse(text);applyBackupAssetsV24(data,loaded.assets||{});const unresolvedImageCount=countUnresolvedBackupImagesV24(data);const normalized=normalizeBackupPayloadV23(data,file.name);
-      if(unresolvedImageCount&&ShirohaPlatform.storage.checkpoint)throw new Error('备份缺少图片，尚未更改本地数据。请补齐原始图片后重试。');
-      if(!normalized.banks.length){toast('没有在 JSON 中找到可导入的题库。','warn');return}
-      const mode=backupImportModeV23||'merge';
-      const previousStateJson=JSON.stringify(state);
-      if(mode==='overwrite'){
-        if(!await ShirohaDialogs.confirm(`覆盖恢复会清空当前本地数据，并导入 ${normalized.banks.length} 个题库。确定继续？`))return;
-        if(!await loadNativeAll())throw new Error('恢复前读取失败，原数据已保留。');
-        await ShirohaPlatform.storage.checkpoint?.();
-        await ShirohaPlatform.harness?.cancelAll();
-        if(ShirohaPlatform.credentials.native)await ShirohaPlatform.credentials.reset();
-        const previousWebSettings=state.settings&&typeof state.settings==='object'?state.settings:{};state.schemaVersion=CURRENT_SCHEMA_VERSION;state.banks=normalized.banks.map(b=>({...b,groupName:normalizeBankGroupNameV58(b.groupName)}));state.activeBankId=normalized.activeBankId||state.banks[0]?.id||'';state.wrongBook=normalized.wrongBook||{};state.favorites=normalized.favorites||{};state.records=Array.isArray(normalized.records)?normalized.records:[];state.settings=normalized.hasWebSettings&&normalized.settings&&typeof normalized.settings==='object'?normalized.settings:previousWebSettings;state.crossPlatformMeta=normalized.crossPlatformMeta&&typeof normalized.crossPlatformMeta==='object'?normalized.crossPlatformMeta:{favoriteQuestions:{}};
-      }else{
-        mergeBackupBanksV23(normalized);
-      }
-      upgradeState();ensureDefaultBank();
-      try{await saveSilent()}catch(storageError){const previous=JSON.parse(previousStateJson);Object.keys(state).forEach(k=>delete state[k]);Object.assign(state,previous);upgradeState();throw new Error('导入内容超过浏览器本地存储容量，已恢复导入前数据。可减少图片后重试，或只导入部分题库。')}
-      renderAll();setupEnhancedDataToolsV23();
-      const total=normalized.banks.reduce((n,b)=>n+(b.questions||[]).length,0);
-      toast(`导入完成：${normalized.banks.length} 个题库，${total} 道题。${unresolvedImageCount?` 另有 ${unresolvedImageCount} 张图片未包含在备份文件中，Web 端无法显示。`:''}`,unresolvedImageCount?'warn':'ok');
+      await applyBackupImportV23(normalized,backupImportModeV23||'merge',unresolvedImageCount);
     }catch(err){toast('导入备份失败：'+err.message,'danger')}
     finally{if(!mutationSaveError)e.target.value=''}
   });})();
