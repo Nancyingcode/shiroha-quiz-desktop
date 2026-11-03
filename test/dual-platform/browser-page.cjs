@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 const { chromium } = require('../../apps/desktop/node_modules/playwright-core');
 const { startServer, WEB_ROOT } = require('../web-ai-practice/harness.cjs');
 const { webState } = require('./fixtures/dataset.cjs');
+const { loadWeb, plain } = require('./web-source.cjs');
 const { pathToFileURL } = require('node:url');
 const path = require('node:path');
 const KEY = 'shiroha_quiz_state_v28_4_c1';
@@ -34,6 +35,98 @@ async function pageFor(t, raw, injection = '') {
   return page;
 }
 const saved = page => page.evaluate(key => globalThis.localStorage.getItem(key), KEY);
+
+function importBackupFixture() {
+  const initial = webState();
+  initial.records[0].id = 'backup-record';
+  initial.banks.push({ ...initial.banks[1], id: 'bank-c', name: '第三个题库', groupName: '另一分组' });
+  const { api } = loadWeb({ state: initial });
+  return plain(api.buildBackupPayloadV23(api.snapshot().banks, 'all_data', true));
+}
+
+for (const mode of ['auto', 'json']) {
+  test(`完整备份从开始识别合并恢复，分组和学习数据重启后保留：${mode}`, async t => {
+    const page = await pageFor(t, JSON.stringify(webState()));
+    await page.locator('body[data-storage-state="ready"]').waitFor();
+    await page.locator('#save-all-btn').click();
+    await page.locator('body[data-storage-state="ready"]').waitFor();
+    const before = JSON.parse(await saved(page));
+    const backup = importBackupFixture();
+    const confirmations = [];
+    page.on('app-dialog', dialog => confirmations.push(dialog.message()));
+    await page.locator('.nav[data-view="import"]').click();
+    await page.locator('#import-mode').selectOption(mode);
+    await page.locator('#import-file').setInputFiles({ name: 'shiroha-quiz-all-data-fixture.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(backup)) });
+    await page.waitForFunction(() => globalThis.document.getElementById('import-text').value.includes('backup-record'));
+    await page.locator('#parse-import-btn').click();
+    await page.getByText('备份导入完成', { exact: true }).waitFor();
+    const after = JSON.parse(await saved(page));
+    const imported = after.banks.slice(before.banks.length);
+    assert.equal(imported.length, 3);
+    assert.match(confirmations[0], /3 个题库，9 道题，1 条学习记录/);
+    assert.deepEqual(after.banks.slice(0, before.banks.length), before.banks);
+    assert.deepEqual(imported.map(bank => bank.groupName), backup.banks.map(bank => bank.groupName));
+    assert.deepEqual(imported.map(bank => bank.questions.length), [7, 1, 1]);
+    assert.notEqual(imported[0].id, before.banks[0].id);
+    assert.match(imported[0].name, /导入/);
+    assert.deepEqual(imported[0].questions[6].extensions, backup.banks[0].questions[6].extensions);
+    assert.deepEqual(after.wrongBook[imported[0].id], backup.wrongBook['bank-a']);
+    assert.deepEqual(after.favorites[imported[0].id], backup.favorites['bank-a']);
+    assert.deepEqual(after.favorites[imported[1].id], backup.favorites['bank-b']);
+    assert.deepEqual(after.records.slice(0, before.records.length), before.records);
+    const record = after.records.at(-1);
+    assert.equal(record.id, 'backup-record');
+    assert.equal(record.bankId, imported[0].id);
+    assert.equal(record.details[0].sourceBankId, imported[0].id);
+    assert.deepEqual(record.details[0].userBlankAnswers, backup.records[0].details[0].userBlankAnswers);
+    assert.deepEqual(after.crossPlatformMeta.favoriteQuestions[imported[0].id], backup.webState.crossPlatformMeta.favoriteQuestions['bank-a']);
+    assert.equal(await page.locator('#confirm-import-btn').isDisabled(), true);
+    await page.reload();
+    await page.locator('body[data-storage-state="ready"]').waitFor();
+    assert.deepEqual(JSON.parse(await saved(page)), after);
+  });
+}
+
+test('取消开始识别中的备份合并，保留当前数据和原始 JSON', async t => {
+  const page = await pageFor(t, JSON.stringify(webState()));
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  const before = await saved(page);
+  const text = JSON.stringify(importBackupFixture());
+  page.removeAllListeners('app-dialog');
+  page.on('app-dialog', dialog => dialog.dismiss());
+  await page.locator('.nav[data-view="import"]').click();
+  await page.locator('#import-text').fill(text);
+  const opened = page.waitForEvent('app-dialog');
+  await page.locator('#parse-import-btn').click();
+  await opened;
+  await page.locator('#app-dialog').waitFor({ state: 'hidden' });
+  assert.equal(await saved(page), before);
+  assert.equal(await page.locator('#import-text').inputValue(), text);
+});
+
+test('开始识别中的备份保存失败保全原数据，重试成功只合并一次', async t => {
+  const page = await pageFor(t, JSON.stringify(webState()));
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  const before = JSON.parse(await saved(page));
+  const text = JSON.stringify(importBackupFixture());
+  await page.evaluate(() => {
+    const write = globalThis.ShirohaPlatform.storage.write;
+    globalThis.__resumeBackupWrite = () => { globalThis.ShirohaPlatform.storage.write = write; };
+    globalThis.ShirohaPlatform.storage.write = async () => { throw new Error('Synthetic backup save failure'); };
+  });
+  await page.locator('.nav[data-view="import"]').click();
+  await page.locator('#import-text').fill(text);
+  await page.locator('#parse-import-btn').click();
+  await page.locator('#platform-status.failed').waitFor();
+  assert.deepEqual(JSON.parse(await saved(page)), before);
+  assert.equal(await page.locator('#import-text').inputValue(), text);
+  await page.evaluate(() => globalThis.__resumeBackupWrite());
+  await page.locator('#platform-status').getByRole('button', { name: '重试', exact: true }).click();
+  await page.getByText('备份导入完成', { exact: true }).waitFor();
+  const after = JSON.parse(await saved(page));
+  assert.equal(after.banks.length, before.banks.length + 3);
+  assert.equal(after.records.length, before.records.length + 1);
+});
 
 test('训练复盘：按选题补读保存解析，离开页面后忽略迟到渲染', async t => {
   const initial = webState();
