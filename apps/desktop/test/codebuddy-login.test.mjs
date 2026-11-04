@@ -27,12 +27,13 @@ function status(phase = 'signed_out', revision = 0) {
   return { phase, revision, loginUrl: phase === 'authenticating' ? 'https://copilot.tencent.com/login?platform=CLI&state=synthetic' : '', message: `合成状态：${phase}`, browserOpened: phase === 'authenticating', busy: ['authenticating','restoring'].includes(phase), rememberLogin:false, persistenceState:'none', persistenceErrorCode:null };
 }
 
-/** @param {{desktop?:boolean,loading?:boolean}} [options] */
+/** @param {{desktop?:boolean,loading?:boolean,cli?:boolean,cliSelected?:boolean,clipboard?:boolean}} [options] */
 function fixture(options = {}) {
-  const names = ['settings', 'phase', 'status', 'login', 'details', 'login-url', 'browser-status', 'open-login', 'copy-link', 'refresh', 'cancel', 'logout', 'remember', 'retry-restore', 'retry-save'];
+  const names = ['settings', 'phase', 'status', 'login', 'details', 'login-url', 'browser-status', 'open-login', 'copy-link', 'refresh', 'cancel', 'logout', 'remember', 'retry-restore', 'retry-save', 'cli-guide', 'copy-command'];
   const elements = new Map(names.map(name => [`ai-codebuddy-${name}`, new Element()]));
   /** @param {string} name */
   const get = name => { const element = elements.get(`ai-codebuddy-${name}`); assert(element); return element; };
+  if (options.cli) get('settings').dataset.authSource = 'cli';
   /** @type {Array<{command:string,request:Record<string,unknown>}>} */ const calls = [];
   /** @type {string[]} */ const copied = [];
   /** @type {Array<{revision:number,phase:string,blocked:boolean}>} */ const accounts = [];
@@ -46,13 +47,13 @@ function fixture(options = {}) {
   };
   const context = {
     ShirohaDesktopHost: options.desktop === false ? undefined : host,
-    ShirohaPlatform: {harness:{codebuddyAccountChanged(/** @type {{revision:number,phase:string,blocked:boolean}} */ account) {accounts.push(account);}}},
+    ShirohaPlatform: {harness:{status(){return {adapter:options.cliSelected?'codebuddy':'codex',mode:'harness'};},codebuddyAccountChanged(/** @type {{revision:number,phase:string,blocked:boolean}} */ account) {accounts.push(account);}}},
     document: {
       readyState: options.loading ? 'loading' : 'complete',
       getElementById: (/** @type {string} */ id) => elements.get(id),
       addEventListener: (/** @type {string} */ name, /** @type {()=>void} */ callback) => events.set(name, callback),
     },
-    navigator: { clipboard: { async writeText(/** @type {string} */ text) { copied.push(text); } } },
+    navigator: options.clipboard === false ? {} : { clipboard: { async writeText(/** @type {string} */ text) { copied.push(text); } } },
     setTimeout: (/** @type {()=>void|Promise<void>} */ callback) => { const id = ++timerId; timers.set(id, callback); return id; },
     clearTimeout: (/** @type {number} */ id) => timers.delete(id),
     addEventListener: (/** @type {string} */ name, /** @type {()=>void} */ callback) => events.set(name, callback),
@@ -291,7 +292,7 @@ test('model account invalidation requests a readonly card refresh without restar
   assert.equal(f.calls.length,2);
 });
 
-test('shared HTML keeps the account card hidden and makes remembered login opt-in', async () => {
+test('shared HTML keeps the account card hidden and guides CLI login', async () => {
   const html = await readFile(new URL('../../web/index.html', import.meta.url), 'utf8');
   assert.match(html, /id="ai-codebuddy-settings"[^>]*hidden/);
   assert.match(html, /id="ai-codebuddy-status"[^>]*role="status"[^>]*aria-live="polite"/);
@@ -303,13 +304,108 @@ test('shared HTML keeps the account card hidden and makes remembered login opt-i
   assert.match(html, /<label for="ai-codebuddy-model">/);
   assert.match(html, /id="ai-codebuddy-model-status"[^>]*role="status"[^>]*aria-live="polite"/);
   assert.match(html, /id="ai-codebuddy-model-retry"[^>]*hidden/);
-  assert.match(html, /关闭应用后需要重新登录/);
-  assert.match(html, /id="ai-codebuddy-remember"[^>]*type="checkbox"/);
-  assert.doesNotMatch(html, /id="ai-codebuddy-remember"[^>]*\bchecked\b/);
-  assert.match(html, /下次启动会联网核验登录状态，不会自动调用模型/);
+  assert.match(html, /id="ai-codebuddy-settings"[^>]*data-auth-source="cli"/);
+  assert.match(html, /id="ai-codebuddy-cli-guide"/);
+  assert.match(html, /打开终端/);
+  assert.match(html, /<code>codebuddy<\/code>/);
+  assert.match(html, /国内站/);
+  assert.match(html, /返回.*刷新登录状态/);
+  for (const name of ['remember','login','logout','cancel','login-url']) assert.doesNotMatch(html, new RegExp(`id="ai-codebuddy-${name}"`));
   assert.doesNotMatch(html, /<script[^>]*codebuddy-login\.js/);
   for (const provider of ['codex','codebuddy','deepseek']) assert.match(html, new RegExp(`<option value="${provider}">`, 'i'));
   assert.match(html, /id="ai-codex-settings"[^>]*class="notice"/);
   assert.match(html, /id="ai-deepseek-settings"[^>]*hidden/);
   assert(html.indexOf('id="ai-codebuddy-settings"') < html.indexOf('id="ai-api-settings-fields"'), '账户面板应在 Harness 容器内');
+});
+
+test('CLI signed-out state displays login guidance and copies only the fixed command', async () => {
+  const f = fixture({cli:true});
+  f.respond(async()=>({...status(),authSource:'cli',cliLoginAvailable:false}));
+  f.start(); await setImmediate();
+  assert.equal(f.get('cli-guide').hidden,false);
+  f.get('copy-command').click(); await setImmediate();
+  assert.deepEqual(f.copied,['codebuddy']);
+  assert.deepEqual(f.calls.map(call=>call.request.kind),['status']);
+});
+
+test('CLI refresh binds the observed account revision and never starts an app login', async () => {
+  const f = fixture({cli:true});
+  f.respond(async()=>({...status('signed_out',4),authSource:'cli',cliLoginAvailable:false}));
+  f.start(); await setImmediate();
+  f.get('refresh').click(); await setImmediate();
+  assert.equal(f.calls.at(-1)?.request.kind,'refresh');
+  assert.equal(f.calls.at(-1)?.request.revision,4);
+  assert.deepEqual(Object.keys(f.calls.at(-1)?.request || {}).sort(),['kind','revision']);
+  assert.equal(f.calls.some(call=>['login','set_remember','logout'].includes(String(call.request.kind))),false);
+});
+
+test('CLI verified state hides guidance and preserves the provider account observation', async () => {
+  const f = fixture({cli:true});
+  f.respond(async()=>({...status('signed_in',7),authSource:'cli',cliLoginAvailable:true}));
+  f.start(); await setImmediate();
+  assert.equal(f.get('cli-guide').hidden,true);
+  assert.equal(f.accounts.at(-1)?.revision,7);
+  assert.equal(f.accounts.at(-1)?.blocked,false);
+});
+
+test('selected CodeBuddy verifies an available CLI source once without invoking a model', async () => {
+  const f = fixture({cli:true,cliSelected:true});
+  f.respond(async kind=>({...status(kind==='refresh'?'restoring':'signed_out',3),authSource:'cli',cliLoginAvailable:true}));
+  f.start(); await setImmediate();
+  assert.deepEqual(f.calls.map(call=>call.request.kind),['status','refresh']);
+  f.respond(async()=>({...status('signed_in',4),authSource:'cli',cliLoginAvailable:true}));
+  await f.tick();
+  assert.equal(f.get('cli-guide').hidden,true);
+  assert.equal(f.calls.every(call=>call.command==='codebuddy_control'),true);
+});
+
+test('restore barrier does not automatically reconnect and page exit stops CLI polling', async () => {
+  const f = fixture({cli:true,cliSelected:true});
+  f.respond(async()=>({...status('signed_out',9),authSource:'cli',cliLoginAvailable:false}));
+  f.start(); await setImmediate();
+  assert.deepEqual(f.calls.map(call=>call.request.kind),['status']);
+  assert.equal(f.timers.size,1);
+  f.events.get('pagehide')?.();
+  assert.equal(f.timers.size,0);
+});
+
+test('CLI guidance falls back to manual input when the clipboard API is unavailable', async () => {
+  const f = fixture({cli:true,clipboard:false});
+  f.respond(async()=>({...status(),authSource:'cli',cliLoginAvailable:false}));
+  f.start(); await setImmediate();
+  f.get('copy-command').click(); await setImmediate();
+  assert.match(f.get('status').textContent,/手动输入 codebuddy/);
+  assert.deepEqual(f.copied,[]);
+});
+
+test('background CLI reads keep the current label and refresh keyboard access stable', async () => {
+  const f = fixture({cli:true});
+  const signedIn = {...status('signed_in',2),authSource:'cli',cliLoginAvailable:true};
+  f.respond(async()=>signedIn); f.start(); await setImmediate();
+  /** @type {(value:unknown)=>void} */ let resolve = ()=>{};
+  const response = new Promise(accept=>{resolve=accept;});
+  f.respond(()=>response);
+  const pending = f.tick();
+  assert.equal(f.get('phase').textContent,'个人账户已登录');
+  assert.equal(f.get('settings').attributes.get('aria-busy'),'false');
+  assert.equal(f.get('refresh').disabled,false);
+  resolve(signedIn); await pending;
+});
+
+test('manual CLI refresh supersedes a stalled read and ignores its late account result', async () => {
+  const f = fixture({cli:true});
+  f.respond(async()=>({...status('signed_in',2),authSource:'cli',cliLoginAvailable:true}));
+  f.start(); await setImmediate();
+  /** @type {(value:unknown)=>void} */ let resolve = ()=>{};
+  const response = new Promise(accept=>{resolve=accept;});
+  f.respond(()=>response);
+  const pending = f.tick();
+  f.respond(async()=>({...status('signed_out',4),authSource:'cli',cliLoginAvailable:false}));
+  f.get('refresh').click(); await setImmediate();
+  assert.equal(f.calls.at(-1)?.request.kind,'refresh');
+  resolve({...status('signed_in',3),authSource:'cli',cliLoginAvailable:true}); await pending;
+  assert.equal(f.get('cli-guide').hidden,false);
+  assert.equal(f.accounts.at(-1)?.revision,4);
+  assert.equal(f.accounts.at(-1)?.blocked,true);
+  assert.equal(f.timers.size,1);
 });

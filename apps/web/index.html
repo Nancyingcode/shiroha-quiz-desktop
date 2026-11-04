@@ -413,11 +413,14 @@ C. 判断题
                 </details>
                 <div id="ai-harness-status" class="notice" role="status" aria-live="polite">尚未检测。</div>
               </div>
-              <div id="ai-codebuddy-settings" class="notice" role="group" aria-labelledby="ai-codebuddy-title" hidden>
+              <div id="ai-codebuddy-settings" data-auth-source="cli" class="notice" role="group" aria-labelledby="ai-codebuddy-title" hidden>
                 <div class="section-head"><h3 id="ai-codebuddy-title">CodeBuddy 个人账户</h3><span id="ai-codebuddy-phase" class="pill">读取中</span></div>
-                <p>未开启记住登录时，关闭应用后需要重新登录；已保存的登录过期后仍需重新授权。</p>
-                <label class="ai-checkbox-row-v99"><input id="ai-codebuddy-remember" type="checkbox" disabled aria-describedby="ai-codebuddy-remember-help" />在此设备记住登录</label>
-                <p id="ai-codebuddy-remember-help" class="muted">主动开启后安全保存到本机。下次启动会联网核验登录状态，不会自动调用模型。</p>
+                <p>使用 CodeBuddy CLI 登录状态。登录、续期和退出由 CLI 管理；客户端不另存登录凭据，关闭应用不会退出 CLI。</p>
+                <div id="ai-codebuddy-cli-guide" class="notice">
+                  <b>尚未登录？请先在 CodeBuddy CLI 完成登录</b>
+                  <ol><li>打开终端（PowerShell 或命令提示符）。</li><li>运行 <code>codebuddy</code>；未安装时先按 <a href="https://www.codebuddy.cn/docs/cli/installation" target="_blank" rel="noopener noreferrer">官方安装说明</a>安装。</li><li>选择国内站，按 CLI 提示在浏览器完成个人账户登录。</li><li>返回本页面，点击“刷新登录状态”。</li></ol>
+                  <button id="ai-codebuddy-copy-command" class="ghost" type="button">复制登录命令</button>
+                </div>
                 <p class="muted">CodeBuddy 当前支持连接测试、单题解析和追问；暂不支持导入与批量任务。每次最多等待 120 秒。执行会使用当前个人账户并消耗账户用量。</p>
                 <label for="ai-codebuddy-model">CodeBuddy 模型</label>
                 <select id="ai-codebuddy-model" aria-describedby="ai-codebuddy-model-status"><option value="deepseek-v4.1-flash">DeepSeek V4.1 Flash</option><option value="hy4-preview">Hy4 preview</option><option value="hy3">Hy3</option><option value="default">Default（服务端默认）</option></select>
@@ -427,18 +430,9 @@ C. 判断题
                 <div class="actions"><button id="ai-codebuddy-prepare" class="ghost" type="button">准备组件</button><button id="ai-codebuddy-prepare-cancel" class="ghost" type="button" hidden>取消准备</button><button id="ai-codebuddy-stop" class="ghost" type="button" hidden>停止 CodeBuddy 任务</button></div>
                 <p class="muted">组件准备和登录不会调用模型。就绪后可点击下方“测试连接”，或在练习中主动生成单题解析。</p>
                 <div class="actions">
-                  <button id="ai-codebuddy-login" class="primary" type="button" disabled>登录 CodeBuddy</button>
-                  <button id="ai-codebuddy-refresh" class="ghost" type="button">刷新状态</button>
-                  <button id="ai-codebuddy-cancel" class="ghost" type="button" hidden>取消登录</button>
-                  <button id="ai-codebuddy-logout" class="ghost danger" type="button" hidden>退出登录</button>
-                </div>
-                <div id="ai-codebuddy-details" class="notice" hidden>
-                  <p id="ai-codebuddy-browser-status">请在浏览器完成个人账户登录。</p>
-                  <label>当前官方登录地址<input id="ai-codebuddy-login-url" type="url" readonly spellcheck="false" autocomplete="off" /></label>
-                  <div class="actions"><button id="ai-codebuddy-open-login" class="ghost" type="button">重新打开授权页</button><button id="ai-codebuddy-copy-link" class="ghost" type="button">复制登录链接</button></div>
+                  <button id="ai-codebuddy-refresh" class="ghost" type="button">刷新登录状态</button>
                 </div>
                 <p id="ai-codebuddy-status" class="notice" role="status" aria-live="polite">正在读取 CodeBuddy 登录状态…</p>
-                <div class="actions"><button id="ai-codebuddy-retry-restore" class="ghost" type="button" hidden>重试恢复登录</button><button id="ai-codebuddy-retry-save" class="ghost" type="button" hidden>重试保存登录</button></div>
                 <p id="ai-codebuddy-execution-status" class="notice" role="status" aria-live="polite">请准备组件并完成登录。</p>
               </div>
               <div id="ai-deepseek-settings" class="notice" role="group" aria-labelledby="ai-deepseek-title" hidden>

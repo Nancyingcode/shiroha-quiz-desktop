@@ -3,7 +3,7 @@ import { markNativeIsolation } from './native-isolation.mjs';
 import { createNativeMock, nativeServiceSmoke } from './network-smoke.mjs';
 import { documentSmoke } from './document-smoke.mjs';
 import { harnessSmoke, harnessSwitchingSmoke } from './harness-smoke.mjs';
-import { codebuddyLoginSmoke, codebuddyLoginAfterRestart, codebuddyLoginPersistenceSmoke } from './codebuddy-login-smoke.mjs';
+import { codebuddyCliSmoke, codebuddyCliAfterRestart, codebuddyCliPersistenceSmoke } from './codebuddy-cli-smoke.mjs';
 import { spawn, execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { mkdir, mkdtemp, realpath, rm, stat, readFile, writeFile } from 'node:fs/promises';
@@ -1107,7 +1107,7 @@ async function main() {
     await check('空解析错题主动 AI 生成、确认保存与原生重载', () => wrongAnalysisSmoke(page));
     await check('订阅 Harness 登录、既有 AI 任务与取消草稿保全',()=>harnessSmoke(page,()=>practiceImportedBank(page,bankName)));
     await check('Harness 下载中切换与组件缓存复用',()=>harnessSwitchingSmoke(page,profile));
-    await check('CodeBuddy 登录、单题解析、追问与配置保全',()=>codebuddyLoginSmoke(page,()=>practiceImportedBank(page,bankName)));
+    await check('CodeBuddy CLI 登录引导、单题解析、追问与配置保全',()=>codebuddyCliSmoke(page,profile,()=>practiceImportedBank(page,bankName)));
     await check('MathJax 本地公式', () => mathSmoke(page));
     await check('PDF.js 本地模块与 Worker', () => pdfSmoke(page));
     await check('Tesseract 本地 OCR', () => ocrSmoke(page));
@@ -1131,8 +1131,8 @@ async function main() {
     await stop(runtime); runtime = undefined;
     runtime = await launch(executable, profile, proxyPort);
     const memoryRestart = runtime;
-    await check('CodeBuddy 仅内存登录在重启后清除',()=>codebuddyLoginAfterRestart(memoryRestart.page));
-    await check('CodeBuddy 记住登录、关闭记住与退出跨重启验证',()=>codebuddyLoginPersistenceSmoke(memoryRestart.page, async()=>{
+    await check('CodeBuddy CLI 登录在重启后重新核验',()=>codebuddyCliAfterRestart(memoryRestart.page));
+    await check('CodeBuddy CLI 过期引导、重启复用与退出跨重启验证',()=>codebuddyCliPersistenceSmoke(memoryRestart.page,profile, async()=>{
       assert(runtime);
       await stop(runtime); runtime = undefined;
       runtime = await launch(executable, profile, proxyPort);

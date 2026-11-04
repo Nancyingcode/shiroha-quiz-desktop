@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { setTimeout as delay } from 'node:timers/promises';
 
+export { apiSettings, executionStatus, persistedState, questionSmoke, selectCodeBuddyModel, selectProvider, status, waitForPhase };
+
 const LOGIN_TIMEOUT_MS = 15_000;
 const LOGIN_POLL_MS = 50;
 

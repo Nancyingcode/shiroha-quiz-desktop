@@ -90,6 +90,27 @@ pub(crate) struct Store {
 }
 
 impl Store {
+    pub(crate) fn retire_legacy(root: &Path) -> Result<()> {
+        Self::retire_with(root, || Self::open(root))
+    }
+
+    fn retire_with(root: &Path, open: impl FnOnce() -> Result<Self>) -> Result<()> {
+        let database = root.join(DATABASE);
+        reject_links(&database)?;
+        if !database.try_exists()? {
+            return Ok(());
+        }
+        match open() {
+            Ok(mut store) => store.revoke(),
+            Err(error) => {
+                if error.code != "codebuddy_store_in_use" {
+                    Self::mark_revoked_without_store(root)?;
+                }
+                Err(error)
+            }
+        }
+    }
+
     pub(crate) fn open(root: &Path) -> Result<Self> {
         #[cfg(feature = "native-test")]
         let provider = SyntheticProvider::open(root)?;
@@ -475,6 +496,41 @@ mod tests {
             expires_at_ms: now_ms().unwrap() + 60_000,
             saved_at_ms: now_ms().unwrap(),
         }
+    }
+
+    #[test]
+    fn retiring_absent_legacy_storage_creates_nothing() {
+        let (root, _) = fixture();
+        Store::retire_with(&root, || panic!("absent legacy storage must not be opened")).unwrap();
+        assert!(!root.exists());
+    }
+
+    #[test]
+    fn retiring_legacy_storage_revokes_before_failed_cleanup_and_can_retry() {
+        let (root, provider) = fixture();
+        let mut store = Store::open_with(&root, provider.clone()).unwrap();
+        let record = store.stage(&secret(3000)).unwrap();
+        store.commit(&record).unwrap();
+        drop(store);
+        provider.lock().unwrap().fail_delete = true;
+        assert!(Store::retire_with(&root, || Store::open_with(&root, provider.clone())).is_err());
+        let reopened = Store::open_with(&root, provider.clone()).unwrap();
+        assert!(reopened.active().unwrap().is_none());
+        drop(reopened);
+        provider.lock().unwrap().fail_delete = false;
+        Store::retire_with(&root, || Store::open_with(&root, provider.clone())).unwrap();
+        assert!(provider.lock().unwrap().values.is_empty());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn corrupt_legacy_metadata_still_gets_a_durable_revocation_marker() {
+        let (root, _) = fixture();
+        fs::create_dir(&root).unwrap();
+        fs::write(root.join(DATABASE), "synthetic-corrupt-database").unwrap();
+        assert!(Store::retire_with(&root, || Err(invalid())).is_err());
+        assert_eq!(fs::read(root.join(REVOKED)).unwrap(), b"revoked");
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

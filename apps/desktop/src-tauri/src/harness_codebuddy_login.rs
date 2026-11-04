@@ -11,6 +11,8 @@ use uuid::Uuid;
 #[path = "harness_codebuddy_login_store.rs"]
 mod persistence;
 use persistence::{Job, PersistenceState};
+#[path = "harness_codebuddy_login_cli.rs"]
+mod cli;
 
 const LOGIN_PREFIX: &str = "https://copilot.tencent.com/login?";
 const SIGNED_OUT_MESSAGE: &str = "尚未登录 CodeBuddy。";
@@ -28,6 +30,9 @@ const MAX_LOGIN_URL_BYTES: usize = 1024;
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Control {
     Status {},
+    Refresh {
+        revision: u64,
+    },
     Login {
         revision: u64,
         #[serde(default)]
@@ -60,6 +65,10 @@ enum Phase {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Status {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    auth_source: Option<&'static str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    cli_login_available: Option<bool>,
     phase: Phase,
     revision: u64,
     login_url: String,
@@ -86,6 +95,7 @@ pub(crate) struct ExecutionStatus {
 }
 
 struct Inner {
+    cli: Option<cli::CliState>,
     phase: Phase,
     revision: u64,
     login_url: String,
@@ -169,6 +179,7 @@ impl Login {
     pub fn new() -> Self {
         Self {
             inner: Mutex::new(Inner {
+                cli: None,
                 phase: Phase::SignedOut,
                 revision: 0,
                 login_url: String::new(),
@@ -188,8 +199,16 @@ impl Login {
     }
 
     pub(crate) fn control(self: &Arc<Self>, request: Control) -> Result<Status> {
+        if self.cli_enabled()? {
+            return match request {
+                Control::Status {} => self.status(),
+                Control::Refresh { revision } => self.refresh_cli(revision),
+                _ => Err(Error::new("codebuddy_cli_action_unsupported")),
+            };
+        }
         match request {
             Control::Status {} => self.status(),
+            Control::Refresh { .. } => Err(Error::new("codebuddy_cli_action_unsupported")),
             Control::Login { revision, remember } => {
                 let attempt = self.start_remembered(revision, remember)?;
                 let initial = self.status()?;
@@ -209,6 +228,7 @@ impl Login {
     }
 
     fn status(&self) -> Result<Status> {
+        self.check_cli(true)?;
         let mut state = self
             .inner
             .lock()
@@ -218,6 +238,7 @@ impl Login {
     }
 
     pub(crate) fn execution_status(&self) -> Result<ExecutionStatus> {
+        self.check_cli(true)?;
         let mut state = self
             .inner
             .lock()
@@ -232,6 +253,7 @@ impl Login {
     }
 
     pub(crate) fn ensure_execution_current(&self, expected_revision: u64) -> Result<()> {
+        self.check_cli(true)?;
         let mut state = self
             .inner
             .lock()
@@ -258,6 +280,7 @@ impl Login {
         expected_account_revision: u64,
         task_cancel: Arc<AtomicBool>,
     ) -> Result<ExecutionLease> {
+        self.check_cli(true)?;
         if task_cancel.load(Ordering::Acquire) {
             return Err(Error::new("cancelled"));
         }
@@ -501,7 +524,7 @@ impl Login {
 impl Inner {
     fn has_account(&self) -> bool {
         self.phase == Phase::SignedIn
-            && !self.storage_blocked()
+            && (self.cli.is_some() || !self.storage_blocked())
             && (self.session.is_some() || self.lease.is_some())
     }
 
@@ -566,6 +589,11 @@ impl Inner {
 
     fn snapshot(&self) -> Status {
         Status {
+            auth_source: self.cli.as_ref().map(|_| "cli"),
+            cli_login_available: self
+                .cli
+                .as_ref()
+                .map(|cli| cli.available && !cli.restore_blocked),
             phase: self.phase,
             revision: self.revision,
             login_url: self.login_url.clone(),
@@ -850,6 +878,10 @@ async fn watch_expiration(service: Weak<Login>, revision: u64, id: Uuid, cancel:
             cancel.store(true, Ordering::Release);
             return;
         };
+        if service.check_cli(false).is_err() {
+            cancel.store(true, Ordering::Release);
+            return;
+        }
         let Ok(mut state) = service.inner.lock() else {
             cancel.store(true, Ordering::Release);
             return;

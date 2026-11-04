@@ -32,6 +32,7 @@
     const panel = document.getElementById('ai-codebuddy-settings');
     if (!panel || panel.dataset.initialized === 'true') return;
     panel.dataset.initialized = 'true';
+    if (panel.dataset.authSource === 'cli') { initializeCli(panel); return; }
     /** @param {string} name */
     const element = name => document.getElementById(`ai-codebuddy-${name}`);
     /** @param {string} name */
@@ -219,6 +220,105 @@
     scope.addEventListener('pagehide', () => { disposed = true; generation++; stopPolling(); clearTimeout(readTimer); readTimer = undefined; }, { once:true });
     render();
     void refreshStatus();
+  }
+  /** @param {HTMLElement} panel */
+  function initializeCli(panel) {
+    /** @typedef {import('../../web/platform/runtime').CodeBuddyCliAccountStatus} CliStatus */
+    /** @param {string} name */
+    const element = name => document.getElementById(`ai-codebuddy-${name}`);
+    const refresh = /** @type {HTMLButtonElement|null} */ (element('refresh'));
+    /** @type {CliStatus|undefined} */ let current;
+    /** @type {ReturnType<typeof setTimeout>|undefined} */ let timer;
+    /** @type {Set<ReturnType<typeof setTimeout>>} */ const readTimeouts = new Set();
+    let sequence = 0;
+    let disposed = false;
+    /** @type {'status'|'refresh'|undefined} */ let reading;
+    let failed = false;
+    let autoRevision = -1;
+    let notice = '';
+
+    /** @param {boolean} blocked */
+    function notify(blocked) {
+      if (current) scope.ShirohaPlatform?.harness?.codebuddyAccountChanged({revision:current.revision,phase:current.phase,blocked});
+    }
+    function renderCli() {
+      const checkingAccount = reading === 'refresh' || current?.phase === 'restoring';
+      const initialRead = !current && !!reading;
+      panel.setAttribute('aria-busy',String(checkingAccount || initialRead));
+      panel.dataset.phase = current?.phase || 'loading';
+      const phase = element('phase');
+      let phaseLabel = labels[current?.phase || 'signed_out'];
+      if (current?.phase === 'restoring') phaseLabel = '正在核验 CLI 登录';
+      if (!current || reading === 'refresh') phaseLabel = '读取中';
+      if (failed) phaseLabel = '读取失败';
+      if (phase && phase.textContent !== phaseLabel) phase.textContent = phaseLabel;
+      const message = element('status');
+      const messageText = notice || current?.message || '正在读取 CodeBuddy CLI 登录状态…';
+      if (message && message.textContent !== messageText) message.textContent = messageText;
+      const guide = element('cli-guide');
+      if (guide) guide.hidden = current?.phase === 'signed_in' && !failed;
+      if (refresh) { refresh.disabled = reading === 'refresh' || initialRead || current?.busy === true; refresh.textContent = '刷新登录状态'; }
+    }
+    /** @param {'status'|'refresh'} [kind] */
+    async function readCli(kind = 'status') {
+      if (disposed) return;
+      if (kind === 'refresh' && !current) kind = 'status';
+      const supersedesRead = kind === 'refresh' && reading === 'status';
+      if (reading && !supersedesRead) return;
+      clearTimeout(timer); timer = undefined;
+      const requestSequence = ++sequence;
+      reading = kind; failed = false; notice = '';
+      if (kind === 'refresh') notify(true);
+      renderCli();
+      let shouldAutoRefresh = false;
+      /** @type {ReturnType<typeof setTimeout>|undefined} */ let requestTimeout;
+      try {
+        /** @type {import('../../web/platform/runtime').CodeBuddyCliControl} */
+        const request = kind === 'refresh' && current ? {kind,revision:current.revision} : {kind:'status'};
+        const value = await Promise.race([host?.invoke('codebuddy_control',{request}),new Promise((_,reject)=>{requestTimeout=setTimeout(()=>reject(new Error('status_timeout')),statusTimeoutMs);readTimeouts.add(requestTimeout);})]);
+        if (disposed || requestSequence !== sequence) return;
+        const next = /** @type {CliStatus} */ (readStatus(value));
+        const cliPhase = ['signed_out','restoring','signed_in','expired','failed'].includes(next.phase);
+        const cliStorage = ['none','clearing','cleanup_required'].includes(next.persistenceState);
+        if (next.authSource !== 'cli' || typeof next.cliLoginAvailable !== 'boolean' || !cliPhase || !cliStorage || next.rememberLogin || next.loginUrl || next.browserOpened) throw new Error('invalid_cli_status');
+        if (current && next.revision < current.revision) return;
+        current = next;
+        notify(next.phase !== 'signed_in');
+        const selected = scope.ShirohaPlatform?.harness?.status?.();
+        shouldAutoRefresh = selected?.adapter === 'codebuddy' && selected.mode === 'harness' && next.phase === 'signed_out' && next.cliLoginAvailable && autoRevision !== next.revision;
+        if (shouldAutoRefresh) autoRevision = next.revision;
+      } catch {
+        if (!disposed && requestSequence === sequence) {
+          failed = true;
+          notice = '暂时无法读取 CodeBuddy CLI 登录状态，请刷新重试。';
+          notify(true);
+        }
+      } finally {
+        // 主动刷新可越过只读查询；迟到查询只释放自己的超时，不能影响新请求。
+        clearTimeout(requestTimeout);
+        if (requestTimeout !== undefined) readTimeouts.delete(requestTimeout);
+        if (!disposed && requestSequence === sequence) {
+          reading = undefined; renderCli();
+          if (shouldAutoRefresh) void readCli('refresh');
+          else timer = setTimeout(()=>{timer=undefined;void readCli();},pollIntervalMs);
+        }
+      }
+    }
+    refresh?.addEventListener('click',()=>{void readCli('refresh');});
+    async function copyCommand() {
+      try {
+        await navigator.clipboard.writeText('codebuddy');
+        if (!disposed) notice='登录命令已复制。请在终端运行并完成登录，再返回刷新。';
+      } catch {
+        if (!disposed) notice='无法复制，请在终端手动输入 codebuddy。';
+      }
+      if (!disposed) renderCli();
+    }
+    element('copy-command')?.addEventListener('click',()=>{void copyCommand();});
+    document.addEventListener('shiroha-codebuddy-account-refresh',()=>{void readCli();});
+    scope.addEventListener('pagehide',()=>{disposed=true;sequence++;clearTimeout(timer);for(const pending of readTimeouts)clearTimeout(pending);readTimeouts.clear();},{once:true});
+    renderCli();
+    void readCli();
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initialize, { once:true });
   else initialize();

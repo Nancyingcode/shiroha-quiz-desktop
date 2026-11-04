@@ -14,6 +14,7 @@ pub mod harness_codebuddy;
     any(test, feature = "codebuddy-prototype", not(feature = "native-test"))
 ))]
 pub mod harness_codebuddy_auth;
+mod harness_codebuddy_cli;
 #[cfg(all(
     windows,
     any(test, feature = "codebuddy-prototype", not(feature = "native-test"))

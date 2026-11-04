@@ -92,6 +92,9 @@ impl Login {
     }
 
     pub(crate) async fn invalidate_for_restore(self: &Arc<Self>) -> Result<()> {
+        if self.cli_enabled()? {
+            return self.block_cli_for_restore();
+        }
         if self.root.is_some() {
             let (completion, confirmed) = tokio::sync::oneshot::channel();
             self.inner
@@ -410,7 +413,8 @@ impl Inner {
         )
     }
     pub(super) fn busy(&self) -> bool {
-        self.operation_busy() || self.persistence_state == PersistenceState::CleanupRequired
+        self.operation_busy()
+            || self.cli.is_none() && self.persistence_state == PersistenceState::CleanupRequired
     }
     pub(super) fn operation_busy(&self) -> bool {
         // 清理失败仍拒绝本账户执行，但不把其他提供方永久锁在繁忙状态。
@@ -451,6 +455,14 @@ impl Inner {
         })
     }
     pub(super) fn persistence_message(&self) -> &'static str {
+        if self.cli.is_some() {
+            if self.persistence_state == PersistenceState::CleanupRequired
+                && self.phase == Phase::SignedIn
+            {
+                return "当前使用 CLI 登录；旧客户端凭据清理未完成，请刷新登录状态以重试清理。";
+            }
+            return self.message;
+        }
         match self.persistence_state {
             PersistenceState::Saving => "已登录，正在保存 CodeBuddy 登录状态…",
             PersistenceState::Clearing => "正在清理此设备保存的 CodeBuddy 登录状态…",
@@ -503,7 +515,7 @@ impl MemorySession {
         }
     }
 
-    async fn restore(secret: SavedSession, cancel: &AtomicBool) -> Result<Self> {
+    pub(super) async fn restore(secret: SavedSession, cancel: &AtomicBool) -> Result<Self> {
         #[cfg(all(windows, not(any(test, feature = "native-test"))))]
         {
             Ok(Self {
