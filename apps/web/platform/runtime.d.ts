@@ -60,6 +60,14 @@ export type AiTaskKind = 'connection_test'|'import_organize'|'batch_review'|'bat
 export interface HarnessComponentTask {
   adapter:string; id:string; phase:'checking'|'queued'|'downloading'|'verifying'|'extracting'; received:number; total:number;
 }
+export interface CodeBuddyCliAccountStatus {
+  authSource:'cli'; cliLoginAvailable:boolean;
+  phase:'signed_out'|'restoring'|'signed_in'|'expired'|'failed'; revision:number; message:string; busy:boolean;
+  loginUrl:''; browserOpened:false; rememberLogin:false;
+  persistenceState:'none'|'clearing'|'cleanup_required';
+  persistenceErrorCode:'codebuddy_store_unavailable'|null;
+}
+export type CodeBuddyCliControl = {kind:'status'}|{kind:'refresh';revision:number};
 export interface HarnessStatus {
   mode:'api'|'harness'; adapter:string; model:string; timeoutSeconds:number;
   credentialStatus:string; runtimePath:string; runtimeVersion:string; ready:boolean; reason:string; revision:number; busy:boolean;
