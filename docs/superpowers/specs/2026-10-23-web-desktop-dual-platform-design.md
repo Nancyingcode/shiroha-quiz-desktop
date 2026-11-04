@@ -54,7 +54,7 @@ Android 原生版通过交换格式和 fixture 保持互通。本轮不重写其
 | 资源生成已具备过滤、内联事件转换、路径安全与许可证保留 | 增加桥接时延续现有生成器与 CSP |
 | Android Web 壳加载 file 来源的独立旧资源副本 | 不假定它与 Web 已同步，未来同步须单独验证 |
 
-依据：[Web 业务源码](../../../apps/web/app.js)、[桌面说明](../../../apps/desktop/README.md)、[资源生成脚本](../../../apps/desktop/scripts/prepare-web.mjs)、[Tauri 配置](../../../apps/desktop/src-tauri/tauri.conf.json)、[Android Web 壳](../../../apps/android/app/src/web/java/com/yiqiu/shirohaquiz/WebShellActivity.kt)。
+依据：[Web 业务源码](../../../apps/web/app.js)、[桌面说明](../../../apps/desktop/README.md)、[资源生成脚本](../../../apps/desktop/scripts/prepare-web.mjs)、[Tauri 配置](../../../apps/desktop/src-tauri/tauri.conf.json)、[Android Web 壳](https://github.com/Nancyingcode/shiroha-quiz-desktop/blob/f7e1b2765b5fd16a7230ca738dc0eebca0658deb/apps/android/app/src/web/java/com/yiqiu/shirohaquiz/WebShellActivity.kt)。
 
 已有 PDF 真 Worker、英文 Canvas OCR 和重启持久化记录只代表原型已覆盖的场景。中文扫描 PDF、完整文档导入导出、大文件、迁移及安装均须按本设计补充验证。
 

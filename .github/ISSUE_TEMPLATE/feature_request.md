@@ -26,12 +26,12 @@ assignees: ""
 
 当前项目主要包含以下使用端，如功能涉及特定平台请勾选：
 
-- [ ] 原生 Android App
+- [ ] Windows 桌面版
 - [ ] Web 版（浏览器 / GitHub Pages）
 - [ ] 双端都需要
 - [ ] 不确定
 
-如果建议和手机安装包、原生界面、题库导入、刷题体验有关，通常请选择”原生 Android App”。
+本仓库仅维护 Web 与 Windows 桌面，Android 不再接受新功能开发。
 
 ## 补充信息
 

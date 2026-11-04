@@ -4,7 +4,7 @@
 
 ## 用户下载
 
-桌面附件位于[本仓库 Releases](https://github.com/Nancyingcode/shiroha-quiz-desktop/releases)。首次运行并公开草稿前，可能没有公开桌面附件；草稿只有有权维护发布的人可以查看。预发布不使用 `/releases/latest` 下载入口。Web/Android 仍通过根 README 的上游入口下载。
+桌面附件位于[本仓库 Releases](https://github.com/Nancyingcode/shiroha-quiz-desktop/releases)。首次运行并公开草稿前，可能没有公开桌面附件；草稿只有有权维护发布的人可以查看。预发布不使用 `/releases/latest` 下载入口。Web 仍通过根 README 的上游入口使用；本仓库已停止 Android 维护，旧备份兼容入口见根 README。
 
 以 `0.1.0` 为例：
 

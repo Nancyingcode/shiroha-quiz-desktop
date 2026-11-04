@@ -1,4 +1,4 @@
-/* 桌面适配在共享样式之后加载；集中覆盖历史高优先级规则，避免改变 Web 与 Android。 */
+/* 桌面适配在共享样式之后加载；集中覆盖历史高优先级规则，避免改变 Web 版。 */
 body.desktop-mist-blue {
   color-scheme: light;
   --bg: #edf3f9;

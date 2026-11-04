@@ -1,3 +1,5 @@
+> 历史设计：包含已退出维护的 Android 实现与待办，不作为当前实施计划。当前操作见[Web/Windows 使用指南](../WebDAV云备份使用指南/Shiroha Quiz WebDAV 云备份使用指南.md)，旧备份见[迁移说明](../universal/Android停止维护与迁移.md)。
+
 # Shiroha Quiz WebDAV 同步实现方案
 
 > 更新日期：2026-08-15  

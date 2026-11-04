@@ -4,7 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { chromium } = require('../../apps/desktop/node_modules/playwright-core');
 const { startServer, WEB_ROOT } = require('../web-ai-practice/harness.cjs');
-const { webState } = require('./fixtures/dataset.cjs');
+const { webState, androidBackup, PNG_BASE64, IMAGE } = require('./fixtures/dataset.cjs');
 const { loadWeb, plain } = require('./web-source.cjs');
 const { pathToFileURL } = require('node:url');
 const path = require('node:path');
@@ -35,6 +35,70 @@ async function pageFor(t, raw, injection = '') {
   return page;
 }
 const saved = page => page.evaluate(key => globalThis.localStorage.getItem(key), KEY);
+
+for (const format of ['json', 'zip']) {
+  test(`旧 Android v3 ${format} 实际导入保留图片、多空、收藏和记录`, async t => {
+    const page = await pageFor(t, JSON.stringify(webState()));
+    await page.locator('body[data-storage-state="ready"]').waitFor();
+    const backup = androidBackup();
+    const { api } = loadWeb();
+    let buffer;
+    if (format === 'zip') {
+      const zip = api.zipStoreFiles([
+        { name: 'backup.json', text: JSON.stringify(backup) },
+        { name: 'assets/pixel.png', data: new Uint8Array(Buffer.from(PNG_BASE64, 'base64')) },
+      ]);
+      buffer = Buffer.from(await zip.arrayBuffer());
+    } else {
+      backup.banks[0].questions[0].images[0].dataUrl = IMAGE;
+      buffer = Buffer.from(JSON.stringify(backup));
+    }
+    const file = { name: `legacy-android.${format}`, mimeType: format === 'zip' ? 'application/zip' : 'application/json', buffer };
+    if (format === 'zip') {
+      await page.locator('.nav[data-view="settings"]').click();
+      await page.locator('#settings-backup-mode-v23').selectOption('merge');
+      const chooserEvent = page.waitForEvent('filechooser');
+      await page.locator('#settings-import-backup-v23').click();
+      await (await chooserEvent).setFiles(file);
+      await page.waitForFunction(key => JSON.parse(globalThis.localStorage.getItem(key)).banks.some(bank => bank.id === 'native-bank'), KEY);
+    } else {
+      await page.locator('.nav[data-view="import"]').click();
+      await page.locator('#import-mode').selectOption('json');
+      await page.locator('#import-file').setInputFiles(file);
+      await page.waitForFunction(() => globalThis.document.getElementById('import-text').value.includes('native-record'));
+      await page.locator('#parse-import-btn').click();
+      await page.getByText('备份导入完成', { exact: true }).waitFor();
+    }
+    const after = JSON.parse(await saved(page));
+    const bank = after.banks.find(item => item.id === 'native-bank');
+    assert.equal(bank.questions[0].images[0].dataUrl, IMAGE);
+    assert.deepEqual(bank.questions[0].blankAnswers, [['北京', '北京市'], ['京']]);
+    assert.deepEqual(after.favorites['native-bank'], ['native-blank']);
+    assert.equal(after.wrongBook['native-bank'][0].wrongCount, 2);
+    assert.deepEqual(after.records.find(item => item.id === 'native-record').details[0].userBlankAnswers, ['北京市', '京']);
+  });
+}
+
+test('设置页以含图片备份展示 ZIP，实际下载仍使用旧兼容载荷', async t => {
+  const page = await pageFor(t, JSON.stringify(webState()));
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.locator('.nav[data-view="settings"]').click();
+  const before = await saved(page);
+  const downloadEvent = page.waitForEvent('download');
+  await page.getByRole('button', { name: '导出含图片备份 ZIP', exact: true }).click();
+  const download = await downloadEvent;
+  assert.match(download.suggestedFilename(), /^shiroha-quiz-native-backup-.*\.zip$/);
+  const bytes = require('node:fs').readFileSync(await download.path());
+  const { api } = loadWeb();
+  const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+  const entries = api.parseZipEntries(buffer);
+  const payload = JSON.parse(await api.unzipEntry(buffer, entries.find(entry => entry.name === 'backup.json')));
+  assert.equal(payload.kind, 'shiroha_quiz_web_native_backup');
+  assert.equal(payload.version, 3);
+  assert.equal(payload.banks.length, 2);
+  assert(entries.some(entry => entry.name.startsWith('assets/')));
+  assert.equal(await saved(page), before);
+});
 
 function importBackupFixture() {
   const initial = webState();

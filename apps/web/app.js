@@ -8274,11 +8274,11 @@ function ensureSettingsBackupPanelV23(){
       <label>备份范围<input disabled value="全部题库、错题本、收藏夹、记录、设置" /></label>
     </div>
     <div class="actions wrap-v23">
-      <button class="ghost" id="settings-export-native-backup-v611" type="button">导出 Android 原生 ZIP</button>
+      <button class="ghost" id="settings-export-native-backup-v611" type="button">导出含图片备份 ZIP</button>
       <button class="ghost" id="settings-import-backup-v23" type="button">导入备份 JSON/ZIP</button>
       <button class="ghost" id="settings-copy-all-backup-v23" type="button">复制 Web 备份文本</button>
     </div>
-    <p class="muted">提示：顶部“导出 Web 完整备份”用于 Web 端完整恢复；“Android 原生 ZIP”更适合导入 Android 原生版；复制文本只作为浏览器下载失败时的兜底。覆盖恢复会替换本机数据；合并导入遇到同名题库会自动追加“_导入”。</p>
+    <p class="muted">提示：顶部“导出 Web 完整备份”用于 Web 端完整恢复；“含图片备份 ZIP”保存题库、图片及现有可交换学习数据，兼容旧版备份格式，不包含所有平台专属设置；复制文本只作为浏览器下载失败时的兜底。覆盖恢复会替换本机数据；合并导入遇到同名题库会自动追加“_导入”。</p>
     <details class="asset-reference-details"><summary>角色基准素材预览</summary><img src="./media/mascot_character_sheet.webp" alt="角色基准素材" /></details>
   </div>`);
   settingsCard.insertAdjacentHTML('beforeend',`<div id="webdav-panel-v378" class="data-tools-v23 webdav-card-v378">
@@ -8387,10 +8387,10 @@ async function exportNativeCompatibleBackupZipV611(){try{if(!await loadNativeAll
     const result=buildNativeCompatibleBackupZipV611();
     setBackupPreviewV23(JSON.stringify(result.payload,null,2));
     await downloadBlob(`shiroha-quiz-native-backup-${todayV23()}.zip`,result.blob);
-    toast(`已生成原生兼容 ZIP。${result.assetCount?`已外置 ${result.assetCount} 张图片。`:'当前没有需要外置的图片。'}`,'ok');
+    toast(`已生成含图片备份 ZIP。${result.assetCount?`已外置 ${result.assetCount} 张图片。`:'当前没有需要外置的图片。'}`,'ok');
   }catch(err){
-    warnDev('导出原生兼容 ZIP 失败',err);
-    toast('导出原生兼容 ZIP 失败，请先使用完整 JSON 备份。','danger');
+    warnDev('导出含图片备份 ZIP 失败',err);
+    toast('导出含图片备份 ZIP 失败，请先使用完整 JSON 备份。','danger');
   }
 }catch(error){platformStatus('导出失败：'+error.message,true);return false}}
 async function copySelectedBanksJsonV23(){if(!await loadNativeBanks(selectedBanksV23().map(b=>b.id)))return;
@@ -9407,9 +9407,6 @@ function mergeBackupBanksV23(normalized){
 }
 function download(name,text){
   const out=$('#export-output');if(out)out.value=text;
-  if(window.ShirohaAndroid&&typeof window.ShirohaAndroid.saveJsonFile==='function'){
-    try{const ok=window.ShirohaAndroid.saveJsonFile(String(name||'shiroha-quiz.json'),String(text||''));if(ok){toast('已调用系统保存文件。若未看到文件，请检查 Downloads 或使用复制备份文本。','ok');return}}catch(e){warnDev('Android 原生保存接口调用失败',e)}
-  }
   return ShirohaPlatform.download(name,new Blob([text],{type:'application/json;charset=utf-8'}));
 }
 function downloadBlob(name,blob){return ShirohaPlatform.download(name||'download.bin',blob)}

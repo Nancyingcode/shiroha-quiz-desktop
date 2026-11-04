@@ -8,13 +8,13 @@
 
 提交 Bug 时，建议说明：
 
-- 你使用的是哪一端：原生 Android App、Web 版，或后台 / 管理端。
+- 你使用的是哪一端：Web 版或 Windows 桌面版。
 - 出问题的具体操作步骤。
 - 预期结果和实际结果。
-- Shiroha Quiz 版本号、设备型号、Android 系统版本或浏览器版本。
+- Shiroha Quiz 版本号、设备型号、Windows / WebView2 版本或浏览器版本。
 - 如涉及题库导入，请尽量提供可脱敏的样例文件或文本片段。
 
-如果是在手机安装包里遇到问题，通常请选择“原生 Android App”，不要写成 Web 版。
+旧 Android 应用已退出本仓库维护；旧备份导入问题请注明目标 Web / Windows 平台，并参考[迁移说明](docs/universal/Android停止维护与迁移.md)。
 
 ## 提交建议
 
@@ -32,7 +32,7 @@
 如果你希望提交 Pull Request，请尽量保持改动范围清晰：
 
 - Web 相关改动放在 Web 目录内。
-- 原生 Android 相关改动放在 Android 原生源码目录内。
+- Windows 桌面相关改动放在 apps/desktop，业务仍复用 apps/web。
 - 涉及题库导入解析时，请同步补充说明或测试样例。
 - 不要提交个人信息、专有题库、密钥、缓存文件或构建产物。
 

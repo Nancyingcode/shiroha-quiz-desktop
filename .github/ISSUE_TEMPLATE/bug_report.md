@@ -25,18 +25,18 @@ assignees: ""
 - 系统：
 - Shiroha Quiz 版本号：
 - 设备型号：
-- Android 系统版本（仅原生 Android App 需要）：
+- Windows / WebView2 版本（仅桌面版需要）：
 - 浏览器版本（仅 Web 版需要）：
 
 ## 使用端 / 平台
 
 请勾选实际出问题的一端：
 
-- [ ] 原生 Android App
+- [ ] Windows 桌面版
 - [ ] Web 版（浏览器 / GitHub Pages）
 - [ ] 不确定
 
-如果是在手机安装包里遇到问题，通常请选择“原生 Android App”，不要写成 Web 版。
+旧 Android 应用已停止维护；旧备份兼容问题请选择导入备份的目标 Web / Windows 平台。
 
 ## 补充信息
 

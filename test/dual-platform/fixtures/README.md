@@ -36,7 +36,7 @@ node --test test/dual-platform/business.test.cjs test/dual-platform/format.test.
 | 选中单库 JSON | 直接题库对象，含 questions | 无学习数据与设置；类型转换为 SINGLE/MULTIPLE/JUDGE/BLANK/SHORT；可被现有恢复器读取 |
 | 选中多库 JSON | exportType=`question_banks`，schemaVersion=1，banks | 库顺序和 ID 保留；无 wrongBook/favorites/records/settings/webState/crossPlatform |
 | Web 原生兼容图片 ZIP | backup.json + assets/*.png；kind=`shiroha_quiz_web_native_backup`，version=3，schemaVersion=1 | 实际 STORE ZIP 写入/解析/解压；图片资产字节和引用校验；恢复后检测无缺失结构化图片；题干/结构化图外置，选项与解析仍保留原内嵌 Data URI |
-| Android 自建兼容 ZIP | backup.json + assets/pixel.png；kind=`shiroha_quiz_full_backup`，version/schemaVersion=3 | 按 [Android 序列化实现](../../../apps/android/app/src/native/java/com/yiqiu/shirohaquiz/state/QuizRepository.kt) 手写输入，验证 Web 读取并重新导出后的逻辑字段；没有执行 Android Kotlin 运行时或设备 UI |
+| Android 自建兼容 ZIP | backup.json + assets/pixel.png；kind=`shiroha_quiz_full_backup`，version/schemaVersion=3 | 按 [Android 序列化实现](https://github.com/Nancyingcode/shiroha-quiz-desktop/blob/f7e1b2765b5fd16a7230ca738dc0eebca0658deb/apps/android/app/src/native/java/com/yiqiu/shirohaquiz/state/QuizRepository.kt) 手写输入，验证 Web 读取并重新导出后的逻辑字段；没有执行 Android Kotlin 运行时或设备 UI |
 | 历史输入 | 单库对象、裸题目数组、questionType/title/choices/answerKeys | 题型别名及答案可读；原题号保持；未声称覆盖所有历史版本 |
 
 缺图变体保留 `assets/pixel.png` 且不给 assets，验证未解析计数非零、原路径不被伪装成已恢复图。结构化图片资产一致不证明选项/解析图片已在 Android 渲染，也不证明 ZIP 路径、膨胀、CRC 或重复条目安全边界全部通过。

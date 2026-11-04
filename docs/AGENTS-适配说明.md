@@ -1,3 +1,7 @@
+# 规范适配的历史记录
+
+> 2026-11-05：本文保留 2026-10-23 的适配历史。当前仅维护 Web/Windows，Android 工程及 Gradle 门禁已移除；实际要求以[当前根规范](../AGENTS.md)为准。
+
 # AGENTS.md 项目适配与删改说明
 
 日期：2026-10-23。
@@ -56,8 +60,8 @@
 - [Cargo.toml](../apps/desktop/src-tauri/Cargo.toml)、[Tauri 配置](../apps/desktop/src-tauri/tauri.conf.json)：edition、依赖、应用标识、权限与 CSP。
 - [资源准备脚本](../apps/desktop/scripts/prepare-web.mjs)：生成目录、路径校验与许可证保留。
 - [文档检查脚本](../apps/desktop/scripts/check-docs.mjs)：检查名单包含原有桌面说明、原型设计与计划、根 AGENTS.md、Rust 指南和本说明，以及双端设计/计划、索引与阶段说明，共 14 份；`npm run lint` 已包含 `lint:docs`。
-- [Android 构建配置](../apps/android/app/build.gradle.kts)：native/web flavor 与测试配置。
-- [WebDAV 回归说明](../test/web-webdav/README.md)、[Web AI 回归说明](../test/web-ai-practice/README.md)、[原生解析器回归说明](../test/native-parser-regression/README.md)：平台测试入口与隔离要求。
+- [Android 构建配置](https://github.com/Nancyingcode/shiroha-quiz-desktop/blob/f7e1b2765b5fd16a7230ca738dc0eebca0658deb/apps/android/app/build.gradle.kts)：native/web flavor 与测试配置。
+- [WebDAV 回归说明](../test/web-webdav/README.md)、[Web AI 回归说明](../test/web-ai-practice/README.md)、[原生解析器回归说明](https://github.com/Nancyingcode/shiroha-quiz-desktop/blob/f7e1b2765b5fd16a7230ca738dc0eebca0658deb/test/native-parser-regression/README.md)：平台测试入口与隔离要求。
 - [贡献指南](../CONTRIBUTING.md)：凭据不得进入备份或日志，不提交个人题库与构建产物。
 
 ## 5. 验证与范围限制

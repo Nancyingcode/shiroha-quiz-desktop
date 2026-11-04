@@ -18,7 +18,7 @@ const exportedNames = [
   'buildNativeInteropStateV24', 'readBackupFileV24', 'applyBackupAssetsV24',
   'countUnresolvedBackupImagesV24', 'parseZipEntries', 'unzipEntry', 'unzipEntryBytes', 'zipStoreFiles',
   'sameAnswerForQuestion', 'scoreOf', 'makeAnswerDetail', 'recordPracticeAnswer',
-  'mergeBackupBanksV23',
+  'mergeBackupBanksV23', 'download',
   'practiceItemKeyV8916', 'getPracticeAnswerStateV26', 'addWrong', 'markRight', 'getWrongEntries',
   'parseTextQuestions', 'parseAnswerEntries', 'mergeQuestionAnswers', 'upgradeState', 'serializeState',
 ];
@@ -77,7 +77,7 @@ function loadWeb({ state, local = {}, session = {}, scoreDefaults = {} } = {}) {
   // 在测试副本中取消页面启动；所有被测解析、评分、转换和 ZIP 代码仍来自真实业务源码。
   const bridge = `\nObject.assign(state, migrateState(${JSON.stringify(state || null)} || blankState(), KEY));\nglobalThis.__test = {${exportedNames.join(',')}, snapshot: () => JSON.parse(JSON.stringify(state)), practiceSnapshot: () => JSON.parse(JSON.stringify(practice))};\n})();`;
   vm.runInContext(source.replace(startup, bridge), context, { filename: sourcePath, timeout: 5000 });
-  return { api: context.__test, logs };
+  return { api: context.__test, logs, context };
 }
 
 function plain(value) { return JSON.parse(JSON.stringify(value)); }
