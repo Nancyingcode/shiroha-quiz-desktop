@@ -2,12 +2,12 @@
 
 这里整理当前仍建议阅读的文档入口。主要文档按主题放在独立文件夹中；历史计划和旧方案统一放在 `archive/`，避免和当前主线混在一起。
 
-当前主线为 Web 版与原生 Android Compose 版。原生版已更新到 `v0.9.14-native`，外部回归当前维护 63 个有效 parser 用例（历史编号已使用至 64）。具体功能状态以根目录 [README](../README.md) 和 [CHANGELOG](../CHANGELOG.md) 为准。
+当前主线为 Web 与 Windows 桌面。Android 已退出本仓库维护，保留旧 JSON/ZIP 备份兼容；当前功能与验收边界见根 README 和桌面说明。
 
 ## 目录
 
 - [用户文档](README.md#docs-user)
-- [原生 Android](README.md#docs-native)
+- [Android 历史资料](README.md#docs-native)
 - [工程与发布](README.md#docs-engineering)
 - [计划归档参考](README.md#docs-plan)
 - [归档文档](README.md#docs-archive)
@@ -17,31 +17,31 @@
 ## 用户文档
 
 - 标准题库格式示例：推荐题库格式模板，含文本、Excel、普通 JSON 示例。  
-  [Markdown](./标准题库格式示例/标准题库格式示例.md) / [Word](./标准题库格式示例/标准题库格式示例.docx) / [PDF](./标准题库格式示例/标准题库格式示例.pdf) / [Excel 通用模板](./标准题库格式示例/Shiroha_Quiz_Excel题库导入通用模板.xlsx)
+  [Markdown](./标准题库格式示例/标准题库格式示例.md) / [Excel 通用模板](./标准题库格式示例/Shiroha_Quiz_Excel题库导入通用模板.xlsx)
 - 题库导入格式支持说明：支持哪些文件格式、每种格式怎么写。  
-  [Markdown](./题库导入格式支持说明/Shiroha_Quiz_题库导入格式支持说明.md) / [Word](./题库导入格式支持说明/Shiroha_Quiz_题库导入格式支持说明.docx)
+  [Markdown](./题库导入格式支持说明/Shiroha_Quiz_题库导入格式支持说明.md)
 - 题库导入策略与使用指南：面向普通用户的导入入口、AI 辅助、预览检查和备份恢复说明。<br>
-  [Markdown](./题库导入策略与使用指南/Shiroha Quiz 题库导入策略与使用指南.md) / [Word](./题库导入策略与使用指南/Shiroha Quiz 题库导入策略与使用指南.docx)
+  [Markdown](./题库导入策略与使用指南/Shiroha Quiz 题库导入策略与使用指南.md)
 - 题目导入解析方法说明：解释软件如何识别题号、选项、答案、解析、集中答案区和异常提示。<br>
-  [Markdown](./题目导入解析方法说明/Shiroha Quiz 题目导入解析方法说明.md) / [Word](./题目导入解析方法说明/Shiroha Quiz 题目导入解析方法说明.docx)
-- WebDAV 云备份使用指南：把题库备份到自己的 WebDAV 云盘，含双端配置、云端恢复与自动备份说明。<br>
+  [Markdown](./题目导入解析方法说明/Shiroha Quiz 题目导入解析方法说明.md)
+- WebDAV 云备份使用指南：把题库备份到自己的 WebDAV 云盘，含 Web/Windows 配置和手动云端恢复说明。<br>
   [Markdown](./WebDAV云备份使用指南/Shiroha Quiz WebDAV 云备份使用指南.md)
 
 <a name="docs-native"></a>
 
-## 原生 Android
+## Android 历史资料
 
-- [原生开发进度](./native/原生开发进度.md)
-- [解析器回归测试说明](./native/解析器回归测试说明.md)
-- [测试体系整理说明](./native/测试体系整理说明.md)
-- [解析器回归测试剩余关注项](./native/解析器回归测试未覆盖功能点.md)
-- [安卓组件与状态说明](./native/安卓组件与状态说明.md)
-- [原生 Compose 视觉规范](./native/Shiroha_Quiz_原生Android_Compose视觉规范_v30.md)
-- [安卓设计 Token 规范](./native/安卓设计Token规范.md)
+- [停止维护与旧备份迁移](./universal/Android停止维护与迁移.md)
+- [归档的 Android 开发、设计与测试资料](./archive/native/README.md)
+- [历史解析样例（不作为 Web 通过清单）](../test/fixtures/legacy-android-parser/README.md)
+- [旧版指南及 Word/PDF 历史快照](./archive/android-era-documents/README.md)
 
 <a name="docs-engineering"></a>
 
 ## 工程与发布
+
+- [Android 移除设计](./superpowers/specs/2026-11-04-remove-android-support.md)
+- [Android 移除实施与验证](./superpowers/plans/2026-11-05-remove-android-support.md)
 
 - [协作开发分支规划](./universal/协作开发分支规划.md)
 - [Web 与 Windows 桌面双端设计](./superpowers/specs/2026-10-23-web-desktop-dual-platform-design.md)
@@ -69,7 +69,7 @@
 - [双端详细实施计划](./superpowers/plans/2026-10-23-web-desktop-dual-platform.md)
 - [阶段 A 基线、测试入口与执行记录](../test/dual-platform/README.md)
 - [架构说明](./universal/架构说明.md)
-- [WebDAV 同步实现方案](./WebDAV同步实现方案/Shiroha%20Quiz%20WebDAV%20同步实现方案.md)
+- [旧 Web/Android WebDAV 方案（历史参考）](./WebDAV同步实现方案/Shiroha%20Quiz%20WebDAV%20同步实现方案.md)
 - [Git Release 操作速查](./universal/Git-Release-操作速查.md)
 
 <a name="docs-plan"></a>

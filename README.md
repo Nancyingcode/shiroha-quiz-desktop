@@ -11,11 +11,10 @@ Shiroha Quiz 是一个轻量、开源的刷题工具，支持自导入题库、�
 
 > 你手里有 Word、Excel、TXT、JSON，或者题目和答案分开的文件。Shiroha Quiz 尝试把这些内容自动识别成可练习、可考试、可复盘的个人题库。
 
-当前提供 Web、Windows 桌面与 Android 三种使用方式：
+本仓库当前维护 Web 与 Windows 桌面两种使用方式：
 
 - **Web 版**：适合电脑整理题库，支持导入、练习、考试、错题、备份、AI 与 OCR。
 - **Windows 桌面版（预览）**：Tauri 2 + WebView2 独立窗口，复用 Web 业务，支持 Codex / CodeBuddy AI、SQLite 本地数据、恢复点、原生 AI/WebDAV 与雾蓝桌面界面。
-- **Android 原生版**：当前主推，Kotlin + Compose 原生实现，支持 AI、多空填空、背题/斩题、图片题和智能复习。
 
 <img src="assets/shiroha_quiz_ui_assets_v2_cutout/illus_me_settings.webp" width="150" align="right" alt="看板娘" />
 
@@ -30,12 +29,11 @@ Shiroha Quiz 是一个轻量、开源的刷题工具，支持自导入题库、�
 
 | 你的情况 | 下载什么 | 入口 |
 | --- | --- | --- |
-| Android 手机 | 原生版 APK，文件名以 `-native-release.apk` 结尾 | [下载](https://github.com/reiqr/shiroha-quiz/releases/latest) |
 | Windows 电脑，使用 Web 版 | Web ZIP，解压后双击 `打开Shiroha Quiz.cmd` | [下载](https://github.com/reiqr/shiroha-quiz/releases/latest) |
 | Windows 电脑，体验桌面预览版 | 独立 EXE 或普通 / 离线 NSIS 候选安装包；尚未完成正式发行验收 | [桌面 Releases](https://github.com/Nancyingcode/shiroha-quiz-desktop/releases) / [构建说明](apps/desktop/README.md) |
 | 先体验一下 | 在线版，免安装 | [打开在线版](https://reiqr.github.io/shiroha-quiz) |
 
-> 各端使用独立版本号，不是新旧关系。**下载时认文件名即可**，Web/Android 制品以[上游 Releases/latest](https://github.com/reiqr/shiroha-quiz/releases/latest) 为准；Windows 桌面预发布使用本仓库 Releases 列表。首次公开草稿前可能尚无桌面附件，候选状态见[桌面说明](apps/desktop/README.md)。
+> 各端使用独立版本号，不是新旧关系。**下载时认文件名即可**，Web 制品以[上游 Releases/latest](https://github.com/reiqr/shiroha-quiz/releases/latest) 为准；Windows 桌面预发布使用本仓库 Releases 列表。首次公开草稿前可能尚无桌面附件，候选状态见[桌面说明](apps/desktop/README.md)。
 
 > **当前仍处于测试阶段**，不建议用于高风险正式考试场景。**重要题库请定期备份。**
 
@@ -43,7 +41,7 @@ Shiroha Quiz 是一个轻量、开源的刷题工具，支持自导入题库、�
 
 ## 本次更新：WorkBuddy / CodeBuddy 接入
 
-Windows 桌面预览版新增 **CodeBuddy Harness**。此次 WorkBuddy 接入在客户端中统一显示为「CodeBuddy」，通过固定版本的 CodeBuddy Code 组件执行 AI 任务。在「AI 设置」中选择「使用 Harness」及对应提供方，即可使用个人账户登录；原有 Codex 和直接 API 配置独立保留，Web 与 Android 继续使用各自现有接口。
+Windows 桌面预览版新增 **CodeBuddy Harness**。此次 WorkBuddy 接入在客户端中统一显示为「CodeBuddy」，通过固定版本的 CodeBuddy Code 组件执行 AI 任务。在「AI 设置」中选择「使用 Harness」及对应提供方，即可使用个人账户登录；原有 Codex 和直接 API 配置独立保留，Web 继续使用现有接口。
 
 - **单题解析与连续追问**：结合本题文字、参考答案、当前作答与追问记录生成解析草稿，沿用现有练习界面；只有点击「保存到题库解析」才写回，不自动提交作答或修改答案。
 - **独立模型选择**：默认 `deepseek-v4.1-flash`，也可选择 `hy4-preview`、`hy3` 或 `default`（服务端默认）。选择自动保存，切换模型不发起请求；可选项不代表当前账户一定有访问权限，`default` 不承诺对应某个固定模型。
@@ -76,139 +74,21 @@ Windows 桌面预览版新增 **CodeBuddy Harness**。此次 WorkBuddy 接入在
 
 ---
 
-## 三端区别
+## Web 与 Windows 桌面区别
 
-| 维度 | Android 原生版 | Web 版 | Windows 桌面版（预览） |
-| --- | --- | --- | --- |
-| 使用方式 | 安装 APK，Android 8.0+ | 在线访问或解压后双击本地启动器 | 独立 EXE / 候选安装包，依赖 WebView2 |
-| 数据存储 | 本地 SharedPreferences | 浏览器 LocalStorage | Rust / SQLite、独立媒体文件与恢复点 |
-| 离线能力 | 除 AI、在线文档识别外可离线 | 基础功能可离线，扩展库可按需下载 | 内置 PDF / 公式 / 中英文 OCR 资源；远程服务需联网 |
-| 文档识别 | MinerU 在线 OCR、DOCX 图片提取 | PDF.js 文字层解析、OCR 测试区 | 复用 Web 解析与核对流程，支持本地 PDF / OCR |
-| 特色 | 背题、斩题、智能复习、暗夜模式、平板适配 | 题库清洗、OCR、AI 导入与单题解析 | 雾蓝界面、沉浸标题栏、本地恢复、原生网络与系统凭据 |
-| 适合 | 手机日常刷题 | 电脑整理题库与快速使用 | 体验独立桌面窗口与本地数据能力 |
+| 维度 | Web 版 | Windows 桌面版（预览） |
+| --- | --- | --- |
+| 运行方式 | 浏览器、本地服务或在线版 | Tauri 2 + WebView2 独立窗口 |
+| 数据 | 浏览器本地存储，各来源独立 | SQLite、媒体文件与恢复点 |
+| 文档识别 | PDF.js、OCR 测试区 | 内置 PDF、公式与中英文 OCR 资源 |
+| 服务与凭据 | 浏览器请求，受 CORS 限制 | 受控原生 AI/WebDAV，Windows 凭据管理器 |
+| AI | 直接 API | 直接 API 与 Codex/CodeBuddy Harness |
 
-<details>
-<summary><strong>展开查看三端详细差异</strong></summary>
+两端复用 Web 题库、练习、考试、错题、收藏和记录业务，通过 JSON/ZIP 主动交换数据，不会自动共享本机数据。桌面安装和运行验收限制仍见[桌面说明](apps/desktop/README.md)。
 
-<br>
+### 旧 Android 备份
 
-### 刷题与考试
-
-**三端都有**
-
-- 支持随机练习、顺序练习、考试、错题复习、收藏和学习记录。
-- 支持单选、多选、判断、填空（含多空）和简答题。
-- 支持顺序练习进度、题目快速编辑、考试倒计时和答题卡。
-- 答错题目可进入错题本，学习记录可用于后续复盘。
-
-**Android 原生版额外支持（Web / 桌面版当前没有）**
-
-- **即时练习 / 批量练习**：可选择立即判题、自动下一题，也可整组提交。
-- **背题模式**：直接查看答案与解析，不计入普通练习记录。
-- **斩题**：把已经掌握的题移出普通练习池，并可随时恢复。
-- **智能复习**：根据错题状态安排到期复习。
-- **选项打乱**：练习与考试可独立控制。
-- **字号与紧凑模式**：题干、选项字号可调，适合长题阅读。
-- **错题作用域**：可在当前题库 / 全部题库之间切换，并按掌握状态筛选。
-- **优先未做题**：随机组题时优先抽取尚未练习过的题，数量不足再从已做题补足。
-- **考试细化设置**：可按题型设置题量、分值和时长，并支持滑动切题。
-
-**Web / 桌面版额外支持或实现不同**
-
-- 考试结果可按题型汇总得分。
-- 更偏桌面端快速刷题与题库整理，不提供背题、斩题和智能复习。
-
-### 题库导入与文档处理
-
-**三端都有**
-
-- 支持 `docx`、`xlsx` / `csv`、`txt`、`json` 和粘贴文本导入。
-- 支持“题目文件 + 答案文件”双文件导入。
-- 自动识别题号、题干、选项、答案、解析、题型和分区。
-- 支持导入预览、异常提示、手动修正和全文查找 / 替换。
-- 支持普通 JSON、跨端备份和图片题数据互通。
-
-**Android 原生版额外支持**
-
-- **DOCX 内嵌图片提取**并绑定到题目。
-- **材料题 / 共用题干、集中答案区**等复杂格式的专门解析与回归保护。
-- **MinerU 在线 OCR**：支持扫描 PDF 识别、图片提取与人工绑定。
-
-**Web / 桌面版额外支持**
-
-- **PDF.js** 直接解析文字层 PDF。
-- **OCR 测试区**：扫描 PDF 可转为文本或 DOCX 后再人工核对导入。
-- 更适合在电脑上先做全文清洗，再进入识别预览。
-
-### AI 功能
-
-**三端都有**
-
-- AI 导入核对、补解析和结构化结果优先。
-- 练习页支持单题 AI 解析与连续追问。
-- 确认后的 AI 解析可以保存回题库。
-- 支持 DeepSeek、OpenAI 兼容接口和自定义接口。
-
-**Android 原生版实现特点**
-
-- **无答案题 AI 临时参考答案**：默认关闭，只用于本次判题，不写回题库，也不进入错题本。
-- API Key 使用 Android Keystore 加密保存。
-
-**Web / 桌面版额外支持**
-
-- AI 可用于**整理原始题库文本**后再进入导入流程。
-- 可连接 **Ollama / LM Studio** 等本机 OpenAI 兼容服务。
-- 单题追问可产出可独立保存的完整解析草稿。
-
-**Windows 桌面版新增**
-
-- 可通过 **Codex 订阅登录**执行导入整理、批量核对、补解析、单题解析与追问。
-- 「直接调用 API」与「使用 Harness」显式切换，订阅授权与原有 API 配置独立保留。
-- 首次自动准备官方组件；订阅授权、组件与执行设置不随题库备份跨端同步。
-
-### 备份与跨端
-
-**三端都有**
-
-- 支持本地完整备份与恢复。
-- Web、桌面与 Android 原生版题库格式互通。
-- 图片题可通过 ZIP 保留素材并跨端导入。
-- 支持 WebDAV 云备份与远程恢复。
-
-**Android 原生版额外支持**
-
-- 可选每天 / 每周自动 WebDAV 备份，并设置网络、充电和旧备份保留条件。
-
-**Web / 桌面版实现特点**
-
-- 支持 WebDAV 远程列表、SHA-256 校验，以及合并 / 覆盖恢复。
-
-**桌面版本地恢复与凭据**
-
-- 设置页可选择本机恢复点；数据库损坏时，启动恢复页可从恢复点或兼容备份修复。
-- 记住的 AI Key / WebDAV 密码使用 Windows 凭据管理器；覆盖恢复、恢复点恢复或重置后，需重新配置服务凭据。
-
-### 界面与平台能力
-
-**Android 原生版**
-
-- Kotlin + Jetpack Compose + Material3 原生界面。
-- 支持浅色 / 暗夜模式、Shiroha 模式、平板侧边导航和系统返回键。
-- 主要面向手机和平板日常刷题。
-
-**Web 版**
-
-- HTML + CSS + JavaScript，浏览器直接运行。
-- 支持本地启动器和在线版，主要面向电脑端题库整理与快速使用。
-
-**Windows 桌面版**
-
-- Tauri 2 + WebView2，复用 Web 业务，使用独立的本地数据与原生服务适配。
-- 雾蓝一体界面与沉浸式标题栏，保留练习 / 考试专注模式，并恢复有效窗口位置。
-
-> 三端通过兼容的 JSON / ZIP 交换题库与备份，不会自动共享本机数据。已发布功能变化以 [CHANGELOG](./CHANGELOG.md) 和 [Releases](https://github.com/reiqr/shiroha-quiz/releases) 为准，桌面预览进展见[桌面说明](apps/desktop/README.md)。
-
-</details>
+本仓库已停止 Android 原生版和 WebView 壳维护，保留旧 Android JSON/ZIP 的现有导入与导出兼容。设置页的图片 ZIP 入口现称“导出含图片备份 ZIP”，格式和版本保持不变。请先在旧应用备份，再核对迁移结果，见[停止维护与迁移说明](docs/universal/Android停止维护与迁移.md)。
 
 ---
 
@@ -219,7 +99,6 @@ Windows 桌面预览版新增 **CodeBuddy Harness**。此次 WorkBuddy 接入在
 - **题型**：单选、多选、判断、填空（含多空）、简答题。
 - **练习**：随机练习、顺序练习、考试、错题复习、收藏与学习记录。
 - **范围与进度**：支持题库分组、跨题库练习范围和顺序练习进度。
-- **Android 原生特色**：即时/批量练习、随机练习优先未做题、背题、斩题、选项打乱、字号调整和智能复习。
 - **考试**：支持倒计时、答题卡、交卷提醒和结果统计。
 - **快速编辑**：练习中可直接修改题目并写回来源题库。
 - **学习记录**：每轮练习或考试生成独立记录，支持逐题复盘与只看错题筛选。
@@ -230,15 +109,12 @@ Windows 桌面预览版新增 **CodeBuddy Harness**。此次 WorkBuddy 接入在
 - **双文件导入**：支持“题目文件 + 答案文件”自动匹配。
 - **自动解析**：识别题号、题干、选项、答案、解析、题型和分区。
 - **核对与修正**：支持导入预览、异常提示、手动修正、全文查找/替换。
-- **Android 原生版**：支持 DOCX 内嵌图片提取、材料题/共用题干和集中答案区等复杂格式。
 - **Web / 桌面版**：支持 PDF.js 文字层解析，并提供扫描 PDF OCR 测试兜底；桌面内置离线识别资源。
-- 原生解析器持续维护真实题库回归测试，复杂边界说明放在专项文档中。
 
 ### AI 辅助
 
-- **AI 导入**：三端均支持 AI 辅助核对 / 补解析，优先使用结构化题目结果；Web / 桌面版还支持整理原始题库文本。
+- **AI 导入**：Web / 桌面支持 AI 辅助核对 / 补解析，优先使用结构化题目结果；Web / 桌面版还支持整理原始题库文本。
 - **单题 AI**：练习页可按需解析与追问，确认后保存解析。
-- **临时参考答案**：Android 原生版可选启用，默认关闭，不写回题库、不进入错题本。
 - **接口**：支持 DeepSeek、OpenAI 兼容接口和自定义接口；Web / 桌面版也可连接 Ollama / LM Studio。
 - **桌面 Harness AI**：支持 Codex 订阅执行及 CodeBuddy 个人账户接入；CodeBuddy 当前限连接测试、单题解析和追问，Codex 另支持题库整理与批量任务。组件按需准备，结果仍需人工确认。
 
@@ -247,10 +123,10 @@ Windows 桌面预览版新增 **CodeBuddy Harness**。此次 WorkBuddy 接入在
 ### 备份与跨端
 
 - **本地备份**：支持完整数据备份和恢复。
-- **跨端互通**：Web、桌面与 Android 原生版题库格式互通，图片题可通过 ZIP 保留素材。
-- **WebDAV**：支持云备份与远程恢复，Android 原生版还可选自动备份。
+- **跨端互通**：Web 与桌面交换题库，保留旧 Android 备份的现有兼容，图片题可通过 ZIP 保留素材。
+- **WebDAV**：支持云备份与远程恢复；当前 Web / 桌面不提供 Android 式后台自动备份。
 - **本地恢复**：桌面版提供恢复点与损坏数据库恢复入口，恢复时保留原数据。
-- **密钥存储**：Android 原生版 API Key 使用 Android Keystore 加密保存；桌面版记住的 AI Key / WebDAV 密码使用 Windows 凭据管理器。
+- **密钥存储**：桌面版记住的 AI Key / WebDAV 密码使用 Windows 凭据管理器。
 
 ---
 
@@ -276,20 +152,12 @@ Windows 桌面预览版新增 **CodeBuddy Harness**。此次 WorkBuddy 接入在
 
 > 不建议直接双击 `index.html`。PDF/OCR 依赖 Web Worker 和 ES module，`file://` 下部分能力会失效，而且数据来源与启动器模式不同。
 
-### Android 原生版
-
-1. 安装 `*-native-release.apk`。
-2. 在 **导入** 页面选择文件或粘贴文本。
-3. 在 **核对页** 检查识别结果，必要时手动修正或使用 AI 辅助。
-4. 选择 **练习、考试、背题** 等模式开始使用。
-5. 错题、收藏、学习记录和智能复习会保存在本机。
-
 ### 数据备份建议
 
 - **重要题库导入后**及时导出备份。
 - **换设备、清缓存、卸载 App 前**先备份。
 - Web 版建议固定使用同一种访问方式，在线版、本地服务和 `file://` 的数据互不相通。
-- Web JSON、桌面备份与 Android 原生备份可跨端导入；含图片题建议使用 ZIP。
+- Web JSON、桌面备份与已支持的旧 Android 备份可导入；含图片题建议使用 ZIP。
 - 桌面开发与正式运行的数据相互隔离；跨设备迁移使用应用内 JSON / ZIP 导出，不要在运行时只复制 SQLite 主文件充当备份。
 - 桌面恢复点保存在本机，不能替代设备外备份；恢复点和未引用图片目前保守保留，不自动清理。
 - WebDAV 使用方式见 [WebDAV 云备份使用指南](docs/WebDAV云备份使用指南/Shiroha%20Quiz%20WebDAV%20云备份使用指南.md)。
@@ -325,12 +193,12 @@ Windows 桌面预览版新增 **CodeBuddy Harness**。此次 WorkBuddy 接入在
 ## 下载与更新
 
 - [Windows 桌面预发布与附件](https://github.com/Nancyingcode/shiroha-quiz-desktop/releases)
-- [Web / Android 最新 Release](https://github.com/reiqr/shiroha-quiz/releases/latest)
-- [Web / Android 全部 Releases](https://github.com/reiqr/shiroha-quiz/releases)
+- [上游 Web ZIP 下载](https://github.com/reiqr/shiroha-quiz/releases/latest)
+- [上游 Web 历史 Releases](https://github.com/reiqr/shiroha-quiz/releases)
 - [在线体验](https://reiqr.github.io/shiroha-quiz)
 - [CHANGELOG](./CHANGELOG.md)
 
-上游正式发布通常提供 Android 原生 APK 与 Web ZIP。Windows 桌面版使用独立的 `desktop-v<版本>` 发布流程，检查通过后生成预发布草稿，维护者核验后才公开附件。下载 `windows-x64-setup.exe` 普通包，或 `windows-x64-offline-setup.exe` 离线安装包；独立 `windows-x64.exe` 需要系统已有 WebView2。每次附带 `SHA256SUMS.txt` 和构建元数据，选择及校验方法见[Windows 发布说明](.github/DESKTOP_RELEASE.md)。首次公开前可能尚无桌面附件；具体变化与验收范围以各次 Release 说明和桌面阶段记录为准。
+Web 下载入口指向上游 Releases，请选择 Web ZIP；本仓库不再推荐 APK 下载。Windows 桌面版使用独立的 `desktop-v<版本>` 发布流程，检查通过后生成预发布草稿，维护者核验后才公开附件。下载 `windows-x64-setup.exe` 普通包，或 `windows-x64-offline-setup.exe` 离线安装包；独立 `windows-x64.exe` 需要系统已有 WebView2。每次附带 `SHA256SUMS.txt` 和构建元数据，选择及校验方法见[Windows 发布说明](.github/DESKTOP_RELEASE.md)。首次公开前可能尚无桌面附件；具体变化与验收范围以各次 Release 说明和桌面阶段记录为准。
 
 Web ZIP 不包含约 88 MB 的 PDF.js / MathJax / Tesseract 离线扩展资源，可在 `apps/web/libs/` 下按需下载；联网时也可使用 CDN 兜底。桌面构建要求这些离线资源齐备并一同打包，运行时仅执行本地脚本。
 
@@ -350,15 +218,6 @@ shiroha-quiz/
 │   │   ├── scripts/                # 资源生成、检查与桌面验证
 │   │   ├── src-tauri/              # Rust / SQLite、文件、网络与凭据
 │   │   └── dist/                   # 自动生成资源，不手工维护
-│   └── android/                    # Android 工程
-│       └── app/src/native/         # 原生 Compose 源码
-│           ├── ai/                 # AI
-│           ├── importer/           # 导入解析
-│           ├── document/           # 文档识别
-│           ├── security/           # 密钥存储
-│           ├── state/              # 状态管理
-│           ├── sync/               # WebDAV
-│           └── ui/                 # Compose UI
 ├── docs/                           # 文档索引见 docs/README.md
 ├── test/                           # 解析器、Web 与双端回归
 ├── assets/                         # 宣传素材
@@ -368,12 +227,6 @@ shiroha-quiz/
 └── README.md
 ```
 
-Android 工程仍保留两个 flavor：
-
-| Flavor | 包名 | 技术路线 |
-| --- | --- | --- |
-| `web` | `com.yiqiu.shirohaquiz` | 历史 WebView 壳 |
-| `native` | `com.reqir.shirohaquiz` | Kotlin + Jetpack Compose + Material3 |
 
 ---
 
@@ -412,19 +265,6 @@ npx serve apps/web
 
 在线版：[https://reiqr.github.io/shiroha-quiz](https://reiqr.github.io/shiroha-quiz)
 
-### Android
-
-```bash
-cd apps/android
-./gradlew assembleNativeRelease
-```
-
-Windows PowerShell：
-
-```powershell
-.\gradlew.bat assembleNativeRelease
-```
-
 ---
 
 ## 测试与回归
@@ -447,19 +287,6 @@ npm run test:desktop
 
 2026-10-23 整合记录中，实际 WebView2 25 项回归通过，覆盖窗口恢复、文档导入、OCR 识别中取消重试、迁移、分页和损坏数据库恢复；中文扫描样本在测试中模拟人工核对。上述隔离测试不替代干净系统安装、升级和正常发行环境验收，完整范围见[双端阶段验证记录](test/dual-platform/README.md)。
 
-解析器外部回归：
-
-```powershell
-.\run-regression.ps1
-```
-
-原生 JVM 单元测试：
-
-```powershell
-cd apps/android
-.\gradlew.bat :app:testNativeDebugUnitTest
-```
-
 WebDAV 请求测试：
 
 ```powershell
@@ -472,31 +299,28 @@ AI 练习回归位于 `test/web-ai-practice/`，需要 Node、Playwright 和可�
 
 - [桌面验证说明](apps/desktop/README.md#验证)
 - [Web 与桌面双端阶段验证记录](test/dual-platform/README.md)
-- [测试体系整理说明](docs/native/测试体系整理说明.md)
-- [解析器回归测试说明](docs/native/解析器回归测试说明.md)
-- [外部回归测试包说明](test/native-parser-regression/README.md)
+- [历史 Android 解析样例](test/fixtures/legacy-android-parser/README.md)
 
 ---
 
 ## 开发状态与文档
 
-历史开发计划已归档到 `docs/archive/`。当前功能状态以 README、CHANGELOG、Releases、桌面说明和原生开发进度为准；Web / 桌面的当前设计与实施计划保留在 `docs/superpowers/`。
+历史开发计划已归档到 `docs/archive/`。当前功能状态以 README、CHANGELOG、Releases和桌面说明为准；Web / 桌面的当前设计与实施计划保留在 `docs/superpowers/`。
 
 - [文档索引](docs/README.md)
 - [Windows 桌面说明](apps/desktop/README.md)
 - [Web 与 Windows 桌面双端设计](docs/superpowers/specs/2026-10-23-web-desktop-dual-platform-design.md)
 - [双端实施计划](docs/superpowers/plans/2026-10-23-web-desktop-dual-platform.md)
-- [原生 Android 开发进度](docs/native/原生开发进度.md)
+- [Android 历史资料](docs/archive/native/README.md)
 - [架构说明](docs/universal/架构说明.md)
-- [解析器回归测试说明](docs/native/解析器回归测试说明.md)
 
 ---
 
 ## 参与贡献 / 提交反馈
 
-欢迎通过 [Issue](https://github.com/reiqr/shiroha-quiz/issues/new/choose) 提交 Bug、题库兼容问题、导入失败样例、功能建议或文档修正。
+欢迎通过 [Issue](https://github.com/Nancyingcode/shiroha-quiz-desktop/issues/new/choose) 提交 Bug、题库兼容问题、导入失败样例、功能建议或文档修正。
 
-提交时请注明平台（Android 原生版 / Web 版 / Windows 桌面版）；桌面问题请附上 Windows、WebView2 和应用版本，方便定位问题。
+提交时请注明平台（Web 版 / Windows 桌面版）；桌面问题请附上 Windows、WebView2 和应用版本，方便定位问题。
 
 - [CONTRIBUTING.md](./CONTRIBUTING.md)
 - [CHANGELOG.md](./CHANGELOG.md)

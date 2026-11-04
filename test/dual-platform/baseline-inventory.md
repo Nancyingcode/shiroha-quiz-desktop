@@ -120,7 +120,7 @@ rg -n 'CloseRequested|on_window_event|onCloseRequested' apps/desktop/src-tauri
 | 图片/交换格式 | A2 [dataset.cjs](./fixtures/dataset.cjs) 的 `webState()`：2 库 8 题，首库 7 题覆盖单选/多选/判断/多空/简答/无答案/富文本，第二库 1 题含跨库重复 ID。同一 1×1 PNG 重复放入题干、选项、解析、images、错题/收藏元信息和历史快照。`androidBackup()`：version 3、1 库 1 多空题、1 图片及错题/收藏/记录 | 固定逻辑样本的 ZIP 预期只外置 1 份共享图片；不代表大图性能。转换生成的字节须登记哈希、题数、图片字节、缺图数，不能以当前有损输出为无损预期 |
 | 文字 PDF | smoke `textPdf()`（170—189）：单页 400×200、Helvetica 24、正文 `DESKTOP SMOKE` | 直接验证 PDF.js 真 Worker 提取文本；没有文件选择→解析预览→入库，不覆盖中文文字 PDF |
 | OCR 图像 | smoke `ocrSmoke`（240—258）：600×180 Canvas，Arial 100px，黑白 `TEST`，仅 eng，禁用语言缓存 | 仅验证非空英文 OCR 与 Worker 释放，不是中文扫描 PDF，不构成扫描文档基线 |
-| 双文件/解析样例 | [题目](./fixtures/dual-questions.txt)及[答案](./fixtures/dual-answers.txt)：3 题，各题型题号均为 1；[材料题](./fixtures/material.txt)：共享材料 2 题；另可复用[原生解析回归样例](../native-parser-regression/README.md) | 复用已登记文本和预期，不直接修改 Android 预期；文档实际导入性能需要另测 |
+| 双文件/解析样例 | [题目](./fixtures/dual-questions.txt)及[答案](./fixtures/dual-answers.txt)：3 题，各题型题号均为 1；[材料题](./fixtures/material.txt)：共享材料 2 题；另可复用[原生解析回归样例](https://github.com/Nancyingcode/shiroha-quiz-desktop/blob/f7e1b2765b5fd16a7230ca738dc0eebca0658deb/test/native-parser-regression/README.md) | 复用已登记文本和预期，不直接修改 Android 预期；文档实际导入性能需要另测 |
 
 本次未把历史 README 的毫秒/MiB 数值搬成新测量结果；阶段 A 实测是否完成以验证记录为准。中文扫描 PDF、DOCX、XLSX、大文件和连续多轮文档处理的端到端固定样本与测量仍需 E1/E3 补齐；未完成时必须保留缺口，不以英文 Canvas 或小文本替代。
 

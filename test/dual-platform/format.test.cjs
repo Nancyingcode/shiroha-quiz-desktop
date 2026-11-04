@@ -17,6 +17,34 @@ async function readZip(api, blob) {
   return { buffer, entries, payload };
 }
 
+for (const outcome of ['saved', 'cancelled', 'failed']) {
+  test(`JSON 导出仅委托当前平台，旧 Android 桥接不接管保存：${outcome}`, async () => {
+    const { api, context } = loadWeb({ state: webState() });
+    const before = api.snapshot();
+    const output = { value: '' };
+    context.document.querySelector = selector => {
+      assert.equal(selector, '#export-output');
+      return output;
+    };
+    let bridgeCalls = 0;
+    context.ShirohaAndroid = { saveJsonFile() { bridgeCalls++; throw new Error('旧桥接不得调用'); } };
+    const calls = [];
+    const error = new Error(outcome === 'cancelled' ? '已取消保存。' : '合成写入失败');
+    context.ShirohaPlatform.download = async (name, blob) => {
+      calls.push({ name, type: blob.type, text: await blob.text() });
+      if (outcome !== 'saved') throw error;
+      return 'platform-receipt';
+    };
+    const text = JSON.stringify(api.buildBackupPayloadV23(before.banks, 'all_data', true));
+    if (outcome === 'saved') assert.equal(await api.download('fixture.json', text), 'platform-receipt');
+    else await assert.rejects(async () => api.download('fixture.json', text), value => value === error);
+    assert.equal(bridgeCalls, 0);
+    assert.deepEqual(calls, [{ name: 'fixture.json', type: 'application/json;charset=utf-8', text }]);
+    assert.equal(output.value, text);
+    assert.deepEqual(api.snapshot(), before);
+  });
+}
+
 test('完整 Web JSON 容器和学习数据往返；跨库相同 ID 不合并', () => {
   const initial = webState();
   const { api } = loadWeb({ state: initial });

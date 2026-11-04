@@ -12,8 +12,7 @@
 | `apps/desktop/` | Tauri 2 + WebView2 Windows 原型；npm 脚本与桌面验证入口 |
 | `apps/desktop/src-tauri/` | Rust 应用入口、Tauri 配置与权限边界；当前 edition 为 2021 |
 | `apps/desktop/dist/` | 自动生成的桌面资源，不手工修改，不维护第二份 Web 业务源码 |
-| `apps/android/` | Kotlin Android 工程，包含原生 Compose 的 `native` 和 WebView 的 `web` flavor |
-| `test/` | Web 回归与原生解析器样例；平台单元测试另在对应工程中 |
+| `test/` | Web/Windows 回归与历史 Android 解析样例；历史预期不作为 Web 能力承诺 |
 | `docs/` | 使用说明、设计与实施计划；历史材料位于 `docs/archive/` |
 
 当前桌面端复用 Web 业务，题库与学习数据接入 Rust/SQLite、媒体文件、受控文件 IPC 和恢复点；Web 仍使用浏览器存储。桌面通过摘要、分页和按需正文查询加载界面，损坏数据库可切换到已校验的恢复副本；桌面 AI/WebDAV 已接入受控原生网络与 Windows 凭据管理器，Web/MinerU 仍沿用浏览器实现。已有普通/离线 NSIS 候选构建、Windows CI 配置、窗口位置恢复和中文文档回归；干净系统安装/升级、最低运行时和正式发行验收未完成，自动更新尚未实现。当前范围与未验收项以[桌面说明](./apps/desktop/README.md)和[双端实施计划](./docs/superpowers/plans/2026-10-23-web-desktop-dual-platform.md)为准。
@@ -45,7 +44,7 @@
 
 ### 4.1 通用约定
 
-- 遵循改动模块的现有风格。JavaScript/TypeScript 新增代码不使用 `var` 或 TypeScript `any`；此条不用于禁止 Kotlin 的 `var`。现有 JavaScript 不为满足类型偏好而整体改写，桌面脚本保持现有 JSDoc + `checkJs` 检查。
+- 遵循改动模块的现有风格。JavaScript/TypeScript 新增代码不使用 `var` 或 TypeScript `any`；现有 JavaScript 不为满足类型偏好而整体改写，桌面脚本保持现有 JSDoc + `checkJs` 检查。
 - 核心逻辑包括题库解析、答案判定、评分、练习/考试状态、备份恢复、持久化迁移及权限边界；可独立的计算优先写成无副作用的纯函数，避免修改输入对象。
 - 影响评分、时间窗口、容量、重试或安全判断的业务值使用具名常量或配置，必要时说明单位和规则来源。
 - 复杂条件使用业务名称，复用状态与关联字段的共同判断；保留“未设置”和“明确关闭”等不同语义，避免多层三元表达式掩盖状态转换。
@@ -68,7 +67,7 @@
 - 保持当前模块的中文文案、术语和资源组织方式；本项目尚无统一 React/i18n 资源层，不以规范适配为由引入框架或要求补齐全量双语资源。
 - 数字、日期和单位格式保持同一界面一致，优先复用已有格式化逻辑。修改导入/导出数值格式时验证跨端读写兼容。
 - Web/桌面交互支持键盘并提供可访问名称，优先语义化 HTML；覆盖层管理初始焦点、焦点约束和关闭后恢复，异步状态与错误向辅助技术提供反馈。
-- Web 动画遵循 `prefers-reduced-motion`；Android 遵循平台无障碍与动画设置。颜色不得作为状态的唯一表达，图表与悬停信息提供静态文本或键盘等价入口。
+- Web/桌面动画遵循 `prefers-reduced-motion`。颜色不得作为状态的唯一表达，图表与悬停信息提供静态文本或键盘等价入口。
 
 ## 5. 验证要求
 
@@ -83,20 +82,18 @@
 | 桌面窗口、资源加载、离线能力或持久化行为 | `apps/desktop` | 成功构建后追加 `npm run test:desktop`，未覆盖场景补人工验收 |
 | WebDAV 请求行为 | 仓库根目录 | `node --test test/web-webdav/request.test.cjs` |
 | Web 单题 AI 行为 | 仓库根目录 | `node test/web-ai-practice/runner.cjs`；依赖与浏览器要求见[测试说明](./test/web-ai-practice/README.md) |
-| Android 原生业务 | `apps/android` | `.\gradlew.bat :app:testNativeDebugUnitTest`；界面、资源、依赖或构建变更追加 `:app:assembleNativeDebug` 与 `:app:lintNativeDebug` |
-| Android Web 壳或共享构建配置 | `apps/android` | `.\gradlew.bat :app:assembleWebDebug :app:lintWebDebug`；共享配置同时检查受影响的 native flavor |
-| 原生题库解析 | 仓库根目录 | 追加 `powershell -File test/native-parser-regression/run-external-regression.ps1`，维护相关样例与预期 |
 
 - Rust 编译/测试需要前端资源时，先在 `apps/desktop` 执行 `npm run prepare:web`；npm 的 lint/typecheck 不覆盖 Rust。typecheck 分别覆盖桌面 `scripts/`、`test/` 的 Node 环境，以及 `apps/web/platform`、桌面 `frontend` 和共享契约类型样例的浏览器环境；不整体检查历史 `app.js`。
+- Web/Windows 保留旧 Android JSON/ZIP 的现有读写兼容，不因平台移除删除格式、字段或有效测试。历史 parser 样例在 `test/fixtures/legacy-android-parser`，无当前 Kotlin 运行器。
 - Web 业务修改运行受影响的现有回归；无自动化覆盖时补充对应测试或可重复步骤。影响桌面复用资源时，同时验证桌面生成与运行；浏览器测试不能替代 WebView2 验证。
 - `runner.cjs --self-test` 只验证测试框架，静态资源存在也不代表 PDF/OCR 已实际运行；报告应注明离线、中文扫描 PDF、大文件与真实服务等实际覆盖范围。
 - 纯文档修改不要求完整代码门禁。在 `apps/desktop` 运行 `npm run lint:docs`，并对本次全部变更文档检查 UTF-8、代码围栏、本地链接和差异；脚本覆盖根 `AGENTS.md`、贡献指南、Rust 指南、适配说明、桌面说明、文档索引、原型与双端设计/计划，以及 `test/dual-platform` 的阶段说明，共 15 份文档，`npm run lint` 已包含此命令。未列入的文件须补同等检查。
 
 ## 6. 依赖、规则与 Git
 
-- 桌面使用 npm 和 `package-lock.json`，Rust 使用 Cargo 和 `Cargo.lock`，Android 使用 Gradle Wrapper；不更换包管理器或随意更新锁文件。新增生产依赖前说明必要性及维护、许可、体积影响。
+- 桌面使用 npm 和 `package-lock.json`，Rust 使用 Cargo 和 `Cargo.lock`；不更换包管理器或随意更新锁文件。新增生产依赖前说明必要性及维护、许可、体积影响。
 - 安装或重建依赖前，确认并停止使用当前工程依赖的相关进程；按命令行、路径等核实归属，不结束无关进程。安装后验证依赖和受影响命令。
-- 根规范只保留长期原则与入口。机械规则以实际配置的 ESLint、TypeScript、rustfmt、Clippy 和 Gradle 检查为准，不声称已部署不存在的 Prettier、lint-staged、Hook 或 CI 门禁。
+- 根规范只保留长期原则与入口。机械规则以实际配置的 ESLint、TypeScript、rustfmt、Clippy 检查为准，不声称已部署不存在的 Prettier、lint-staged、Hook 或 CI 门禁。
 - 能通过 lint、类型检查或测试执行的约束优先自动化；新增检查时同步维护命令与覆盖范围，避免只有文字要求而没有可运行验证。
 - 仓库内规则冲突按安全边界、本文件流程与行为规则、自动化配置、专项补充指南、非约束性参考资料的顺序处理；发现冲突时修正相关规则，不用参考示例覆盖项目配置。
 - 保留无关用户修改，不覆盖、回滚或顺带格式化；不提交个人题库、凭据、缓存和构建产物。

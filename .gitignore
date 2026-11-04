@@ -17,6 +17,11 @@ apps/android/keystore.properties
 apps/android/app/build/
 apps/android/build/
 
+# Retired parser runner outputs remain private after its local ignore file is removed.
+test/native-parser-regression/actual/
+test/native-parser-regression/runner/build/
+test/native-parser-regression/runner/.gradle/
+
 # Editor / IDE
 .idea/
 .vscode/
