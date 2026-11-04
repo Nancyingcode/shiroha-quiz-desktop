@@ -1334,6 +1334,27 @@ async function main() {
       });
       return {questions:130,defaultPageSize:10,pageSizes:[20,50],directLastPage:5,lastPage:15,initialBodies:0,crossBankIdentity:true};
     });
+    await check('自选题号同时设置题量，仅加载范围内指定数量',async()=>{
+      const page=migratedRestart.page;
+      await page.reload();await page.locator('body[data-storage-state="ready"]').waitFor();
+      await page.locator('.nav[data-view="banks"]').click();
+      await page.locator('[data-practice-group-v8916="C8"]').click();
+      await page.locator('.nav[data-view="practice"]').click();
+      await page.locator('#practice-start-mode-v58916').selectOption('custom');
+      await page.locator('#practice-number-range-v58916').fill('65-66');
+      assert(await page.locator('#practice-limit').isVisible());
+      await page.locator('#practice-limit').selectOption('custom');
+      await page.locator('#practice-custom-count').fill('1');
+      await page.screenshot({path:path.join(path.dirname(SCREENSHOT_PATH),'practice-range-count.png'),fullPage:true});
+      await page.locator('#start-practice-btn').click();
+      await page.locator('#practice-card').getByText('lazy-a 正文 64',{exact:true}).waitFor();
+      assert.equal(await page.locator('[data-practice-jump]').count(),1);
+      assert.equal(await page.locator('#practice-card .practice-source-number').innerText(),'题库第 65 题');
+      await page.locator('#p-exit').click();
+      await page.locator('#app-dialog [data-dialog-accept]').click();
+      await page.waitForFunction(()=>!document.body.classList.contains('practice-focus'));
+      return {range:'65-66',requested:1,actual:1};
+    });
     await check('本轮错题一览分页保留题号、全部选项和完整题量',async()=>{
       const page=migratedRestart.page;
       // 前一用例用独立快照读取完整导出；重载后页面与适配器重新共享同一读取基线。

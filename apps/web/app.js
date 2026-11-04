@@ -8601,7 +8601,7 @@ function parsePracticeNumberRangeV58916(raw,max){
 function syncPracticeStartModeFieldsV58916(){
   const select=$('#practice-start-mode-v58916');const rangeInput=$('#practice-number-range-v58916');const limitControl=$('#practice-limit-control-v58916');const rangeLabel=$('#practice-range-label-v58916');if(!select||!rangeInput||!limitControl)return;
   const custom=select.value===PRACTICE_START_CUSTOM_V58916;
-  rangeInput.hidden=!custom;rangeInput.disabled=!custom;limitControl.hidden=custom;if(rangeLabel)rangeLabel.textContent=custom?'自选题号':'题量';
+  rangeInput.hidden=!custom;rangeInput.disabled=!custom;limitControl.hidden=false;if(rangeLabel)rangeLabel.hidden=!custom;
 }
 function syncPracticeStartUiV58916(preferContinue=false){
   const select=$('#practice-start-mode-v58916');if(!select)return;
@@ -8623,7 +8623,13 @@ function buildPracticeSelectionV58916(scope,source,type,order,limit,customCount)
   const baseItems=practiceBaseItemsV58916(source,type,scope);let startMode=$('#practice-start-mode-v58916')?.value||PRACTICE_START_FROM_V58916;
   if(order!=='sequence'&&startMode===PRACTICE_START_CONTINUE_V58916)startMode=PRACTICE_START_FROM_V58916;
   const progressKey=practiceProgressKeyV58916(scope,source,type);let startIndex=0;let items=[];
-  if(startMode===PRACTICE_START_CUSTOM_V58916){const parsed=parsePracticeNumberRangeV58916($('#practice-number-range-v58916')?.value||'',baseItems.length);if(parsed.error)return {error:parsed.error,items:[],baseItems,startMode,progressKey,startIndex};items=parsed.indexes.map(index=>baseItems[index]).filter(Boolean);if(order==='random')items=shuffle(items)}
+  if(startMode===PRACTICE_START_CUSTOM_V58916){
+    const parsed=parsePracticeNumberRangeV58916($('#practice-number-range-v58916')?.value||'',baseItems.length);
+    if(parsed.error)return {error:parsed.error,items:[],baseItems,startMode,progressKey,startIndex};
+    items=parsed.indexes.map(index=>baseItems[index]).filter(Boolean);
+    if(order==='random')items=shuffle(items);
+    items=applyQuestionLimitV60(items,limit,customCount);
+  }
   else if(order==='sequence'){
     if(startMode===PRACTICE_START_CONTINUE_V58916){const progress=resolvePracticeProgressV58916(scope,source,type,baseItems);if(progress)startIndex=progress.index;else startMode=PRACTICE_START_FROM_V58916}
     items=applyQuestionLimitV60(baseItems.slice(startIndex),limit,customCount);
