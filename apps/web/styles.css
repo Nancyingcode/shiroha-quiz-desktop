@@ -7590,6 +7590,7 @@ body.practice-focus.practice-rail-collapsed-v34 #practice-card > .practice-side-
   height:44px !important;
 }
 .practice-number-range-v58916[hidden],
+#practice-range-label-v58916[hidden],
 #practice-limit-control-v58916[hidden]{
   display:none !important;
 }

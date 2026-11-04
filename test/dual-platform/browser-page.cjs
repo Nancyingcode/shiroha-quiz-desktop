@@ -917,6 +917,63 @@ test('收藏单题快捷入口先选择提交方式，并保留单题范围', as
   assert.equal(JSON.parse(await saved(page)).records[0].correct, 1);
 });
 
+test('自选题号和练习题量同时可选，切换起点保留输入且窄屏不溢出', async t => {
+  const page = await pageFor(t, JSON.stringify(webState()));
+  page.setDefaultTimeout(5000);
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.locator('.nav[data-view="practice"]').click();
+  await page.locator('#practice-custom-count').fill('2');
+  await page.locator('#practice-start-mode-v58916').selectOption('custom');
+  const range = page.locator('#practice-number-range-v58916');
+  await range.fill('2,4-7');
+  assert(await page.locator('#practice-limit').isVisible());
+  assert(await page.locator('#practice-custom-count').isVisible());
+  assert(await range.isVisible());
+  await page.setViewportSize({ width: 360, height: 740 });
+  for (const control of [range, page.locator('#practice-limit'), page.locator('#practice-custom-count')]) {
+    const bounds = await control.boundingBox();
+    assert.ok(bounds && bounds.x >= 0 && bounds.x + bounds.width <= 360);
+  }
+  await page.locator('#practice-limit').selectOption('all');
+  assert.equal(await page.locator('#practice-custom-count').isVisible(), false);
+  await page.locator('#practice-start-mode-v58916').selectOption('from_start');
+  assert.equal(await range.isVisible(), false);
+  assert.equal(await range.isDisabled(), true);
+  assert(await page.locator('#practice-limit').isVisible());
+  await page.locator('#practice-start-mode-v58916').selectOption('custom');
+  await page.locator('#practice-limit').selectOption('custom');
+  assert.equal(await range.inputValue(), '2,4-7');
+  assert.equal(await page.locator('#practice-custom-count').inputValue(), '2');
+});
+
+for (const order of ['sequence', 'random']) {
+  for (const [limit, expectedCount] of [['custom', 2], ['half', 3], ['all', 5], ['50', 5], ['100', 5]]) {
+    test(`自选题号按所选范围限制题量：${order} / ${limit}`, async t => {
+      const page = await pageFor(t, JSON.stringify(webState()));
+      page.setDefaultTimeout(5000);
+      await page.locator('body[data-storage-state="ready"]').waitFor();
+      await page.locator('.nav[data-view="practice"]').click();
+      await page.locator('#practice-submit-mode').selectOption('total');
+      await page.locator('#practice-order').selectOption(order);
+      await page.locator('#practice-limit').selectOption(limit);
+      if (limit === 'custom') await page.locator('#practice-custom-count').fill('2');
+      await page.locator('#practice-start-mode-v58916').selectOption('custom');
+      await page.locator('#practice-number-range-v58916').fill('2,4-7,4');
+      await page.evaluate(() => { Math.random = () => 0; });
+      await page.locator('#start-practice-btn').click();
+      await page.locator('[data-practice-jump="0"]').waitFor();
+      assert.equal(await page.locator('[data-practice-jump]').count(), expectedCount);
+      const numbers = [];
+      for (let index = 0; index < expectedCount; index++) {
+        await page.locator(`[data-practice-jump="${index}"]`).click();
+        numbers.push(await page.locator('#practice-card .practice-source-number').innerText());
+      }
+      const expected = order === 'sequence' ? [2, 4, 5, 6, 7] : [4, 5, 6, 7, 2];
+      assert.deepEqual(numbers, expected.slice(0, expectedCount).map(number => `题库第 ${number} 题`));
+    });
+  }
+}
+
 for (const mode of ['single', 'total']) test(`刷题题号：${mode} 模式按所属题库定位，独立于本轮和导入题号`, async t => {
   const initial = webState();
   initial.settings.practiceScope = { type: 'group', value: '自建样本' };
