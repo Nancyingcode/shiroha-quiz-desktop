@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { copyFile, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -135,8 +135,8 @@ test('the bundled bridge source stays ESM while browser scripts reject import de
   assert(classic.messages.some((message) => message.fatal));
 });
 
-/** @param {import('node:test').TestContext} t */
-async function repositoryFixture(t) {
+/** @param {import('node:test').TestContext} t @param {NodeJS.ProcessEnv} [environment] */
+async function repositoryFixture(t, environment = process.env) {
   const temporary = await mkdtemp(path.join(os.tmpdir(), 'shiroha lint fixture-'));
   t.after(() => rm(temporary, { recursive: true, force: true }));
   const project = path.join(temporary, 'apps/desktop');
@@ -150,14 +150,51 @@ async function repositoryFixture(t) {
     await copyFile(path.join(desktop, 'scripts', name), path.join(project, 'scripts', name));
   }
   await symlink(path.join(desktop, 'node_modules'), path.join(project, 'node_modules'), 'junction');
-  const init = spawnSync('git', ['init'], { cwd: temporary, encoding: 'utf8', windowsHide: true });
+  const localVariables = spawnSync('git', ['rev-parse', '--local-env-vars'], {
+    cwd: temporary, env: environment, encoding: 'utf8', windowsHide: true,
+  });
+  assert.equal(localVariables.status, 0, localVariables.stderr);
+  const names = new Set(localVariables.stdout.split(/\r?\n/).filter(Boolean).map((key) => key.toUpperCase()));
+  const fixtureEnvironment = { ...environment };
+  // Hook 继承的仓库定位变量不能影响临时仓库，避免意外操作调用者的仓库。
+  for (const key of Object.keys(fixtureEnvironment)) {
+    if (names.has(key.toUpperCase()) || /^GIT_CONFIG_(?:KEY|VALUE)_\d+$/i.test(key)) {
+      delete fixtureEnvironment[key];
+    }
+  }
+  const init = spawnSync('git', ['init'], { cwd: temporary, env: fixtureEnvironment, encoding: 'utf8', windowsHide: true });
   assert.equal(init.status, 0, init.stderr);
   const run = (/** @type {string} */ script, /** @type {string[]} */ args = []) => spawnSync(
     process.execPath, [path.join(project, 'scripts', script), ...args],
-    { cwd: os.tmpdir(), encoding: 'utf8', windowsHide: true },
+    { cwd: os.tmpdir(), env: fixtureEnvironment, encoding: 'utf8', windowsHide: true },
   );
   return { temporary, run };
 }
+
+test('fixture repositories ignore Git hook repository variables', async (t) => {
+  const tempRoot = await realpath(os.tmpdir());
+  const decoy = await mkdtemp(path.join(tempRoot, 'shiroha-hook-decoy-'));
+  t.after(async () => {
+    const actual = await realpath(decoy);
+    assert.equal(path.dirname(actual).toLowerCase(), tempRoot.toLowerCase());
+    assert(path.basename(actual).startsWith('shiroha-hook-decoy-'));
+    await rm(actual, { recursive: true, force: true });
+  });
+  const cleanEnvironment = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_')));
+  const init = spawnSync('git', ['init'], { cwd: decoy, env: cleanEnvironment, encoding: 'utf8', windowsHide: true });
+  assert.equal(init.status, 0, init.stderr);
+  const hookEnvironment = { ...cleanEnvironment, GIT_DIR: path.join(decoy, '.git'), GIT_WORK_TREE: decoy };
+  const fixture = await repositoryFixture(t, hookEnvironment);
+  const probe = path.join(fixture.temporary, 'test/new-slice/probe.cjs');
+  await writeFile(probe, 'console.log("invalid");\n');
+  const result = fixture.run('lint-incremental.mjs');
+  assert.equal(result.status, 1, result.stderr + result.stdout);
+  assert.match(result.stdout, /@stylistic\/quotes/);
+  const bare = spawnSync('git', ['config', '--local', '--get', 'core.bare'], {
+    cwd: decoy, env: cleanEnvironment, encoding: 'utf8', windowsHide: true,
+  });
+  assert.equal(bare.stdout.trim(), 'false');
+});
 
 test('incremental CLI finds untracked code outside the old scopes and reads complete files without rewriting', async (t) => {
   const f = await repositoryFixture(t);
