@@ -232,3 +232,17 @@ test('原生 ZIP 导出不得改写当前错题与收藏历史快照的图片引
   api.buildNativeCompatibleBackupZipV611();
   assert.deepEqual(plain(api.snapshot()), initial, '导出必须保留原内存中的图片引用。');
 });
+
+test('各备份版本字段独立拒绝未来值且不改写已有状态', () => {
+  const { api } = loadWeb({ state: webState() });
+  const before = api.snapshot();
+  for (const patch of [
+    { crossPlatformSchemaVersion: 2 }, { kind: 'shiroha_quiz_web_native_backup', version: 4 },
+    { kind: 'shiroha_quiz_full_backup', schemaVersion: 4 }, { kind: 'shiroha_quiz_web_full_backup', schemaVersion: 2 },
+  ]) {
+    assert.throws(() => api.normalizeBackupPayloadV23({ banks: [], ...patch }, 'future.json'), /版本/);
+    assert.deepEqual(api.snapshot(), before);
+  }
+  const legacy = api.normalizeBackupPayloadV23({ kind: 'shiroha_quiz_full_backup', version: 3, schemaVersion: 3, banks: [] }, 'legacy.json');
+  assert.deepEqual(plain(legacy.banks), []);
+});

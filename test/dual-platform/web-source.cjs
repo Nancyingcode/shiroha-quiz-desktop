@@ -1,13 +1,12 @@
 'use strict';
 
-const assert = require('node:assert/strict');
-const { readFileSync } = require('node:fs');
+const { loadWebSource, runWebScripts } = require('./source-tools.cjs');
 const path = require('node:path');
 const vm = require('node:vm');
 const { webcrypto } = require('node:crypto');
 
 const sourcePath = path.resolve(__dirname, '../../apps/web/app.js');
-const source = readFileSync(sourcePath, 'utf8');
+const source = loadWebSource();
 const exportedNames = [
   'listPageNumbers', 'listPageRange',
   'renderReviewOptions', 'renderReviewAnswerSummary', 'renderPracticeWrongOverview', 'renderTrainingQuestion',
@@ -20,7 +19,8 @@ const exportedNames = [
   'sameAnswerForQuestion', 'scoreOf', 'makeAnswerDetail', 'recordPracticeAnswer',
   'mergeBackupBanksV23', 'download',
   'practiceItemKeyV8916', 'getPracticeAnswerStateV26', 'addWrong', 'markRight', 'getWrongEntries',
-  'parseTextQuestions', 'parseAnswerEntries', 'mergeQuestionAnswers', 'upgradeState', 'serializeState',
+  'parseTextQuestions', 'parseAnswerEntries', 'mergeQuestionAnswers', 'sourceQuestionNumberFromLineV58910',
+  'upgradeState', 'serializeState',
 ];
 
 function memoryStorage(initial = {}) {
@@ -33,8 +33,7 @@ function memoryStorage(initial = {}) {
 }
 
 function loadWeb({ state, local = {}, session = {}, scoreDefaults = {} } = {}) {
-  const storageKey = source.match(/^const KEY='([^']+)';/m)?.[1];
-  assert(storageKey, '主状态键变化，请更新测试加载器。');
+  const storageKey = source.stringConstant('KEY');
   const logs = [];
   const document = {
     getElementById(id) {
@@ -68,15 +67,12 @@ function loadWeb({ state, local = {}, session = {}, scoreDefaults = {} } = {}) {
   sandbox.window = sandbox;
   sandbox.addEventListener = () => {};
   const context = vm.createContext(sandbox);
-  vm.runInContext(readFileSync(path.resolve(__dirname, '../../apps/web/platform/validation.js'), 'utf8'), context);
-  vm.runInContext(readFileSync(path.resolve(__dirname, '../../apps/web/platform/browser.js'), 'utf8'), context);
+  runWebScripts(context, ['platform/validation.js', 'platform/browser.js']);
   context.ShirohaPlatform = { files: context.ShirohaBrowser.files, media: context.ShirohaBrowser.media };
-  vm.runInContext(readFileSync(path.resolve(__dirname, '../../apps/web/training.js'), 'utf8'), context);
-  const startup = /\nstartApplication\(\);\s*\n\}\)\(\);/;
-  assert.equal((source.match(new RegExp(startup.source, 'g')) || []).length, 1, '启动边界变化，请更新测试加载器。');
+  runWebScripts(context, ['training.js', 'quiz-core.js', 'text-answers.js', 'backup-core.js']);
   // 在测试副本中取消页面启动；所有被测解析、评分、转换和 ZIP 代码仍来自真实业务源码。
-  const bridge = `\nObject.assign(state, migrateState(${JSON.stringify(state || null)} || blankState(), KEY));\nglobalThis.__test = {${exportedNames.join(',')}, snapshot: () => JSON.parse(JSON.stringify(state)), practiceSnapshot: () => JSON.parse(JSON.stringify(practice))};\n})();`;
-  vm.runInContext(source.replace(startup, bridge), context, { filename: sourcePath, timeout: 5000 });
+  const bridge = `\nObject.assign(state, migrateState(${JSON.stringify(state || null)} || blankState(), KEY));\nglobalThis.__test = {${exportedNames.join(',')}, snapshot: () => JSON.parse(JSON.stringify(state)), practiceSnapshot: () => JSON.parse(JSON.stringify(practice))};\n`;
+  vm.runInContext(source.replaceStartup(bridge), context, { filename: sourcePath, timeout: 5000 });
   return { api: context.__test, logs, context };
 }
 

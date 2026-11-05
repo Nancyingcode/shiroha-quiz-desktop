@@ -15,8 +15,8 @@
     "test:documents": "node --test ../../test/dual-platform/document-page.cjs",
     "test:shared": "node --test ../../test/dual-platform/*.test.cjs",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.platform.json",
-    "lint": "npm run lint:eslint && npm run lint:platform && npm run lint:docs",
-    "lint:eslint": "eslint scripts test eslint.config.mjs eslint.platform.config.mjs commitlint.config.mjs --max-warnings 0",
+    "lint": "npm run lint:eslint && npm run lint:platform && npm run lint:incremental && npm run lint:fixtures && npm run lint:docs",
+    "lint:eslint": "eslint scripts test *.config.mjs eslint.rules.mjs eslint.migration.mjs --max-warnings 0",
     "lint:platform": "node scripts/lint-platform.mjs",
     "lint:docs": "node scripts/check-docs.mjs",
     "commitlint": "commitlint --cwd ../.. --config apps/desktop/commitlint.config.mjs",
@@ -28,12 +28,16 @@
     "build:test": "npm run prepare:web && cargo build --manifest-path src-tauri/Cargo.toml --release --features custom-protocol,native-test --target-dir src-tauri/target/native-test",
     "test:desktop": "node scripts/smoke.mjs src-tauri/target/native-test/release/shiroha-quiz-desktop.exe",
     "test:dev": "node scripts/dev-smoke.mjs",
-    "bench:desktop": "node scripts/benchmark.mjs"
+    "bench:desktop": "node scripts/benchmark.mjs",
+    "lint:incremental": "node scripts/lint-incremental.mjs",
+    "lint:fixtures": "node --test test/lint-config.test.mjs",
+    "lint:debt": "node scripts/lint-debt.mjs"
   },
   "devDependencies": {
     "@commitlint/cli": "21.2.4",
     "@commitlint/config-conventional": "21.2.4",
     "@eslint/js": "10.0.1",
+    "@stylistic/eslint-plugin": "5.10.0",
     "@tauri-apps/api": "2.12.4",
     "@tauri-apps/cli": "2.12.4",
     "@types/node": "^24.0.0",

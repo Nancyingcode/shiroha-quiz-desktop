@@ -1404,9 +1404,27 @@ test('考试提交失败保全记录，重试与重复点击只新增一次',asy
 test('file URL 的静态 ZIP 入口可启动且不依赖可选 PDF/OCR',async t=>{
   const context=await browser.newContext();t.after(()=>context.close());
   const page=await context.newPage();
+  const scriptErrors = [];
+  page.on('pageerror', (error) => scriptErrors.push(error.message));
   await context.route('**/libs/**',route=>route.abort());
   await page.goto(pathToFileURL(path.join(WEB_ROOT,'index.html')).href);
   await page.locator('body[data-storage-state="ready"]').waitFor();
+  const scripts = await page.locator('script[src]').evaluateAll(
+    (nodes) => nodes.map((node) => node.getAttribute('src')),
+  );
+  const appIndex = scripts.indexOf('./app.js');
+  for (const name of ['./quiz-core.js', './text-answers.js', './backup-core.js']) {
+    assert(scripts.indexOf(name) >= 0 && scripts.indexOf(name) < appIndex);
+  }
+  assert.deepEqual(
+    await page.evaluate(() => [
+      typeof globalThis.ShirohaQuizCore,
+      typeof globalThis.ShirohaTextAnswers,
+      typeof globalThis.ShirohaBackupCore,
+    ]),
+    ['object', 'object', 'object'],
+  );
+  assert.deepEqual(scriptErrors, []);
   await page.locator('#save-all-btn').click();
   await page.locator('body[data-storage-state="ready"]').waitFor();
   assert(JSON.parse(await saved(page)).banks.length>0);

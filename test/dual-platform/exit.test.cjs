@@ -1,11 +1,9 @@
 'use strict';
+const { loadWebSource } = require('./source-tools.cjs');
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const vm = require('node:vm');
-const { readFileSync } = require('node:fs');
-const source = readFileSync(require.resolve('../../apps/web/app.js'), 'utf8');
-const start = source.indexOf('if(globalThis.ShirohaDesktopHost)globalThis.ShirohaDesktopHost.canClose=async()=>{');
-const end = source.indexOf('\n};', start) + 3;
+const source = loadWebSource();
 
 function fixture(overrides = {}) {
   const prompts = [];
@@ -20,9 +18,8 @@ function fixture(overrides = {}) {
     ShirohaPlatform: { network: { cancelAll: async () => {} }, saves: { idle: async () => {} } }, ...overrides,
   });
   context.ShirohaDialogs = { confirm: context.confirm };
-  const busyStart = source.indexOf('function aiTasksBusyV99(');
-  vm.runInContext(source.slice(busyStart,source.indexOf('\n',busyStart)),context);
-  vm.runInContext(source.slice(start, end), context);
+  vm.runInContext(source.functionSource('aiTasksBusyV99'),context);
+  vm.runInContext(source.closeHookSource(), context);
   return { close: context.ShirohaDesktopHost.canClose, prompts, status };
 }
 

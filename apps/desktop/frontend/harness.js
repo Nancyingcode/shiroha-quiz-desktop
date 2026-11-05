@@ -255,7 +255,7 @@
     assertCodex();
     invalidateSetup();
     generation++;
-    clearTimeout(authTimer); authTimer = undefined;
+    clearAuthorizationTimer();
     authorizationBlock = '正在清理订阅授权，当前授权已停用。';
     protectAuthorization(); render(false); changed();
     try {
@@ -270,9 +270,13 @@
       throw error;
     } finally { render(false); changed(); }
   }
+  function clearAuthorizationTimer() {
+    clearTimeout(authTimer);
+    authTimer = undefined;
+  }
   function observeAuthorization() {
     const observing = !!current.componentTasks?.length || current.busy && current.operationBusy === false || supportedSelection() && ((codexSelected() && current.credentialStatus === 'authenticating') || current.runtimeState === 'preparing' || !!(preparationCheck && current.busy));
-    if (!observing) { clearTimeout(authTimer); authTimer = undefined; return; }
+    if (!observing) { clearAuthorizationTimer(); return; }
     if (authTimer !== undefined) return;
     const epoch = generation;
     authTimer = setTimeout(async()=>{
@@ -301,7 +305,7 @@
     const epoch = ++generation;
     const operation = ++selectionSequence;
     invalidateSetup();
-    clearTimeout(authTimer); authTimer = undefined;
+    clearAuthorizationTimer();
     codexReadSequence++; codexReading = false;
     draftAdapter = adapter; selectingAdapter = true; selectionFailure = ''; failedAdapter = '';
     const mode = input('ai-execution-harness'); if (mode) mode.checked = true;
@@ -493,7 +497,7 @@
       if (generation > 0) automaticPreparationAttempts.add(current.adapter);
       settingsLoading = true; settingsFailure = ''; codexAccountConfirmed = false; codexReadFailure = ''; codexReading = false; render(false);
       const epoch = ++generation;
-      clearTimeout(authTimer); authTimer = undefined;
+      clearAuthorizationTimer();
       try { await control({kind:'status'}); }
       catch (error) { if (epoch === generation) { settingsFailure = '暂时无法读取 AI 设置，请重新读取。'; current = {...current,mode:'harness',ready:false,reason:failure(error).message}; } }
       finally { if (epoch === generation) { settingsLoading = false; render(false); } }
@@ -565,7 +569,7 @@
         throw error;
       } finally { signal?.removeEventListener('abort',abort); active.delete(id); finished(); render(false); changed(); }
     },
-    async cancelAll() { invalidateSetup(); generation++; clearTimeout(authTimer); authTimer = undefined; if (!['codex','codebuddy'].includes(current.adapter)) return; const pending = [...active.values()]; await control({kind:'cancel_all'}); await Promise.all(pending); },
+    async cancelAll() { invalidateSetup(); generation++; clearAuthorizationTimer(); if (!['codex','codebuddy'].includes(current.adapter)) return; const pending = [...active.values()]; await control({kind:'cancel_all'}); await Promise.all(pending); },
     formMode() { return input('ai-execution-harness')?.checked ? 'harness' : 'api'; },
     formAdapter() { return selectedAdapter(); },
     selectAdapter,
@@ -583,7 +587,7 @@
       if (epoch !== generation) throw cancelled();
       generation++;
       if (mode === 'api') { draftAdapter = undefined; selectionFailure = ''; }
-      clearTimeout(authTimer); authTimer = undefined; observeAuthorization();
+      clearAuthorizationTimer(); observeAuthorization();
       render(); changed();
       if (mode === 'harness' && modelSelectionPending()) await selectModel(draftModel ?? current.model);
     },

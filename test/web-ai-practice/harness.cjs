@@ -1,5 +1,6 @@
 'use strict';
 const { observeAppDialogs } = require('./dialogs.cjs');
+const { createWebSource, loadWebSource } = require('../dual-platform/source-tools.cjs');
 
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -37,13 +38,12 @@ function reportPath(value) {
 }
 
 function storageKeys() {
-  const source = fs.readFileSync(path.join(WEB_ROOT, 'app.js'), 'utf8');
-  function read(name) {
-    const match = source.match(new RegExp(`\\bconst\\s+${name}\\s*=\\s*(['"])([^'"\\r\\n]+)\\1\\s*;`));
-    assert(match, `Cannot read ${name} from apps/web/app.js; update the test adapter, not application source.`);
-    return match[2];
-  }
-  return { state: read('KEY'), session: read('AI_KEY_SESSION_V99'), local: read('AI_KEY_LOCAL_V99') };
+  const source = loadWebSource();
+  return {
+    state: source.stringConstant('KEY'),
+    session: source.stringConstant('AI_KEY_SESSION_V99'),
+    local: source.stringConstant('AI_KEY_LOCAL_V99'),
+  };
 }
 
 function loadPlaywright() {
@@ -201,16 +201,12 @@ async function setup(browser, url, keys, { configured = true, rich = false, empt
       } else if (destination.pathname.endsWith('/app.js')) {
         const response = await route.fetch({ maxRedirects: 0 });
         assert.equal(response.status(), 200, 'Local static service did not return app.js.');
-        let source = await response.text();
-        if (/^\s*\(function\(\)\{/.test(source)) {
-          const endings = [...source.matchAll(/^\}\)\(\);/gm)];
-          assert.equal(endings.length, 1, 'Cannot safely locate the application IIFE end for a read-only bridge.');
-          const offset = endings[0].index;
-          const fixtureHook = rich ? `\nwindow.__webAiPracticeSeedRich = ${seedRichFixture.toString()};\n` : '';
-          source = `${source.slice(0, offset)}\nwindow.__webAiPracticeSnapshot = ${readSnapshot.toString()};\n${fixtureHook}${source.slice(offset)}`;
-          bridgeUsed = true;
-        }
-        await route.fulfill({ status: 200, contentType: 'application/javascript; charset=utf-8', body: source });
+        const fixtureHook = rich ? `\nwindow.__webAiPracticeSeedRich = ${seedRichFixture.toString()};\n` : '';
+        const result = createWebSource(await response.text()).injectIife(
+          `\nwindow.__webAiPracticeSnapshot = ${readSnapshot.toString()};\n${fixtureHook}`,
+        );
+        bridgeUsed = result.bridgeUsed;
+        await route.fulfill({ status: 200, contentType: 'application/javascript; charset=utf-8', body: result.source });
       } else await route.continue();
       return;
     }

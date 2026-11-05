@@ -45,6 +45,7 @@
 ### 4.1 通用约定
 
 - 遵循改动模块的现有风格。JavaScript/TypeScript 新增代码不使用 `var` 或 TypeScript `any`；现有 JavaScript 不为满足类型偏好而整体改写，桌面脚本保持现有 JSDoc + `checkJs` 检查。
+- 修改 JavaScript/TypeScript 前阅读 [Airbnb JavaScript 项目适配指南](./rules/javascript-style-guide.md)。采用其中的语言风格与项目例外；上游配置不直接覆盖现有 ESLint 10、脚本加载方式或安全边界，历史代码按已确认批次逐步迁移，不为局部改动批量格式化。
 - 核心逻辑包括题库解析、答案判定、评分、练习/考试状态、备份恢复、持久化迁移及权限边界；可独立的计算优先写成无副作用的纯函数，避免修改输入对象。
 - 影响评分、时间窗口、容量、重试或安全判断的业务值使用具名常量或配置，必要时说明单位和规则来源。
 - 复杂条件使用业务名称，复用状态与关联字段的共同判断；保留“未设置”和“明确关闭”等不同语义，避免多层三元表达式掩盖状态转换。
@@ -87,7 +88,8 @@
 - Web/Windows 保留旧 Android JSON/ZIP 的现有读写兼容，不因平台移除删除格式、字段或有效测试。历史 parser 样例在 `test/fixtures/legacy-android-parser`，无当前 Kotlin 运行器。
 - Web 业务修改运行受影响的现有回归；无自动化覆盖时补充对应测试或可重复步骤。影响桌面复用资源时，同时验证桌面生成与运行；浏览器测试不能替代 WebView2 验证。
 - `runner.cjs --self-test` 只验证测试框架，静态资源存在也不代表 PDF/OCR 已实际运行；报告应注明离线、中文扫描 PDF、大文件与真实服务等实际覆盖范围。
-- 纯文档修改不要求完整代码门禁。在 `apps/desktop` 运行 `npm run lint:docs`，并对本次全部变更文档检查 UTF-8、代码围栏、本地链接和差异；脚本覆盖根 `AGENTS.md`、贡献指南、Rust 指南、适配说明、桌面说明、文档索引、原型与双端设计/计划，以及 `test/dual-platform` 的阶段说明，共 15 份文档，`npm run lint` 已包含此命令。未列入的文件须补同等检查。
+- `npm run lint` 保留 recommended/no-var/prefer-const/no-unused-vars，并执行逐文件增量语义/Stylistic 门禁与违规 fixture。新手写 JavaScript 路径默认完整检查；历史暂缓规则和文件以 `apps/desktop/eslint.migration.mjs` 为准，不增加历史例外隐藏新文件违规。`npm run lint:debt` 只读报告历史语义与格式债务，app.js 仅语义诊断；执行或解析失败返回非零。具体覆盖和例外见 JavaScript 指南。
+- 纯文档修改不要求完整代码门禁。在 `apps/desktop` 运行 `npm run lint:docs`，并对本次全部变更文档检查 UTF-8、代码围栏、本地链接和差异；脚本覆盖根 `AGENTS.md`、贡献指南、Rust 指南、适配说明、桌面说明、文档索引、原型与双端设计/计划，以及 `test/dual-platform` 的阶段说明、JavaScript 指南及设计/计划、AI/WebDAV 运行说明，共 20 份文档，`npm run lint` 已包含此命令。未列入的文件须补同等检查。
 
 ## 6. 依赖、规则与 Git
 

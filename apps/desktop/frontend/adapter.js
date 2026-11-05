@@ -78,6 +78,12 @@
     const groups={single:['single','single_choice','singlechoice','choice','radio'],multiple:['multiple','multi','multiple_choice','multiplechoice','checkbox'],judge:['judge','judgement','judgment','true_false','truefalse','boolean'],blank:['blank','fill','fill_blank','fillblank','fill_in_blank'],short:['short','short_answer','essay','qa','subjective','question_answer']};
     return Object.entries(groups).find(([,aliases])=>aliases.includes(value))?.[0]||type;
   }
+  /** @param {number} expected */
+  function assertReadRevision(expected) {
+    if (revision !== expected) {
+      throw new Error('数据修订已变化，请重试读取。');
+    }
+  }
   const storage = {
     async initialize() {
       ready = false;
@@ -116,7 +122,7 @@
         const all = [...ids];
         for(let offset=0;offset<all.length;offset+=200) {
           const items = /** @type {import('../../web/platform/contracts').Question[]} */ (await invoke('local_query',{query:{kind:'details',collection:'questions',bank_id:bankId,ids:all.slice(offset,offset+200),revision:expected}}));
-          if(revision!==expected)throw new Error('数据修订已变化，请重试读取。');
+          assertReadRevision(expected);
           for(const item of items) {
             Object.assign(item,{type:questionType(item.type)});
             const target=snapshot.banks.find(b=>b.id===bankId)?.questions.find(q=>q.id===item.id);
@@ -132,7 +138,7 @@
       const expected=revision;const missing=ids.filter(id=>!loadedRecords.has(id)&&baseline?.records.some(r=>r.id===id));
       for(let offset=0;offset<missing.length;offset+=200) {
         const items=/** @type {import('../../web/platform/contracts').StudyRecord[]} */ (await invoke('local_query',{query:{kind:'details',collection:'records',bank_id:'',ids:missing.slice(offset,offset+200),revision:expected}}));
-        if(revision!==expected)throw new Error('数据修订已变化，请重试读取。');
+        assertReadRevision(expected);
         for(const item of items){const target=snapshot.records.find(r=>r.id===item.id),original=baseline?.records.find(r=>r.id===item.id);if(!target||!original)throw new Error('读取期间记录已变化。');Object.assign(target,item);Object.assign(original,structuredClone(item));loadedRecords.add(item.id);}
       }
     },
@@ -143,7 +149,7 @@
       const expected=revision;
       for(const key of ['wrongBook','crossPlatformMeta']) {
         const value=await invoke('local_query',{query:{kind:'hydrate',value:snapshot[key],revision:expected}});
-        if(revision!==expected)throw new Error('数据修订已变化，请重试读取。');
+        assertReadRevision(expected);
         if(baseline&&equal(baseline[key],snapshot[key]))Object.assign(baseline,{[key]:structuredClone(value)});
         Object.assign(snapshot,{[key]:value});
       }

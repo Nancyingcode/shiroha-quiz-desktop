@@ -13,5 +13,9 @@ files.push(...globSync('apps/desktop/frontend/**/*.js', { cwd: root }));
 const results = await lint.lintFiles(files);
 const formatter = await lint.loadFormatter('stylish');
 const output = await formatter.format(results);
-if (output) console.log(output);
-if (results.some(result => result.errorCount || result.warningCount)) process.exitCode = 1;
+if (output) {
+  console.log(output);
+}
+if (results.some((result) => result.errorCount || result.warningCount)) {
+  process.exitCode = 1;
+}
