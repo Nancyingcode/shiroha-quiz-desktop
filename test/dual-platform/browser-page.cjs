@@ -238,7 +238,7 @@ test('训练复盘：未知来源不读取当前题库的同 ID 解析', async t
   });
   await page.locator('.nav[data-view="records"]').click();
   await page.locator('#records [data-training-review]').click();
-  await page.locator('#training-question .training-analysis').filter({ hasText: '题库未提供解析。' }).waitFor();
+  await page.locator('#training-question .training-analysis').filter({ hasText: '暂无解析' }).waitFor();
   assert.equal(await page.evaluate(() => globalThis.__unknownSourceReads), 0);
 });
 

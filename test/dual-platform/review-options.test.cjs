@@ -94,7 +94,7 @@ test('训练复盘补读明确来源的已保存解析，快照已有解析或�
   row.question.analysis = '';
   for (const bankId of ['', 'deleted-source']) {
     const missing = api.renderTrainingQuestion({ ...row, bankId });
-    assert.match(missing, /题库未提供解析/);
+    assert.match(missing, /暂无解析/);
     assert.doesNotMatch(missing, /来源题库解析|其他题库解析/);
   }
 });

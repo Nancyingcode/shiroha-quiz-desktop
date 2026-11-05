@@ -279,7 +279,7 @@ function bindNav(){ $$('.nav').forEach(btn=>btn.onclick=async ()=>{
   const view=target&&$('#'+target);
   if(!view||view.classList.contains('active'))return;
   if(target!=='practice'&&!await canLeaveTotalPractice(target))return;
-  trainingReviewRequest++;trainingReview=null;$('#training-review-content')?.replaceChildren();
+  releaseTrainingReviewAnalysis();trainingReviewRequest++;trainingReview=null;$('#training-review-content')?.replaceChildren();
   if(document.body.classList.contains('practice-focus')&&target!=='practice')exitPracticeFocus();
   if(document.body.classList.contains('exam-focus')&&target!=='exam')exitExamFocus();
   if(aiImportRequestV99.running&&target!=='import')cancelAiImportRequestV99(true);
@@ -8068,15 +8068,26 @@ async function closeTrainingReview(){
   if(view.origin==='records')await renderRecords();
   requestAnimationFrame(()=>{if($('.view.active')?.id!==view.origin)return;window.scrollTo({top:view.scroll.window,behavior:'instant'});const main=$('.main');if(main)main.scrollTop=view.scroll.main;const fallback=[...($('#'+view.origin)?.querySelectorAll('[data-training-review]')||[])].find(button=>button.dataset.trainingReview===view.record.id);const focus=view.focus?.isConnected?view.focus:fallback;focus?.focus({preventScroll:true})});
 }
-function renderTrainingQuestion(row){
+function releaseTrainingReviewAnalysis(keepKey = '') {
+  $$('#training-review-content [data-review-analysis]').forEach((panel) => {
+    const key = panel.dataset.reviewAnalysis;
+    const session = reviewAnalysisSessions.get(key);
+    if (!session || key === keepKey) {
+      return;
+    }
+    session.requestId++;
+    session.controller?.abort();
+    reviewAnalysisSessions.delete(key);
+  });
+}
+function renderTrainingQuestion(row,recordId=''){
   if(!row?.question)return '<p class="notice">未记录原题快照，无法还原这道题。</p>';
   const q={...row.question,type:normalizeWebQuestionType(row.question.type||row.detail?.type)},chosen=row.chosen||[],answer=q.answer||row.detail?.answer||[];
-  const analysis=reviewAnalysisText({bankId:row.bankId,question:q});
   const title=row.roundNumber?`本轮第 ${row.roundNumber} 题`:`历史明细第 ${row.index+1} 条（原题序未记录）`;
   const bankNumber=row.bankQuestionNumber?`题库第 ${row.bankQuestionNumber} 题`:'题库题号未记录';
   const status={correct:'✓ 正确',wrong:'× 错误',unanswered:'— 未作答',unrecorded:'未记录'}[row.status];
   const comparison=isMultiBlankQuestionV58914(q)?renderMultiBlankComparisonV58914(q.blankAnswers,chosen,true):`<div><b>你的答案：</b>${practiceReviewAnswerHtml(q,chosen)}</div><div class="training-reference-answer"><b>${q.type==='short'?'参考答案（人工自评）':'正确答案'}：</b>${hasAnswerValueV58914(answer)?practiceReviewAnswerHtml(q,answer):'题库未提供答案'}</div>`;
-  return `<article class="training-question-content"><div class="qmeta"><b>${title}</b><span class="pill">${bankNumber}</span><span>${esc(label(q.type))}</span><span>${esc(row.bankName)}</span><b class="training-status-${row.status}">${status}</b></div>${row.partial?'<p class="notice">旧记录未保存完整原题，以下仅为当时保存的摘要与答案。</p>':''}<div class="question-title">${renderQuestionBodyV83(q)}</div>${renderReviewOptions({...q,answer},chosen)}<div class="training-answer-comparison training-status-${row.status}">${comparison}</div>${row.revealed?'<p class="muted">本题曾查看答案，未正式提交。</p>':''}${hasAnswerValueV58914(row.draft)?`<div class="notice"><b>曾填写但未提交（不计成绩）：</b>${practiceReviewAnswerHtml(q,row.draft)}</div>`:''}<div class="training-analysis"><b>题目解析</b>${analysis?renderQuestionContent(analysis):'<p class="muted">题库未提供解析。</p>'}</div></article>`;
+  return `<article class="training-question-content"><div class="qmeta"><b>${title}</b><span class="pill">${bankNumber}</span><span>${esc(label(q.type))}</span><span>${esc(row.bankName)}</span><b class="training-status-${row.status}">${status}</b></div>${row.partial?'<p class="notice">旧记录未保存完整原题，以下仅为当时保存的摘要与答案。</p>':''}<div class="question-title">${renderQuestionBodyV83(q)}</div>${renderReviewOptions({...q,answer},chosen)}<div class="training-answer-comparison training-status-${row.status}">${comparison}</div>${row.revealed?'<p class="muted">本题曾查看答案，未正式提交。</p>':''}${hasAnswerValueV58914(row.draft)?`<div class="notice"><b>曾填写但未提交（不计成绩）：</b>${practiceReviewAnswerHtml(q,row.draft)}</div>`:''}<div class="training-analysis">${renderReviewAnalysis({bankId:row.bankId,question:{...q,answer}},chosen,'training:'+recordId+':'+row.index)}</div></article>`;
 }
 async function renderTrainingReview(){
   const view=trainingReview;if(!view||!$('#training-review.active'))return;
@@ -8086,6 +8097,11 @@ async function renderTrainingReview(){
   const filtered=rows.filter(row=>view.filter==='all'||row.status===view.filter);
   if(filtered.length&&!filtered.some(row=>row.index===view.index))view.index=filtered[0].index;
   const position=filtered.findIndex(row=>row.index===view.index),selected=filtered[position];
+  const selectedAnalysisKey = selected?.question
+    ? JSON.stringify(['training:' + record.id + ':' + selected.index, selected.bankId || '', selected.question.id || ''])
+    : '';
+  // 补读可能异步完成，切题时先释放旧会话，避免迟到响应继续绑定旧页面。
+  releaseTrainingReviewAnalysis(selectedAnalysisKey);
   const needsSourceAnalysis=selected?.question&&selected.bankId&&!String(selected.question.analysis||'').trim();
   if(needsSourceAnalysis){
     // 桌面摘要不含解析；只补读当前选题，切题或离开后的迟到读取不能重绘旧页面。
@@ -8097,7 +8113,8 @@ async function renderTrainingReview(){
   const box=$('#training-review-content');box.dataset.recordId=record.id;
   const active=box.contains(document.activeElement)?document.activeElement:null;
   const focused=active?.getAttribute('data-training-filter'),focusedQuestion=active?.getAttribute('data-training-question'),focusedPage=active?.dataset.pageControl;
-  box.innerHTML=`<button type="button" class="ghost mini-btn" id="training-review-back">← 返回${view.origin==='dashboard'?'首页':view.origin==='practice'||view.origin==='exam'?'训练结果':'训练记录'}</button><div class="section-head"><div><h2>${esc(trainingTitle(record))}</h2><p class="muted">${esc(fmt(record.date))} · ${esc(record.mode)} · ${meta?{single:'单题提交',total:'总提交',exam:'考试交卷'}[meta.submitMode]||'':''} · ${trainingCompletion(record)}</p></div></div><div class="score-card"><div class="metric"><span>正确</span><b>${counts.correct}</b></div><div class="metric"><span>错误（已作答）</span><b>${counts.wrong}</b></div><div class="metric"><span>未作答</span><b>${counts.unanswered}</b></div><div class="metric"><span>用时</span><b>${ShirohaTraining.formatDuration(record.duration)}</b></div></div><p class="muted">正确率 ${record.accuracy}%${meta?` · ${record.correct}/${denominator} 道${meta.submitMode==='single'?'已判定题':'本轮题目'}`:'（沿用历史统计）'} · ${meta?.timing==='active'?'已扣除暂停':'原记录用时，可能包含停留时间'}</p>${missing?`<p class="notice">另有 ${missing} 道题未记录原题快照，无法还原；旧明细顺序不代表本轮题序。</p>`:''}${meta&&meta.submitMode!=='single'&&counts.unanswered?'<p class="notice">未作答题已按本轮原规则计错；上方“错误（已作答）”只统计实际作答错误。</p>':''}<div class="training-filters" aria-label="复盘题目筛选">${[['all','全部题目',rows.length],['correct','正确',counts.correct],['wrong','错误',counts.wrong],['unanswered','未作答',counts.unanswered]].map(([key,text,count])=>`<button type="button" class="ghost mini-btn" data-training-filter="${key}" aria-pressed="${view.filter===key}">${text} ${count}</button>`).join('')}</div><div id="training-answer-card" class="training-answer-card" aria-label="本轮答题卡"></div><p class="muted">✓ 正确　× 错误　— 未作答</p><section id="training-question" aria-label="选中题目复盘">${selected?renderTrainingQuestion(selected):'<p class="empty" role="status">当前筛选没有题目。</p>'}</section><div class="actions"><button type="button" class="ghost" id="training-prev" ${position<=0?'disabled':''}>上一题</button><button type="button" class="ghost" id="training-next" ${position<0||position===filtered.length-1?'disabled':''}>下一题</button><button type="button" class="primary" id="training-retry" ${counts.wrong?'':'disabled'}>重练错题（${counts.wrong}）</button></div>`;
+  box.innerHTML=`<button type="button" class="ghost mini-btn" id="training-review-back">← 返回${view.origin==='dashboard'?'首页':view.origin==='practice'||view.origin==='exam'?'训练结果':'训练记录'}</button><div class="section-head"><div><h2>${esc(trainingTitle(record))}</h2><p class="muted">${esc(fmt(record.date))} · ${esc(record.mode)} · ${meta?{single:'单题提交',total:'总提交',exam:'考试交卷'}[meta.submitMode]||'':''} · ${trainingCompletion(record)}</p></div></div><div class="score-card"><div class="metric"><span>正确</span><b>${counts.correct}</b></div><div class="metric"><span>错误（已作答）</span><b>${counts.wrong}</b></div><div class="metric"><span>未作答</span><b>${counts.unanswered}</b></div><div class="metric"><span>用时</span><b>${ShirohaTraining.formatDuration(record.duration)}</b></div></div><p class="muted">正确率 ${record.accuracy}%${meta?` · ${record.correct}/${denominator} 道${meta.submitMode==='single'?'已判定题':'本轮题目'}`:'（沿用历史统计）'} · ${meta?.timing==='active'?'已扣除暂停':'原记录用时，可能包含停留时间'}</p>${missing?`<p class="notice">另有 ${missing} 道题未记录原题快照，无法还原；旧明细顺序不代表本轮题序。</p>`:''}${meta&&meta.submitMode!=='single'&&counts.unanswered?'<p class="notice">未作答题已按本轮原规则计错；上方“错误（已作答）”只统计实际作答错误。</p>':''}<div class="training-filters" aria-label="复盘题目筛选">${[['all','全部题目',rows.length],['correct','正确',counts.correct],['wrong','错误',counts.wrong],['unanswered','未作答',counts.unanswered]].map(([key,text,count])=>`<button type="button" class="ghost mini-btn" data-training-filter="${key}" aria-pressed="${view.filter===key}">${text} ${count}</button>`).join('')}</div><div id="training-answer-card" class="training-answer-card" aria-label="本轮答题卡"></div><p class="muted">✓ 正确　× 错误　— 未作答</p><section id="training-question" aria-label="选中题目复盘">${selected?renderTrainingQuestion(selected,record.id):'<p class="empty" role="status">当前筛选没有题目。</p>'}</section><div class="actions"><button type="button" class="ghost" id="training-prev" ${position<=0?'disabled':''}>上一题</button><button type="button" class="ghost" id="training-next" ${position<0||position===filtered.length-1?'disabled':''}>下一题</button><button type="button" class="primary" id="training-retry" ${counts.wrong?'':'disabled'}>重练错题（${counts.wrong}）</button></div>`;
+  updateReviewAnalysisPanels();
   const card=$('#training-answer-card'),pageRows=nativePage(filtered,'training:'+record.id+':'+view.filter,card,renderTrainingReview);
   card.innerHTML=pageRows.map(row=>`<button type="button" class="training-status-${row.status}" data-training-question="${row.index}" aria-label="${row.roundNumber?'第 '+row.roundNumber+' 题':'明细第 '+(row.index+1)+' 条'}，${{correct:'正确',wrong:'错误',unanswered:'未作答',unrecorded:'未记录'}[row.status]}" aria-pressed="${view.index===row.index}">${row.roundNumber||row.index+1} ${{correct:'✓',wrong:'×',unanswered:'—',unrecorded:'?'}[row.status]}</button>`).join('');
   $('#training-review-back').onclick=closeTrainingReview;
@@ -8940,7 +8957,7 @@ async function saveAiSingleAnalysisV613(reviewSession=null){return runMutation(a
 });}
 /* SHIROHA_WEB_PRACTICE_AI_SINGLE_QUESTION_V613_END */
 
-// 错题草稿只属于当前页面会话；来源库、题目和场景共同标识，卸载的列表项会取消请求并释放草稿，不写入备份。
+// 解析草稿只属于当前页面会话；来源库、题目和场景共同标识，卸载的列表项会取消请求并释放草稿，不写入备份。
 const reviewAnalysisSessions=new Map();
 function reviewAnalysisSource(item){
   const q=practiceQuestionV8916(item),bankId=item.bankId||'';
@@ -9859,7 +9876,7 @@ async function switchViewV45(viewId){
   if(viewId!=='practice'&&!await canLeaveTotalPractice(viewId))return;
   if(viewId!=='practice')exitPracticeFocus();
   if(viewId!=='exam')exitExamFocus();
-  if(viewId!=='training-review'){trainingReviewRequest++;trainingReview=null;$('#training-review-content')?.replaceChildren()}
+  if(viewId!=='training-review'){releaseTrainingReviewAnalysis();trainingReviewRequest++;trainingReview=null;$('#training-review-content')?.replaceChildren()}
   $$('.nav').forEach(b=>b.classList.toggle('active',b.dataset.view===viewId));
   $$('.view').forEach(v=>v.classList.toggle('active',v===view));
   const nav=document.querySelector(`[data-view="${viewId}"]`);

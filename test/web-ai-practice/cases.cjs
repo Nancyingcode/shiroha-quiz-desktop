@@ -28,6 +28,7 @@ async function saveAndCheck(h, expected) {
 const cases = [
   ...require('./saved-analysis.cjs').cases,
   ...require('./wrong-analysis.cjs').cases,
+  ...require('./training-review-analysis.cjs').cases,
   ...require('./submit-modes.cjs').cases,
   {
     name: 'unconfigured-never-requests', options: { configured: false },
