@@ -1380,6 +1380,30 @@ async function main() {
       await page.waitForFunction(()=>!document.body.classList.contains('practice-focus'));
       return {range:'65-66',requested:1,actual:1};
     });
+    await check('单个自选起点按题量连续跨库出题', async () => {
+      const page = migratedRestart.page;
+      await page.reload();
+      await page.locator('body[data-storage-state="ready"]').waitFor();
+      await page.locator('.nav[data-view="banks"]').click();
+      await page.locator('[data-practice-group-v8916="C8"]').click();
+      await page.locator('.nav[data-view="practice"]').click();
+      await page.locator('#practice-start-mode-v58916').selectOption('custom');
+      await page.locator('#practice-number-range-v58916').fill('65');
+      await page.locator('#practice-limit').selectOption('custom');
+      await page.locator('#practice-custom-count').fill('3');
+      await page.locator('#start-practice-btn').click();
+      await page.locator('#practice-card').getByText('lazy-a 正文 64', { exact: true }).waitFor();
+      assert.equal(await page.locator('[data-practice-jump]').count(), 3);
+      assert.equal(await page.locator('#practice-card .practice-source-number').innerText(), '题库第 65 题');
+      await page.locator('#p-next').click();
+      await page.locator('#practice-card').getByText('lazy-b 正文 0', { exact: true }).waitFor();
+      await page.locator('#p-next').click();
+      await page.locator('#practice-card').getByText('lazy-b 正文 1', { exact: true }).waitFor();
+      await page.locator('#p-exit').click();
+      await page.locator('#app-dialog [data-dialog-accept]').click();
+      await page.waitForFunction(() => !document.body.classList.contains('practice-focus'));
+      return { start: 65, requested: 3, actual: 3, acrossBanks: true };
+    });
     await check('本轮错题一览分页保留题号、全部选项和完整题量',async()=>{
       const page=migratedRestart.page;
       // 前一用例用独立快照读取完整导出；重载后页面与适配器重新共享同一读取基线。

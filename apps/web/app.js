@@ -8133,7 +8133,14 @@ async function renderTrainingReview(){
     if(banks.length===1)setPracticeBankScopeV8916(first.bankId);else setPracticeGroupScopeV8916([...groups][0]);
     $('#practice-source').value='all';$('#practice-type').value='all';$('#practice-order').value='sequence';$('#practice-start-mode-v58916').value='custom';
     const base=practiceBaseItemsV58916('all','all',practiceScopeV8916());
-    $('#practice-number-range-v58916').value=base.map((item,index)=>wrongRows.some(row=>row.bankId===practiceItemBankIdV8916(item)&&row.question.id===practiceQuestionV8916(item).id)?index+1:null).filter(Boolean).join(',');
+    const selectedNumbers = base.map((item, index) => {
+      const belongsToWrongRows = wrongRows.some((row) => (
+        row.bankId === practiceItemBankIdV8916(item)
+        && row.question.id === practiceQuestionV8916(item).id
+      ));
+      return belongsToWrongRows ? index + 1 : null;
+    }).filter(Boolean);
+    $('#practice-number-range-v58916').value = formatExactPracticeNumbersV58916(selectedNumbers);
     renderPracticeScopeUiV8916();syncPracticeStartModeFieldsV58916();
   };
   if(focused)box.querySelector(`[data-training-filter="${focused}"]`)?.focus({preventScroll:true});
@@ -8539,6 +8546,12 @@ function parsePracticeNumberRangeV58916(raw,max){
   if(invalid.length)return {indexes:[],error:`题号格式或范围有误：${invalid.slice(0,5).join('、')}${invalid.length>5?'…':''}`};
   const indexes=[...selected].sort((a,b)=>a-b);return indexes.length?{indexes,error:''}:{indexes:[],error:'没有可用的题号。'};
 }
+function formatExactPracticeNumbersV58916(numbers) {
+  if (numbers.length === 1) {
+    return `${numbers[0]}-${numbers[0]}`;
+  }
+  return numbers.join(',');
+}
 function syncPracticeStartModeFieldsV58916(){
   const select=$('#practice-start-mode-v58916');const rangeInput=$('#practice-number-range-v58916');const limitControl=$('#practice-limit-control-v58916');const rangeLabel=$('#practice-range-label-v58916');if(!select||!rangeInput||!limitControl)return;
   const custom=select.value===PRACTICE_START_CUSTOM_V58916;
@@ -8565,11 +8578,22 @@ function buildPracticeSelectionV58916(scope,source,type,order,limit,customCount)
   if(order!=='sequence'&&startMode===PRACTICE_START_CONTINUE_V58916)startMode=PRACTICE_START_FROM_V58916;
   const progressKey=practiceProgressKeyV58916(scope,source,type);let startIndex=0;let items=[];
   if(startMode===PRACTICE_START_CUSTOM_V58916){
-    const parsed=parsePracticeNumberRangeV58916($('#practice-number-range-v58916')?.value||'',baseItems.length);
-    if(parsed.error)return {error:parsed.error,items:[],baseItems,startMode,progressKey,startIndex};
-    items=parsed.indexes.map(index=>baseItems[index]).filter(Boolean);
-    if(order==='random')items=shuffle(items);
-    items=applyQuestionLimitV60(items,limit,customCount);
+    const raw = String($('#practice-number-range-v58916')?.value || '').trim();
+    const parsed = parsePracticeNumberRangeV58916(raw, baseItems.length);
+    if (parsed.error) {
+      return { error: parsed.error, items: [], baseItems, startMode, progressKey, startIndex };
+    }
+    const isStartingNumber = /^\d+$/.test(raw);
+    if (isStartingNumber) {
+      startIndex = parsed.indexes[0];
+      items = baseItems.slice(startIndex);
+    } else {
+      items = parsed.indexes.map((index) => baseItems[index]).filter(Boolean);
+    }
+    if (order === 'random') {
+      items = shuffle(items);
+    }
+    items = applyQuestionLimitV60(items, limit, customCount);
   }
   else if(order==='sequence'){
     if(startMode===PRACTICE_START_CONTINUE_V58916){const progress=resolvePracticeProgressV58916(scope,source,type,baseItems);if(progress)startIndex=progress.index;else startMode=PRACTICE_START_FROM_V58916}
@@ -9097,7 +9121,9 @@ async function startSingleFavoritePracticeV596(id){
   $('#practice-source').value='favorite';$('#practice-type').value='all';$('#practice-order').value='sequence';openQuickPracticeSetup();
   const index=practiceBaseItemsV58916('favorite','all').findIndex(item=>practiceQuestionV8916(item).id===id);
   if(index<0){toast('这道题已不在收藏中，请重新选择。','warn');return}
-  $('#practice-start-mode-v58916').value=PRACTICE_START_CUSTOM_V58916;$('#practice-number-range-v58916').value=String(index+1);syncPracticeStartModeFieldsV58916();
+  $('#practice-start-mode-v58916').value = PRACTICE_START_CUSTOM_V58916;
+  $('#practice-number-range-v58916').value = formatExactPracticeNumbersV58916([index + 1]);
+  syncPracticeStartModeFieldsV58916();
 }
 async function renderWrongBook(){
   if(!nativeViewVisible('wrongbook'))return;

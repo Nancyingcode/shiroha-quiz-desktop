@@ -961,7 +961,7 @@ test('总提交：全题型、跨库同 ID、键盘与草稿不提前计分', as
 
 test('收藏单题快捷入口先选择提交方式，并保留单题范围', async t => {
   const initial = webState();
-  initial.favorites['bank-a'] = ['multiple', 'judge'];
+  initial.favorites['bank-a'] = ['multiple', 'judge', 'unanswered'];
   const page = await pageFor(t, JSON.stringify(initial));
   await page.locator('body[data-storage-state="ready"]').waitFor();
   await page.locator('.nav[data-view="favorites"]').click();
@@ -969,7 +969,8 @@ test('收藏单题快捷入口先选择提交方式，并保留单题范围', as
   await page.locator('[data-practice-one-fav-v596="judge"]').click();
   await page.locator('#practice-submit-mode').waitFor({ state: 'visible' });
   assert.equal(await page.locator('#bank-question-detail').count(), 0);
-  assert.equal(await page.locator('#practice-number-range-v58916').inputValue(), '2');
+  assert.equal(await page.locator('#practice-number-range-v58916').inputValue(), '2-2');
+  await page.locator('#practice-limit').selectOption('all');
   await page.locator('#practice-submit-mode').selectOption('total');
   await page.locator('#start-practice-btn').click();
   assert.equal(await page.locator('[data-practice-jump]').count(), 1);
@@ -993,6 +994,8 @@ test('自选题号和练习题量同时可选，切换起点保留输入且窄�
   assert(await page.locator('#practice-limit').isVisible());
   assert(await page.locator('#practice-custom-count').isVisible());
   assert(await range.isVisible());
+  assert(await page.locator('#practice-number-hint-v58916').isVisible());
+  assert.match(await range.getAttribute('aria-describedby'), /practice-number-hint-v58916/);
   await page.setViewportSize({ width: 360, height: 740 });
   for (const control of [range, page.locator('#practice-limit'), page.locator('#practice-custom-count')]) {
     const bounds = await control.boundingBox();
@@ -1008,6 +1011,89 @@ test('自选题号和练习题量同时可选，切换起点保留输入且窄�
   await page.locator('#practice-limit').selectOption('custom');
   assert.equal(await range.inputValue(), '2,4-7');
   assert.equal(await page.locator('#practice-custom-count').inputValue(), '2');
+});
+
+const singleStartCases = [
+  { name: '顺序和自定义数量', start: '2', limit: 'custom', count: '3', expected: [2, 3, 4] },
+  { name: '50题超过剩余数量', start: '2', limit: '50', expected: [2, 3, 4, 5, 6, 7] },
+  { name: '一半按起点之后计算', start: '2', limit: 'half', expected: [2, 3, 4] },
+  { name: '全部从起点练到末尾', start: '2', limit: 'all', expected: [2, 3, 4, 5, 6, 7] },
+  { name: '末尾不足时保留剩余题目', start: '6', limit: 'custom', count: '20', expected: [6, 7] },
+  { name: '随机从起点后的范围取题', start: '2', limit: 'custom', count: '3', order: 'random', expected: [3, 4, 5] },
+  { name: '收藏来源按筛选结果计算起点', start: '2', limit: 'custom', count: '2', source: 'favorite', expected: [2, 3] },
+];
+
+for (const scenario of singleStartCases) {
+  test(`单个自选题号作为练习起点：${scenario.name}`, async (t) => {
+    const initial = webState();
+    initial.favorites['bank-a'] = ['same-id', 'multiple', 'judge', 'unanswered'];
+    const page = await pageFor(t, JSON.stringify(initial));
+    page.setDefaultTimeout(5000);
+    await page.locator('body[data-storage-state="ready"]').waitFor();
+    await page.locator('.nav[data-view="practice"]').click();
+    await page.locator('#practice-submit-mode').selectOption('total');
+    if (scenario.source) await page.locator('#practice-source').selectOption(scenario.source);
+    if (scenario.order) await page.locator('#practice-order').selectOption(scenario.order);
+    await page.locator('#practice-limit').selectOption(scenario.limit);
+    if (scenario.count) await page.locator('#practice-custom-count').fill(scenario.count);
+    await page.locator('#practice-start-mode-v58916').selectOption('custom');
+    await page.locator('#practice-number-range-v58916').fill(scenario.start);
+    await page.evaluate(() => { Math.random = () => 0; });
+    await page.locator('#start-practice-btn').click();
+    await page.locator('[data-practice-jump="0"]').waitFor();
+    assert.equal(await page.locator('[data-practice-jump]').count(), scenario.expected.length);
+    const numbers = [];
+    for (let index = 0; index < scenario.expected.length; index++) {
+      await page.locator(`[data-practice-jump="${index}"]`).click();
+      numbers.push(await page.locator('#practice-card .practice-source-number').innerText());
+    }
+    assert.deepEqual(numbers, scenario.expected.map((number) => `题库第 ${number} 题`));
+  });
+}
+
+test('自选起点拒绝无效题号，单题范围仍只选择一题', async (t) => {
+  const page = await pageFor(t, JSON.stringify(webState()));
+  page.setDefaultTimeout(5000);
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.locator('.nav[data-view="practice"]').click();
+  await page.locator('#practice-start-mode-v58916').selectOption('custom');
+  const range = page.locator('#practice-number-range-v58916');
+  for (const invalid of ['0', '8', 'abc']) {
+    await range.fill(invalid);
+    await page.locator('#start-practice-btn').click();
+    assert.match(await page.locator('#practice-card').innerText(), /题号格式或范围有误/);
+    assert.equal(await page.locator('[data-practice-jump]').count(), 0);
+  }
+  await range.fill('2-2');
+  await page.locator('#practice-limit').selectOption('all');
+  await page.locator('#start-practice-btn').click();
+  assert.equal(await page.locator('[data-practice-jump]').count(), 1);
+  assert.equal(await page.locator('#practice-card .practice-source-number').innerText(), '题库第 2 题');
+});
+
+test('训练复盘重练单道错题时，只包含这道题', async (t) => {
+  const initial = webState();
+  const question = initial.banks[0].questions[0];
+  initial.records = [];
+  initial.banks = [initial.banks[0]];
+  initial.banks[0].questions = Array.from({ length: 3 }, (_, index) => ({
+    ...question, id: `retry-single-${index}`, question: `错题重练样本 ${index + 1}`, answer: ['A'],
+  }));
+  const page = await pageFor(t, JSON.stringify(initial));
+  page.setDefaultTimeout(5000);
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.locator('.nav[data-view="practice"]').click();
+  await page.locator('#practice-limit').selectOption('all');
+  await page.locator('#start-practice-btn').click();
+  await page.locator('#practice-card .option[data-key="B"]').click();
+  await page.locator('#p-submit').click();
+  await page.locator('#p-exit').click();
+  await page.locator('#practice-review-result').click();
+  await page.locator('#training-retry').click();
+  assert.equal(await page.locator('#practice-number-range-v58916').inputValue(), '1-1');
+  await page.locator('#start-practice-btn').click();
+  assert.equal(await page.locator('[data-practice-jump]').count(), 1);
+  assert.match(await page.locator('#practice-card .question-title').innerText(), /错题重练样本 1/);
 });
 
 for (const order of ['sequence', 'random']) {
