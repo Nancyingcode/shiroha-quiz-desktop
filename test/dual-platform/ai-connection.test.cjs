@@ -1,19 +1,16 @@
 'use strict';
+const { loadWebSource } = require('./source-tools.cjs');
 
 const assert = require('node:assert/strict');
-const { readFileSync } = require('node:fs');
 const vm = require('node:vm');
 const test = require('node:test');
 
-const source = readFileSync(require.resolve('../../apps/web/app.js'), 'utf8');
+const source = loadWebSource();
 const config = { provider: 'ollama', endpoint: 'http://127.0.0.1:11434/v1/chat/completions', model: 'test-model' };
 const browserAdvice = /CORS|跨域|Origin|浏览器|当前网页/;
 
 function functionsBetween(startName, endName) {
-  const start = source.indexOf(startName);
-  const end = source.indexOf(endName, start);
-  assert(start >= 0 && end > start, 'AI 函数边界已改变，请更新测试加载器。');
-  return source.slice(start, end);
+  return source.between(startName, endName);
 }
 
 function harness(native, ai = async () => { throw new Error('未配置 mock 响应'); }) {
@@ -27,9 +24,9 @@ function harness(native, ai = async () => { throw new Error('未配置 mock 响�
     clearTimeout(timer) { timers.delete(timer); },
   });
   for (const [start, end] of [
-    ['function aiProviderLabelV99(', 'function readAiFormV99('],
-    ['function aiCurrentOriginV375(', 'function renderAiDiagnosticV375('],
-    ['function aiResponseContentV99(', 'async function testAiConnectionV99('],
+    ['aiProviderLabelV99', 'readAiFormV99'],
+    ['aiCurrentOriginV375', 'renderAiDiagnosticV375'],
+    ['aiResponseContentV99', 'testAiConnectionV99'],
   ]) vm.runInContext(functionsBetween(start, end), context);
   return { context, timers };
 }

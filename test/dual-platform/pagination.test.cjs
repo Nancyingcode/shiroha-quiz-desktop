@@ -26,3 +26,10 @@ test('分页范围涵盖四档条数、空列表和删除后末页回退', () =>
   assert.deepEqual(plain(api.listPageRange(0, 4, 10)), { page: 0, pages: 1, start: 0, end: 0 });
   assert.deepEqual(plain(api.listPageRange(20, 2, 10)), { page: 1, pages: 2, start: 10, end: 20 });
 });
+
+test('分页范围限制负页码并在页数阈值处保留完整页码', () => {
+  const { api } = loadWeb();
+  assert.deepEqual(plain(api.listPageRange(101, -4, 10)), { page: 0, pages: 11, start: 0, end: 10 });
+  assert.deepEqual(plain(api.listPageRange(101, 1, 10)), { page: 1, pages: 11, start: 10, end: 20 });
+  assert.deepEqual(plain(api.listPageNumbers(4, 8)), [1, 2, 3, 4, 5, 6, 7, 8]);
+});

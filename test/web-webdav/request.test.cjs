@@ -5,12 +5,10 @@ const { readFileSync } = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const test = require('node:test');
+const { loadWebSource } = require('../dual-platform/source-tools.cjs');
 
 // Execute the real transport and diagnostic functions with a fake fetch, without app startup.
-const source = readFileSync(path.resolve(__dirname, '../../apps/web/app.js'), 'utf8');
-const start = source.indexOf('function webdavBasicAuthV378(');
-const end = source.indexOf('function setWebdavDiagnosticV378(', start);
-assert(start >= 0 && end > start, 'WebDAV source boundaries changed; update the test loader.');
+const source = loadWebSource();
 
 function harness(protocol, fetch) {
   const timers = new Set();
@@ -22,7 +20,7 @@ function harness(protocol, fetch) {
   });
   vm.runInContext(readFileSync(path.resolve(__dirname, '../../apps/web/platform/browser-network.js'), 'utf8'), context);
   context.ShirohaPlatform = { network: context.ShirohaBrowserNetwork };
-  vm.runInContext(source.slice(start, end), context);
+  vm.runInContext(source.between('webdavBasicAuthV378', 'setWebdavDiagnosticV378'), context);
   return { context, timers };
 }
 

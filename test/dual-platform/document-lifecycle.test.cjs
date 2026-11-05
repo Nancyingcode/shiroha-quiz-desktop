@@ -1,10 +1,10 @@
 'use strict';
+const { loadWebSource } = require('./source-tools.cjs');
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const vm = require('node:vm');
 const { setImmediate } = require('node:timers');
-const { readFileSync } = require('node:fs');
-const source = readFileSync(require.resolve('../../apps/web/app.js'), 'utf8');
+const source = loadWebSource();
 
 for (const fail of [false, true]) {
   test(`PDF extraction releases document after ${fail ? 'failure' : 'success'}`, async () => {
@@ -19,7 +19,7 @@ for (const fail of [false, true]) {
       pdfDocumentOptions: x => x, pdfItemsToLines: () => 'A self authored question with enough text for extraction',
       toast() {}, warnDev() {}, extractPdfTextLite: async () => 'Fallback self authored question with enough text',
     });
-    vm.runInContext(source.slice(source.indexOf('async function extractPdfText(file)'), source.indexOf('async function loadLocalPdfJs')), context);
+    vm.runInContext(source.between('extractPdfText', 'loadLocalPdfJs'), context);
     await context.extractPdfText({});
     assert.equal(destroyed, 1);
   });
@@ -38,7 +38,7 @@ test('failed OCR releases canvas, worker and PDF without losing the failure stat
     createOcrWorker: async () => ({ worker: { recognize: async () => { throw new Error('broken recognition'); }, terminate: async () => { terminated++; } } }),
     renderPdfPageToCanvas: async () => canvas,
   });
-  vm.runInContext(source.slice(source.indexOf('async function startPdfOcrImport()'), source.indexOf('async function renderPdfPageToCanvas')), context);
+  vm.runInContext(source.between('startPdfOcrImport', 'renderPdfPageToCanvas'), context);
   await context.startPdfOcrImport();
   assert.equal(canvas.width, 1); assert.equal(canvas.height, 1);
   assert.equal(destroyed, 1); assert.equal(terminated, 1);
@@ -68,7 +68,7 @@ test('cancelling pending recognition releases resources and permits retry withou
     },
     renderPdfPageToCanvas: async () => { const canvas = { width: 1000, height: 1000 }; canvases.push(canvas); return canvas; },
   });
-  vm.runInContext(source.slice(source.indexOf('async function startPdfOcrImport()'), source.indexOf('async function renderPdfPageToCanvas')), context);
+  vm.runInContext(source.between('startPdfOcrImport', 'renderPdfPageToCanvas'), context);
   let completed = false;
   const running = context.startPdfOcrImport().then(() => { completed = true; });
   await started;
@@ -102,7 +102,7 @@ test('switching import source cannot receive a late OCR result', async () => {
     createOcrWorker: async () => ({ worker: { recognize: () => pending, terminate: async () => {} } }),
     renderPdfPageToCanvas: async () => ({ width: 100, height: 100 }),
   });
-  vm.runInContext(source.slice(source.indexOf('async function startPdfOcrImport()'), source.indexOf('async function renderPdfPageToCanvas')), context);
+  vm.runInContext(source.between('startPdfOcrImport', 'renderPdfPageToCanvas'), context);
   const running = context.startPdfOcrImport();
   await new Promise(resolve => setImmediate(resolve));
   context.ocrImportState = { file: { name: 'new.pdf' }, text: '', pages: [], running: false };
@@ -114,7 +114,7 @@ test('switching import source cannot receive a late OCR result', async () => {
 test('oversized PDF pages are rejected before allocating a canvas', async () => {
   let allocated = false;
   const context = vm.createContext({ document: { createElement() { allocated = true; throw new Error('allocated'); } } });
-  vm.runInContext(source.slice(source.indexOf('async function renderPdfPageToCanvas'), source.indexOf('function formatOcrPages')), context);
+  vm.runInContext(source.between('renderPdfPageToCanvas', 'formatOcrPages'), context);
   await assert.rejects(context.renderPdfPageToCanvas({ getPage: async () => ({ getViewport: () => ({ width: 100000, height: 100000 }), cleanup() {} }) }, 1), /像素/);
   assert.equal(allocated, false);
 });

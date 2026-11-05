@@ -40,6 +40,8 @@
 
 ### 代码检查与提交规范
 
+JavaScript/TypeScript 修改遵循 [Airbnb JavaScript 项目适配指南](./rules/javascript-style-guide.md)。新增代码和修改逻辑逐步采用规范，保留本项目的 IIFE、Node ESM/CommonJS、数据格式与安全边界；[重构设计](./docs/superpowers/specs/2026-11-05-airbnb-javascript-refactor.md)和[已批准实施计划](./docs/superpowers/plans/2026-11-05-airbnb-javascript-refactor.md)记录后续门禁与迁移批次。用户已批准的 P0—P5 分阶段任务已完成；高风险状态的保留范围、实际验证与历史债务见实施计划。ESLint 覆盖范围以下文和实际配置为准。
+
 开发工具统一安装在 `apps/desktop`，使用现有 npm 锁文件。安装依赖前，先关闭使用当前工作区依赖的开发服务和桌面窗口，详见[桌面开发说明](./apps/desktop/README.md#开发与构建)。
 
 ```powershell
@@ -52,7 +54,11 @@ npm test
 
 `npm ci` / `npm install` 会通过 `prepare` 在仓库根目录安装 Husky hooks；已有依赖时可运行 `npm run prepare` 重新安装。每个 worktree 都需安装自己的依赖和 hooks。根目录没有 `package.json`，不要在根目录直接运行 npm 脚本。
 
-提交时，`pre-commit` 自动运行 `npm run lint`：ESLint 检查桌面脚本、测试、配置、Web 平台适配与桌面前端，文档检查验证 UTF-8、代码围栏和本地链接。任何错误或警告都会阻止提交；检查只读取文件，不自动修复或改写暂存区，首次提交适用同样的检查。历史 `apps/web/app.js`、`question-bank.js`、其他测试目录、第三方库与生成资源不在当前 ESLint 覆盖范围内；相关业务变更仍须执行对应回归。
+提交时，`pre-commit` 自动运行 `npm run lint`：保留原有桌面、Web 平台/训练、桌面前端和双端测试检查，追加 `lint:incremental`、`lint:fixtures` 与 20 份文档检查。增量入口读取 Git 跟踪和未忽略的未跟踪 JavaScript 文件，按完整文件检查；新路径默认执行 recommended、项目语义规则和 14 条显式 Stylistic 规则。任何正式门禁错误或警告都阻止提交；不自动修复、不改写源码或暂存区，首次提交同样适用。fixture 只在隔离临时目录写入自建样例。
+
+历史范围采用[逐文件迁移清单](./apps/desktop/eslint.migration.mjs)：当前 79 个文件保留原正确性门禁，29 个已达到全部目标规则；41 个文件暂缓部分 Stylistic 规则，44 个文件仅暂缓已列明的少量未清零语义规则，清零的规则仍为 error。另有 app.js 和 15 个既有测试文件暂不进入正式门禁；新建测试文件不继承这些例外。`question-bank.js` 数据、第三方、原始 fixture 和生成资源明确排除。暂缓范围不保证新增同类违规会被阻断，修改时仍需人工按规范审查，后续逐规则/文件迁移后删除例外；不采用总告警预算或仅检查改动行。
+
+在 `apps/desktop` 运行 `npm run lint:debt` 可查看上述历史文件的逐文件/规则数量、行列和消息；app.js 只报告语义问题，不整体格式化。发现既有债务正常输出报告；缺失文件、语法错误、配置或规则执行失败返回非零，不能把失败当成零债务。可用 `npm run lint:debt -- --file apps/web/app.js` 聚焦复核。导入重复检查由 ESLint 核心规则提供；没有安装 import-x，不宣称检查缺失模块、导入循环或未使用模块。相关业务变更仍须执行对应回归。
 
 `commit-msg` 使用 commitlint 的 `@commitlint/config-conventional` 校验提交信息，格式为 `type(scope): 描述`，其中 scope 可省略，描述支持中文。例如：
 

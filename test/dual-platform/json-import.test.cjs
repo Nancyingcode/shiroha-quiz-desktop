@@ -1,15 +1,13 @@
 'use strict';
+const { loadWebSource } = require('./source-tools.cjs');
 
 const assert = require('node:assert/strict');
-const { readFileSync } = require('node:fs');
 const test = require('node:test');
 const vm = require('node:vm');
 const { loadWeb, plain } = require('./web-source.cjs');
 const { webState } = require('./fixtures/dataset.cjs');
 
-const source = readFileSync(require.resolve('../../apps/web/app.js'), 'utf8');
-const start = source.indexOf('function tryParseAutoJsonImportV58922(');
-const end = source.indexOf('function loadDualSample(', start);
+const source = loadWebSource();
 
 function setup(data, { mode = 'auto', accepted = true } = {}) {
   const { api } = loadWeb();
@@ -36,8 +34,7 @@ function setup(data, { mode = 'auto', accepted = true } = {}) {
     largeImportRiskMessageV376: () => '', summarizeImportResultV376: () => '识别完成',
     showNotice: (...args) => notices.push(args), toast: (...args) => notices.push(args),
   });
-  assert(start >= 0 && end > start);
-  vm.runInContext(source.slice(start, end), context);
+  vm.runInContext(source.between('tryParseAutoJsonImportV58922', 'loadDualSample'), context);
   return { context, input, original, confirmations, imports, notices, previews, elements };
 }
 

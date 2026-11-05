@@ -1,4 +1,5 @@
 'use strict';
+const { loadWebSource } = require('./source-tools.cjs');
 const assert = require('node:assert/strict');
 const {readFileSync} = require('node:fs');
 const vm = require('node:vm');
@@ -121,10 +122,10 @@ test('account card refresh rechecks Harness after an earlier unreadable status w
 });
 
 test('shared business routes only the three CodeBuddy tasks and never retries through API',async()=>{
-  const source=readFileSync(require.resolve('../../apps/web/app.js'),'utf8');const runs=[];let network=0;
+  const source=loadWebSource();const runs=[];let network=0;
   const context=vm.createContext({ShirohaPlatform:{harness:{snapshot:()=>({...ready}),execute:async(snapshot,task)=>{runs.push({snapshot,task});return {content:'合成结果'};}},network:{ai:()=>network++}},AI_PROVIDER_PRESETS_V99:{}});
-  vm.runInContext(source.slice(source.indexOf('function aiProviderLabelV99('),source.indexOf('function normalizeAiEndpointV99(')),context);
-  vm.runInContext(source.slice(source.indexOf('async function requestAiChatV99('),source.indexOf('async function withAiTimeoutV99(')),context);
+  vm.runInContext(source.between('aiProviderLabelV99', 'normalizeAiEndpointV99'),context);
+  vm.runInContext(source.between('requestAiChatV99', 'withAiTimeoutV99'),context);
   const config=context.aiExecutionConfigV99();assert.equal(config.model,ready.model);assert.equal(config.timeoutSeconds,120);
   for(const task of ['connection_test','question_analysis','question_followup']){
     assert.equal(context.aiConfiguredV99(config,task),true);await context.requestAiChatV99(config,[],{task});
@@ -245,10 +246,10 @@ for(const outcome of ['success','failure'])test(`model save ${outcome} after rei
 });
 
 test('shared connection button reaches CodeBuddy test without reading hidden Codex form',async()=>{
-  const source=readFileSync(require.resolve('../../apps/web/app.js'),'utf8');let tested=0;const notices=[];const button={disabled:false};
+  const source=loadWebSource();let tested=0;const notices=[];const button={disabled:false};
   const context=vm.createContext({ShirohaPlatform:{harness:{formMode:()=> 'harness',formAdapter:()=> 'codebuddy',snapshot:()=>({...ready}),test:async()=>{tested++;}}},$:()=>button,setAiSettingsStatusV99:message=>notices.push(message),updateAiConnectionPillV99(){}});
-  vm.runInContext(source.slice(source.indexOf('function aiProviderLabelV99('),source.indexOf('function normalizeAiEndpointV99(')),context);
-  vm.runInContext(source.slice(source.indexOf('async function testAiConnectionV99('),source.indexOf('function ',source.indexOf('async function testAiConnectionV99(')+30)),context);
+  vm.runInContext(source.between('aiProviderLabelV99', 'normalizeAiEndpointV99'),context);
+  vm.runInContext(source.functionSource('testAiConnectionV99'),context);
   await context.testAiConnectionV99();assert.equal(tested,1);assert.equal(button.disabled,false);assert(notices.some(message=>message.includes('CodeBuddy 测试执行成功')));
 });
 
@@ -287,7 +288,7 @@ test('an already formatted known CodeBuddy failure does not duplicate its diagno
 });
 
 test('single analysis and followup show the fixed native diagnostic while preserving existing drafts',async()=>{
-  const source=readFileSync(require.resolve('../../apps/web/app.js'),'utf8');const calls=[];const notices=[];
+  const source=loadWebSource();const calls=[];const notices=[];
   const code='codebuddy_upstream_unverified';const message='CodeBuddy 上游响应未通过完整性校验。';
   const f=fixture(async(command,{request})=>{if(command==='harness_execute'){calls.push(request.task);throw {code,message,detail:'synthetic-private-body',cause:{message:'synthetic-private-token'}};}return {...ready};});
   await f.api.initialize();
@@ -295,8 +296,8 @@ test('single analysis and followup show the fixed native diagnostic while preser
   const session={requestId:0,fingerprint:'same',loading:'',draft:'保留当前追问',analysis:{analysis:'保留原解析'},initialAnalysis:'保留初始解析',messages:[{role:'assistant',content:'保留历史'}]};
   const original=JSON.stringify({analysis:session.analysis,initialAnalysis:session.initialAnalysis,messages:session.messages,draft:session.draft});
   const context=vm.createContext({practice,currentPracticeItemV8916:()=>item,aiSingleAllowedV613:()=>true,practiceItemKeyV8916:()=> 'synthetic-key',aiSingleSessionV613:()=>session,aiSingleSessionsV613:new Map([['synthetic-key',session]]),aiSingleFingerprintV613:()=> 'same',aiSingleConfigV613:()=>({configured:true,requestConfig:{execution:f.api.snapshot(),timeoutSeconds:120}}),getPracticeAnswerStateV26:()=>({chosen:['B']}),renderPracticeAiPanelV613(){},withAiTimeoutV99:async(_seconds,run)=>run({}),requestAiChatV99:(_config,_messages,options)=>f.api.execute(f.api.snapshot(),options.task,[]),buildAiSingleAnalysisMessagesV613:()=>[],buildAiSingleFollowUpMessagesV613:()=>[],showNotice:(_title,text)=>notices.push(text),ShirohaPlatform:{credentials:{redact:(_config,text)=>text}}});
-  vm.runInContext(source.slice(source.indexOf('function sanitizeAiDiagnosticDetailV375('),source.indexOf('function aiOllamaCorsCommandV375(')),context);
-  vm.runInContext(source.slice(source.indexOf('async function runAiSingleAnalysisV613('),source.indexOf('function aiSingleWithAnalysisV613(')),context);
+  vm.runInContext(source.between('sanitizeAiDiagnosticDetailV375', 'aiOllamaCorsCommandV375'),context);
+  vm.runInContext(source.between('runAiSingleAnalysisV613', 'aiSingleWithAnalysisV613'),context);
   await context.runAiSingleAnalysisV613();await context.runAiSingleFollowUpV613();
   const expected=`${message}（诊断码：${code}）`;
   assert.deepEqual(calls,['question_analysis','question_followup']);assert.deepEqual(notices,[expected,expected]);assert.equal(session.error,expected);

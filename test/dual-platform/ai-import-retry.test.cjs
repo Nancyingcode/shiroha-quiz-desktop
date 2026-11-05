@@ -1,12 +1,10 @@
 'use strict';
+const { loadWebSource } = require('./source-tools.cjs');
 
 const assert = require('node:assert/strict');
-const { readFileSync } = require('node:fs');
 const vm = require('node:vm');
 const test = require('node:test');
-const source = readFileSync(require.resolve('../../apps/web/app.js'), 'utf8');
-const start = source.indexOf('async function startAiImportV99(');
-const end = source.indexOf('/* SHIROHA_WEB_ISSUE_99_AI_IMPORT_END */', start);
+const source = loadWebSource();
 
 function setup(respond) {
   const requests = [];
@@ -26,9 +24,8 @@ function setup(respond) {
     requestAiChatV99: async (_config, options) => { requests.push(options.requestedMode); return respond(requests.length); },
     parseAiRefactorPayloadV384: () => { throw new Error('模型业务 JSON 无效'); },
   });
-  assert(start >= 0 && end > start);
-  vm.runInContext(source.slice(source.indexOf('function aiExecutionConfigV99('),source.indexOf('function normalizeAiEndpointV99(')), context);
-  vm.runInContext(source.slice(start, end), context);
+  vm.runInContext(source.between('aiExecutionConfigV99', 'normalizeAiEndpointV99'), context);
+  vm.runInContext(source.functionSource('startAiImportV99'), context);
   return { context, requests, original };
 }
 

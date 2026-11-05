@@ -2,7 +2,9 @@
 
 仅使用自建安全题库和假密钥，每个用例新建 Playwright context，不接触用户浏览器数据。`page.route` 拦截 `https://mock-ai.invalid/**`，返回 OpenAI 格式解析 JSON / 追问正文；其它 API 请求一律阻断。不安装包，不调用真实账户或收费 API，不改应用文件。
 
-其他电脑需预先具备 Node、可被 `require('playwright')` 解析的 Playwright 包及已安装的 Chromium 浏览器（或显式指定现有 Chromium/Edge）。脚本不安装依赖、不下载浏览器；本机 runtime 不随仓库分发。加载包时先 `require('playwright')`，仅缺包时兜底当前机器的 bundled 目录。
+运行前需具备项目要求的 Node.js 24+，并已按 `apps/desktop/package-lock.json` 安装桌面开发依赖。[共享源码加载器](../dual-platform/source-tools.cjs)复用已锁定的 ESLint 解析状态键和 IIFE，避免排版变化使桥接失效。没有新增 npm 包，但 AI runner 新增了对既有桌面开发依赖的运行前提；只有 Node、Playwright 和浏览器不再足够。依赖准备遵守[根规范](../../AGENTS.md#6-依赖规则与-git)的项目进程占用检查要求，测试脚本仍不自行安装依赖。
+
+此外需预先具备可被 `require('playwright')` 解析的 Playwright 包及已安装的 Chromium 浏览器（或显式指定现有 Chromium/Edge）。脚本不安装依赖、不下载浏览器；本机 runtime 不随仓库分发。加载包时先 `require('playwright')`，仅缺包时兜底当前机器的 bundled 目录。
 
 在仓库根目录通用运行：
 

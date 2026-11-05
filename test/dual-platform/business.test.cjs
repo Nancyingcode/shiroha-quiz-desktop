@@ -149,3 +149,55 @@ test('现有富文本公式和所有可显示图片位置保持在解析后的�
   assert(question.analysis.includes(IMAGE));
   assert.equal(question.images[0].dataUrl, IMAGE);
 });
+
+test('答案比较保留空答案、重复选项和输入所有权的既有语义', () => {
+  const { api } = loadWeb();
+  const chosen = Object.freeze(['C', 'A']);
+  const answer = Object.freeze(['A', 'C']);
+  assert.equal(api.sameAnswerForQuestion({ type: 'multiple' }, chosen, answer), true);
+  assert.deepEqual(chosen, ['C', 'A']);
+  assert.deepEqual(answer, ['A', 'C']);
+  assert.equal(api.sameAnswerForQuestion({ type: 'multiple' }, ['A', 'A'], ['A']), false);
+  assert.equal(api.sameAnswerForQuestion({ type: 'single' }, [], []), true);
+  assert.equal(api.sameAnswerForQuestion({ type: 'blank' }, [], ['']), false);
+  assert.equal(api.sameAnswerForQuestion({ type: 'short' }, [''], ['']), false);
+  const blank = { type: 'blank', blankAnswers: [['beijing'], ['京']] };
+  assert.equal(api.sameAnswerForQuestion(blank, ['ＢＥＩＪＩＮＧ', '京'], []), true);
+  assert.deepEqual(blank.blankAnswers, [['beijing'], ['京']]);
+});
+
+test('答案表保留区间、粘连题号、分组和原始答案文本', () => {
+  const { api } = loadWeb();
+  const entries = api.parseAnswerEntries('单选题\n1-3：A B C\n28 B29 B\n多选题\n第1题：A、C\n判断题\n1. 正确');
+  assert.deepEqual(plain(entries.map((entry) => [entry.number, entry.group, entry.answer, entry.raw])), [
+    ['1', '单选题', ['A'], 'A'], ['2', '单选题', ['B'], 'B'], ['3', '单选题', ['C'], 'C'],
+    ['28', '单选题', ['B'], 'B'], ['29', '单选题', ['B'], 'B'],
+    ['1', '多选题', ['A', 'C'], 'A、C'], ['1', '判断题', ['正确'], '正确'],
+  ]);
+});
+
+test('重复题号无法判断题型时保留空答案并保持源数据不变', () => {
+  const { api } = loadWeb();
+  const questions = [{ id: 'x', number: 1, type: 'judge', question: '判断？',
+    options: [{ key: 'A', text: '正确' }, { key: 'B', text: '错误' }], answer: [] }];
+  const answers = [
+    { number: '1', group: '单选题', answer: ['C'], raw: 'C' },
+    { number: '1', group: '多选题', answer: ['A', 'C'], raw: 'AC' },
+  ];
+  const before = structuredClone({ questions, answers });
+  const result = api.mergeQuestionAnswers(questions, answers, 'number');
+  assert.deepEqual(plain(result.questions[0].answer), []);
+  assert(result.warnings.some((warning) => warning.includes('重复题号')));
+  assert.deepEqual({ questions, answers }, before);
+});
+
+test('原文题号识别区分题干、选项、答案和解析行', () => {
+  const { api } = loadWeb();
+  const cases = [
+    ['1. 这是一道题？', 1], ['第12题 判断题：北京是首都吗？', 12], ['（13）这是第十三题', 13],
+    ['2. A', 0], ['3. 答案：B', 0], ['A. 这是选项', 0], ['一、单选题', 0], ['12. 解析：说明', 0],
+  ];
+  for (const [line, expected] of cases) {
+    assert.equal(api.sourceQuestionNumberFromLineV58910(line), expected, line);
+  }
+});

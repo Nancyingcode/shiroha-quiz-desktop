@@ -40,7 +40,7 @@ async function fixture(t) {
   for (const name of ['pre-commit', 'commit-msg']) {
     await copyFile(path.join(root, '.husky', name), path.join(repository, '.husky', name));
   }
-  for (const name of ['eslint.config.mjs', 'commitlint.config.mjs']) {
+  for (const name of ['eslint.config.mjs', 'eslint.rules.mjs', 'eslint.migration.mjs', 'commitlint.config.mjs']) {
     await copyFile(path.join(desktop, name), path.join(project, name));
   }
   const pkg = JSON.parse(await readFile(path.join(desktop, 'package.json'), 'utf8'));
@@ -57,12 +57,12 @@ async function fixture(t) {
   };
   install();
   const probe = path.join(project, 'scripts/probe.mjs');
-  await writeFile(probe, 'console.log("fixture");\n');
+  await writeFile(probe, "console.log('fixture');\n");
   expectSuccess(git(['add', '.']));
   return { temporary, repository, project, probe, git, install };
 }
 
-test('pre-commit rejects invalid JavaScript before the first commit without rewriting staged or working files', async t => {
+test('pre-commit rejects invalid JavaScript before the first commit without rewriting staged or working files', async (t) => {
   const f = await fixture(t);
   const staged = f.git(['show', ':apps/desktop/scripts/probe.mjs']).stdout;
   const invalid = 'var value = process.pid; console.log(value);\n';
@@ -77,7 +77,7 @@ test('pre-commit rejects invalid JavaScript before the first commit without rewr
   assert.equal(f.git(['status', '--porcelain=v1']).stdout, before);
 });
 
-test('commit-msg rejects invalid messages and accepts Chinese Conventional Commits', async t => {
+test('commit-msg rejects invalid messages and accepts Chinese Conventional Commits', async (t) => {
   const f = await fixture(t);
   for (const message of ['更新检查配置', 'unknown: 更新检查配置']) {
     const result = f.git(['commit', '-m', message]);
@@ -86,19 +86,19 @@ test('commit-msg rejects invalid messages and accepts Chinese Conventional Commi
     assert.equal(f.git(['rev-parse', '--verify', 'HEAD']).status, 128);
   }
   expectSuccess(f.git(['commit', '-m', 'chore: 初始化检查样例']));
-  await writeFile(f.probe, 'console.log("updated");\n');
+  await writeFile(f.probe, "console.log('updated');\n");
   expectSuccess(f.git(['add', '.']));
   expectSuccess(f.git(['commit', '-m', 'fix(desktop): 更新检查样例']));
 });
 
-test('hooks validate the message file supplied by Git in a linked worktree with spaces and Chinese in its path', async t => {
+test('hooks validate the message file supplied by Git in a linked worktree with spaces and Chinese in its path', async (t) => {
   const f = await fixture(t);
   expectSuccess(f.git(['commit', '-m', 'chore: 初始化检查样例']));
   const linked = path.join(f.temporary, 'linked worktree 中文');
   expectSuccess(f.git(['worktree', 'add', '-b', 'hook-test', linked]));
   await symlink(path.join(desktop, 'node_modules'), path.join(linked, 'apps/desktop/node_modules'), 'junction');
   f.install(linked);
-  await writeFile(path.join(linked, 'apps/desktop/scripts/probe.mjs'), 'console.log("linked");\n');
+  await writeFile(path.join(linked, 'apps/desktop/scripts/probe.mjs'), "console.log('linked');\n");
   expectSuccess(f.git(['add', '.'], linked));
   const result = f.git(['commit', '-m', '错误信息'], linked);
   assert.equal(result.status, 1, result.stdout + result.stderr);

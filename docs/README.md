@@ -40,6 +40,10 @@
 
 ## 工程与发布
 
+- [Airbnb JavaScript 项目适配指南](../rules/javascript-style-guide.md)
+- [Airbnb JavaScript 规范引入与重构设计（已批准，分阶段实施）](./superpowers/specs/2026-11-05-airbnb-javascript-refactor.md)
+- [Airbnb JavaScript 分阶段实施计划与验证记录](./superpowers/plans/2026-11-05-airbnb-javascript-refactor.md)
+- Airbnb 重构已按用户授权完成 P0—P5，各阶段串行交接；历史规则债务和验证限制见上述实施计划，未授权提交、推送、PR 或发布。
 - [Android 移除设计](./superpowers/specs/2026-11-04-remove-android-support.md)
 - [Android 移除实施与验证](./superpowers/plans/2026-11-05-remove-android-support.md)
 

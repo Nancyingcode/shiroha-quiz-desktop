@@ -171,3 +171,158 @@ test('lazy metadata writes preserve unread questions and failed edits restore th
   assert.deepEqual(Array.from(changes,change=>change.kind),['put_bank_metadata']);
   assert(!JSON.stringify(changes).includes('questions'));
 });
+
+for (const collection of ['questions', 'records']) {
+  test(`未加载的 ${collection} 详情发生修改时拒绝提交，原始摘要仍可继续保存`, async () => {
+    const source = await readFile(new URL('../frontend/adapter.js', import.meta.url), 'utf8');
+    const index = {
+      schemaVersion: 1,
+      banks: [{ id: 'b', name: 'bank', questions: [{ id: 'q', type: 'single', question: '', options: [], answer: [] }] }],
+      records: [{ id: 'r' }],
+      settings: {}, wrongBook: {}, favorites: {}, crossPlatformMeta: {}, activeBankId: 'b',
+    };
+    /** @type {string[]} */ const calls = [];
+    const scope = {
+      ShirohaDesktopHost: { invoke: async (/** @type {string} */ command, /** @type {{query?:{kind:string}}} */ args) => {
+        calls.push(command);
+        if (command === 'local_initialize') { return { revision: 1, hasData: true }; }
+        if (args?.query?.kind === 'summary') { return { revision: 1, snapshot: globalThis.structuredClone(index) }; }
+        if (command === 'local_operation') { return null; }
+        if (command === 'local_commit') { return { revision: 2 }; }
+        throw new Error('unexpected command');
+      } },
+      ShirohaBrowser: {}, ShirohaBrowserCredentials: {}, ShirohaSaveQueue: { create: () => ({}) },
+      localStorage: { getItem: () => null }, structuredClone: globalThis.structuredClone,
+    };
+    vm.runInNewContext(source, scope);
+    const storage = /** @type {import('../../web/platform/runtime.d.ts').BrowserStorage} */ (vm.runInNewContext('ShirohaPlatform.storage', scope));
+    await storage.initialize();
+    await storage.read();
+    const edited = globalThis.structuredClone(index);
+    if (collection === 'questions') {
+      edited.banks[0].questions[0].question = '不应覆盖未加载正文';
+    } else {
+      Object.assign(edited.records[0], { details: [{ question: '不应覆盖未加载记录' }] });
+    }
+    const snapshot = /** @type {import('../../web/platform/contracts.d.ts').Snapshot} */ (edited);
+    await assert.rejects(storage.write(snapshot, 'rejected', 1), /尚未读取，已阻止保存/);
+    assert.equal(calls.includes('local_commit'), false);
+    assert.equal(storage.revision(), 1);
+    await storage.write(/** @type {import('../../web/platform/contracts.d.ts').Snapshot} */ (index), 'retry', 1);
+    assert.equal(storage.revision(), 2);
+    assert.equal(calls.filter((command) => command === 'local_commit').length, 1);
+  });
+}
+
+for (const collection of ['questions', 'records']) {
+  test(`恢复修订后拒绝迟到的 ${collection} 正文并允许重新读取`, async () => {
+    const source = await readFile(new URL('../frontend/adapter.js', import.meta.url), 'utf8');
+    const index = {
+      schemaVersion: 1,
+      banks: [{ id: 'b', name: 'bank', questions: [{ id: 'q', type: 'single', question: '', options: [], answer: [] }] }],
+      records: [{ id: 'r' }],
+      settings: {}, wrongBook: {}, favorites: {}, crossPlatformMeta: {}, activeBankId: 'b',
+    };
+    /** @type {(value:unknown)=>void} */ let releaseOld = () => { throw new Error('old request was not started'); };
+    let nativeRevision = 1;
+    const scope = {
+      ShirohaDesktopHost: { invoke: async (/** @type {string} */ command, /** @type {{query?:{kind:string,revision?:number,expected_revision?:number}}} */ args) => {
+        if (command === 'local_initialize') { return { revision: nativeRevision, hasData: true }; }
+        if (args?.query?.kind === 'summary') { return { revision: nativeRevision, snapshot: globalThis.structuredClone(index) }; }
+        if (args?.query?.kind === 'restore') {
+          assert.equal(args.query.expected_revision, 1);
+          nativeRevision = 2;
+          return { revision: nativeRevision };
+        }
+        if (args?.query?.kind === 'details') {
+          if (args.query.revision === 1) { return new Promise((resolve) => { releaseOld = resolve; }); }
+          assert.equal(args.query.revision, 2);
+          return collection === 'questions'
+            ? [{ id: 'q', type: 'single', question: '恢复后的正文', options: [], answer: [] }]
+            : [{ id: 'r', details: [{ question: '恢复后的记录' }] }];
+        }
+        throw new Error('unexpected command');
+      } },
+      ShirohaBrowser: {}, ShirohaBrowserCredentials: {}, ShirohaSaveQueue: { create: () => ({}) },
+      localStorage: { getItem: () => null }, structuredClone: globalThis.structuredClone,
+      crypto: { randomUUID: () => 'synthetic-restore' },
+    };
+    vm.runInNewContext(source, scope);
+    const storage = /** @type {import('../../web/platform/runtime.d.ts').BrowserStorage} */ (vm.runInNewContext('ShirohaPlatform.storage', scope));
+    assert(storage.ensureQuestions && storage.ensureRecords && storage.restoreSnapshot);
+    await storage.initialize();
+    const old = await storage.read();
+    assert(old);
+    const pending = collection === 'questions'
+      ? storage.ensureQuestions(old, [{ bankId: 'b', questionId: 'q' }])
+      : storage.ensureRecords(old, ['r']);
+    await storage.restoreSnapshot('synthetic-snapshot');
+    releaseOld(collection === 'questions'
+      ? [{ id: 'q', type: 'single', question: '过期正文', options: [], answer: [] }]
+      : [{ id: 'r', details: [{ question: '过期记录' }] }]);
+    await assert.rejects(pending, /数据修订已变化/);
+    assert.equal(old.banks[0].questions[0].question, '');
+    assert.equal(old.records[0].details, undefined);
+    const fresh = await storage.read();
+    assert(fresh);
+    if (collection === 'questions') {
+      await storage.ensureQuestions(fresh, [{ bankId: 'b', questionId: 'q' }]);
+      assert.equal(fresh.banks[0].questions[0].question, '恢复后的正文');
+    } else {
+      await storage.ensureRecords(fresh, ['r']);
+      assert.deepEqual(fresh.records[0].details, [{ question: '恢复后的记录' }]);
+    }
+  });
+}
+
+test('恢复修订后拒绝迟到的完整数据读取并允许重新读取', async () => {
+  const source = await readFile(new URL('../frontend/adapter.js', import.meta.url), 'utf8');
+  const index = {
+    schemaVersion: 1, banks: [], records: [], settings: {}, favorites: {}, activeBankId: '',
+    wrongBook: { b: [{ id: 'summary' }] }, crossPlatformMeta: {},
+  };
+  /** @type {(value:unknown)=>void} */ let releaseOld = () => { throw new Error('old request was not started'); };
+  let markStarted = () => {};
+  const started = new Promise((resolve) => { markStarted = () => resolve(undefined); });
+  let nativeRevision = 1;
+  let oldHydrates = 0;
+  let freshHydrates = 0;
+  const scope = {
+    ShirohaDesktopHost: { invoke: async (/** @type {string} */ command, /** @type {{query?:{kind:string,revision?:number}}} */ args) => {
+      if (command === 'local_initialize') { return { revision: nativeRevision, hasData: true }; }
+      if (args?.query?.kind === 'summary') { return { revision: nativeRevision, snapshot: globalThis.structuredClone(index) }; }
+      if (args?.query?.kind === 'restore') { nativeRevision = 2; return { revision: nativeRevision }; }
+      if (args?.query?.kind === 'hydrate') {
+        if (args.query.revision === 1) {
+          oldHydrates += 1;
+          if (oldHydrates === 1) { return new Promise((resolve) => { releaseOld = resolve; markStarted(); }); }
+          return { stale: true };
+        }
+        assert.equal(args.query.revision, 2);
+        freshHydrates += 1;
+        return freshHydrates === 1 ? { b: [{ id: 'restored' }] } : { restored: true };
+      }
+      throw new Error('unexpected command');
+    } },
+    ShirohaBrowser: {}, ShirohaBrowserCredentials: {}, ShirohaSaveQueue: { create: () => ({}) },
+    localStorage: { getItem: () => null }, structuredClone: globalThis.structuredClone,
+    crypto: { randomUUID: () => 'synthetic-restore' },
+  };
+  vm.runInNewContext(source, scope);
+  const storage = /** @type {import('../../web/platform/runtime.d.ts').BrowserStorage} */ (vm.runInNewContext('ShirohaPlatform.storage', scope));
+  assert(storage.ensureAll && storage.restoreSnapshot);
+  await storage.initialize();
+  const old = await storage.read();
+  assert(old);
+  const pending = storage.ensureAll(old);
+  await started;
+  await storage.restoreSnapshot('synthetic-snapshot');
+  releaseOld({ b: [{ id: 'stale' }] });
+  await assert.rejects(pending, /数据修订已变化/);
+  assert.deepEqual(old.wrongBook, index.wrongBook);
+  const fresh = await storage.read();
+  assert(fresh);
+  await storage.ensureAll(fresh);
+  assert.deepEqual(fresh.wrongBook, { b: [{ id: 'restored' }] });
+  assert.deepEqual(fresh.crossPlatformMeta, { restored: true });
+});
