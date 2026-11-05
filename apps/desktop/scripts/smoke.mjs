@@ -965,6 +965,30 @@ async function wrongAnalysisSmoke(page) {
   return { emptyState: true, nativeAi: true, confirmedSave: true, persistedAfterReload: true, sourceAnalysisInReview: true, savedPracticePanel: true };
 }
 
+/** @param {Page} page */
+async function trainingReviewAnalysisSmoke(page) {
+  const bankName = `复盘解析验证-${randomUUID().slice(0, 8)}`;
+  await importAndPractice(page, bankName, '');
+  await page.locator('#practice-card .option[data-key="B"]').click();
+  await page.locator('#p-submit').click();
+  await page.locator('#p-next').click();
+  await page.locator('#practice-review-result').click();
+  const panel = page.locator('#training-question [data-review-analysis]');
+  await panel.locator('[data-review-ai="generate"]').click();
+  await panel.locator('.q-multiline-text').filter({ hasText: 'NATIVE_PRACTICE_AI' }).waitFor();
+  assert.match(await panel.innerText(), /草稿 · 未保存/);
+  await panel.locator('[data-review-ai="save"]').click();
+  await panel.locator('.review-analysis-saved').waitFor();
+  await page.reload();
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.locator('.nav[data-view="records"]').click();
+  await page.locator('#records .record-item').filter({ hasText: bankName }).first().locator('[data-training-review]').click();
+  await panel.locator('.q-multiline-text').filter({ hasText: 'NATIVE_PRACTICE_AI' }).waitFor();
+  assert.equal(await panel.locator('[data-review-ai="generate"]').count(), 0);
+  assert.equal(await page.locator('#training-question .option.wrong').getAttribute('data-key'), 'B');
+  return { nativeAi: true, confirmedSave: true, persistedAfterReload: true, originalAnswer: true };
+}
+
 async function main() {
   assert.equal(process.platform, 'win32', '此 smoke 仅支持 Windows WebView2');
   const argument = process.argv[2];
@@ -1105,6 +1129,7 @@ async function main() {
       return result;
     });
     await check('空解析错题主动 AI 生成、确认保存与原生重载', () => wrongAnalysisSmoke(page));
+    await check('训练复盘主动 AI 生成、确认保存与原生重载', () => trainingReviewAnalysisSmoke(page));
     await check('订阅 Harness 登录、既有 AI 任务与取消草稿保全',()=>harnessSmoke(page,()=>practiceImportedBank(page,bankName)));
     await check('Harness 下载中切换与组件缓存复用',()=>harnessSwitchingSmoke(page,profile));
     await check('CodeBuddy CLI 登录引导、单题解析、追问与配置保全',()=>codebuddyCliSmoke(page,profile,()=>practiceImportedBank(page,bankName)));
