@@ -64,6 +64,8 @@
     function pendingStorage() { return current.persistenceState === 'saving' || current.persistenceState === 'clearing'; }
     function storageBlocked() { return pendingStorage() || current.persistenceState === 'cleanup_required'; }
     function usableLink() { return !cleanupPending && current.phase === 'authenticating' && !!current.loginUrl; }
+    /** @param {number} epoch */
+    function isCurrentRequest(epoch) { return epoch === generation && !disposed; }
     function render() {
       if (!panel || disposed) return;
       const reading = refreshing && !pendingLogin();
@@ -86,9 +88,10 @@
         login.disabled = reading || readFailed || !!action || !!cleanupPending || current.busy || current.revision < 0 || current.persistenceState !== 'none';
       }
       const cancel = button('cancel');
-      if (cancel) { cancel.hidden = !awaitingLogin && cleanupPending !== 'cancel'; cancel.disabled = action === 'cancel' || action === 'logout'; }
+      const endingLogin = action === 'cancel' || action === 'logout';
+      if (cancel) { cancel.hidden = !awaitingLogin && cleanupPending !== 'cancel'; cancel.disabled = endingLogin; }
       const logout = button('logout');
-      if (logout) { logout.hidden = !signedIn && current.phase !== 'restoring' && current.persistenceState === 'none' && cleanupPending !== 'logout'; logout.disabled = action === 'cancel' || action === 'logout'; }
+      if (logout) { logout.hidden = !signedIn && current.phase !== 'restoring' && current.persistenceState === 'none' && cleanupPending !== 'logout'; logout.disabled = endingLogin; }
       if (rememberField) { rememberField.checked = rememberChoice; rememberField.disabled = reading || readFailed || !!action || !!cleanupPending || current.busy || current.revision < 0 || (!signedIn && current.persistenceState !== 'none'); }
       const retryRestore = button('retry-restore');
       if (retryRestore) { retryRestore.hidden = !['failed','cancelled'].includes(current.phase) || current.persistenceState === 'cleanup_required'; retryRestore.disabled = reading || !!action || !!cleanupPending || current.busy; }
@@ -111,7 +114,7 @@
       const epoch = generation;
       timer = setTimeout(() => {
         timer = undefined;
-        if (epoch === generation && !disposed) void refreshStatus();
+        if (isCurrentRequest(epoch)) void refreshStatus();
       }, pollIntervalMs);
     }
     /** @param {AccountStatus} next @param {number} requestSequence */
@@ -136,13 +139,13 @@
       render();
       try {
         const result = await Promise.race([host?.invoke('codebuddy_control', { request:{ kind:'status' } }), new Promise((_, reject) => { readTimer = setTimeout(() => reject(new Error('status_timeout')), statusTimeoutMs); })]);
-        if (epoch !== generation || disposed) return;
+        if (!isCurrentRequest(epoch)) return;
         if (accept(readStatus(result), requestSequence)) notifyAccount(!!cleanupPending || storageBlocked());
       } catch {
-        if (epoch === generation && !disposed) { readFailed = true; notice = '暂时无法读取 CodeBuddy 登录状态，请重新读取。'; notifyAccount(true); }
+        if (isCurrentRequest(epoch)) { readFailed = true; notice = '暂时无法读取 CodeBuddy 登录状态，请重新读取。'; notifyAccount(true); }
       } finally {
         if (epoch === generation) { clearTimeout(readTimer); readTimer = undefined; }
-        if (epoch === generation && !disposed) { refreshing = false; render(); observeLogin(); }
+        if (isCurrentRequest(epoch)) { refreshing = false; render(); observeLogin(); }
       }
     }
     /** @param {Action} kind */
@@ -175,7 +178,7 @@
       notice = progress[kind]; render();
       try {
         const result = await host?.invoke('codebuddy_control', { request });
-        if (epoch !== generation || disposed) return;
+        if (!isCurrentRequest(epoch)) return;
         const next = readStatus(result);
         const stillAuthorized = next.phase === 'signed_in' || next.phase === 'authenticating' || next.phase === 'restoring';
         if (endingLogin && (stillAuthorized || next.revision < current.revision)) throw new Error('cleanup_unconfirmed');
@@ -184,7 +187,7 @@
           notifyAccount(!!cleanupPending || storageBlocked());
         }
       } catch {
-        if (epoch !== generation || disposed) return;
+        if (!isCurrentRequest(epoch)) return;
         // 清理失败时查询不能重新启用旧授权；必须明确重试取消或退出。
         if (kind === 'logout') notice = '退出登录尚未完成，请重试退出登录。';
         else if (kind === 'cancel') notice = '取消登录尚未完成，请重试取消登录。';
@@ -193,7 +196,7 @@
         else if (kind === 'retry_restore') notice = '无法恢复登录，请重试或退出清理。';
         else notice = '无法启动 CodeBuddy 登录，请刷新状态后重试。';
       } finally {
-        if (epoch === generation && !disposed) { action = undefined; render(); observeLogin(); }
+        if (isCurrentRequest(epoch)) { action = undefined; render(); observeLogin(); }
       }
     }
     async function copyLink() {
@@ -202,9 +205,9 @@
       const link = current.loginUrl;
       try {
         await navigator.clipboard.writeText(link);
-        if (epoch === generation && current.loginUrl === link && !disposed) notice = '登录链接已复制，请在浏览器中打开。';
+        if (isCurrentRequest(epoch) && current.loginUrl === link) notice = '登录链接已复制，请在浏览器中打开。';
       } catch {
-        if (epoch === generation && !disposed) notice = '无法复制链接，请选中上方登录地址后手动复制。';
+        if (isCurrentRequest(epoch)) notice = '无法复制链接，请选中上方登录地址后手动复制。';
       }
       render();
     }
@@ -259,6 +262,8 @@
       if (guide) guide.hidden = current?.phase === 'signed_in' && !failed;
       if (refresh) { refresh.disabled = reading === 'refresh' || initialRead || current?.busy === true; refresh.textContent = '刷新登录状态'; }
     }
+    /** @param {number} requestSequence */
+    function isCurrentCliRead(requestSequence) { return !disposed && requestSequence === sequence; }
     /** @param {'status'|'refresh'} [kind] */
     async function readCli(kind = 'status') {
       if (disposed) return;
@@ -276,7 +281,7 @@
         /** @type {import('../../web/platform/runtime').CodeBuddyCliControl} */
         const request = kind === 'refresh' && current ? {kind,revision:current.revision} : {kind:'status'};
         const value = await Promise.race([host?.invoke('codebuddy_control',{request}),new Promise((_,reject)=>{requestTimeout=setTimeout(()=>reject(new Error('status_timeout')),statusTimeoutMs);readTimeouts.add(requestTimeout);})]);
-        if (disposed || requestSequence !== sequence) return;
+        if (!isCurrentCliRead(requestSequence)) return;
         const next = /** @type {CliStatus} */ (readStatus(value));
         const cliPhase = ['signed_out','restoring','signed_in','expired','failed'].includes(next.phase);
         const cliStorage = ['none','clearing','cleanup_required'].includes(next.persistenceState);
@@ -288,7 +293,7 @@
         shouldAutoRefresh = selected?.adapter === 'codebuddy' && selected.mode === 'harness' && next.phase === 'signed_out' && next.cliLoginAvailable && autoRevision !== next.revision;
         if (shouldAutoRefresh) autoRevision = next.revision;
       } catch {
-        if (!disposed && requestSequence === sequence) {
+        if (isCurrentCliRead(requestSequence)) {
           failed = true;
           notice = '暂时无法读取 CodeBuddy CLI 登录状态，请刷新重试。';
           notify(true);
@@ -297,7 +302,7 @@
         // 主动刷新可越过只读查询；迟到查询只释放自己的超时，不能影响新请求。
         clearTimeout(requestTimeout);
         if (requestTimeout !== undefined) readTimeouts.delete(requestTimeout);
-        if (!disposed && requestSequence === sequence) {
+        if (isCurrentCliRead(requestSequence)) {
           reading = undefined; renderCli();
           if (shouldAutoRefresh) void readCli('refresh');
           else timer = setTimeout(()=>{timer=undefined;void readCli();},pollIntervalMs);

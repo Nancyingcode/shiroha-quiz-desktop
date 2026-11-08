@@ -15,6 +15,13 @@ function training() {
 const plain = value => JSON.parse(JSON.stringify(value));
 const question = (id, text) => ({ id, type: 'single', question: text, options: [{ key: 'A', text: '甲' }, { key: 'B', text: '乙' }], answer: ['A'] });
 
+test('练习模块独立提供题号范围与精确单题格式', () => {
+  const api = training();
+  assert.deepEqual(plain(api.parsePracticeNumberRangeV58916('3,1-2,2', 5)), { indexes: [0, 1, 2], error: '' });
+  assert.deepEqual(plain(api.parsePracticeNumberRangeV58916('5-4', 5)), { indexes: [], error: '题号格式或范围有误：5-4' });
+  assert.equal(api.formatExactPracticeNumbersV58916([3]), '3-3');
+});
+
 test('有效计时按运行段累计，重复暂停、继续及停止后重试不增加用时', () => {
   const api = training();
   let clock = api.createClock(100);

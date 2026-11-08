@@ -1,17 +1,13 @@
 'use strict';
-const { loadWebSource } = require('./source-tools.cjs');
+const { installAiTransport } = require('./ai-transport-helper.cjs');
+const { installAiSettings } = require('./ai-settings-helper.cjs');
 
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
 const test = require('node:test');
 
-const source = loadWebSource();
 const config = { provider: 'ollama', endpoint: 'http://127.0.0.1:11434/v1/chat/completions', model: 'test-model' };
 const browserAdvice = /CORS|跨域|Origin|浏览器|当前网页/;
-
-function functionsBetween(startName, endName) {
-  return source.between(startName, endName);
-}
 
 function harness(native, ai = async () => { throw new Error('未配置 mock 响应'); }) {
   const timers = new Set();
@@ -23,11 +19,8 @@ function harness(native, ai = async () => { throw new Error('未配置 mock 响�
     setTimeout(callback) { const timer = { callback }; timers.add(timer); return timer; },
     clearTimeout(timer) { timers.delete(timer); },
   });
-  for (const [start, end] of [
-    ['aiProviderLabelV99', 'readAiFormV99'],
-    ['aiCurrentOriginV375', 'renderAiDiagnosticV375'],
-    ['aiResponseContentV99', 'testAiConnectionV99'],
-  ]) vm.runInContext(functionsBetween(start, end), context);
+  installAiSettings(context);
+  installAiTransport(context);
   return { context, timers };
 }
 
@@ -153,3 +146,53 @@ test('桌面主动取消不会被诊断为连接或跨域失败', async () => {
     return true;
   });
 });
+
+for (const status of [400, 422]) {
+  test(`HTTP ${status} 只去掉 response_format 重试一次并消费每个响应正文`, async () => {
+    const calls = [];
+    const reads = [];
+    const { context } = harness(false, async (_config, payload) => {
+      calls.push(payload);
+      const first = calls.length === 1;
+      return { ok: !first, status: first ? status : 200, text: async () => {
+        reads.push(first ? status : 200);
+        return first ? '不支持格式参数' : JSON.stringify({ choices: [{ message: { content: '{"ok":true}' } }] });
+      } };
+    });
+    const result = await context.requestAiChatV99(config, []);
+    assert.equal(result.content, '{"ok":true}');
+    assert.equal(calls.length, 2);
+    assert.equal(calls[0].response_format.type, 'json_object');
+    assert.equal(Object.hasOwn(calls[1], 'response_format'), false);
+    assert.deepEqual(reads, [status, 200]);
+  });
+}
+
+test('响应正文读取失败不触发格式兜底重试', async () => {
+  let calls = 0;
+  const failure = new Error('正文读取失败');
+  const { context } = harness(false, async () => {
+    calls++;
+    return { ok: false, status: 400, text: async () => { throw failure; } };
+  });
+  await assert.rejects(context.requestAiChatV99(config, []), error => error === failure);
+  assert.equal(calls, 1);
+});
+
+for (const status of [200, 400]) {
+  test(`取消后迟到 HTTP ${status} 先读取正文再拒绝，不能重试`, async () => {
+    let finish;
+    let calls = 0;
+    let reads = 0;
+    const delayed = new Promise(resolve => { finish = resolve; });
+    const response = { ok: status === 200, status, text: async () => { reads++; return '{"choices":[{"message":{"content":"结果"}}]}'; } };
+    const { context } = harness(false, async () => { calls++; return calls === 1 ? delayed : response; });
+    const controller = new AbortController();
+    const pending = context.requestAiChatV99(config, [], { controller });
+    controller.abort();
+    finish(response);
+    await assert.rejects(pending, error => error.name === 'AbortError');
+    assert.equal(reads, 1);
+    assert.equal(calls, 1);
+  });
+}

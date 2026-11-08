@@ -10,14 +10,16 @@ function fixture(overrides = {}) {
   const status = [];
   const context = vm.createContext({
     ShirohaDesktopHost: {}, mutationBusy: false, mutationSaveError: null,
-    exam: { items: [], submitted: false }, ocrImportState: { running: false },
+    exam: { items: [], submitted: false }, ocrSession: { isRunning: () => false, cancel() {} },
     practice: { items: [] }, totalPracticeFilledCount: () => 0,
     $: () => null,
-    webdavRuntimeV378: { busy: false }, aiImportRequestV99: { running: false }, aiPreviewRequestV991: { running: false }, aiSingleSessionsV613: new Map(), reviewAnalysisSessions: new Map(),
+    webdavPanel: { isBusy: () => false }, aiImportSessions: { importRequest: { running: false }, previewRequest: { running: false } }, practiceAiSessions: { isBusy: () => false }, reviewAiSessions: { isBusy: () => false },
     confirm: message => { prompts.push(message); return false; }, platformStatus: message => status.push(message),
     ShirohaPlatform: { network: { cancelAll: async () => {} }, saves: { idle: async () => {} } }, ...overrides,
   });
   context.ShirohaDialogs = { confirm: context.confirm };
+  context.practiceSession = { current: context.practice };
+  context.examSession = { current: context.exam };
   vm.runInContext(source.functionSource('aiTasksBusyV99'),context);
   vm.runInContext(source.closeHookSource(), context);
   return { close: context.ShirohaDesktopHost.canClose, prompts, status };
@@ -32,15 +34,24 @@ test('saving and failed saves retain the window until an explicit decision', asy
 test('unfinished exam, OCR and single-question AI can cancel exit', async () => {
   for (const override of [
     { exam: { items: [{}], submitted: false } },
-    { ocrImportState: { running: true } },
-    { aiSingleSessionsV613: new Map([['question', { loading: 'analysis' }]]) },
-    { reviewAnalysisSessions: new Map([['wrong-question', { loading: 'analysis' }]]) },
-    { reviewAnalysisSessions: new Map([['wrong-question', { saving: true }]]) },
+    { ocrSession: { isRunning: () => true, cancel() {} } },
+    { practiceAiSessions: { isBusy: () => true } },
+    { reviewAiSessions: { isBusy: () => true } },
   ]) {
     const f = fixture(override);
     assert.equal(await f.close(), false);
     assert.equal(f.prompts.length, 1);
   }
+});
+
+test('确认退出时取消当前 OCR 并继续完成退出检查', async () => {
+  let cancellations = 0;
+  const f = fixture({
+    confirm: () => true,
+    ocrSession: { isRunning: () => true, cancel: () => { cancellations++; } },
+  });
+  assert.equal(await f.close(), true);
+  assert.equal(cancellations, 1);
 });
 
 test('failed native cancellation keeps the window open and reports failure', async () => {

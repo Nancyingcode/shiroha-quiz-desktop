@@ -22,7 +22,7 @@ function pdfFile(objects) {
 /** @param {import('playwright-core').Page} page */
 export async function documentSmoke(page) {
   const require = createRequire(import.meta.url);
-  /** @type {{loadWeb: () => {api: {zipStoreFiles(files: Array<{name: string, text: string}>): Blob}}}} */
+  /** @type {{loadWeb: () => {api: {zipStoreFiles(files: Array<{name: string, text?: string, data?: Uint8Array}>): Blob}}}} */
   const { loadWeb } = require(fileURLToPath(new URL('../../../test/dual-platform/web-source.cjs', import.meta.url)));
   const api = loadWeb().api;
   const lines = ['1. 中国的首都是哪里？', 'A. 北京', 'B. 上海', '答案：A'];
@@ -55,9 +55,17 @@ export async function documentSmoke(page) {
   const docx = Buffer.from(await api.zipStoreFiles([
     { name: '[Content_Types].xml', text: '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>' },
     { name: '_rels/.rels', text: '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>' },
-    { name: 'word/document.xml', text: `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${lines.map(line => `<w:p><w:r><w:t>${line}</w:t></w:r></w:p>`).join('')}</w:body></w:document>` },
+    { name: 'word/document.xml', text: `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>${lines[0]}</w:t><w:drawing><a:blip r:embed="image1"/></w:drawing></w:r><m:oMath><m:f><m:num><m:r><m:t>1</m:t></m:r></m:num><m:den><m:r><m:t>2</m:t></m:r></m:den></m:f></m:oMath></w:p>${lines.slice(1).map(line => `<w:p><w:r><w:t>${line}</w:t></w:r></w:p>`).join('')}</w:body></w:document>` },
+    { name: 'word/_rels/document.xml.rels', text: '<Relationships><Relationship Id="image1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/sample.jpg"/></Relationships>' },
+    { name: 'word/media/sample.jpg', data: image },
+  ]).arrayBuffer());
+  const altChunkDocx = Buffer.from(await api.zipStoreFiles([
+    { name: 'word/document.xml', text: '<w:document><w:body><w:altChunk r:id="chunk1"/></w:body></w:document>' },
+    { name: 'word/_rels/document.xml.rels', text: '<Relationships><Relationship Id="chunk1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/aFChunk" Target="body.html"/></Relationships>' },
+    { name: 'word/body.html', text: `<html><body>${lines.map(line => `<p>${line}</p>`).join('')}</body></html>` },
   ]).arrayBuffer());
   const rows = [['题干', 'A', 'B', '答案', '题型'], ['中国的首都是哪里？', '北京', '上海', 'A', '单选']];
+  const csv = Buffer.from(rows.map(row => row.join(',')).join('\n'));
   const xlsx = Buffer.from(await api.zipStoreFiles([
     { name: '[Content_Types].xml', text: '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>' },
     { name: '_rels/.rels', text: '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>' },
@@ -67,7 +75,7 @@ export async function documentSmoke(page) {
   ]).arrayBuffer());
   const names = [];
   let recognized = '';
-  for (const [extension, buffer] of /** @type {Array<[string, Buffer]>} */ ([['docx', docx], ['xlsx', xlsx], ['text.pdf', text], ['pdf', scan]])) {
+  for (const [extension, buffer] of /** @type {Array<[string, Buffer]>} */ ([['csv', csv], ['xlsx', xlsx], ['docx', docx], ['altchunk.docx', altChunkDocx], ['text.pdf', text], ['pdf', scan]])) {
     await page.locator('.nav[data-view="import"]').click();
     await page.locator('#clear-import-btn').click();
     await page.locator('#import-mode').selectOption('normal');
@@ -117,7 +125,12 @@ export async function documentSmoke(page) {
     } else {
       await page.waitForFunction(expected => (/** @type {HTMLTextAreaElement | null} */ (document.querySelector('#import-text')))?.value.includes(expected), extension === 'text.pdf' ? 'Beijing' : '中国');
     }
-    if (extension !== 'xlsx') await page.locator('#parse-import-btn').click();
+    if (extension === 'docx') {
+      const extracted = await page.locator('#import-text').inputValue();
+      assert.match(extracted, /!\[DOCX图片1\]\(data:image\/(?:jpeg|webp);base64,/);
+      assert.match(extracted, /【DOCX公式OMML：\(1\)\/\(2\)】/);
+    }
+    if (!['csv', 'xlsx'].includes(extension)) await page.locator('#parse-import-btn').click();
     await page.waitForFunction(() => document.querySelectorAll('#import-preview tbody tr').length > 0);
     const name = `阶段E-${extension}`;
     await page.locator('#import-bank-name').fill(name);
@@ -139,6 +152,11 @@ export async function documentSmoke(page) {
     const bank = restored.find(bank => bank.name === name);
     assert.equal(bank?.questions.length, 1, `${name} 持久化题数`);
     assert.deepEqual(bank?.questions[0].answer, ['A'], `${name} 持久化答案`);
+    if (name === '阶段E-docx') {
+      assert(bank);
+      assert.match(bank.questions[0].question, /!\[DOCX图片1\]\(data:image\//);
+      assert.match(bank.questions[0].question, /【DOCX公式OMML：\(1\)\/\(2\)】/);
+    }
   }
   return { importedAndReloaded: names, chineseScan: true, cancellationDuringRecognition: true, recognized, manualReviewSimulated: true, realDocumentPipeline: true };
 }

@@ -1,4 +1,6 @@
 'use strict';
+const { installAiTransport } = require('./ai-transport-helper.cjs');
+const { installAiSettings } = require('./ai-settings-helper.cjs');
 const { loadWebSource } = require('./source-tools.cjs');
 
 const assert = require('node:assert/strict');
@@ -223,10 +225,9 @@ for(const adapter of ['codebuddy','deepseek'])test(`${adapter}即使收到伪造
 });
 
 test('共享业务冻结真实提供方标签并拒绝未开放提供方，隐私文案不冒称OpenAI',()=>{
-  const source=loadWebSource();
   let execution={...status};
   const context=vm.createContext({ShirohaPlatform:{harness:{snapshot:()=>execution}},AI_PROVIDER_PRESETS_V99:{}});
-  vm.runInContext(source.between('aiProviderLabelV99', 'normalizeAiEndpointV99'),context);
+  installAiSettings(context);
   for(const [adapter,label] of [['codex','Codex'],['codebuddy','CodeBuddy'],['deepseek','DeepSeek']]){
     execution={...status,adapter,model:adapter==='codebuddy'?'deepseek-v4.1-flash':status.model};const config=context.aiExecutionConfigV99();
     assert.equal(config.provider,adapter);assert.equal(context.aiExecutionLabelV99(config),`${label} Harness`);
@@ -245,8 +246,8 @@ test('共享清除入口在非Codex提供方不确认或清理Codex授权',async
   for(const adapter of ['codebuddy','deepseek']){
     const calls=[];
     const context=vm.createContext({ShirohaPlatform:{harness:{formMode:()=>'harness',formAdapter:()=>adapter,snapshot:()=>({...status,adapter}),cancelAll:async()=>calls.push('cancel'),clear:async()=>calls.push('clear')}},ShirohaDialogs:{confirm:async()=>{calls.push('confirm');return true;}},setAiSettingsStatusV99(){},updateAiConnectionPillV99(){},syncAiImportActionV99(){}});
-    vm.runInContext(source.between('aiProviderLabelV99', 'normalizeAiEndpointV99'),context);
-    vm.runInContext(source.between('clearAiSettingsV99', 'bindAiImportEventsV99'),context);
+    installAiSettings(context);
+    vm.runInContext(source.functionSource('clearAiSettingsV99'),context);
     await context.clearAiSettingsV99();assert.deepEqual(calls,[]);
   }
 });
@@ -259,9 +260,9 @@ test('共享测试与统一请求入口拒绝缺少账户修订的CodeBuddy和�
       ShirohaPlatform:{harness:{formMode:()=>'harness',formAdapter:()=>adapter,snapshot:()=>({...status,adapter}),test:async()=>calls.push('test'),execute:async()=>calls.push('execute')},network:{ai:async()=>calls.push('network')}},
       $:()=>button,setAiSettingsStatusV99:message=>messages.push(message),updateAiConnectionPillV99(){},
     });
-    vm.runInContext(source.between('aiProviderLabelV99', 'normalizeAiEndpointV99'),context);
-    vm.runInContext(source.between('testAiConnectionV99', 'extractBalancedJsonV99'),context);
-    vm.runInContext(source.between('requestAiChatV99', 'withAiTimeoutV99'),context);
+    installAiSettings(context);
+    vm.runInContext(source.between('testAiConnectionV99', 'aiQuestionKeyV991'),context);
+    installAiTransport(context);
     await context.testAiConnectionV99();
     for(const task of ['connection_test','import_organize','batch_review','batch_analysis','question_analysis','question_followup'])await assert.rejects(context.requestAiChatV99({execution:{...status,adapter}},[],{task}),adapter==='codebuddy'?/尚未配置|尚未开放/:/尚未开放/);
     assert.deepEqual(calls,[]);assert.equal(button.disabled,false);assert.match(messages[0],adapter==='codebuddy'?/尚未就绪/:/尚未开放/);
@@ -501,13 +502,11 @@ test('取消全部任务等待在途执行终态，再允许保存配置', async
 });
 
 test('统一入口返回 Harness 内容，失败不走 API response_format 重试', async () => {
-  const source = loadWebSource();
-  const fragment = source.between('requestAiChatV99', 'withAiTimeoutV99');
   let apiCalls = 0;
   let harnessCalls = 0;
   const context = vm.createContext({ ShirohaPlatform: { credentials: { native: true }, network: { ai() { apiCalls++; } }, harness: { async execute(snapshot, task) { harnessCalls++; assert.equal(snapshot.revision, 4); assert.equal(task, 'import_organize'); throw Object.assign(new Error('额度不足'), { code: 'quota_exceeded' }); } } } });
-  vm.runInContext(source.between('aiProviderLabelV99', 'normalizeAiEndpointV99'),context);
-  vm.runInContext(fragment, context);
+  installAiSettings(context);
+  installAiTransport(context);
   await assert.rejects(context.requestAiChatV99({ execution: status }, [], { task: 'import_organize' }), /额度不足/);
   assert.equal(apiCalls, 0);
   assert.equal(harnessCalls, 1);

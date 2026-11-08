@@ -106,6 +106,8 @@
     return result;
   }
   function cancelled() { return failure({code:'cancelled',message:'AI 请求已取消。'}); }
+  /** @param {number} epoch @param {number} sequence */
+  function isCurrentCodexRead(epoch, sequence) { return epoch === generation && sequence === codexReadSequence; }
   /** @param {string} command @param {Record<string,unknown>} request @returns {Promise<unknown>} */
   async function invoke(command, request) {
     try { return await scope.ShirohaDesktopHost?.invoke(command, {request}); }
@@ -217,10 +219,10 @@
       const canInspect = current.runtimeState === 'ready' && !current.busy && !pendingMutations && !active.size && !preparation && !businessBusy();
       if (epoch === generation && codexSelected() && canInspect && !authorizationBlock && current.credentialStatus !== 'authenticating') await control({kind:'inspect'});
     } catch (error) {
-      if (epoch === generation && sequence === codexReadSequence) { codexReadFailure = '暂时无法读取登录状态，请重新读取。'; current = {...current,ready:false}; }
+      if (isCurrentCodexRead(epoch, sequence)) { codexReadFailure = '暂时无法读取登录状态，请重新读取。'; current = {...current,ready:false}; }
       throw error;
     } finally {
-      if (epoch === generation && sequence === codexReadSequence) { codexReading = false; render(false); changed(); }
+      if (isCurrentCodexRead(epoch, sequence)) { codexReading = false; render(false); changed(); }
     }
   }
   async function loginSubscription() {
@@ -540,6 +542,7 @@
       const epoch = generation;
       const account = accountEpoch;
       let stopped = false;
+      const wasCancelled = () => stopped || signal?.aborted || epoch !== generation;
       /** @type {Promise<unknown>|undefined} */ let stopping;
       const abort = () => { stopped = true; stopping = control({kind:'cancel',id}).catch(() => undefined); };
       let finished = () => {};
@@ -558,14 +561,14 @@
           // 用户也能在终态查询期间取消；这次停止完成前的查询不能作为最终状态。
           if (stopping !== pendingStop) { await stopping; await refreshAfterExecution(epoch); }
         }
-        if (stopped || signal?.aborted || epoch !== generation) throw cancelled();
+        if (wasCancelled()) throw cancelled();
         if (snapshot.revision !== current.revision) throw failure({code:'configuration_changed',message:'AI 配置已变化，旧结果已丢弃。'});
         if (codebuddy && (account !== accountEpoch || snapshot.accountRevision !== current.accountRevision)) throw failure({code:'configuration_changed',message:'CodeBuddy 账户已变化，旧结果已丢弃。'});
         if (!result || typeof result.content !== 'string' || !result.content.trim()) throw failure({code:'invalid_response',message:`${providerLabel()} 没有返回有效内容。`});
         return {content:result.content};
       } catch (error) {
         await stopping;
-        if (stopped || signal?.aborted || epoch !== generation) throw cancelled();
+        if (wasCancelled()) throw cancelled();
         throw error;
       } finally { signal?.removeEventListener('abort',abort); active.delete(id); finished(); render(false); changed(); }
     },

@@ -149,9 +149,10 @@ class MockAi {
     entry.arrived.resolve(call);
     await entry.released.promise;
     // V38.1 的追问同时返回对话与完整解析；旧字符串样本表示不改动解析的追问。
-    const requestContext = entry.kind === 'follow' && typeof entry.content === 'string' && !entry.raw ? JSON.parse(body.messages.at(-1).content) : null;
+    const shouldPreserveFollowUpAnalysis = entry.kind === 'follow' && typeof entry.content === 'string' && !entry.raw;
+    const requestContext = shouldPreserveFollowUpAnalysis ? JSON.parse(body.messages.at(-1).content) : null;
     const originalAnalysis = this.entries.find(item => item.kind === 'analysis' && item.content?.analysis === requestContext?.currentAnalysisDraft)?.content;
-    const responseContent = entry.kind === 'follow' && typeof entry.content === 'string' && !entry.raw
+    const responseContent = shouldPreserveFollowUpAnalysis
       ? { reply: entry.content, revisedAnalysis: requestContext.currentAnalysisDraft, confidence: originalAnalysis?.confidence || 'HIGH', needsReview: originalAnalysis?.needsReview || false, warning: originalAnalysis?.warning || '' }
       : entry.content;
     const content = typeof responseContent === 'string' ? responseContent : JSON.stringify(responseContent);
@@ -331,7 +332,8 @@ function seedRichFixture(prepared) {
 }
 
 function readSnapshot() {
-    if (typeof state === 'undefined' || typeof practice === 'undefined') throw new Error('V613 adapter requires global lexical state/practice. Current app may still be inside an IIFE; ask the parent task for state hooks.');
+    if (typeof state === 'undefined' || typeof practiceSession === 'undefined') throw new Error('V613 adapter requires the application state and practice session.');
+    const practice = practiceSession.current;
     // Track reference identity in test globals without adding properties to application objects.
     const identities = globalThis.__webAiPracticeIdentities ||= { ids: new WeakMap(), next: 1 };
     const identity = object => {

@@ -42,6 +42,66 @@ test('多空答案按位置接受别名，空白、漏空、交换顺序不判�
   ]) assert.equal(api.sameAnswerForQuestion(question, chosen, question.answer), correct);
 });
 
+test('自选题号保留去重排序、区间边界和原有错误文案', () => {
+  const { api } = loadWeb();
+  const parse = (raw, max = 10) => plain(api.parsePracticeNumberRangeV58916(raw, max));
+  assert.deepEqual(parse(' 3，1、3；5-7 6 10~10 '), { indexes: [0, 2, 4, 5, 6, 9], error: '' });
+  assert.deepEqual(parse('1—2,4至5'), { indexes: [0, 1, 3, 4], error: '' });
+  assert.deepEqual(parse(''), { indexes: [], error: '请输入题号，例如 1,3,5-10,20。' });
+  assert.deepEqual(parse('，、；'), { indexes: [], error: '没有可用的题号。' });
+  assert.deepEqual(parse('1,0,8-7,9-11,abc,12,13,14'), {
+    indexes: [], error: '题号格式或范围有误：0、8-7、9-11、abc、12…',
+  });
+  assert.deepEqual(parse('1 - 3'), { indexes: [], error: '题号格式或范围有误：-' });
+  assert.deepEqual(parse('1', 0), { indexes: [], error: '题号格式或范围有误：1' });
+});
+
+test('精确题号格式保留单题范围，避免被解释为从该题继续', () => {
+  const { api } = loadWeb();
+  assert.equal(api.formatExactPracticeNumbersV58916([]), '');
+  assert.equal(api.formatExactPracticeNumbersV58916(Object.freeze([2])), '2-2');
+  assert.equal(api.formatExactPracticeNumbersV58916(Object.freeze([2, 4, 7])), '2,4,7');
+});
+
+test('多空归一化保留位置和空组，只去除各组内修剪后完全相同的答案', () => {
+  const { api } = loadWeb();
+  const input = Object.freeze([
+    Object.freeze([' 甲 ', '甲', '', null, 'Ａ', 'A', '甲 ']),
+    Object.freeze(['', '  ']),
+    '乙',
+    Object.freeze([0, false, '0', 'false']),
+  ]);
+  const expected = [['甲', 'Ａ', 'A'], [], ['乙'], ['0', 'false']];
+  assert.deepEqual(plain(api.normalizeBlankAnswersV58914(input)), expected);
+  assert.deepEqual(plain(api.normalizeBlankAnswersV58914(null)), []);
+  assert.equal(api.primaryBlankAnswerV58914(input), '甲；；乙；0');
+  const copy = api.cloneBlankAnswersV58914(input);
+  assert.deepEqual(plain(copy), expected);
+  copy[0].push('新答案');
+  assert.equal(input[0].length, 7);
+  assert.equal(api.normalizeBlankTextV58914('  ，ＢＥＩＪＩＮＧ。 '), 'beijing');
+  assert.equal(api.normalizeBlankTextV58914('甲，乙'), '甲,乙');
+  for (const type of ['blank', 'BLANK', 'fill-in-blank']) {
+    assert.equal(api.isMultiBlankQuestionV58914({ type, blankAnswers: [[]] }), true);
+  }
+  assert.equal(api.isMultiBlankQuestionV58914({ type: 'short', blankAnswers: [['甲']] }), false);
+  assert.equal(api.isMultiBlankQuestionV58914({ type: 'blank', blankAnswers: [] }), false);
+  assert.equal(api.isMultiBlankQuestionV58914(null), false);
+});
+
+test('多空判定保留位置、空组和标点比较规则，且不更改输入', () => {
+  const { api } = loadWeb();
+  const question = { type: 'BLANK', blankAnswers: [['Ａ', 'a', '甲，乙'], ['京']] };
+  const before = structuredClone(question);
+  for (const [chosen, correct] of [
+    [[' a。 ', '京'], true], [['甲,乙', ' 京 '], true],
+    [['甲乙', '京'], false], [['京', 'a'], false],
+    [['a'], false], [['a', '京', '多余'], false], [['a', ''], false],
+  ]) assert.equal(api.sameAnswerForQuestion(question, chosen, []), correct);
+  assert.equal(api.sameAnswerForQuestion({ type: 'blank', blankAnswers: [['甲'], []] }, ['甲', ''], []), false);
+  assert.deepEqual(question, before);
+});
+
 test('旧单空支持等价参考答案；简答文本比较保持换行内容但练习自评分数由调用者确认', () => {
   const { api } = loadWeb();
   const blank = { type: 'blank', answer: ['北京', '北京市'] };
@@ -53,6 +113,17 @@ test('旧单空支持等价参考答案；简答文本比较保持换行内容�
   const wrong = api.makeAnswerDetail({ bankId: 'bank-a', bankName: '阶段A全题型', question }, ['人工核对后的作答'], false, 5, 5);
   assert.equal(correct.score, 5);
   assert.equal(wrong.score, 0);
+});
+
+test('简答自评区分未选择、判错与判对，空答案不请求自评', () => {
+  const { api } = loadWeb();
+  const question = { type: 'short' };
+  assert.equal(api.needsPracticeSelfAssessment(question, { chosen: ['回答'] }), true);
+  assert.equal(api.needsPracticeSelfAssessment(question, { chosen: ['回答'], selfCorrect: null }), true);
+  assert.equal(api.needsPracticeSelfAssessment(question, { chosen: ['回答'], selfCorrect: false }), false);
+  assert.equal(api.needsPracticeSelfAssessment(question, { chosen: ['回答'], selfCorrect: true }), false);
+  assert.equal(api.needsPracticeSelfAssessment(question, { chosen: [' '] }), false);
+  assert.equal(api.needsPracticeSelfAssessment({ type: 'blank' }, { chosen: ['回答'] }), false);
 });
 
 test('无答案题保留空答案，普通非空作答不能通过比较', () => {
@@ -67,7 +138,10 @@ test('题目自定分覆盖界面默认分；答题明细保留多空内容、�
   for (const [type, expected] of [['single', 2], ['multiple', 4], ['judge', 1], ['blank', 3], ['short', 5]]) {
     assert.equal(api.scoreOf({ type }), expected);
     assert.equal(api.scoreOf({ type, score: 7 }), 7);
+    assert.equal(api.scoreOf({ type, score: 0 }), expected);
   }
+  assert.equal(api.scoreOf({ type: 'unknown' }), 2);
+  assert.equal(api.scoreOf({ type: 'single', score: '0' }), '0');
   const question = questions()[3];
   const detail = plain(api.makeAnswerDetail({ bankId: 'bank-a', bankName: '阶段A全题型', question }, ['北京市', '京'], true, 4, 4));
   assert.deepEqual(detail.blankAnswers, [['北京', '北京市'], ['京']]);

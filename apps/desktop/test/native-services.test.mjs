@@ -89,6 +89,45 @@ test('desktop credentials expose status only and commit staged secrets explicitl
   assert(!JSON.stringify(credentials).includes('fake-key'));
 });
 
+test('desktop credential input preserves, replaces or clears each service through a staged operation', async () => {
+  /** @type {Record<string, unknown>[]} */ const requests = [];
+  const scope = {
+    ShirohaBrowser: {}, ShirohaBrowserCredentials: {}, ShirohaSaveQueue: { create: () => ({}) },
+    ShirohaDesktopHost: { invoke: async (/** @type {string} */ _command, /** @type {{request:Record<string,unknown>}} */ args) => {
+      requests.push(args.request);
+      if (args.request.kind === 'stage') return { id: `stage-${requests.length}` };
+      if (args.request.kind === 'status') return { state: 'session' };
+      return {};
+    } },
+  };
+  vm.runInNewContext(await readFile(new URL('../frontend/adapter.js', import.meta.url), 'utf8'), scope);
+  const credentials = vm.runInNewContext('ShirohaPlatform.credentials', scope);
+  for (const service of ['ai', 'webdav']) {
+    const config = { endpoint: 'https://mock.invalid/service', username: 'user' };
+    for (const [value, kind, remember] of [
+      ['[已保存的凭据]', 'keep', true], ['synthetic-secret', 'replace', false], ['', 'clear', false],
+    ]) {
+      const undo = await credentials.set(service, config, value, remember);
+      const staged = requests.at(-1);
+      assert(staged);
+      assert.equal(staged.kind, 'stage');
+      const input = /** @type {{kind:string,value?:string}} */ (staged.input);
+      assert.equal(input.kind, kind);
+      assert.equal(input.value, kind === 'replace' ? value : undefined);
+      assert.equal(staged.remember, remember);
+      assert.equal(/** @type {{service:string}} */ (staged.config).service, service);
+      if (kind === 'keep') {
+        await undo();
+        assert.equal(requests.at(-1)?.kind, 'rollback');
+      } else {
+        await credentials.finalize(undo);
+        assert.equal(requests.at(-2)?.kind, 'commit');
+        assert.equal(requests.at(-1)?.kind, 'status');
+      }
+    }
+  }
+});
+
 test('desktop network maps DAV methods to limited operations and rejects arbitrary methods', async () => {
   /** @type {{command:string,args:{request:{kind:string,operation?:{kind:string}},secret?:string|null}}[]} */ const calls = [];
   const scope = { Response: globalThis.Response, crypto: globalThis.crypto, TextDecoder, TextEncoder: globalThis.TextEncoder, structuredClone: globalThis.structuredClone,

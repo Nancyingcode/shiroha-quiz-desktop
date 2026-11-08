@@ -45,23 +45,113 @@
     return numbers;
   }
 
-  function sameAnswerForQuestion(question, chosen, answer, rules) {
-    if (rules.isMultiBlankQuestionV58914(question)) {
-      const groups = rules.normalizeBlankAnswersV58914(question.blankAnswers);
-      if (!Array.isArray(chosen) || chosen.length !== groups.length) {
+  function normalizeWebQuestionType(type) {
+    const value = String(type || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+    if (['single', 'single_choice', 'singlechoice', 'choice', 'radio'].includes(value)) {
+      return 'single';
+    }
+    if (['multiple', 'multi', 'multiple_choice', 'multiplechoice', 'checkbox'].includes(value)) {
+      return 'multiple';
+    }
+    if (['judge', 'judgement', 'judgment', 'true_false', 'truefalse', 'boolean'].includes(value)) {
+      return 'judge';
+    }
+    if (['blank', 'fill', 'fill_blank', 'fillblank', 'fill_in_blank'].includes(value)) {
+      return 'blank';
+    }
+    if (['short', 'short_answer', 'essay', 'qa', 'subjective', 'question_answer'].includes(value)) {
+      return 'short';
+    }
+    return '';
+  }
+
+  function isTextType(type) {
+    return type === 'blank' || type === 'short' || type === 'short_answer';
+  }
+
+  function normalizeBlankAnswersV58914(value) {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+    return value.map((group) => {
+      const values = Array.isArray(group) ? group : [group];
+      const seen = new Set();
+      const accepted = [];
+      values.forEach((item) => {
+        const answer = String(item ?? '').trim();
+        if (answer && !seen.has(answer)) {
+          seen.add(answer);
+          accepted.push(answer);
+        }
+      });
+      return accepted;
+    });
+  }
+
+  function isMultiBlankQuestionV58914(question) {
+    const isBlank = normalizeWebQuestionType(question && question.type) === 'blank';
+    if (!isBlank) {
+      return false;
+    }
+    const hasBlankGroups = Array.isArray(question && question.blankAnswers)
+      && question.blankAnswers.length > 0;
+    return hasBlankGroups;
+  }
+
+  function normalizeBlankTextV58914(value) {
+    let text = String(value ?? '');
+    try {
+      text = text.normalize('NFKC');
+    } catch {
+      // 兼容缺少 Unicode 归一化的旧环境；最低浏览器版本保证支持后可移除回退。
+    }
+    const punctuation = { '，': ',', '；': ';', '：': ':', '（': '(', '）': ')', '。': '.', '！': '!', '？': '?' };
+    text = text.replace(/[，；：（）。！？]/g, (char) => punctuation[char] || char);
+    return text.trim().replace(/[\s\u3000]+/g, '').toLowerCase()
+      .replace(/^[.,;:!?，。；：！？、]+|[.,;:!?，。；：！？、]+$/g, '');
+  }
+
+  function primaryBlankAnswerV58914(groups) {
+    return normalizeBlankAnswersV58914(groups).map((group) => group[0] || '').join('；');
+  }
+
+  function cloneBlankAnswersV58914(groups) {
+    return normalizeBlankAnswersV58914(groups).map((group) => [...group]);
+  }
+
+  function normalizeTextAnswerForCompare(value) {
+    return String(value || '').trim().replace(/[\s\u3000]+/g, '')
+      .replace(/[，,。.;；:：、!！?？]/g, '').toLowerCase();
+  }
+
+  function sameAnswerForQuestion(question, chosen, answer) {
+    if (isMultiBlankQuestionV58914(question)) {
+      const groups = normalizeBlankAnswersV58914(question.blankAnswers);
+      const hasExpectedBlankCount = Array.isArray(chosen) && chosen.length === groups.length;
+      if (!hasExpectedBlankCount) {
         return false;
       }
       return groups.every((accepted, index) => {
-        const actual = rules.normalizeBlankTextV58914(chosen[index]);
-        return !!actual && accepted.some((item) => rules.normalizeBlankTextV58914(item) === actual);
+        const actual = normalizeBlankTextV58914(chosen[index]);
+        if (!actual) {
+          return false;
+        }
+        return accepted.some((item) => normalizeBlankTextV58914(item) === actual);
       });
     }
-    if (rules.isTextType(question.type)) {
-      const user = rules.normalizeTextAnswerForCompare((chosen || []).join('；'));
-      return !!user && (answer || []).some((item) => rules.normalizeTextAnswerForCompare(item) === user);
+    if (isTextType(question.type)) {
+      const user = normalizeTextAnswerForCompare((chosen || []).join('；'));
+      if (!user) {
+        return false;
+      }
+      return (answer || []).some((item) => normalizeTextAnswerForCompare(item) === user);
     }
     return JSON.stringify([...chosen].sort()) === JSON.stringify([...answer].sort());
   }
 
-  globalThis.ShirohaQuizCore = Object.freeze({ listPageRange, listPageNumbers, sameAnswerForQuestion });
+  globalThis.ShirohaQuizCore = Object.freeze({
+    listPageRange, listPageNumbers, normalizeWebQuestionType, isTextType,
+    normalizeBlankAnswersV58914, isMultiBlankQuestionV58914, normalizeBlankTextV58914,
+    primaryBlankAnswerV58914, cloneBlankAnswersV58914, normalizeTextAnswerForCompare, sameAnswerForQuestion,
+  });
 })();

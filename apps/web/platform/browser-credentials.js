@@ -16,7 +16,11 @@
   function read(service, config) {
     if (bindings()[service] !== binding(config)) return '';
     const remember = service === 'ai' ? config.rememberKey : config.rememberPassword;
-    return (remember ? localStorage : sessionStorage).getItem(service === 'ai' ? (remember ? AI_LOCAL : AI_SESSION) : (remember ? DAV_LOCAL : DAV_SESSION)) || '';
+    const localKey = service === 'ai' ? AI_LOCAL : DAV_LOCAL;
+    const sessionKey = service === 'ai' ? AI_SESSION : DAV_SESSION;
+    const store = remember ? localStorage : sessionStorage;
+    const key = remember ? localKey : sessionKey;
+    return store.getItem(key) || '';
   }
   /** @param {Config} ai */
   function initialize(ai) {
@@ -38,8 +42,14 @@
     const localKey = service === 'ai' ? AI_LOCAL : DAV_LOCAL;
     const sessionKey = service === 'ai' ? AI_SESSION : DAV_SESSION;
     const undo = checkpoint([[localStorage, localKey], [sessionStorage, sessionKey], [localStorage, BINDINGS]]);
-    const secret = value === MARKER && bindings()[service] === binding(config) ? (localStorage.getItem(localKey) || sessionStorage.getItem(sessionKey) || '') : value === MARKER ? '' : value;
-    if (value === MARKER && !secret) throw new Error('服务地址或账号已改变，请重新输入凭据。');
+    let secret = value;
+    if (value === MARKER) {
+      const sameBinding = bindings()[service] === binding(config);
+      secret = sameBinding ? (localStorage.getItem(localKey) || sessionStorage.getItem(sessionKey) || '') : '';
+      if (!secret) {
+        throw new Error('服务地址或账号已改变，请重新输入凭据。');
+      }
+    }
     try {
       const primary = remember ? localStorage : sessionStorage;
       const primaryKey = remember ? localKey : sessionKey;
