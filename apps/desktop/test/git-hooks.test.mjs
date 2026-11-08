@@ -63,22 +63,25 @@ async function fixture(t) {
   const probe = path.join(project, 'scripts/probe.mjs');
   await writeFile(probe, "console.log('fixture');\n");
   expectSuccess(git(['add', '.']));
-  return { temporary, repository, project, probe, git, install };
+  const fullLint = () => spawnSync('npm run lint', {
+    shell: true, cwd: project, env, encoding: 'utf8', windowsHide: true,
+  });
+  return { temporary, repository, project, probe, git, install, fullLint };
 }
 
-test('pre-commit rejects invalid JavaScript before the first commit without rewriting staged or working files', async (t) => {
+test('first commit uses valid staged contents and preserves invalid unstaged and untracked code', async (t) => {
   const f = await fixture(t);
   const staged = f.git(['show', ':apps/desktop/scripts/probe.mjs']).stdout;
   const invalid = 'var value = process.pid; console.log(value);\n';
+  const untracked = path.join(f.project, 'scripts/lint-runner.mjs');
   await writeFile(f.probe, invalid);
-  const before = f.git(['status', '--porcelain=v1']).stdout;
-  const result = f.git(['commit', '-m', 'chore: 初始化检查样例']);
-  assert.equal(result.status, 1, result.stdout + result.stderr);
-  assert.match(result.stdout + result.stderr, /no-var/);
-  assert.equal(f.git(['rev-parse', '--verify', 'HEAD']).status, 128);
-  assert.equal(await readFile(f.probe, 'utf8'), invalid);
+  await writeFile(untracked, invalid);
+  expectSuccess(f.git(['commit', '--file', '-'], f.repository, 'chore: 初始化检查样例\n'));
+  assert.equal(f.git(['show', 'HEAD:apps/desktop/scripts/probe.mjs']).stdout, staged);
   assert.equal(f.git(['show', ':apps/desktop/scripts/probe.mjs']).stdout, staged);
-  assert.equal(f.git(['status', '--porcelain=v1']).stdout, before);
+  assert.equal(await readFile(f.probe, 'utf8'), invalid);
+  assert.equal(await readFile(untracked, 'utf8'), invalid);
+  assert.equal(f.git(['ls-files', '--', 'apps/desktop/scripts/lint-runner.mjs']).stdout, '');
 });
 
 test('pre-commit rejects invalid staged JavaScript even when the worktree is clean', async (t) => {
@@ -118,58 +121,59 @@ test('pre-commit refuses mismatched staged lint configuration without rewriting 
   assert.equal(f.git(['status', '--porcelain=v1']).stdout, before);
 });
 
-test('pre-commit refuses a lint runner that differs from its staged version', async (t) => {
+test('a docs-only commit skips the JavaScript entry point and a lone uppercase extension is checked', async (t) => {
   const f = await fixture(t);
-  const runner = path.join(f.project, 'scripts/lint-runner.mjs');
-  const staged = "console.log('staged runner');\n";
-  const working = "console.log('working runner');\n";
-  await writeFile(runner, staged);
-  expectSuccess(f.git(['add', 'apps/desktop/scripts/lint-runner.mjs']));
-  await writeFile(runner, working);
+  expectSuccess(f.git(['commit', '-m', 'chore: 初始化检查样例']));
+  const script = path.join(f.project, 'scripts/lint-index.mjs');
+  const original = await readFile(script, 'utf8');
+  const working = 'throw new Error("should not execute");\n';
+  await writeFile(script, working);
+  await writeFile(path.join(f.repository, 'README.md'), '# 示例\n');
+  expectSuccess(f.git(['add', 'README.md']));
+  expectSuccess(f.git(['commit', '-m', 'docs: 更新说明']));
+  assert.equal(await readFile(script, 'utf8'), working);
+  assert.equal(f.git(['show', 'HEAD:README.md']).stdout, '# 示例\n');
+  await writeFile(script, original);
+  await writeFile(path.join(f.repository, 'only.MJS'), 'var value = 1; console.log(value);\n');
+  expectSuccess(f.git(['add', 'only.MJS']));
+  const before = f.git(['status', '--porcelain=v1']).stdout;
+  const result = f.git(['commit', '-m', 'test: 检查扩展名']);
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stdout + result.stderr, /no-var/);
+  assert.equal(f.git(['status', '--porcelain=v1']).stdout, before);
+});
+
+test('pre-commit refuses an unstaged change to its entry point before executing it', async (t) => {
+  const f = await fixture(t);
+  const script = path.join(f.project, 'scripts/lint-index.mjs');
+  const staged = f.git(['show', ':apps/desktop/scripts/lint-index.mjs']).stdout;
+  const working = 'process.exit(0);\n';
+  await writeFile(script, working);
   const before = f.git(['status', '--porcelain=v1']).stdout;
   const result = f.git(['commit', '-m', 'chore: 更新检查入口']);
   assert.equal(result.status, 1, result.stdout + result.stderr);
-  assert.match(result.stdout + result.stderr, /配置或暂存检查脚本与索引不一致/);
+  assert.match(result.stdout + result.stderr, /lint-index\.mjs/);
   assert.equal(f.git(['rev-parse', '--verify', 'HEAD']).status, 128);
-  assert.equal(await readFile(runner, 'utf8'), working);
-  assert.equal(f.git(['show', ':apps/desktop/scripts/lint-runner.mjs']).stdout, staged);
+  assert.equal(await readFile(script, 'utf8'), working);
+  assert.equal(f.git(['show', ':apps/desktop/scripts/lint-index.mjs']).stdout, staged);
   assert.equal(f.git(['status', '--porcelain=v1']).stdout, before);
 });
 
-test('pre-commit refuses an untracked lint runner when JavaScript is staged', async (t) => {
+test('a staged deletion cannot silently use a lint config left in the worktree', async (t) => {
   const f = await fixture(t);
-  const runner = path.join(f.project, 'scripts/lint-runner.mjs');
-  await writeFile(runner, "console.log('untracked runner');\n");
+  const config = 'apps/desktop/eslint.migration.mjs';
+  const original = await readFile(path.join(f.repository, config), 'utf8');
+  expectSuccess(f.git(['rm', '--cached', config]));
   const before = f.git(['status', '--porcelain=v1']).stdout;
-  const result = f.git(['commit', '-m', 'chore: 更新检查入口']);
+  const result = f.git(['commit', '-m', 'chore: 更新检查配置']);
   assert.equal(result.status, 1, result.stdout + result.stderr);
-  assert.match(result.stdout + result.stderr, /配置或暂存检查脚本与索引不一致/);
+  assert.match(result.stdout + result.stderr, /配置或暂存检查脚本与索引不一致.*eslint\.migration\.mjs/);
   assert.equal(f.git(['rev-parse', '--verify', 'HEAD']).status, 128);
-  assert.equal(await readFile(runner, 'utf8'), "console.log('untracked runner');\n");
+  assert.equal(await readFile(path.join(f.repository, config), 'utf8'), original);
   assert.equal(f.git(['status', '--porcelain=v1']).stdout, before);
 });
 
-test('pre-commit refuses untracked lint regression files when JavaScript is staged', async (t) => {
-  const f = await fixture(t);
-  const directory = path.join(f.project, 'test');
-  const names = ['lint-suppressions.test.mjs', 'lint-mixed-extensions.test.mjs', 'lint-deleted-worktree.test.mjs'];
-  await mkdir(directory, { recursive: true });
-  for (const name of names) {
-    await writeFile(path.join(directory, name), "console.log('untracked regression');\n");
-  }
-  const before = f.git(['status', '--porcelain=v1']).stdout;
-  const result = f.git(['commit', '-m', 'chore: 更新检查用例']);
-  assert.equal(result.status, 1, result.stdout + result.stderr);
-  assert.match(result.stdout + result.stderr, /配置或暂存检查脚本与索引不一致/);
-  assert.equal(f.git(['rev-parse', '--verify', 'HEAD']).status, 128);
-  for (const name of names) {
-    assert.match(result.stdout + result.stderr, new RegExp(name.replaceAll('.', '\\.')));
-    assert.equal(await readFile(path.join(directory, name), 'utf8'), "console.log('untracked regression');\n");
-  }
-  assert.equal(f.git(['status', '--porcelain=v1']).stdout, before);
-});
-
-test('pre-commit runs every parallel check and only checks the index after all pass', async (t) => {
+test('the hook checks the index while the CI lint command still runs every full check', async (t) => {
   const f = await fixture(t);
   await copyFile(path.join(desktop, 'scripts/lint-runner.mjs'), path.join(f.project, 'scripts/lint-runner.mjs'));
   await writeFile(path.join(f.project, 'scripts/hook-check.mjs'), [
@@ -186,24 +190,26 @@ test('pre-commit runs every parallel check and only checks the index after all p
   const pkgPath = path.join(f.project, 'package.json');
   const pkg = JSON.parse(await readFile(pkgPath, 'utf8'));
   pkg.scripts.lint = 'node scripts/lint-runner.mjs';
-  for (const name of ['eslint', 'platform', 'incremental', 'fixtures', 'docs', 'index']) {
+  for (const name of ['eslint', 'platform', 'incremental', 'fixtures', 'docs']) {
     pkg.scripts[`lint:${name}`] = `node scripts/hook-check.mjs ${name}`;
   }
   await writeFile(pkgPath, JSON.stringify(pkg));
   await writeFile(path.join(f.repository, '.git/fail-platform'), 'fail');
   expectSuccess(f.git(['add', '.']));
-  const before = f.git(['status', '--porcelain=v1']).stdout;
-  const rejected = f.git(['commit', '-m', 'chore: 验证并行检查']);
-  assert.equal(rejected.status, 1, rejected.stdout + rejected.stderr);
-  for (const name of ['eslint', 'platform', 'incremental', 'fixtures', 'docs']) {
-    assert.equal(await readFile(path.join(f.repository, `.git/ran-${name}`), 'utf8'), 'yes');
-  }
-  await assert.rejects(readFile(path.join(f.repository, '.git/ran-index'), 'utf8'), { code: 'ENOENT' });
-  assert.equal(f.git(['status', '--porcelain=v1']).stdout, before);
-  await unlink(path.join(f.repository, '.git/fail-platform'));
   expectSuccess(f.git(['commit', '--file', '-'], f.repository, 'chore: 验证并行检查\n'));
   assert.equal(f.git(['log', '-1', '--format=%s']).stdout.trim(), 'chore: 验证并行检查');
-  assert.equal(await readFile(path.join(f.repository, '.git/ran-index'), 'utf8'), 'yes');
+  const names = ['eslint', 'platform', 'incremental', 'fixtures', 'docs'];
+  for (const name of names) {
+    await assert.rejects(readFile(path.join(f.repository, `.git/ran-${name}`)), { code: 'ENOENT' });
+  }
+  const rejected = f.fullLint();
+  assert.ifError(rejected.error);
+  assert.equal(rejected.status, 1, rejected.stdout + rejected.stderr);
+  for (const name of names) {
+    assert.equal(await readFile(path.join(f.repository, `.git/ran-${name}`), 'utf8'), 'yes');
+  }
+  await unlink(path.join(f.repository, '.git/fail-platform'));
+  expectSuccess(f.fullLint());
 });
 
 test('pre-commit checks a staged file that was subsequently deleted from the worktree', async (t) => {
@@ -214,6 +220,30 @@ test('pre-commit checks a staged file that was subsequently deleted from the wor
   assert.equal(f.git(['show', 'HEAD:apps/desktop/scripts/probe.mjs']).stdout, staged);
   await assert.rejects(readFile(f.probe, 'utf8'), { code: 'ENOENT' });
   assert.match(f.git(['status', '--porcelain=v1']).stdout, / D apps\/desktop\/scripts\/probe\.mjs/);
+});
+
+test('staged renames use the destination path while deletions and vendor code are skipped', async (t) => {
+  const f = await fixture(t);
+  const deleted = 'apps/desktop/scripts/deleted.mjs';
+  const oldPath = 'apps/desktop/scripts/probe.mjs';
+  const newPath = 'apps/desktop/scripts/题库 rename.MJS';
+  await writeFile(path.join(f.repository, deleted), "console.log('old');\n");
+  expectSuccess(f.git(['add', deleted]));
+  expectSuccess(f.git(['commit', '-m', 'test: 初始化检查样例']));
+  expectSuccess(f.git(['rm', deleted]));
+  expectSuccess(f.git(['mv', oldPath, newPath]));
+  const vendorDir = path.join(f.repository, 'apps/web/libs');
+  await mkdir(vendorDir, { recursive: true });
+  await writeFile(path.join(vendorDir, 'vendor.js'), 'broken(\n');
+  expectSuccess(f.git(['add', 'apps/web/libs/vendor.js']));
+  const staged = f.git(['show', `:0:${newPath}`]).stdout;
+  const unstaged = 'var value = 1; console.log(value);\n';
+  await writeFile(path.join(f.repository, newPath), unstaged);
+  const result = f.git(['commit', '-m', 'test: 重命名检查样例']);
+  expectSuccess(result);
+  assert.match(result.stdout + result.stderr, /Checked 1 staged JavaScript files/);
+  assert.equal(f.git(['show', `HEAD:${newPath}`]).stdout, staged);
+  assert.equal(await readFile(path.join(f.repository, newPath), 'utf8'), unstaged);
 });
 
 test('pre-commit refuses a staged JavaScript symlink without modifying the index', async (t) => {
@@ -227,6 +257,22 @@ test('pre-commit refuses a staged JavaScript symlink without modifying the index
   assert.equal(result.status, 1, result.stdout + result.stderr);
   assert.match(result.stdout + result.stderr, /无法检查暂存的非普通 JavaScript 文件/);
   assert.equal(f.git(['rev-parse', '--verify', 'HEAD']).status, 128);
+  assert.equal(f.git(['status', '--porcelain=v1']).stdout, before);
+});
+
+test('pre-commit refuses a regular JavaScript file changed to a symlink without modifying the index', async (t) => {
+  const f = await fixture(t);
+  expectSuccess(f.git(['commit', '-m', 'chore: 初始化检查样例']));
+  const head = f.git(['rev-parse', 'HEAD']).stdout;
+  const blob = f.git(['hash-object', '-w', 'apps/desktop/scripts/probe.mjs']);
+  expectSuccess(blob);
+  const link = 'apps/desktop/scripts/probe.mjs';
+  expectSuccess(f.git(['update-index', '--add', '--cacheinfo', `120000,${blob.stdout.trim()},${link}`]));
+  const before = f.git(['status', '--porcelain=v1']).stdout;
+  const result = f.git(['commit', '-m', 'chore: 初始化检查样例']);
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stdout + result.stderr, /无法检查暂存的非普通 JavaScript 文件/);
+  assert.equal(f.git(['rev-parse', 'HEAD']).stdout, head);
   assert.equal(f.git(['status', '--porcelain=v1']).stdout, before);
 });
 

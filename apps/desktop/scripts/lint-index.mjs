@@ -4,21 +4,16 @@ import { fileURLToPath } from 'node:url';
 import { ESLint } from 'eslint';
 
 const root = fileURLToPath(new URL('../../..', import.meta.url));
-const git = (/** @type {string[]} */ args) => execFileSync('git', args, {
+const git = (/** @type {string[]} */ args) => execFileSync('git', ['--no-optional-locks', ...args], {
   cwd: root, encoding: 'utf8', windowsHide: true, maxBuffer: 64 * 1024 * 1024,
 });
-const changed = git(['diff', '--cached', '--no-ext-diff', '--name-only', '-z']).split('\0').filter(Boolean);
-const staged = git(['diff', '--cached', '--no-ext-diff', '--name-only', '--diff-filter=ACMR', '-z'])
+const changed = git(['diff', '--cached', '--no-ext-diff', '--no-renames', '--name-only', '-z']).split('\0').filter(Boolean);
+const staged = git(['diff', '--cached', '--no-ext-diff', '--no-renames', '--name-only', '--diff-filter=AMT', '-z'])
   .split('\0').filter((file) => /\.(?:js|mjs|cjs)$/i.test(file));
 const configPaths = [
-  '.husky/pre-commit', 'apps/desktop/eslint.config.mjs', 'apps/desktop/eslint.platform.config.mjs',
+  '.husky/pre-commit', 'apps/desktop/eslint.platform.config.mjs',
   'apps/desktop/eslint.rules.mjs', 'apps/desktop/eslint.migration.mjs', 'apps/desktop/package.json',
-  'apps/desktop/scripts/lint-incremental.mjs', 'apps/desktop/scripts/lint-index.mjs',
-  'apps/desktop/scripts/lint-runner.mjs',
-  'apps/desktop/test/lint-config.test.mjs', 'apps/desktop/test/lint-cli.test.mjs',
-  'apps/desktop/test/lint-fixture-helpers.mjs', 'apps/desktop/test/lint-worktree.test.mjs',
-  'apps/desktop/test/lint-runner.test.mjs', 'apps/desktop/test/lint-suppressions.test.mjs',
-  'apps/desktop/test/lint-mixed-extensions.test.mjs', 'apps/desktop/test/lint-deleted-worktree.test.mjs',
+  'apps/desktop/scripts/lint-index.mjs',
 ];
 if (staged.length || changed.some((file) => configPaths.includes(file))) {
   // 暂存内容必须使用相同的配置验证，否则工作区的临时配置可能掩盖提交中的问题。
@@ -51,7 +46,7 @@ if (files.length) {
     if (mode !== '100644' && mode !== '100755') {
       throw new Error(`无法检查暂存的非普通 JavaScript 文件：${file}`);
     }
-    const source = git(['show', `:${file}`]);
+    const source = git(['show', `:0:${file}`]);
     const [result] = await lint.lintText(source, { filePath: path.join(root, file) });
     results.push(result);
   }

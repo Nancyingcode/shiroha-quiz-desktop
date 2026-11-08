@@ -1,1 +1,17 @@
-npm --prefix apps/desktop run lint && npm --prefix apps/desktop run lint:index
+# 纯文档等提交不依赖 JavaScript 检查工具，允许工作区继续编辑这些工具。
+if git --no-optional-locks diff --cached --quiet --no-ext-diff --no-renames -- \
+  ':(icase)*.js' ':(icase)*.mjs' ':(icase)*.cjs' apps/desktop/package.json .husky/pre-commit; then
+  exit 0
+else
+  status=$?
+  [ "$status" -eq 1 ] || exit "$status"
+fi
+
+# 检查入口必须在运行前核对，否则未暂存的脚本可以跳过自己的校验。
+entry=apps/desktop/scripts/lint-index.mjs
+changed=$(git --no-optional-locks ls-files --modified --others -- .husky/pre-commit "$entry") || exit 1
+if [ -n "$changed" ]; then
+  printf '提交检查入口与索引不一致，请先处理未暂存修改：\n%s\n' "$changed" >&2
+  exit 1
+fi
+exec node "$entry"

@@ -54,7 +54,7 @@ npm test
 
 `npm ci` / `npm install` 会通过 `prepare` 在仓库根目录安装 Husky hooks；已有依赖时可运行 `npm run prepare` 重新安装。每个 worktree 都需安装自己的依赖和 hooks。根目录没有 `package.json`，不要在根目录直接运行 npm 脚本。
 
-提交时，`pre-commit` 自动运行 `npm run lint`：保留原有桌面、Web 平台/训练、桌面前端和双端测试检查，追加 `lint:incremental`、`lint:fixtures` 与 20 份文档检查。各项独立检查并行运行，全部成功后再检查暂存内容；检查输出可能交错显示。增量入口读取 Git 跟踪和未忽略的未跟踪 JavaScript 文件，按完整文件检查；新路径默认执行 recommended、项目语义规则和 14 条显式 Stylistic 规则。任何正式门禁错误或警告都阻止提交；不自动修复、不改写源码或暂存区，首次提交同样适用。fixture 只在隔离临时目录写入自建样例。
+本地提交时，`pre-commit` 对本次暂存的手写 `.js`、`.mjs` 和 `.cjs` 文件执行 ESLint（扩展名大小写均可）。它从 Git 索引读取文件全文，所以部分暂存也能检查实际提交的版本。首次提交使用相同流程。错误或警告会阻止提交，暂存内容和工作区修改均会保留。检查入口或所用规则与索引不一致时，需先处理这些工具文件的差异。`commit-msg` 继续检查提交说明。
 
 历史范围采用[逐文件迁移清单](./apps/desktop/eslint.migration.mjs)：当前 132 个手写脚本均按完整文件进入增量门禁，`app.js` 和此前门禁外的测试工具已执行全部目标规则。其余历史文件中，41 个暂缓部分 Stylistic 规则，44 个仅暂缓已列明的少量未清零语义规则，清零的规则仍为 error；新文件不继承这些例外。`question-bank.js` 数据、第三方、原始 fixture 和生成资源明确排除。暂缓范围不保证新增同类违规会被阻断，修改时仍需人工按规范审查，后续逐规则/文件迁移后删除例外；不采用总告警预算或仅检查改动行。
 
@@ -75,7 +75,7 @@ docs: 补充开发说明
 npm run commitlint -- --from main --to HEAD --verbose
 ```
 
-Windows CI 继续运行相同的 ESLint 检查，并在 Pull Request 中校验 base 到 head 的提交信息；CI 通过 `HUSKY=0` 跳过本地 hooks 安装，单独执行检查。
+Windows CI 在 PR 和推送 `main` 时运行完整的 `npm run lint`、类型检查和测试。完整 lint 包含全库手写 JavaScript、规则回归和文档检查。PR 还校验 base 到 head 的提交说明。开发者可以在 `apps/desktop` 手动运行同一套检查。
 
 ## 贡献者与致谢
 
