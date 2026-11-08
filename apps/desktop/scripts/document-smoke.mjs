@@ -15,7 +15,7 @@ function pdfFile(objects) {
     parts.push(Buffer.from(`${i + 1} 0 obj\n`), object, Buffer.from('\nendobj\n'));
   }
   const xref = Buffer.concat(parts).length;
-  parts.push(Buffer.from(`xref\n0 ${offsets.length}\n0000000000 65535 f \n${offsets.slice(1).map(offset => `${String(offset).padStart(10, '0')} 00000 n \n`).join('')}trailer\n<< /Size ${offsets.length} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`));
+  parts.push(Buffer.from(`xref\n0 ${offsets.length}\n0000000000 65535 f \n${offsets.slice(1).map((offset) => `${String(offset).padStart(10, '0')} 00000 n \n`).join('')}trailer\n<< /Size ${offsets.length} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`));
   return Buffer.concat(parts);
 }
 
@@ -26,9 +26,9 @@ export async function documentSmoke(page) {
   const { loadWeb } = require(fileURLToPath(new URL('../../../test/dual-platform/web-source.cjs', import.meta.url)));
   const api = loadWeb().api;
   const lines = ['1. 中国的首都是哪里？', 'A. 北京', 'B. 上海', '答案：A'];
-  const jpeg = await page.evaluate(lines => {
+  const jpeg = await page.evaluate((lines) => {
     const canvas = document.createElement('canvas'); canvas.width = 1200; canvas.height = 600;
-    const ctx = canvas.getContext('2d'); if (!ctx) throw new Error('canvas');
+    const ctx = canvas.getContext('2d'); if (!ctx) {throw new Error('canvas');}
     ctx.fillStyle = 'white'; ctx.fillRect(0, 0, 1200, 600);
     ctx.fillStyle = 'black'; ctx.font = '56px SimSun';
     lines.forEach((line, index) => ctx.fillText(line, 60, 100 + index * 110));
@@ -55,17 +55,17 @@ export async function documentSmoke(page) {
   const docx = Buffer.from(await api.zipStoreFiles([
     { name: '[Content_Types].xml', text: '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>' },
     { name: '_rels/.rels', text: '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>' },
-    { name: 'word/document.xml', text: `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>${lines[0]}</w:t><w:drawing><a:blip r:embed="image1"/></w:drawing></w:r><m:oMath><m:f><m:num><m:r><m:t>1</m:t></m:r></m:num><m:den><m:r><m:t>2</m:t></m:r></m:den></m:f></m:oMath></w:p>${lines.slice(1).map(line => `<w:p><w:r><w:t>${line}</w:t></w:r></w:p>`).join('')}</w:body></w:document>` },
+    { name: 'word/document.xml', text: `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>${lines[0]}</w:t><w:drawing><a:blip r:embed="image1"/></w:drawing></w:r><m:oMath><m:f><m:num><m:r><m:t>1</m:t></m:r></m:num><m:den><m:r><m:t>2</m:t></m:r></m:den></m:f></m:oMath></w:p>${lines.slice(1).map((line) => `<w:p><w:r><w:t>${line}</w:t></w:r></w:p>`).join('')}</w:body></w:document>` },
     { name: 'word/_rels/document.xml.rels', text: '<Relationships><Relationship Id="image1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/sample.jpg"/></Relationships>' },
     { name: 'word/media/sample.jpg', data: image },
   ]).arrayBuffer());
   const altChunkDocx = Buffer.from(await api.zipStoreFiles([
     { name: 'word/document.xml', text: '<w:document><w:body><w:altChunk r:id="chunk1"/></w:body></w:document>' },
     { name: 'word/_rels/document.xml.rels', text: '<Relationships><Relationship Id="chunk1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/aFChunk" Target="body.html"/></Relationships>' },
-    { name: 'word/body.html', text: `<html><body>${lines.map(line => `<p>${line}</p>`).join('')}</body></html>` },
+    { name: 'word/body.html', text: `<html><body>${lines.map((line) => `<p>${line}</p>`).join('')}</body></html>` },
   ]).arrayBuffer());
   const rows = [['题干', 'A', 'B', '答案', '题型'], ['中国的首都是哪里？', '北京', '上海', 'A', '单选']];
-  const csv = Buffer.from(rows.map(row => row.join(',')).join('\n'));
+  const csv = Buffer.from(rows.map((row) => row.join(',')).join('\n'));
   const xlsx = Buffer.from(await api.zipStoreFiles([
     { name: '[Content_Types].xml', text: '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>' },
     { name: '_rels/.rels', text: '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>' },
@@ -123,14 +123,14 @@ export async function documentSmoke(page) {
       await page.locator('#ocr-result').fill(lines.join('\n'));
       await page.locator('#ocr-use-text-btn').click();
     } else {
-      await page.waitForFunction(expected => (/** @type {HTMLTextAreaElement | null} */ (document.querySelector('#import-text')))?.value.includes(expected), extension === 'text.pdf' ? 'Beijing' : '中国');
+      await page.waitForFunction((expected) => (/** @type {HTMLTextAreaElement | null} */ (document.querySelector('#import-text')))?.value.includes(expected), extension === 'text.pdf' ? 'Beijing' : '中国');
     }
     if (extension === 'docx') {
       const extracted = await page.locator('#import-text').inputValue();
       assert.match(extracted, /!\[DOCX图片1\]\(data:image\/(?:jpeg|webp);base64,/);
       assert.match(extracted, /【DOCX公式OMML：\(1\)\/\(2\)】/);
     }
-    if (!['csv', 'xlsx'].includes(extension)) await page.locator('#parse-import-btn').click();
+    if (!['csv', 'xlsx'].includes(extension)) {await page.locator('#parse-import-btn').click();}
     await page.waitForFunction(() => document.querySelectorAll('#import-preview tbody tr').length > 0);
     const name = `阶段E-${extension}`;
     await page.locator('#import-bank-name').fill(name);
@@ -140,16 +140,16 @@ export async function documentSmoke(page) {
   }
   await page.reload();
   await page.locator('body[data-storage-state="ready"]').waitFor();
-  for (const name of names) assert.equal(await page.locator('#active-bank-select option').filter({ hasText: name }).count(), 1);
+  for (const name of names) {assert.equal(await page.locator('#active-bank-select option').filter({ hasText: name }).count(), 1);}
   const restored = await page.evaluate(async () => {
     const platform = /** @type {{storage: import('../../web/platform/runtime.d.ts').BrowserStorage}} */ (Reflect.get(window, 'ShirohaPlatform'));
     const snapshot = await platform.storage.read();
-    if (!snapshot) throw new Error('保存后没有快照');
+    if (!snapshot) {throw new Error('保存后没有快照');}
     await platform.storage.ensureAll?.(snapshot);
     return snapshot.banks;
   });
   for (const name of names) {
-    const bank = restored.find(bank => bank.name === name);
+    const bank = restored.find((bank) => bank.name === name);
     assert.equal(bank?.questions.length, 1, `${name} 持久化题数`);
     assert.deepEqual(bank?.questions[0].answer, ['A'], `${name} 持久化答案`);
     if (name === '阶段E-docx') {

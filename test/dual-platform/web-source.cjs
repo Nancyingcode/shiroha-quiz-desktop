@@ -40,9 +40,9 @@ const exportedNames = [
 function memoryStorage(initial = {}) {
   const entries = new Map(Object.entries(initial));
   return {
-    getItem: key => entries.get(key) ?? null,
+    getItem: (key) => entries.get(key) ?? null,
     setItem: (key, value) => entries.set(key, String(value)),
-    removeItem: key => entries.delete(key),
+    removeItem: (key) => entries.delete(key),
   };
 }
 
@@ -51,19 +51,19 @@ function loadWeb({ state, local = {}, session = {}, scoreDefaults = {}, determin
   const logs = [];
   const document = {
     getElementById(id) {
-      if (id === 'shiroha-rich-question-style-v55') return {};
+      if (id === 'shiroha-rich-question-style-v55') {return {};}
       return null;
     },
     addEventListener() {},
     querySelector(selector) {
-      if (selector.startsWith('#score-')) return { value: String(scoreDefaults[selector.slice(7)] ?? 1) };
+      if (selector.startsWith('#score-')) {return { value: String(scoreDefaults[selector.slice(7)] ?? 1) };}
       throw new Error(`业务特征测试意外依赖 DOM：${selector}`);
     },
     querySelectorAll() { throw new Error('业务特征测试意外查询 DOM 集合。'); },
   };
   class TestFileReader {
     readAsDataURL(blob) {
-      blob.arrayBuffer().then(bytes => {
+      blob.arrayBuffer().then((bytes) => {
         this.result = `data:${blob.type};base64,${Buffer.from(bytes).toString('base64')}`;
         this.onload?.();
       }, () => this.onerror?.());

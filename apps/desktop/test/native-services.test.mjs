@@ -5,28 +5,28 @@ import vm from 'node:vm';
 
 test('整体撤销凭据后同步 Harness 修订，仍能保存直接 API 执行方式', async () => {
   let revision = 1;
-  const status = () => ({mode:'api',adapter:'codex',model:'',timeoutSeconds:120,credentialStatus:'missing',runtimePath:'',runtimeVersion:'',runtimeSource:'managed',runtimeState:'unprepared',runtimeReceivedBytes:0,runtimeTotalBytes:0,ready:false,reason:'待配置',revision,busy:false});
+  const status = () => ({ mode: 'api', adapter: 'codex', model: '', timeoutSeconds: 120, credentialStatus: 'missing', runtimePath: '', runtimeVersion: '', runtimeSource: 'managed', runtimeState: 'unprepared', runtimeReceivedBytes: 0, runtimeTotalBytes: 0, ready: false, reason: '待配置', revision, busy: false });
   const scope = {
     Response: globalThis.Response, crypto: globalThis.crypto, setTimeout, clearTimeout,
-    document: {getElementById: () => null, addEventListener() {}},
-    ShirohaBrowser: {}, ShirohaBrowserCredentials: {}, ShirohaSaveQueue: {create: () => ({})},
-    ShirohaDesktopHost: {invoke: async (/** @type {string} */ command, /** @type {{request:{kind:string,revision?:number}}} */ args) => {
+    document: { getElementById: () => null, addEventListener() {} },
+    ShirohaBrowser: {}, ShirohaBrowserCredentials: {}, ShirohaSaveQueue: { create: () => ({}) },
+    ShirohaDesktopHost: { invoke: async (/** @type {string} */ command, /** @type {{request:{kind:string,revision?:number}}} */ args) => {
       if (command === 'service_credential' && args.request.kind === 'invalidate') { revision++; return {}; }
-      assert.equal(command,'harness_control');
+      assert.equal(command, 'harness_control');
       if (args.request.kind === 'save') {
-        if (args.request.revision !== revision) throw {code:'harness_stale'};
+        if (args.request.revision !== revision) {throw { code: 'harness_stale' };}
         revision++;
       }
       return status();
-    }},
+    } },
   };
-  for (const file of ['adapter.js','harness.js']) vm.runInNewContext(await readFile(new URL(`../frontend/${file}`,import.meta.url),'utf8'),scope);
-  const platform = vm.runInNewContext('ShirohaPlatform',scope);
+  for (const file of ['adapter.js', 'harness.js']) {vm.runInNewContext(await readFile(new URL(`../frontend/${file}`, import.meta.url), 'utf8'), scope);}
+  const platform = vm.runInNewContext('ShirohaPlatform', scope);
   await platform.harness.initialize();
   await platform.credentials.reset();
-  assert.equal(platform.harness.status().revision,revision);
+  assert.equal(platform.harness.status().revision, revision);
   await platform.harness.saveMode('api');
-  assert.equal(platform.harness.status().mode,'api');
+  assert.equal(platform.harness.status().mode, 'api');
 });
 
 test('desktop AI cancellation keeps AbortError semantics when native IPC rejects', async () => {
@@ -56,7 +56,7 @@ test('desktop AI configuration and redirect failures have actionable messages', 
     };
     vm.runInNewContext(await readFile(new URL('../frontend/adapter.js', import.meta.url), 'utf8'), scope);
     const network = vm.runInNewContext('ShirohaPlatform.network', scope);
-    await assert.rejects(network.ai({ endpoint: 'https://mock.invalid/chat' }, { messages: [] }), error => {
+    await assert.rejects(network.ai({ endpoint: 'https://mock.invalid/chat' }, { messages: [] }), (error) => {
       assert(error && typeof error === 'object');
       assert.equal(Reflect.get(error, 'code'), code);
       assert.match(Reflect.get(error, 'message'), /** @type {RegExp} */ (expected));
@@ -72,8 +72,8 @@ test('desktop credentials expose status only and commit staged secrets explicitl
     localStorage: { getItem: () => null },
     ShirohaDesktopHost: { invoke: async (/** @type {string} */ command, /** @type {{request:{kind:string,operation?:{kind:string}},secret?:string|null}} */ args) => {
       calls.push({ command, args });
-      if (args.request.kind === 'stage') return { id: 'staged' };
-      if (args.request.kind === 'status') return { state: 'remembered' };
+      if (args.request.kind === 'stage') {return { id: 'staged' };}
+      if (args.request.kind === 'status') {return { state: 'remembered' };}
       return {};
     } },
   };
@@ -85,7 +85,7 @@ test('desktop credentials expose status only and commit staged secrets explicitl
   const undo = await credentials.set('ai', config, 'fake-key', true);
   assert.equal(calls.at(-1)?.args.request.kind, 'stage');
   await credentials.finalize(undo);
-  assert(calls.some(call => call.args.request.kind === 'commit'));
+  assert(calls.some((call) => call.args.request.kind === 'commit'));
   assert(!JSON.stringify(credentials).includes('fake-key'));
 });
 
@@ -95,8 +95,8 @@ test('desktop credential input preserves, replaces or clears each service throug
     ShirohaBrowser: {}, ShirohaBrowserCredentials: {}, ShirohaSaveQueue: { create: () => ({}) },
     ShirohaDesktopHost: { invoke: async (/** @type {string} */ _command, /** @type {{request:Record<string,unknown>}} */ args) => {
       requests.push(args.request);
-      if (args.request.kind === 'stage') return { id: `stage-${requests.length}` };
-      if (args.request.kind === 'status') return { state: 'session' };
+      if (args.request.kind === 'stage') {return { id: `stage-${requests.length}` };}
+      if (args.request.kind === 'status') {return { state: 'session' };}
       return {};
     } },
   };

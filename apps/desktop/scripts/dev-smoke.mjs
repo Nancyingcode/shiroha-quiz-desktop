@@ -53,8 +53,8 @@ async function listen(server, port = 0) {
 
 /** @param {import('node:net').Server} server */
 async function closeServer(server) {
-  if (!server.listening) return;
-  await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve(undefined)));
+  if (!server.listening) {return;}
+  await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve(undefined)));
 }
 
 async function availablePort() {
@@ -86,11 +86,11 @@ async function waitForDebugger(child, port, launchError) {
   const deadline = Date.now() + START_TIMEOUT_MS;
   while (Date.now() < deadline) {
     const error = launchError();
-    if (error) throw error;
+    if (error) {throw error;}
     assert(running(child), 'npm run dev 在 WebView2 就绪前退出，详见开发进程日志');
     const ready = await fetch(`${endpoint}/json/version`, { signal: AbortSignal.timeout(1_000) })
-      .then(response => response.ok).catch(() => false);
-    if (ready) return endpoint;
+      .then((response) => response.ok).catch(() => false);
+    if (ready) {return endpoint;}
     await delay(POLL_MS);
   }
   throw new Error(`npm run dev 未在 ${START_TIMEOUT_MS / 1000} 秒内启动 WebView2`);
@@ -100,7 +100,7 @@ async function waitForDebugger(child, port, launchError) {
 async function nativeState(page) {
   const result = await page.evaluate(async () => {
     const host = (/** @type {TestWindow} */ (window)).ShirohaDesktopHost;
-    if (!host) throw new Error('原生桥接缺失');
+    if (!host) {throw new Error('原生桥接缺失');}
     try { return await host.invoke('local_initialize'); }
     catch (error) { throw new Error(`local_initialize: ${JSON.stringify(error)}`, { cause: error }); }
   });
@@ -133,11 +133,11 @@ async function stopDevelopment(child, page) {
       delay(CLOSE_TIMEOUT_MS, undefined, { ref: false }),
     ]);
   }
-  if (!running(child)) return;
+  if (!running(child)) {return;}
   await execute('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true, timeout: CLOSE_TIMEOUT_MS })
-    .catch(error => { if (running(child)) throw error; });
+    .catch((error) => { if (running(child)) {throw error;} });
   const deadline = Date.now() + CLOSE_TIMEOUT_MS;
-  while (running(child) && Date.now() < deadline) await delay(POLL_MS);
+  while (running(child) && Date.now() < deadline) {await delay(POLL_MS);}
   assert(!running(child), '本次开发进程尚未退出，保留隔离目录');
 }
 
@@ -182,7 +182,7 @@ async function main() {
   let developmentLog = '';
   let cleanupError = '';
   // 在 CDP 接入之前也拦截浏览器外网请求；Rust native-test 使用隔离标记提供假凭据并拒绝真实网络。
-  const proxy = createServer(socket => { socket.on('error', () => undefined); socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\nContent-Length: 0\r\n\r\n'); });
+  const proxy = createServer((socket) => { socket.on('error', () => undefined); socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\nContent-Length: 0\r\n\r\n'); });
   const stop = () => stopping ??= child ? stopDevelopment(child, page) : Promise.resolve();
   const cleanup = () => cleaning ??= (async () => {
     let stopped = false;
@@ -198,7 +198,7 @@ async function main() {
   })();
   const interrupt = () => {
     interrupted = true;
-    void stop().catch(error => { cleanupError = errorText(error); });
+    void stop().catch((error) => { cleanupError = errorText(error); });
   };
   process.once('SIGINT', interrupt);
   process.once('SIGTERM', interrupt);
@@ -228,26 +228,26 @@ async function main() {
     });
     /** @type {Error|undefined} */
     let launchError;
-    child.on('error', error => { launchError = error; });
-    for (const stream of [child.stdout, child.stderr]) stream?.on('data', chunk => {
+    child.on('error', (error) => { launchError = error; });
+    for (const stream of [child.stdout, child.stderr]) {stream?.on('data', (chunk) => {
       const text = String(chunk);
       developmentLog = (developmentLog + text).slice(-LOG_LIMIT);
       process.stdout.write(text);
-    });
+    });}
     const endpoint = await waitForDebugger(child, debugPort, () => launchError);
     browser = await chromium.connectOverCDP(endpoint, { timeout: ACTION_TIMEOUT_MS });
     const context = browser.contexts()[0];
     assert(context, '未取得本次 WebView2 context');
-    await context.route('**/*', async route => {
+    await context.route('**/*', async (route) => {
       const url = route.request().url();
-      if (localResource(url)) await route.continue();
+      if (localResource(url)) {await route.continue();}
       else { blockedRequests.push(url); await route.abort('blockedbyclient'); }
     });
     page = context.pages()[0] ?? await context.waitForEvent('page', { timeout: ACTION_TIMEOUT_MS });
     const activePage = page;
     activePage.setDefaultTimeout(ACTION_TIMEOUT_MS);
-    activePage.on('pageerror', error => errors.push(error.message));
-    await activePage.waitForURL(url => url.protocol === 'http:', { timeout: ACTION_TIMEOUT_MS });
+    activePage.on('pageerror', (error) => errors.push(error.message));
+    await activePage.waitForURL((url) => url.protocol === 'http:', { timeout: ACTION_TIMEOUT_MS });
     await check('实际开发来源', async () => {
       assert.equal(new URL(activePage.url()).origin, DEV_ORIGIN, '开发来源改变，需复核原生允许列表');
       return activePage.url();
@@ -267,7 +267,7 @@ async function main() {
     await check('保存递增原生修订且重载后可读', async () => {
       const before = await nativeState(activePage);
       await activePage.locator('#save-all-btn').click();
-      await activePage.waitForFunction(revision => {
+      await activePage.waitForFunction((revision) => {
         const storage = (/** @type {TestWindow} */ (window)).ShirohaPlatform?.storage;
         return storage && storage.revision() > revision;
       }, before.revision);
@@ -290,7 +290,7 @@ async function main() {
     assert(!interrupted, '开发模式回归已中断');
     complete = true;
   } finally {
-    await cleanup().catch(error => { cleanupError = errorText(error); });
+    await cleanup().catch((error) => { cleanupError = errorText(error); });
     process.removeListener('SIGINT', interrupt);
     process.removeListener('SIGTERM', interrupt);
     await mkdir(path.dirname(REPORT_PATH), { recursive: true });
@@ -299,10 +299,10 @@ async function main() {
       checks, profile, retainedProfile, cleanupError, interrupted, errors, blockedRequests, developmentLog,
     }, null, 2));
     console.log(`开发模式回归报告：${REPORT_PATH}`);
-    if (retainedProfile) console.log(`保留本次隔离目录：${profile}`);
-    if (cleanupError) console.error(`清理未完成：${cleanupError}`);
+    if (retainedProfile) {console.log(`保留本次隔离目录：${profile}`);}
+    if (cleanupError) {console.error(`清理未完成：${cleanupError}`);}
   }
-  if (cleanupError) throw new Error(`清理未完成：${cleanupError}`);
+  if (cleanupError) {throw new Error(`清理未完成：${cleanupError}`);}
 }
 
-main().catch(error => { console.error(errorText(error)); process.exitCode = 1; });
+main().catch((error) => { console.error(errorText(error)); process.exitCode = 1; });

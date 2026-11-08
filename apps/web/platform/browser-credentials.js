@@ -14,7 +14,7 @@
   function bindings() { return JSON.parse(localStorage.getItem(BINDINGS) || '{}'); }
   /** @param {'ai'|'webdav'} service @param {Config} config */
   function read(service, config) {
-    if (bindings()[service] !== binding(config)) return '';
+    if (bindings()[service] !== binding(config)) {return '';}
     const remember = service === 'ai' ? config.rememberKey : config.rememberPassword;
     const localKey = service === 'ai' ? AI_LOCAL : DAV_LOCAL;
     const sessionKey = service === 'ai' ? AI_SESSION : DAV_SESSION;
@@ -27,15 +27,15 @@
     const current = bindings();
     const dav = JSON.parse(localStorage.getItem(DAV_CONFIG) || 'null');
     // 只在当前来源首次升级时绑定旧凭据；之后端点变化或备份恢复不能自动重新绑定。
-    if (!Object.hasOwn(current, 'ai')) current.ai = binding(ai);
-    if (!Object.hasOwn(current, 'webdav') && dav) current.webdav = binding(dav);
+    if (!Object.hasOwn(current, 'ai')) {current.ai = binding(ai);}
+    if (!Object.hasOwn(current, 'webdav') && dav) {current.webdav = binding(dav);}
     const encoded = JSON.stringify(current);
-    if (localStorage.getItem(BINDINGS) !== encoded) localStorage.setItem(BINDINGS, encoded);
+    if (localStorage.getItem(BINDINGS) !== encoded) {localStorage.setItem(BINDINGS, encoded);}
   }
   /** @param {[Storage,string][]} entries */
   function checkpoint(entries) {
     const previous = entries.map(([store, key]) => ({ store, key, value: store.getItem(key) }));
-    return () => { for (const { store, key, value } of previous) { if (value === null) store.removeItem(key); else store.setItem(key, value); } };
+    return () => { for (const { store, key, value } of previous) { if (value === null) {store.removeItem(key);} else {store.setItem(key, value);} } };
   }
   /** @param {'ai'|'webdav'} service @param {Config} config @param {string} value @param {boolean} remember */
   function set(service, config, value, remember) {
@@ -53,7 +53,7 @@
     try {
       const primary = remember ? localStorage : sessionStorage;
       const primaryKey = remember ? localKey : sessionKey;
-      if (secret) primary.setItem(primaryKey, secret); else primary.removeItem(primaryKey);
+      if (secret) {primary.setItem(primaryKey, secret);} else {primary.removeItem(primaryKey);}
       (remember ? sessionStorage : localStorage).removeItem(remember ? sessionKey : localKey);
       localStorage.setItem(BINDINGS, JSON.stringify({ ...bindings(), [service]: binding(config) }));
     } catch (error) { undo(); throw error; }
@@ -76,7 +76,7 @@
   function saveDav(config, password, storePassword) {
     const undo = checkpoint([[localStorage, DAV_CONFIG], [localStorage, DAV_LOCAL], [sessionStorage, DAV_SESSION], [localStorage, BINDINGS]]);
     try {
-      if (storePassword) set('webdav', config, password, !!config.rememberPassword);
+      if (storePassword) {set('webdav', config, password, !!config.rememberPassword);}
       localStorage.setItem(DAV_CONFIG, JSON.stringify(config));
     } catch (error) { undo(); throw error; }
   }
@@ -93,7 +93,7 @@
       [localStorage, 'shiroha_quiz_state_v28_4_c1'],
     ];
     const undo = checkpoint(entries);
-    try { for (const [store, key] of entries) store.removeItem(key); }
+    try { for (const [store, key] of entries) {store.removeItem(key);} }
     catch (error) { undo(); throw error; }
   }
   const api = { initialize, set, status, redact, ai, webdav, checkpoint, readDav, saveDav, clearDav, reset };

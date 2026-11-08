@@ -7,7 +7,7 @@
   const minimize = /** @type {HTMLButtonElement | null} */ (document.getElementById('desktop-window-minimize'));
   const maximize = /** @type {HTMLButtonElement | null} */ (document.getElementById('desktop-window-maximize'));
   const close = /** @type {HTMLButtonElement | null} */ (document.getElementById('desktop-window-close'));
-  if (!titlebar || !drag || !status || !minimize || !maximize || !close) return;
+  if (!titlebar || !drag || !status || !minimize || !maximize || !close) {return;}
   const captionName = drag.querySelector('span');
   if (captionName) {
     // 按钮保留在 body 下以沿用保存锁；本页面观察标题宽度，字体缩放后仍紧邻名称。
@@ -32,7 +32,7 @@
   const syncMaximized = async () => {
     const request = ++stateRequest;
     const maximized = await appWindow.isMaximized();
-    if (request !== stateRequest) return;
+    if (request !== stateRequest) {return;}
     titlebar.dataset.maximized = String(maximized);
     const label = maximized ? '还原' : '最大化';
     maximize.setAttribute('aria-label', label);
@@ -44,9 +44,9 @@
   };
   /** @param {() => Promise<void>} action */
   const run = async (action) => {
-    if (actionPending) return;
+    if (actionPending) {return;}
     actionPending = true;
-    buttons.forEach(button => { button.disabled = true; });
+    buttons.forEach((button) => { button.disabled = true; });
     status.hidden = true;
     try {
       await action();
@@ -54,7 +54,7 @@
     } catch { showError(); }
     finally {
       actionPending = false;
-      buttons.forEach(button => { button.disabled = false; });
+      buttons.forEach((button) => { button.disabled = false; });
     }
   };
   minimize.addEventListener('click', () => {
@@ -63,16 +63,16 @@
   });
   maximize.addEventListener('click', () => { void run(() => appWindow.toggleMaximize()); });
   close.addEventListener('click', () => { void run(() => appWindow.close()); });
-  drag.addEventListener('mousedown', event => {
-    if (event.button !== 0) return;
+  drag.addEventListener('mousedown', (event) => {
+    if (event.button !== 0) {return;}
     event.preventDefault();
-    if (event.detail === 2) void run(() => appWindow.toggleMaximize());
-    else void appWindow.startDragging().catch(showError);
+    if (event.detail === 2) {void run(() => appWindow.toggleMaximize());}
+    else {void appWindow.startDragging().catch(showError);}
   });
   window.addEventListener('resize', () => {
     window.clearTimeout(resizeTimer);
     resizeTimer = window.setTimeout(() => { void syncMaximized().catch(showError); }, 80);
   });
-  buttons.forEach(button => { button.disabled = false; });
+  buttons.forEach((button) => { button.disabled = false; });
   void syncMaximized().catch(showError);
 })();

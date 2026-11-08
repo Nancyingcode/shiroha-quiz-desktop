@@ -51,7 +51,7 @@ test('单选、多选、判断严格匹配，多选顺序不影响结果但漏�
     [single, ['A'], true], [single, ['B'], false],
     [multiple, ['C', 'A'], true], [multiple, ['A'], false], [multiple, ['A', 'B', 'C'], false],
     [judge, ['A'], true], [judge, ['B'], false],
-  ]) assert.equal(api.sameAnswerForQuestion(question, chosen, question.answer), correct);
+  ]) {assert.equal(api.sameAnswerForQuestion(question, chosen, question.answer), correct);}
 });
 
 test('多空答案按位置接受别名，空白、漏空、交换顺序不判正确', () => {
@@ -60,7 +60,7 @@ test('多空答案按位置接受别名，空白、漏空、交换顺序不判�
   for (const [chosen, correct] of [
     [['北京市', '京'], true], [[' 北京。 ', '京'], true],
     [['北京', ''], false], [['北京'], false], [['京', '北京'], false],
-  ]) assert.equal(api.sameAnswerForQuestion(question, chosen, question.answer), correct);
+  ]) {assert.equal(api.sameAnswerForQuestion(question, chosen, question.answer), correct);}
 });
 
 test('自选题号保留去重排序、区间边界和原有错误文案', () => {
@@ -118,7 +118,7 @@ test('多空判定保留位置、空组和标点比较规则，且不更改输�
     [[' a。 ', '京'], true], [['甲,乙', ' 京 '], true],
     [['甲乙', '京'], false], [['京', 'a'], false],
     [['a'], false], [['a', '京', '多余'], false], [['a', ''], false],
-  ]) assert.equal(api.sameAnswerForQuestion(question, chosen, []), correct);
+  ]) {assert.equal(api.sameAnswerForQuestion(question, chosen, []), correct);}
   assert.equal(api.sameAnswerForQuestion({ type: 'blank', blankAnswers: [['甲'], []] }, ['甲', ''], []), false);
   assert.deepEqual(question, before);
 });
@@ -178,25 +178,25 @@ test('双文件按题型与重复题号对应，不能将单选答案套到多�
   const { api } = loadWeb();
   const questionList = api.parseTextQuestions(textFixture('dual-questions.txt'));
   const answers = api.parseAnswerEntries(textFixture('dual-answers.txt'));
-  assert.deepEqual(plain(questionList.map(question => question.number)), [1, 1, 1]);
-  assert.deepEqual(plain(questionList.map(question => question.type)), ['single', 'multiple', 'judge']);
-  assert.deepEqual(plain(answers.map(entry => entry.answer)), [['A'], ['A', 'C'], ['正确']]);
+  assert.deepEqual(plain(questionList.map((question) => question.number)), [1, 1, 1]);
+  assert.deepEqual(plain(questionList.map((question) => question.type)), ['single', 'multiple', 'judge']);
+  assert.deepEqual(plain(answers.map((entry) => entry.answer)), [['A'], ['A', 'C'], ['正确']]);
   for (const mode of ['group', 'number', 'auto']) {
     const merged = api.mergeQuestionAnswers(questionList, answers, mode);
-    assert.deepEqual(plain(merged.questions.map(question => question.answer)), [['A'], ['A', 'C'], ['A']]);
+    assert.deepEqual(plain(merged.questions.map((question) => question.answer)), [['A'], ['A', 'C'], ['A']]);
   }
-  assert(questionList.every(question => question.answer.length === 0), '合并不能修改原题目列表。');
+  assert(questionList.every((question) => question.answer.length === 0), '合并不能修改原题目列表。');
 });
 
 test('共享材料绑定到两道题，答案和各自选项保持独立', () => {
   const { api } = loadWeb();
   const parsed = api.parseTextQuestions(textFixture('material.txt'));
   assert.equal(parsed.length, 2);
-  parsed.forEach(question => assert.match(question.question, /某学校种植了十棵树，其中六棵为松树，四棵为柏树/));
+  parsed.forEach((question) => assert.match(question.question, /某学校种植了十棵树，其中六棵为松树，四棵为柏树/));
   assert.match(parsed[0].question, /学校种植了多少棵树/);
   assert.match(parsed[1].question, /松树有多少棵/);
-  assert.deepEqual(plain(parsed.map(question => question.answer)), [['A'], ['B']]);
-  assert.deepEqual(plain(parsed.map(question => question.options.map(option => option.text))), [['十棵', '六棵'], ['四棵', '六棵']]);
+  assert.deepEqual(plain(parsed.map((question) => question.answer)), [['A'], ['B']]);
+  assert.deepEqual(plain(parsed.map((question) => question.options.map((option) => option.text))), [['十棵', '六棵'], ['四棵', '六棵']]);
 });
 
 test('跨题库同 ID 保持独立练习标识和错题状态', () => {
@@ -207,12 +207,12 @@ test('跨题库同 ID 保持独立练习标识和错题状态', () => {
   assert.equal(api.practiceItemKeyV8916(first), 'bank-a#same-id');
   assert.equal(api.practiceItemKeyV8916(second), 'bank-b#same-id');
   api.addWrong('same-id', 'bank-a');
-  assert.equal(api.getWrongEntries('bank-a').find(entry => entry.id === 'same-id').wrongCount, 1);
+  assert.equal(api.getWrongEntries('bank-a').find((entry) => entry.id === 'same-id').wrongCount, 1);
   assert.equal(api.getWrongEntries('bank-b').length, 0);
   api.markRight('same-id', 'bank-a');
-  assert.equal(api.getWrongEntries('bank-a').find(entry => entry.id === 'same-id').status, '复习中');
+  assert.equal(api.getWrongEntries('bank-a').find((entry) => entry.id === 'same-id').status, '复习中');
   api.markRight('same-id', 'bank-a');
-  assert.equal(api.getWrongEntries('bank-a').find(entry => entry.id === 'same-id').status, '已掌握');
+  assert.equal(api.getWrongEntries('bank-a').find((entry) => entry.id === 'same-id').status, '已掌握');
 });
 
 test('错题保存错误选择副本，正确复习不覆盖，重新答错更新且跨库隔离', () => {

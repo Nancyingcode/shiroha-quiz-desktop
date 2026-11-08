@@ -19,15 +19,15 @@ function setup(data, { mode = 'auto', accepted = true } = {}) {
   };
   const confirmations = [], imports = [], notices = [], previews = [];
   const context = vm.createContext({
-    $: selector => elements[selector],
+    $: (selector) => elements[selector],
     cancelAiPreviewRequestV991() {}, resetAiSuggestionsV991() {}, closeAiPreviewPanelV991() {},
     normalizeQuestion: api.normalizeQuestion, normalizeBackupPayloadV23: api.normalizeBackupPayloadV23,
     countUnresolvedBackupImagesV24: api.countUnresolvedBackupImagesV24,
     ShirohaPlatform: { storage: {} },
-    ShirohaDialogs: { confirm: async message => { confirmations.push(message); return accepted; } },
-    runMutation: async action => action(),
+    ShirohaDialogs: { confirm: async (message) => { confirmations.push(message); return accepted; } },
+    runMutation: async (action) => action(),
     applyBackupImportV23: async (...args) => { imports.push(args); },
-    renderImportPreview: questions => previews.push(plain(questions)),
+    renderImportPreview: (questions) => previews.push(plain(questions)),
     collectImportWarnings: () => [], collectSoftRiskWarnings: () => [], countTypes: () => ({}),
     largeImportRiskMessageV376: () => '', summarizeImportResultV376: () => '识别完成',
     showNotice: (...args) => notices.push(args), toast: (...args) => notices.push(args),
@@ -52,8 +52,8 @@ for (const mode of ['auto', 'json']) {
     assert.equal(run.imports.length, 1);
     const [normalized, importMode] = run.imports[0];
     assert.equal(importMode, 'merge');
-    assert.deepEqual(plain(normalized.banks.map(bank => [bank.id, bank.name, bank.groupName])), payload.banks.map(bank => [bank.id, bank.name, bank.groupName]));
-    for (const key of ['wrongBook', 'favorites', 'records']) assert.deepEqual(plain(normalized[key]), payload[key]);
+    assert.deepEqual(plain(normalized.banks.map((bank) => [bank.id, bank.name, bank.groupName])), payload.banks.map((bank) => [bank.id, bank.name, bank.groupName]));
+    for (const key of ['wrongBook', 'favorites', 'records']) {assert.deepEqual(plain(normalized[key]), payload[key]);}
     assert.deepEqual(run.previews, [[]]);
   });
 }
@@ -74,7 +74,7 @@ test('未来版本备份拒绝导入，不能作为普通题目绕过备份版�
   await run.context.parseImport();
   assert.deepEqual(run.confirmations, []);
   assert.deepEqual(run.imports, []);
-  assert(run.notices.some(args => args.some(value => /不支持此备份版本/.test(String(value)))));
+  assert(run.notices.some((args) => args.some((value) => /不支持此备份版本/.test(String(value)))));
 });
 
 for (const shape of ['bank', 'array']) {

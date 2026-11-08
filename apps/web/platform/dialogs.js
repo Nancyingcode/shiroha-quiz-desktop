@@ -8,7 +8,7 @@
 
   /** @param {DialogKind} kind @param {string} message @param {string} initial @param {DialogOptions} options */
   function open(kind, message, initial, options) {
-    return new Promise(resolve => {
+    return new Promise((resolve) => {
       const previousFocus = document.activeElement;
       const dialog = document.createElement('dialog');
       dialog.id = 'app-dialog';
@@ -41,26 +41,26 @@
       accept.textContent = options.acceptLabel || (kind === 'alert' ? '知道了' : '确定');
       let settled = false;
       /** @param {boolean} accepted */
-      const finish = accepted => {
-        if (settled) return;
+      const finish = (accepted) => {
+        if (settled) {return;}
         settled = true;
         let value = null;
-        if (kind === 'confirm') value = accepted;
-        if (kind === 'prompt' && accepted) value = input.value;
+        if (kind === 'confirm') {value = accepted;}
+        if (kind === 'prompt' && accepted) {value = input.value;}
         dialog.close();
         dialog.remove();
-        if (previousFocus instanceof window.HTMLElement && previousFocus.isConnected) previousFocus.focus({ preventScroll: true });
+        if (previousFocus instanceof window.HTMLElement && previousFocus.isConnected) {previousFocus.focus({ preventScroll: true });}
         resolve(value);
       };
-      form.addEventListener('submit', event => { event.preventDefault(); finish(true); });
+      form.addEventListener('submit', (event) => { event.preventDefault(); finish(true); });
       cancel.addEventListener('click', () => finish(false));
       close.addEventListener('click', () => finish(false));
-      dialog.addEventListener('cancel', event => { event.preventDefault(); finish(false); });
-      dialog.addEventListener('keydown', event => {
+      dialog.addEventListener('cancel', (event) => { event.preventDefault(); finish(false); });
+      dialog.addEventListener('keydown', (event) => {
         // 模态框内的快捷键不应切题、作答或触发页面保存；Tab 循环不将焦点交给浏览器工具栏。
         event.stopPropagation();
-        if (event.key !== 'Tab') return;
-        const controls = [close, input, cancel, accept].filter(control => !control.hidden && !control.disabled);
+        if (event.key !== 'Tab') {return;}
+        const controls = [close, input, cancel, accept].filter((control) => !control.hidden && !control.disabled);
         const first = controls[0], last = controls[controls.length - 1];
         if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
         else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
@@ -68,8 +68,8 @@
       document.body.appendChild(dialog);
       dialog.showModal();
       if (kind === 'prompt') { input.focus(); input.select(); }
-      else if (kind === 'confirm') cancel.focus();
-      else accept.focus();
+      else if (kind === 'confirm') {cancel.focus();}
+      else {accept.focus();}
     });
   }
 

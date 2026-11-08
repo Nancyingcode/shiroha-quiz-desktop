@@ -10,10 +10,10 @@ test('Web offline Chinese PDF and OOXML import pipeline', { timeout: 240000 }, a
   try {
     browser = await chromium.launch({ headless: true, channel: 'msedge' });
     const context = await browser.newContext();
-    await context.route('**/*', route => new URL(route.request().url()).origin === new URL(server.url).origin ? route.continue() : route.abort());
+    await context.route('**/*', (route) => new URL(route.request().url()).origin === new URL(server.url).origin ? route.continue() : route.abort());
     const page = await context.newPage();
-  await observeAppDialogs(page);
-    page.on('app-dialog', dialog => dialog.accept());
+    await observeAppDialogs(page);
+    page.on('app-dialog', (dialog) => dialog.accept());
     await page.goto(server.url);
     await page.locator('body[data-storage-state="ready"]').waitFor();
     const { documentSmoke } = await import('../../apps/desktop/scripts/document-smoke.mjs');

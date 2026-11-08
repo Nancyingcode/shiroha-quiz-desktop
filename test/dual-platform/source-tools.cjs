@@ -9,8 +9,8 @@ const { Linter } = require('../../apps/desktop/node_modules/eslint');
 const webRoot = path.resolve(__dirname, '../../apps/web');
 
 function memberName(node) {
-  if (node?.type === 'Identifier') return node.name;
-  if (node?.type !== 'MemberExpression' || node.computed) return null;
+  if (node?.type === 'Identifier') {return node.name;}
+  if (node?.type !== 'MemberExpression' || node.computed) {return null;}
   return `${memberName(node.object)}.${memberName(node.property)}`;
 }
 
@@ -85,7 +85,7 @@ function createWebSource(source) {
       return source.slice(0, node.range[0]) + bridge + source.slice(node.range[1]);
     },
     injectIife(bridge) {
-      if (!wrapper) return { source, bridgeUsed: false };
+      if (!wrapper) {return { source, bridgeUsed: false };}
       startup();
       const offset = wrapper.callee.body.range[1] - 1;
       return { source: source.slice(0, offset) + bridge + source.slice(offset), bridgeUsed: true };
@@ -93,7 +93,7 @@ function createWebSource(source) {
     closeHookSource() {
       const node = unique(body.filter((statement) => {
         if (statement.type !== 'IfStatement'
-          || memberName(statement.test) !== 'globalThis.ShirohaDesktopHost') return false;
+          || memberName(statement.test) !== 'globalThis.ShirohaDesktopHost') {return false;}
         const consequent = statement.consequent.type === 'BlockStatement'
           ? statement.consequent.body : [statement.consequent];
         const assignment = consequent.length === 1 && consequent[0].type === 'ExpressionStatement'

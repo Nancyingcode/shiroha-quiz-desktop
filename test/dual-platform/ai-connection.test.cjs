@@ -39,7 +39,7 @@ for (const [code, message, summary] of [
   test(`桌面 AI 保留 ${code} 原错误并给出对应诊断`, async () => {
     const failure = Object.assign(new Error(message), { code });
     const { context } = harness(true, async () => { throw failure; });
-    await assert.rejects(context.requestAiChatV99(config, []), error => {
+    await assert.rejects(context.requestAiChatV99(config, []), (error) => {
       assert.equal(error, failure);
       assert.equal(error.code, code);
       const diagnostic = context.buildAiDiagnosticV375(error, config);
@@ -56,7 +56,7 @@ for (const endpoint of [config.endpoint, 'https://ai.example.invalid/v1/chat/com
     const failure = Object.assign(new Error('无法连接服务，请检查地址、证书和网络。'), { code: 'network_unavailable' });
     const { context } = harness(true, async () => { throw failure; });
     const current = { ...config, endpoint };
-    await assert.rejects(context.requestAiChatV99(current, []), error => {
+    await assert.rejects(context.requestAiChatV99(current, []), (error) => {
       assert.equal(error, failure);
       const diagnostic = context.buildAiDiagnosticV375(error, current);
       assert.match(diagnostic.summary, /无法连接/);
@@ -69,7 +69,7 @@ for (const endpoint of [config.endpoint, 'https://ai.example.invalid/v1/chat/com
 
 test('桌面 HTTP 403 保留服务拒绝语义，不诊断为 CORS', async () => {
   const { context } = harness(true, async () => ({ ok: false, status: 403, text: async () => 'permission denied' }));
-  await assert.rejects(context.requestAiChatV99(config, []), error => {
+  await assert.rejects(context.requestAiChatV99(config, []), (error) => {
     assert.equal(error.status, 403);
     const diagnostic = context.buildAiDiagnosticV375(error, config);
     assert.match(diagnostic.summary, /拒绝/);
@@ -90,7 +90,7 @@ for (const [mode, error] of [['idle', null], ['ok', null], ['error', new Error('
 test('浏览器网络失败仍保留跨域诊断与 Ollama 命令', async () => {
   const failure = new TypeError('Failed to fetch');
   const { context } = harness(false, async () => { throw failure; });
-  await assert.rejects(context.requestAiChatV99(config, []), error => {
+  await assert.rejects(context.requestAiChatV99(config, []), (error) => {
     assert.equal(error.cause, failure);
     assert.equal(error.network, true);
     const diagnostic = context.buildAiDiagnosticV375(error, config);
@@ -110,7 +110,7 @@ test('浏览器本地服务 HTTP 403 保留 Origin 排查建议', () => {
 for (const native of [false, true]) {
   test(`${native ? '桌面' : '浏览器'} HTTP 参数错误中的秒数限制不会被诊断为超时`, async () => {
     const { context } = harness(native, async () => ({ ok: false, status: 400, text: async () => 'duration 参数不能超过 60 秒' }));
-    await assert.rejects(context.requestAiChatV99(config, []), error => {
+    await assert.rejects(context.requestAiChatV99(config, []), (error) => {
       assert.equal(error.status, 400);
       const diagnostic = context.buildAiDiagnosticV375(error, config);
       assert.equal(diagnostic.summary, '请求格式或模型名称可能不匹配');
@@ -123,10 +123,10 @@ for (const native of [false, true]) {
     const { context, timers } = harness(native, async (_config, _payload, signal) => new Promise((_resolve, reject) => {
       signal.addEventListener('abort', () => reject(Object.assign(new Error('请求已取消。'), { name: 'AbortError', code: 'cancelled' })));
     }));
-    const pending = context.withAiTimeoutV99(15, controller => context.requestAiChatV99(config, [], { controller }));
+    const pending = context.withAiTimeoutV99(15, (controller) => context.requestAiChatV99(config, [], { controller }));
     assert.equal(timers.size, 1);
     [...timers][0].callback();
-    await assert.rejects(pending, error => {
+    await assert.rejects(pending, (error) => {
       const diagnostic = context.buildAiDiagnosticV375(error, config);
       assert.equal(diagnostic.summary, '请求超时');
       assert.match(diagnostic.statusMessage, /15 秒/);
@@ -140,7 +140,7 @@ for (const native of [false, true]) {
 test('桌面主动取消不会被诊断为连接或跨域失败', async () => {
   const failure = Object.assign(new Error('请求已取消。'), { name: 'AbortError', code: 'cancelled' });
   const { context } = harness(true, async () => { throw failure; });
-  await assert.rejects(context.requestAiChatV99(config, []), error => {
+  await assert.rejects(context.requestAiChatV99(config, []), (error) => {
     assert.equal(error, failure);
     assert.match(context.buildAiDiagnosticV375(error, config).summary, /取消/);
     return true;
@@ -175,7 +175,7 @@ test('响应正文读取失败不触发格式兜底重试', async () => {
     calls++;
     return { ok: false, status: 400, text: async () => { throw failure; } };
   });
-  await assert.rejects(context.requestAiChatV99(config, []), error => error === failure);
+  await assert.rejects(context.requestAiChatV99(config, []), (error) => error === failure);
   assert.equal(calls, 1);
 });
 
@@ -184,14 +184,14 @@ for (const status of [200, 400]) {
     let finish;
     let calls = 0;
     let reads = 0;
-    const delayed = new Promise(resolve => { finish = resolve; });
+    const delayed = new Promise((resolve) => { finish = resolve; });
     const response = { ok: status === 200, status, text: async () => { reads++; return '{"choices":[{"message":{"content":"结果"}}]}'; } };
     const { context } = harness(false, async () => { calls++; return calls === 1 ? delayed : response; });
     const controller = new AbortController();
     const pending = context.requestAiChatV99(config, [], { controller });
     controller.abort();
     finish(response);
-    await assert.rejects(pending, error => error.name === 'AbortError');
+    await assert.rejects(pending, (error) => error.name === 'AbortError');
     assert.equal(reads, 1);
     assert.equal(calls, 1);
   });

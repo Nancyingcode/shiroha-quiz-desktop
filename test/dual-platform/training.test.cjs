@@ -12,7 +12,7 @@ function training() {
   vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../../apps/web/training.js'), 'utf8'), context);
   return context.ShirohaTraining;
 }
-const plain = value => JSON.parse(JSON.stringify(value));
+const plain = (value) => JSON.parse(JSON.stringify(value));
 const question = (id, text) => ({ id, type: 'single', question: text, options: [{ key: 'A', text: '甲' }, { key: 'B', text: '乙' }], answer: ['A'] });
 
 test('练习模块独立提供题号范围与精确单题格式', () => {
@@ -49,7 +49,7 @@ test('复盘按本轮顺序关联跨库同 ID 与跳序提交，保留未提交�
   items[2].question.question = '后来改题';
   const record = plain({ total: 3, review, details });
   const rows = api.reviewRows(record);
-  assert.deepEqual(plain(rows.map(row => row.status)), ['correct', 'wrong', 'unanswered']);
+  assert.deepEqual(plain(rows.map((row) => row.status)), ['correct', 'wrong', 'unanswered']);
   assert.equal(rows[0].bankQuestionNumber, 41);
   assert.equal(rows[2].question.question, '未答题');
   assert.deepEqual(plain(rows[2].draft), ['B']);
@@ -63,7 +63,7 @@ test('总提交的空答案计错与复盘未作答分开，简答自评保留�
   const items = [{ bankId: 'a', question: question('empty', '空答案') }, { bankId: 'a', question: { ...question('short', '简答'), type: 'short' } }];
   const details = [{ sourceBankId: 'a', questionId: 'empty', chosen: [], correct: false, nativeQuestion: items[0].question }, { sourceBankId: 'a', questionId: 'short', chosen: ['人工作答'], correct: true, nativeQuestion: items[1].question }];
   const review = api.buildReview(items, details, { completion: 'completed', submitMode: 'total', timing: 'active' });
-  assert.deepEqual(plain(api.reviewRows({ review, details }).map(row => row.status)), ['unanswered', 'correct']);
+  assert.deepEqual(plain(api.reviewRows({ review, details }).map((row) => row.status)), ['unanswered', 'correct']);
   assert.equal(details[0].correct, false);
 });
 
@@ -81,19 +81,19 @@ test('旧记录只使用已保存明细，缺少原题与本轮题号时保留�
 });
 
 test('完整备份往返保留复盘扩展，合并导入时未答快照的题库引用同步映射', () => {
-  const helper=training(), initial=webState(), record=initial.records[0];
-  record.total=3;
-  record.review=plain(helper.buildReview([...record.details.map(detail=>({bankId:detail.sourceBankId,question:detail.nativeQuestion})),{bankId:'bank-a',question:question('not-submitted','未答快照')}],record.details,{completion:'ended_early',submitMode:'single',timing:'active'}));
-  record.reviewSummary=plain(helper.reviewSummary(record.review,record.details));
-  const {api}=loadWeb({state:initial});
-  const payload=plain(api.buildBackupPayloadV23(api.snapshot().banks,'all_data',true));
-  const restored=plain(api.normalizeBackupPayloadV23(JSON.parse(JSON.stringify(payload)),'training.json'));
-  assert.deepEqual(restored.records[0].review,record.review);
-  assert.deepEqual(restored.records[0].reviewSummary,record.reviewSummary);
-  restored.records[0].id='imported-training';
+  const helper = training(), initial = webState(), record = initial.records[0];
+  record.total = 3;
+  record.review = plain(helper.buildReview([...record.details.map((detail)=>({ bankId: detail.sourceBankId, question: detail.nativeQuestion })), { bankId: 'bank-a', question: question('not-submitted', '未答快照') }], record.details, { completion: 'ended_early', submitMode: 'single', timing: 'active' }));
+  record.reviewSummary = plain(helper.reviewSummary(record.review, record.details));
+  const { api } = loadWeb({ state: initial });
+  const payload = plain(api.buildBackupPayloadV23(api.snapshot().banks, 'all_data', true));
+  const restored = plain(api.normalizeBackupPayloadV23(JSON.parse(JSON.stringify(payload)), 'training.json'));
+  assert.deepEqual(restored.records[0].review, record.review);
+  assert.deepEqual(restored.records[0].reviewSummary, record.reviewSummary);
+  restored.records[0].id = 'imported-training';
   api.mergeBackupBanksV23(restored);
-  const merged=api.snapshot(), imported=merged.records.find(value=>value.id==='imported-training');
-  assert.notEqual(imported.review.items[2].sourceBankId,'bank-a');
-  assert.equal(imported.review.items[2].sourceBankId,imported.details[0].sourceBankId);
-  assert.equal(imported.review.items[2].question.question,'未答快照');
+  const merged = api.snapshot(), imported = merged.records.find((value)=>value.id === 'imported-training');
+  assert.notEqual(imported.review.items[2].sourceBankId, 'bank-a');
+  assert.equal(imported.review.items[2].sourceBankId, imported.details[0].sourceBankId);
+  assert.equal(imported.review.items[2].question.question, '未答快照');
 });

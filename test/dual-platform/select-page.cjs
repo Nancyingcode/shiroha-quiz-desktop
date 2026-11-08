@@ -16,15 +16,15 @@ async function component(t, desktop = false) {
   const page = await browser.newPage({ reducedMotion: 'reduce' }); t.after(() => page.close());
   await page.setContent(`<body class="${desktop ? 'desktop-mist-blue' : ''}"><label>题型<select id="type"><option value="all">全部题型</option><option value="single">单选题</option><option value="disabled" disabled>不可用题型</option><option value="multiple">多选题</option></select></label><button id="next">下一项</button></body>`);
   await page.addStyleTag({ path: path.join(WEB_ROOT, 'styles.css') });
-  if (desktop) await page.addStyleTag({ path: path.join(WEB_ROOT, '../desktop/frontend/desktop.css') });
+  if (desktop) {await page.addStyleTag({ path: path.join(WEB_ROOT, '../desktop/frontend/desktop.css') });}
   return page;
 }
 
 for (const desktop of [false, true]) {
-  test(`${desktop ? '桌面' : 'Web'}下拉菜单具有统一浮层、选中提示和禁用态`, async t => {
+  test(`${desktop ? '桌面' : 'Web'}下拉菜单具有统一浮层、选中提示和禁用态`, async (t) => {
     const page = await component(t, desktop);
     const select = page.locator('#type');
-    const style = await select.evaluate(el => ({
+    const style = await select.evaluate((el) => ({
       appearance: globalThis.getComputedStyle(el).appearance,
       radius: globalThis.getComputedStyle(el).borderRadius,
       popup: globalThis.getComputedStyle(el, '::picker(select)').borderRadius,
@@ -37,23 +37,23 @@ for (const desktop of [false, true]) {
     assert.equal(style.disabled, 'not-allowed');
     assert.notEqual(style.selected, 'none');
     await select.click();
-    assert.equal(await select.evaluate(el => el.matches(':open')), true);
+    assert.equal(await select.evaluate((el) => el.matches(':open')), true);
     await select.getByRole('option', { name: '全部题型', exact: true }).hover();
-    assert.equal(await select.evaluate(el => globalThis.getComputedStyle(el.options[0]).backgroundColor), 'rgb(230, 244, 255)');
+    assert.equal(await select.evaluate((el) => globalThis.getComputedStyle(el.options[0]).backgroundColor), 'rgb(230, 244, 255)');
     await page.getByRole('option', { name: '单选题', exact: true }).click();
     assert.equal(await select.inputValue(), 'single');
-    assert.equal(await select.evaluate(el => el.matches(':open')), false);
-    assert.equal(await select.evaluate(el => el === globalThis.document.activeElement), true);
-    await select.evaluate(el => { el.disabled = true; });
+    assert.equal(await select.evaluate((el) => el.matches(':open')), false);
+    assert.equal(await select.evaluate((el) => el === globalThis.document.activeElement), true);
+    await select.evaluate((el) => { el.disabled = true; });
     assert.equal(await select.isDisabled(), true);
-    assert.equal(await select.evaluate(el => globalThis.getComputedStyle(el).cursor), 'not-allowed');
+    assert.equal(await select.evaluate((el) => globalThis.getComputedStyle(el).cursor), 'not-allowed');
   });
 }
 
-test('键盘选择跳过禁用项，Escape 取消且 Tab 可离开', async t => {
+test('键盘选择跳过禁用项，Escape 取消且 Tab 可离开', async (t) => {
   const page = await component(t);
   const select = page.locator('#type');
-  await select.evaluate(el => {
+  await select.evaluate((el) => {
     globalThis.changes = [];
     el.addEventListener('change', () => globalThis.changes.push(el.value));
   });
@@ -70,10 +70,10 @@ test('键盘选择跳过禁用项，Escape 取消且 Tab 可离开', async t => 
   assert.equal(await select.inputValue(), 'multiple');
   assert.deepEqual(await page.evaluate(() => globalThis.changes), ['multiple']);
   await page.keyboard.press('Tab');
-  assert.equal(await page.locator('#next').evaluate(el => el === globalThis.document.activeElement), true);
+  assert.equal(await page.locator('#next').evaluate((el) => el === globalThis.document.activeElement), true);
 });
 
-test('窄屏长选项可换行滚动，弹窗内的浮层可点击', async t => {
+test('窄屏长选项可换行滚动，弹窗内的浮层可点击', async (t) => {
   const page = await component(t);
   await page.setViewportSize({ width: 360, height: 640 });
   await page.evaluate(() => {
@@ -98,10 +98,10 @@ test('窄屏长选项可换行滚动，弹窗内的浮层可点击', async t => 
   assert.ok(bounds.height > 32, '长选项应换行而非溢出');
   await option.click();
   assert.equal(await select.inputValue(), '29');
-  assert.equal(await select.evaluate(el => el.matches(':open')), false);
+  assert.equal(await select.evaluate((el) => el.matches(':open')), false);
 });
 
-test('下拉菜单优先向下展开，靠近视口底部时向上避让', async t => {
+test('下拉菜单优先向下展开，靠近视口底部时向上避让', async (t) => {
   const page = await component(t);
   const select = page.locator('#type');
   await select.click();
@@ -109,7 +109,7 @@ test('下拉菜单优先向下展开，靠近视口底部时向上避让', async
   let first = await select.getByRole('option').first().boundingBox();
   assert.ok(first.y >= control.y + control.height);
   await page.keyboard.press('Escape');
-  await select.evaluate(el => { el.style.cssText = 'position:fixed;bottom:8px;left:16px;width:240px'; });
+  await select.evaluate((el) => { el.style.cssText = 'position:fixed;bottom:8px;left:16px;width:240px'; });
   await select.click();
   control = await select.boundingBox();
   first = await select.getByRole('option').first().boundingBox();
@@ -117,10 +117,10 @@ test('下拉菜单优先向下展开，靠近视口底部时向上避让', async
   assert.ok(first.y >= 0 && last.y + last.height <= control.y);
 });
 
-test('收起的长题库名称不会挤掉下拉箭头', async t => {
+test('收起的长题库名称不会挤掉下拉箭头', async (t) => {
   const page = await component(t, true);
   const select = page.locator('#type');
-  await select.evaluate(el => {
+  await select.evaluate((el) => {
     el.style.width = '220px';
     el.options[0].textContent = '未分组 / C1驾照科目一模拟练习超长题库名称（393题）';
   });
@@ -128,17 +128,17 @@ test('收起的长题库名称不会挤掉下拉箭头', async t => {
   const { root } = await session.send('DOM.getDocument');
   const { nodeId } = await session.send('DOM.querySelector', { nodeId: root.nodeId, selector: '#type' });
   const { node } = await session.send('DOM.describeNode', { nodeId });
-  const arrow = node.pseudoElements.find(element => element.pseudoType === 'picker-icon');
+  const arrow = node.pseudoElements.find((element) => element.pseudoType === 'picker-icon');
   const { model } = await session.send('DOM.getBoxModel', { backendNodeId: arrow.backendNodeId });
   const control = await select.boundingBox();
   const horizontal = model.border.filter((_, index) => index % 2 === 0);
   assert.ok(Math.min(...horizontal) >= control.x && Math.max(...horizontal) <= control.x + control.width, '箭头必须完整留在选择框内');
 });
 
-test('真实页面动态下拉框保留题型筛选、题量联动与紧凑分页', async t => {
+test('真实页面动态下拉框保留题型筛选、题量联动与紧凑分页', async (t) => {
   const context = await browser.newContext(); t.after(() => context.close());
-  await context.addInitScript(data => globalThis.localStorage.setItem('shiroha_quiz_state_v28_4_c1', JSON.stringify(data)), webState());
-  await context.route('**/*', route => new URL(route.request().url()).origin === new URL(server.url).origin ? route.continue() : route.abort());
+  await context.addInitScript((data) => globalThis.localStorage.setItem('shiroha_quiz_state_v28_4_c1', JSON.stringify(data)), webState());
+  await context.route('**/*', (route) => new URL(route.request().url()).origin === new URL(server.url).origin ? route.continue() : route.abort());
   const page = await context.newPage();
   await page.goto(server.url);
   await page.locator('body[data-storage-state="ready"]').waitFor();

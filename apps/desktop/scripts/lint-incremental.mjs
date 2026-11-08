@@ -30,7 +30,7 @@ const output = await formatter.format(results);
 if (output) {
   console.log(output);
 }
-console.log(`Checked ${files.length} complete handwritten JavaScript files (legacy exceptions are explicit).`);
+console.log(`Checked ${files.length} complete handwritten JavaScript files (full target rules).`);
 if (results.some((result) => result.errorCount || result.warningCount)) {
   process.exitCode = 1;
 }

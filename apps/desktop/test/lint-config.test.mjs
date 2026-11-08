@@ -6,6 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { ESLint } from 'eslint';
+import { baseRules, semanticRules, styleRules } from '../eslint.rules.mjs';
 
 const desktop = fileURLToPath(new URL('..', import.meta.url));
 const root = path.resolve(desktop, '../..');
@@ -120,6 +121,27 @@ test('handwritten JavaScript under the Tauri project is checked while generated 
   for (const generated of ['apps/desktop/src-tauri/target/probe.js', 'apps/desktop/src-tauri/gen/probe.js']) {
     assert.equal(await lint.isPathIgnored(path.join(root, generated)), true);
   }
+});
+
+test('all discovered handwritten JavaScript keeps every target rule at error severity', async () => {
+  const listed = spawnSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', '-z'], {
+    cwd: root, encoding: 'utf8', windowsHide: true,
+  });
+  assert.equal(listed.status, 0, listed.stderr);
+  const lint = linter();
+  const rules = Object.keys({ ...baseRules, ...semanticRules, ...styleRules });
+  let checked = 0;
+  for (const file of listed.stdout.split('\0').filter((name) => /\.(?:js|mjs|cjs)$/.test(name))) {
+    const target = path.join(root, file);
+    if (await lint.isPathIgnored(target)) { continue; }
+    const config = await lint.calculateConfigForFile(target);
+    assert(config, file);
+    for (const rule of rules) {
+      assert.equal(config.rules?.[rule]?.[0], 2, `${file}: ${rule}`);
+    }
+    checked++;
+  }
+  assert(checked > 0);
 });
 
 test('duplicate ESM imports are rejected while explicit extensions and named exports pass', async () => {
@@ -308,6 +330,20 @@ test('debt CLI reports rule locations but rejects missing files and syntax failu
   assert.match(missing.stderr, /No files matching/);
 });
 
+test('debt CLI reports an empty list when all historical rules have graduated', async (t) => {
+  const f = await repositoryFixture(t);
+  const migration = path.join(f.temporary, 'apps/desktop/eslint.migration.mjs');
+  await writeFile(migration, [
+    'export const styleDebt = {};',
+    'export const semanticDebt = {};',
+    'export const legacyStyleFiles = [];',
+    '',
+  ].join('\n'));
+  const reported = f.run('lint-debt.mjs');
+  assert.equal(reported.status, 0, reported.stderr);
+  assert.deepEqual(JSON.parse(reported.stdout).files, []);
+});
+
 test('plain .js Node files follow their package runtime without leaking globals into browser scripts', async () => {
   for (const [filePath, valid, invalid] of [
     ['apps/desktop/new-probe.js', "import path from 'node:path';\nconsole.log(path.sep);\n", 'console.log(require);\n'],
@@ -325,7 +361,11 @@ test('plain .js Node files follow their package runtime without leaking globals 
 for (const filePath of [
   'apps/web/training.js',
   'apps/web/platform/index.js',
+  'apps/web/platform/save-queue.js',
+  'apps/desktop/frontend/adapter.js',
   'apps/desktop/scripts/lint-platform.mjs',
+  'apps/desktop/scripts/smoke.mjs',
+  'test/dual-platform/ai-harness.test.cjs',
 ]) {
   test(`graduated target rejects all applicable violations: ${filePath}`, async () => {
     const lint = linter();

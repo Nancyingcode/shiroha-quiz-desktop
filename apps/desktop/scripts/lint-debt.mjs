@@ -22,7 +22,7 @@ const lint = new ESLint({
   overrideConfigFile: true,
   overrideConfig: createConfig({ debt: true, semanticOnly: true }),
 });
-const results = await lint.lintFiles(files);
+const results = files.length ? await lint.lintFiles(files) : [];
 const semanticResultCount = results.length;
 const styleFiles = files.filter((file) => legacyStyleFiles.includes(file));
 if (styleFiles.length) {

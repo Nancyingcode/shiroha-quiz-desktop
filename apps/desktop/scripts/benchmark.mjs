@@ -56,9 +56,9 @@ async function measureFixture(page, fixture, _storageKey) {
   const parseStart = performance.now();
   await page.locator('#import-file').setInputFiles({ name: fixture.fileName,
     mimeType: fixture.mode === 'json' ? 'application/json' : 'text/plain', buffer: Buffer.from(fixture.text) });
-  await page.waitForFunction(text => (/** @type {HTMLTextAreaElement | null} */ (document.querySelector('#import-text')))?.value === text, fixture.text.replace(/\r\n/g, '\n'));
+  await page.waitForFunction((text) => (/** @type {HTMLTextAreaElement | null} */ (document.querySelector('#import-text')))?.value === text, fixture.text.replace(/\r\n/g, '\n'));
   await page.locator('#parse-import-btn').click();
-  await page.waitForFunction(expected => document.querySelectorAll('#import-preview tbody tr').length === expected, fixture.questions);
+  await page.waitForFunction((expected) => document.querySelectorAll('#import-preview tbody tr').length === expected, fixture.questions);
   assert.equal(await page.locator('#confirm-import-btn').isEnabled(), true, '解析后不能确认导入');
   const parseMs = performance.now() - parseStart;
   await page.locator('#import-bank-name').fill(bankName);
@@ -74,7 +74,7 @@ async function measureFixture(page, fixture, _storageKey) {
   assert(raw, '确认导入和手动保存后没有主状态');
   /** @type {{banks?: Array<{name: string, questions?: unknown[]}>}} */
   const saved = JSON.parse(raw);
-  const matching = saved.banks?.filter(bank => bank.name === bankName) ?? [];
+  const matching = saved.banks?.filter((bank) => bank.name === bankName) ?? [];
   assert.equal(matching.length, 1, '样本导入数量不一致');
   assert.equal(matching[0].questions?.length, fixture.questions, '持久化题数不一致');
   // 先完成可练习断言再采样，避免把只出现“成功”提示但数据不可用的运行记为有效样本。
@@ -99,7 +99,7 @@ async function availablePort() {
   });
   const address = server.address();
   assert(address && typeof address !== 'string', '无法取得调试端口');
-  await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve(undefined)));
+  await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve(undefined)));
   return address.port;
 }
 
@@ -148,13 +148,13 @@ async function sampleMemory(owned) {
   const parsed = JSON.parse(stdout);
   assert(Array.isArray(parsed) && parsed.length > 0, '未取得进程内存数据');
   /** @type {ProcessMemory[]} */
-  const processes = parsed.map(row => {
+  const processes = parsed.map((row) => {
     assert(row && typeof row === 'object');
     assert(typeof row.Id === 'number' && typeof row.ProcessName === 'string'
       && typeof row.WorkingSet64 === 'number' && typeof row.PrivateMemorySize64 === 'number', '无效的内存数据');
     return { Id: row.Id, ProcessName: row.ProcessName, WorkingSet64: row.WorkingSet64, PrivateMemorySize64: row.PrivateMemorySize64 };
   });
-  assert(processes.some(row => row.Id === owned.child.pid), '主进程在采样期间退出');
+  assert(processes.some((row) => row.Id === owned.child.pid), '主进程在采样期间退出');
   return processes;
 }
 
@@ -165,15 +165,15 @@ function running(child) {
 
 /** @param {OwnedProcess} owned */
 async function stopOwned(owned) {
-  if (!running(owned.child)) return;
+  if (!running(owned.child)) {return;}
   // 关闭前重新核验可执行文件与启动时间，仅处理本轮自己创建的进程。
   await powershell(`${verifyRoot(owned)} $p=Get-Process -Id $root.ProcessId; [void]$p.CloseMainWindow()`);
   const end = Date.now() + CLOSE_TIMEOUT_MS;
-  while (running(owned.child) && Date.now() < end) await delay(POLL_MS);
+  while (running(owned.child) && Date.now() < end) {await delay(POLL_MS);}
   if (running(owned.child)) {
     await powershell(`${verifyRoot(owned)} & taskkill.exe /PID $root.ProcessId /T /F; if($LASTEXITCODE -ne 0){throw '结束测试进程失败'}`);
     const forcedEnd = Date.now() + CLOSE_TIMEOUT_MS;
-    while (running(owned.child) && Date.now() < forcedEnd) await delay(POLL_MS);
+    while (running(owned.child) && Date.now() < forcedEnd) {await delay(POLL_MS);}
   }
   assert(!running(owned.child), '测试进程仍在运行，保留临时目录');
 }
@@ -194,7 +194,7 @@ async function measure(executable, profile, index, fixture, storageKey = '') {
   });
   /** @type {Error | undefined} */
   let launchError;
-  child.on('error', error => { launchError = error; });
+  child.on('error', (error) => { launchError = error; });
   /** @type {import('playwright-core').Browser | undefined} */
   let browser;
   const owned = { child, executable, earliest, latest: new Date(Date.now() + START_TIMEOUT_MS).toISOString() };
@@ -202,11 +202,11 @@ async function measure(executable, profile, index, fixture, storageKey = '') {
     const endpoint = `http://127.0.0.1:${port}`;
     const end = Date.now() + START_TIMEOUT_MS;
     while (true) {
-      if (launchError) throw launchError;
+      if (launchError) {throw launchError;}
       assert(running(child), '测试进程在 CDP 就绪前退出');
       assert(Date.now() < end, '等待 CDP 超时');
       try {
-        if ((await fetch(`${endpoint}/json/version`, { signal: AbortSignal.timeout(1_000) })).ok) break;
+        if ((await fetch(`${endpoint}/json/version`, { signal: AbortSignal.timeout(1_000) })).ok) {break;}
       } catch { /* 启动期间调试端口尚未监听，按固定间隔重试。 */ }
       await delay(POLL_MS);
     }
@@ -215,7 +215,7 @@ async function measure(executable, profile, index, fixture, storageKey = '') {
     while (!page) {
       assert(Date.now() < end && running(child), '等待 WebView 页面超时');
       page = browser.contexts()[0]?.pages()[0];
-      if (!page) await delay(POLL_MS);
+      if (!page) {await delay(POLL_MS);}
     }
     page.setDefaultTimeout(START_TIMEOUT_MS);
     await page.waitForURL('http://tauri.localhost/**');
@@ -258,8 +258,8 @@ async function measure(executable, profile, index, fixture, storageKey = '') {
 assert(process.platform === 'win32', '该测量脚本仅支持 Windows');
 const argumentsList = process.argv.slice(2);
 const fixturesMode = argumentsList.includes('--fixtures');
-const positional = argumentsList.filter(value => value !== '--fixtures');
-assert(positional.length <= 2 && !positional.some(value => value.startsWith('--')), '参数：benchmark.mjs [EXE] [报告路径] [--fixtures]');
+const positional = argumentsList.filter((value) => value !== '--fixtures');
+assert(positional.length <= 2 && !positional.some((value) => value.startsWith('--')), '参数：benchmark.mjs [EXE] [报告路径] [--fixtures]');
 const executable = await realpath(path.resolve(positional[0] ?? fileURLToPath(new URL('../src-tauri/target/native-test/release/shiroha-quiz-desktop.exe', import.meta.url))));
 assert((await stat(executable)).isFile() && path.extname(executable).toLowerCase() === '.exe', '必须提供 EXE 文件');
 const output = path.resolve(positional[1] ?? fileURLToPath(new URL(fixturesMode ? '../.reports/performance-fixtures.json' : '../.reports/performance.json', import.meta.url)));

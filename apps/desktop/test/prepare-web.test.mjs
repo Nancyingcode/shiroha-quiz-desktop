@@ -43,35 +43,35 @@ async function snapshot(root) {
   return files;
 }
 
-test('unchanged outputs retain timestamps, including generated assets', async t => {
+test('unchanged outputs retain timestamps, including generated assets', async (t) => {
   const f = await fixture(t);
   await prepareWeb(f.web, f.desktop);
   const before = await snapshot(f.dist);
   const old = new Date('2001-01-01T00:00:00Z');
-  for (const name of Object.keys(before)) await utimes(path.join(f.dist, name), old, old);
+  for (const name of Object.keys(before)) {await utimes(path.join(f.dist, name), old, old);}
   await prepareWeb(f.web, f.desktop);
   assert.deepEqual(await snapshot(f.dist), before);
-  for (const name of Object.keys(before)) assert.equal((await stat(path.join(f.dist, name))).mtimeMs, old.getTime(), name);
+  for (const name of Object.keys(before)) {assert.equal((await stat(path.join(f.dist, name))).mtimeMs, old.getTime(), name);}
 });
 
-test('equal-size source changes with preserved timestamps update only affected outputs', async t => {
+test('equal-size source changes with preserved timestamps update only affected outputs', async (t) => {
   const f = await fixture(t);
   await prepareWeb(f.web, f.desktop);
   const old = new Date('2001-01-01T00:00:00Z');
-  for (const name of ['app.js', 'index.html', 'desktop.css']) await utimes(path.join(f.dist, name), old, old);
+  for (const name of ['app.js', 'index.html', 'desktop.css']) {await utimes(path.join(f.dist, name), old, old);}
   const input = path.join(f.web, 'app.js');
   const metadata = await stat(input);
   await writeFile(input, 'changed');
   await utimes(input, metadata.atime, metadata.mtime);
   await prepareWeb(f.web, f.desktop);
   assert.equal(await readFile(path.join(f.dist, 'app.js'), 'utf8'), 'changed');
-  for (const name of ['index.html', 'desktop.css']) assert.equal((await stat(path.join(f.dist, name))).mtimeMs, old.getTime());
+  for (const name of ['index.html', 'desktop.css']) {assert.equal((await stat(path.join(f.dist, name))).mtimeMs, old.getTime());}
   await writeFile(path.join(f.desktop, 'frontend/desktop.css'), 'body { color: red; }');
   await prepareWeb(f.web, f.desktop);
   assert.equal(await readFile(path.join(f.dist, 'desktop.css'), 'utf8'), 'body { color: red; }');
 });
 
-test('incremental cleanup and type changes match a clean generation', async t => {
+test('incremental cleanup and type changes match a clean generation', async (t) => {
   const f = await fixture(t);
   await mkdir(path.join(f.web, 'media'));
   await writeFile(path.join(f.web, 'media/old.png'), 'old');
@@ -94,7 +94,7 @@ test('incremental cleanup and type changes match a clean generation', async t =>
   assert.deepEqual(incremental, await snapshot(f.dist));
 });
 
-test('repairs missing and corrupt outputs without trusting target timestamps', async t => {
+test('repairs missing and corrupt outputs without trusting target timestamps', async (t) => {
   const f = await fixture(t);
   await prepareWeb(f.web, f.desktop);
   const before = await snapshot(f.dist);
@@ -105,7 +105,7 @@ test('repairs missing and corrupt outputs without trusting target timestamps', a
   assert.deepEqual(await snapshot(f.dist), before);
 });
 
-test('rebuilds bridge dependencies while preserving unrelated generated files', async t => {
+test('rebuilds bridge dependencies while preserving unrelated generated files', async (t) => {
   const f = await fixture(t);
   const frontend = path.join(f.desktop, 'frontend');
   await writeFile(path.join(frontend, 'bridge.js'), 'import { value } from "./value.js"; console.log(value);');
@@ -119,7 +119,7 @@ test('rebuilds bridge dependencies while preserving unrelated generated files', 
   assert.equal((await stat(path.join(f.dist, 'index.html'))).mtimeMs, old.getTime());
 });
 
-test('reused output still rejects nested links before any writes', async t => {
+test('reused output still rejects nested links before any writes', async (t) => {
   const f = await fixture(t);
   await prepareWeb(f.web, f.desktop);
   const before = await readFile(path.join(f.dist, 'index.html'));
@@ -173,7 +173,7 @@ test('stages offline resources and licenses, excludes tooling, and leaves Web so
   assert.equal((await readdir(f.dist)).includes('stale.js'), false);
 });
 
-test('adds the independent account script after the native bridge without changing the Web entry', async t => {
+test('adds the independent account script after the native bridge without changing the Web entry', async (t) => {
   const f = await fixture(t);
   await prepareWeb(f.web, f.desktop);
   const html = await readFile(path.join(f.dist, 'index.html'), 'utf8');
@@ -228,7 +228,7 @@ test('loads desktop styles last in the head and preserves the source and existin
   assert.equal(await readFile(path.join(f.dist, 'desktop.css'), 'utf8'), f.desktopCss);
 });
 
-test('injects local titlebar resources and removes only the navigation brand', async t => {
+test('injects local titlebar resources and removes only the navigation brand', async (t) => {
   const f = await fixture(t);
   const source = f.html.replace('<button onclick=', '<aside class="side"><div class="brand"><img src="./app-icon.png"><div><b>Shiroha Quiz</b><span>练习</span></div></div><button class="nav">首页</button></aside><button onclick=');
   await writeFile(path.join(f.web, 'index.html'), source);

@@ -14,13 +14,13 @@ function fixture(overrides = {}) {
     practice: { items: [] }, totalPracticeFilledCount: () => 0,
     $: () => null,
     webdavPanel: { isBusy: () => false }, aiImportSessions: { importRequest: { running: false }, previewRequest: { running: false } }, practiceAiSessions: { isBusy: () => false }, reviewAiSessions: { isBusy: () => false },
-    confirm: message => { prompts.push(message); return false; }, platformStatus: message => status.push(message),
+    confirm: (message) => { prompts.push(message); return false; }, platformStatus: (message) => status.push(message),
     ShirohaPlatform: { network: { cancelAll: async () => {} }, saves: { idle: async () => {} } }, ...overrides,
   });
   context.ShirohaDialogs = { confirm: context.confirm };
   context.practiceSession = { current: context.practice };
   context.examSession = { current: context.exam };
-  vm.runInContext(source.functionSource('aiTasksBusyV99'),context);
+  vm.runInContext(source.functionSource('aiTasksBusyV99'), context);
   vm.runInContext(source.closeHookSource(), context);
   return { close: context.ShirohaDesktopHost.canClose, prompts, status };
 }
@@ -62,10 +62,10 @@ test('failed native cancellation keeps the window open and reports failure', asy
 
 test('退出协调等待 Harness 取消，失败时保留窗口', async () => {
   let cancelled = false;
-  const f = fixture({ confirm:()=>true, ShirohaPlatform:{harness:{status:()=>({busy:true}),async cancelAll(){cancelled=true;throw new Error('Harness 尚未停止');}},network:{},saves:{idle:async()=>{}}} });
-  assert.equal(await f.close(),false);
-  assert.equal(cancelled,true);
-  assert.deepEqual(f.status,['Harness 尚未停止']);
+  const f = fixture({ confirm: ()=>true, ShirohaPlatform: { harness: { status: ()=>({ busy: true }), async cancelAll() {cancelled = true;throw new Error('Harness 尚未停止');} }, network: {}, saves: { idle: async()=>{} } } });
+  assert.equal(await f.close(), false);
+  assert.equal(cancelled, true);
+  assert.deepEqual(f.status, ['Harness 尚未停止']);
 });
 
 test('总提交草稿关闭需确认，已锁定自评须先完成', async () => {
