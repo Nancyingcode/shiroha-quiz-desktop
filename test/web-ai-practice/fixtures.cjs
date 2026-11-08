@@ -25,7 +25,7 @@ function fixture({ configured = true, rich = false, emptyAnalysis = false } = {}
       schema: 'shiroha-web-rich-v1', features: ['latex_formula', 'docx_table'],
       fields: {
         question: { text: questions[0].question, source: 'question', features: ['latex_formula'] },
-        options: questions[0].options.map(option => ({ text: option.text, source: 'option', features: ['latex_formula'] })),
+        options: questions[0].options.map((option) => ({ text: option.text, source: 'option', features: ['latex_formula'] })),
         analysis: { text: OLD_RICH_ANALYSIS, source: 'analysis', features: ['docx_table'] },
       },
     };

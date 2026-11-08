@@ -56,9 +56,9 @@ npm test
 
 提交时，`pre-commit` 自动运行 `npm run lint`：保留原有桌面、Web 平台/训练、桌面前端和双端测试检查，追加 `lint:incremental`、`lint:fixtures` 与 20 份文档检查。增量入口读取 Git 跟踪和未忽略的未跟踪 JavaScript 文件，按完整文件检查；新路径默认执行 recommended、项目语义规则和 14 条显式 Stylistic 规则。任何正式门禁错误或警告都阻止提交；不自动修复、不改写源码或暂存区，首次提交同样适用。fixture 只在隔离临时目录写入自建样例。
 
-历史范围采用[逐文件迁移清单](./apps/desktop/eslint.migration.mjs)：当前 79 个文件保留原正确性门禁，29 个已达到全部目标规则；41 个文件暂缓部分 Stylistic 规则，44 个文件仅暂缓已列明的少量未清零语义规则，清零的规则仍为 error。另有 app.js 和 15 个既有测试文件暂不进入正式门禁；新建测试文件不继承这些例外。`question-bank.js` 数据、第三方、原始 fixture 和生成资源明确排除。暂缓范围不保证新增同类违规会被阻断，修改时仍需人工按规范审查，后续逐规则/文件迁移后删除例外；不采用总告警预算或仅检查改动行。
+历史范围采用[逐文件迁移清单](./apps/desktop/eslint.migration.mjs)：当前 132 个手写脚本均按完整文件进入增量门禁，`app.js` 和此前门禁外的测试工具已执行全部目标规则。其余历史文件中，41 个暂缓部分 Stylistic 规则，44 个仅暂缓已列明的少量未清零语义规则，清零的规则仍为 error；新文件不继承这些例外。`question-bank.js` 数据、第三方、原始 fixture 和生成资源明确排除。暂缓范围不保证新增同类违规会被阻断，修改时仍需人工按规范审查，后续逐规则/文件迁移后删除例外；不采用总告警预算或仅检查改动行。
 
-在 `apps/desktop` 运行 `npm run lint:debt` 可查看上述历史文件的逐文件/规则数量、行列和消息；app.js 只报告语义问题，不整体格式化。发现既有债务正常输出报告；缺失文件、语法错误、配置或规则执行失败返回非零，不能把失败当成零债务。可用 `npm run lint:debt -- --file apps/web/app.js` 聚焦复核。导入重复检查由 ESLint 核心规则提供；没有安装 import-x，不宣称检查缺失模块、导入循环或未使用模块。相关业务变更仍须执行对应回归。
+在 `apps/desktop` 运行 `npm run lint:debt` 可查看上述历史文件的逐文件/规则数量、行列和消息。发现既有债务正常输出报告；缺失文件、语法错误、配置或规则执行失败返回非零，不能把失败当成零债务。可用 `npm run lint:debt -- --file apps/web/app.js` 单独查看语义诊断；`app.js` 的正式门禁同时检查格式。导入重复检查由 ESLint 核心规则提供；没有安装 import-x，不宣称检查缺失模块、导入循环或未使用模块。相关业务变更仍须执行对应回归。
 
 `commit-msg` 使用 commitlint 的 `@commitlint/config-conventional` 校验提交信息，格式为 `type(scope): 描述`，其中 scope 可省略，描述支持中文。例如：
 

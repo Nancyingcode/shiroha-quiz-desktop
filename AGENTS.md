@@ -88,7 +88,7 @@
 - Web/Windows 保留旧 Android JSON/ZIP 的现有读写兼容，不因平台移除删除格式、字段或有效测试。历史 parser 样例在 `test/fixtures/legacy-android-parser`，无当前 Kotlin 运行器。
 - Web 业务修改运行受影响的现有回归；无自动化覆盖时补充对应测试或可重复步骤。影响桌面复用资源时，同时验证桌面生成与运行；浏览器测试不能替代 WebView2 验证。
 - `runner.cjs --self-test` 只验证测试框架，静态资源存在也不代表 PDF/OCR 已实际运行；报告应注明离线、中文扫描 PDF、大文件与真实服务等实际覆盖范围。
-- `npm run lint` 保留 recommended/no-var/prefer-const/no-unused-vars，并执行逐文件增量语义/Stylistic 门禁与违规 fixture。新手写 JavaScript 路径默认完整检查；历史暂缓规则和文件以 `apps/desktop/eslint.migration.mjs` 为准，不增加历史例外隐藏新文件违规。`npm run lint:debt` 只读报告历史语义与格式债务，app.js 仅语义诊断；执行或解析失败返回非零。具体覆盖和例外见 JavaScript 指南。
+- `npm run lint` 保留 recommended/no-var/prefer-const/no-unused-vars，并执行逐文件增量语义/Stylistic 门禁与违规 fixture。手写 JavaScript 路径按完整文件检查；历史暂缓规则和文件以 `apps/desktop/eslint.migration.mjs` 为准，不增加历史例外隐藏新文件违规。`npm run lint:debt` 只读报告历史语义与格式债务；执行或解析失败返回非零。具体覆盖和例外见 JavaScript 指南。
 - 纯文档修改不要求完整代码门禁。在 `apps/desktop` 运行 `npm run lint:docs`，并对本次全部变更文档检查 UTF-8、代码围栏、本地链接和差异；脚本覆盖根 `AGENTS.md`、贡献指南、Rust 指南、适配说明、桌面说明、文档索引、原型与双端设计/计划，以及 `test/dual-platform` 的阶段说明、JavaScript 指南及设计/计划、AI/WebDAV 运行说明，共 20 份文档，`npm run lint` 已包含此命令。未列入的文件须补同等检查。
 
 ## 6. 依赖、规则与 Git

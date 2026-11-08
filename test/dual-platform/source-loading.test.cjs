@@ -11,16 +11,16 @@ const root = path.resolve(__dirname, '../..');
 function equivalentLayout(source, style) {
   const semicolon = style === 'multiline-asi' ? '' : ';';
   return source
-    .replace(/^const (KEY|AI_KEY_SESSION_V99|AI_KEY_LOCAL_V99)\s*=\s*(['"])([^'"\r\n]+)\2;?/gm,
-      (_match, name, _quote, value) => `const ${name} = "${value}"${semicolon}`)
-    .replace(/^(\s*)(async )?function ([\w$]+)\(/gm,
+    .replace(/^([ \t]*)const (KEY)\s*=\s*(['"])([^'"\r\n]+)\3;?/gm,
+      (_match, indent, name, _quote, value) => `${indent}const ${name} = "${value}"${semicolon}`)
+    .replace(/^([ \t]*)(async )?function ([\w$]+)\(/gm,
       (_match, indent, asyncKeyword = '', name) => `${indent}${asyncKeyword}function ${name} (\n`)
-    .replace(/^\(function\(\)\{/m, '( function () {')
-    .replace(/^startApplication\(\);/m, `startApplication (\n)${semicolon}`)
+    .replace(/^\(function\(\)\s*\{/m, '( function () {')
+    .replace(/^([ \t]*)startApplication\(\);/m, (_match, indent) => `${indent}startApplication (\n${indent})${semicolon}`)
     .replace(/^\}\)\(\);/m, `} ) ( )${semicolon}`)
-    .replace(/^if\(globalThis\.ShirohaDesktopHost\)globalThis\.ShirohaDesktopHost\.canClose=async\(\)=>\{/m,
-      'if (globalThis.ShirohaDesktopHost) globalThis.ShirohaDesktopHost.canClose = async () => {')
-    .replace(/^(function aiTasksBusyV99 \(\n\)\{)(.*)(\})$/m, '$1\n$2\n$3');
+    .replace(/^([ \t]*)if \(globalThis\.ShirohaDesktopHost\) \{globalThis\.ShirohaDesktopHost\.canClose = async\(\)=>\{/m,
+      '$1if (globalThis.ShirohaDesktopHost)\n$1{ globalThis.ShirohaDesktopHost.canClose = async () => {')
+    .replace(/^([ \t]*function aiTasksBusyV99 \(\n\) \{)(.*)(\})$/m, '$1\n$2\n$3');
 }
 
 const runner = `
@@ -34,6 +34,9 @@ const read = fs.readFileSync;
 const layout = (${equivalentLayout.toString()});
 const original = read(target, 'utf8');
 const formatted = layout(original, style);
+assert.notEqual(formatted, original, '排版变体必须实际改变源码');
+assert.match(formatted, /^\\s*const KEY = "/m, '状态键必须覆盖不同引号和缩进');
+assert.match(formatted, /^\\s*startApplication \\(\\n/m, '启动边界必须覆盖多行排版');
 const { Linter } = require(path.join(root, 'apps/desktop/node_modules/eslint'));
 function syntax(text) {
   const parser = new Linter();

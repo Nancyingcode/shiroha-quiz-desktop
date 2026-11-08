@@ -64,10 +64,10 @@ async function scanMarkers(directory, markers) {
   for (const entry of await readdir(directory, { withFileTypes: true })) {
     const full = path.join(directory, entry.name);
     assert.equal(entry.isSymbolicLink(), false, 'Refuse traversal outside isolated files');
-    if (entry.isDirectory()) matches.push(...await scanMarkers(full, markers));
+    if (entry.isDirectory()) {matches.push(...await scanMarkers(full, markers));}
     else if (entry.isFile()) {
       const bytes = await readFile(full);
-      if (markers.some(marker => bytes.includes(Buffer.from(marker)))) matches.push(full);
+      if (markers.some((marker) => bytes.includes(Buffer.from(marker)))) {matches.push(full);}
     }
   }
   return matches;
@@ -82,8 +82,8 @@ function sendChunk(response, delta, finishReason = null) {
 async function runCase(executable, runRoot, scenario, guarded = false) {
   const isolated = path.join(runRoot, scenario);
   const dirs = Object.fromEntries(['home', 'config', 'data', 'appdata', 'localappdata', 'temp', 'work']
-    .map(key => [key, path.join(isolated, key)]));
-  await Promise.all(Object.values(dirs).map(dir => mkdir(dir, { recursive: true })));
+    .map((key) => [key, path.join(isolated, key)]));
+  await Promise.all(Object.values(dirs).map((dir) => mkdir(dir, { recursive: true })));
   const marker = `SHIROHA_STDIO_${scenario.toUpperCase()}_SYNTHETIC`;
   const calls = [];
   const events = [];
@@ -106,11 +106,11 @@ async function runCase(executable, runRoot, scenario, guarded = false) {
   let controlBuffer = '';
   let sessionId = '';
   const prompt = `合成题目 ${marker}。Return ${RESPONSE_TEXT}`;
-  const sendControl = subtype => child.stdin.write(`${JSON.stringify({
+  const sendControl = (subtype) => child.stdin.write(`${JSON.stringify({
     type: 'control_request', request_id: `probe-${subtype}`,
     request: { subtype, hasPrompt: false, session_id: sessionId },
   })}\n`);
-  const consumeControlLine = line => {
+  const consumeControlLine = (line) => {
     let event;
     try { event = JSON.parse(line); }
     catch { events.push({ invalid: 'non-JSON control output' }); return; }
@@ -124,11 +124,11 @@ async function runCase(executable, runRoot, scenario, guarded = false) {
       controlResponses.push(summary);
       events.push({ type: 'control_response', response: summary });
       if (response?.subtype !== 'success') { stop('control-error'); return; }
-      if (response.request_id === 'probe-initialize') sendControl('get_auth_methods');
-      else if (response.request_id === 'probe-get_auth_methods') sendControl('logout');
-      else if (response.request_id === 'probe-logout') child.stdin.write(`${JSON.stringify({
+      if (response.request_id === 'probe-initialize') {sendControl('get_auth_methods');}
+      else if (response.request_id === 'probe-get_auth_methods') {sendControl('logout');}
+      else if (response.request_id === 'probe-logout') {child.stdin.write(`${JSON.stringify({
         type: 'user', session_id: '', message: { role: 'user', content: prompt }, parent_tool_use_id: null,
-      })}\n`);
+      })}\n`);}
       return;
     }
     if (event.type === 'control_request') {
@@ -137,7 +137,7 @@ async function runCase(executable, runRoot, scenario, guarded = false) {
       return;
     }
     events.push(event);
-    if (event.session_id) sessionId = event.session_id;
+    if (event.session_id) {sessionId = event.session_id;}
     if (event.type === 'result') {
       child.stdin.end();
       responseTimer = setTimeout(() => stop('stdin-close-fallback'), 2_000);
@@ -145,12 +145,12 @@ async function runCase(executable, runRoot, scenario, guarded = false) {
   };
 
   // Only this invocation owns this PID. Never search for or stop other CodeBuddy processes.
-  const stop = reason => {
-    if (processClosed || cleanupPromise || !child?.pid) return;
+  const stop = (reason) => {
+    if (processClosed || cleanupPromise || !child?.pid) {return;}
     stopReason = reason;
     cleanupPromise = promisify(execFile)(path.join(process.env.SystemRoot, 'System32/taskkill.exe'),
       ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true, timeout: 5_000 })
-      .catch(error => {
+      .catch((error) => {
         if (!processClosed) {
           serverErrors.push(`Process cleanup failed: ${error.code}`);
           child.kill();
@@ -220,7 +220,7 @@ async function runCase(executable, runRoot, scenario, guarded = false) {
     response.end('data: [DONE]\n\n');
   };
   const server = createServer((request, response) => {
-    handle(request, response).catch(error => {
+    handle(request, response).catch((error) => {
       serverErrors.push(error.message);
       response.destroy();
       stop('probe-error');
@@ -236,13 +236,13 @@ async function runCase(executable, runRoot, scenario, guarded = false) {
   let relay;
   try {
     const endpoint = `http://127.0.0.1:${server.address().port}`;
-    if (guarded) relay = await createGuardedRelay(endpoint, scenario === 'auth-token' ? FAKE_AUTH_TOKEN : FAKE_KEY);
+    if (guarded) {relay = await createGuardedRelay(endpoint, scenario === 'auth-token' ? FAKE_AUTH_TOKEN : FAKE_KEY);}
     const env = environment(dirs, relay?.endpoint ?? endpoint);
     if (scenario === 'auth-token') {
       delete env.CODEBUDDY_API_KEY;
       env.CODEBUDDY_AUTH_TOKEN = FAKE_AUTH_TOKEN;
     }
-    if (relay) env.CODEBUDDY_CUSTOM_HEADERS = `x-shiroha-run: ${relay.headers['x-shiroha-run']}`;
+    if (relay) {env.CODEBUDDY_CUSTOM_HEADERS = `x-shiroha-run: ${relay.headers['x-shiroha-run']}`;}
     if (scenario === 'password') {
       env.CODEBUDDY_GATEWAY_AUTH = 'password';
       env.CODEBUDDY_GATEWAY_PASSWORD = 'synthetic-gateway-password-never-real';
@@ -270,20 +270,20 @@ async function runCase(executable, runRoot, scenario, guarded = false) {
           const end = controlBuffer.indexOf('\n');
           const line = controlBuffer.slice(0, end).trim();
           controlBuffer = controlBuffer.slice(end + 1);
-          if (line) consumeControlLine(line);
+          if (line) {consumeControlLine(line);}
         }
       }
-      else if (stream === 'stdout') stdout += chunk;
-      else stderr += chunk;
+      else if (stream === 'stdout') {stdout += chunk;}
+      else {stderr += chunk;}
     };
-    child.stdout.on('data', chunk => collect('stdout', chunk));
-    child.stderr.on('data', chunk => collect('stderr', chunk));
+    child.stdout.on('data', (chunk) => collect('stdout', chunk));
+    child.stderr.on('data', (chunk) => collect('stderr', chunk));
     child.stdin.on('error', () => {});
-    if (usesControlProtocol) sendControl('initialize');
-    else child.stdin.end(prompt);
+    if (usesControlProtocol) {sendControl('initialize');}
+    else {child.stdin.end(prompt);}
     exit = await closed;
     await cleanupPromise;
-    if (!connectionClosed) await new Promise(resolve => setTimeout(resolve, 100));
+    if (!connectionClosed) {await new Promise((resolve) => setTimeout(resolve, 100));}
     connectionClosedBeforeCleanup = connectionClosed;
   } finally {
     clearTimeout(timer);
@@ -292,34 +292,34 @@ async function runCase(executable, runRoot, scenario, guarded = false) {
     await cleanupPromise;
     await relay?.close();
     server.closeAllConnections();
-    await new Promise(resolve => server.close(resolve));
+    await new Promise((resolve) => server.close(resolve));
   }
-  for (const line of stdout.split(/\r?\n/).filter(line => line.trim())) {
+  for (const line of stdout.split(/\r?\n/).filter((line) => line.trim())) {
     try { events.push(JSON.parse(line)); }
     catch { events.push({ invalid: line }); }
   }
-  const results = events.filter(event => event.type === 'result');
-  const assistants = events.filter(event => event.type === 'assistant');
-  const partials = events.filter(event => event.type === 'stream_event');
+  const results = events.filter((event) => event.type === 'result');
+  const assistants = events.filter((event) => event.type === 'assistant');
+  const partials = events.filter((event) => event.type === 'stream_event');
   const markers = [marker, FAKE_KEY, FAKE_AUTH_TOKEN, RESPONSE_TEXT, 'TOOL_MUST_NOT_RUN'];
-  if (relay) markers.push(relay.headers['x-shiroha-run']);
+  if (relay) {markers.push(relay.headers['x-shiroha-run']);}
   const markerFiles = await scanMarkers(isolated, markers);
   let toolFileExists = false;
   try { await access(path.join(dirs.work, 'tool-sentinel.txt')); toolFileExists = true; }
-  catch (error) { if (error.code !== 'ENOENT') throw error; }
-  const modelCalls = calls.filter(call => call.method === 'POST' && call.url === '/chat/completions');
+  catch (error) { if (error.code !== 'ENOENT') {throw error;} }
+  const modelCalls = calls.filter((call) => call.method === 'POST' && call.url === '/chat/completions');
   const observation = {
     scenario, exit, stopReason: stopReason ?? null, ports, localRoutes,
     connectionClosedBeforeCleanup, controlResponses, toolFileExists,
     requestCount: modelCalls.length, unexpectedRoutes: calls.length - modelCalls.length,
-    toolsAdvertised: modelCalls.some(call => JSON.parse(call.body).tools?.length > 0),
-    parentRulesSent: modelCalls.some(call => /AGENTS\.md|always_applied_workspace_rules/.test(call.body)),
-    result: results.map(event => ({ subtype: event.subtype, is_error: event.is_error,
+    toolsAdvertised: modelCalls.some((call) => JSON.parse(call.body).tools?.length > 0),
+    parentRulesSent: modelCalls.some((call) => /AGENTS\.md|always_applied_workspace_rules/.test(call.body)),
+    result: results.map((event) => ({ subtype: event.subtype, is_error: event.is_error,
       result: event.result, terminal_reason: event.terminal_reason ?? null })),
-    assistantStops: assistants.map(event => event.message?.stop_reason),
-    partialStops: partials.map(event => event.event?.delta?.stop_reason).filter(value => value !== undefined),
-    eventTypes: [...new Set(events.map(event => event.type ?? 'invalid'))],
-    markerFiles: markerFiles.map(file => path.relative(isolated, file)), serverErrors,
+    assistantStops: assistants.map((event) => event.message?.stop_reason),
+    partialStops: partials.map((event) => event.event?.delta?.stop_reason).filter((value) => value !== undefined),
+    eventTypes: [...new Set(events.map((event) => event.type ?? 'invalid'))],
+    markerFiles: markerFiles.map((file) => path.relative(isolated, file)), serverErrors,
     ...(relay ? { guard: { ...relay.evidence(), candidate: validateCandidate(events, relay.evidence(),
       Boolean(stopReason) || exit.code !== 0) } } : {}),
   };
@@ -337,11 +337,11 @@ async function main() {
   assert.equal(createHash('sha256').update(await readFile(executable)).digest('hex'), EXPECTED_HASH);
   const guarded = process.argv.includes('--guarded');
   const requested = process.argv[3] === '--guarded' ? undefined : process.argv[3];
-  if (requested) assert.ok(CASES.includes(requested) || requested === 'auth-token', 'Unknown scenario');
+  if (requested) {assert.ok(CASES.includes(requested) || requested === 'auth-token', 'Unknown scenario');}
   const runRoot = path.join(ROOT, '.reports/codebuddy-cli-stdio', `run-${guarded ? 'guarded-' : ''}${Date.now()}`);
   await mkdir(runRoot, { recursive: true });
   const observations = [];
-  const scenarios = guarded ? CASES.filter(name => name !== 'password') : CASES;
+  const scenarios = guarded ? CASES.filter((name) => name !== 'password') : CASES;
   for (const scenario of requested ? [requested] : scenarios) {
     observations.push(await runCase(executable, runRoot, scenario, guarded));
   }

@@ -2,7 +2,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ESLint } from 'eslint';
 import { createConfig } from '../eslint.rules.mjs';
-import { legacyOutsideFiles, legacyStyleFiles, semanticDebt } from '../eslint.migration.mjs';
+import { legacyStyleFiles, semanticDebt } from '../eslint.migration.mjs';
 
 const root = fileURLToPath(new URL('../../..', import.meta.url));
 const args = process.argv.slice(2);
@@ -10,7 +10,7 @@ if (args.length && (args.length !== 2 || args[0] !== '--file')) {
   throw new Error('Usage: node scripts/lint-debt.mjs [--file repository-relative-path]');
 }
 const files = args.length ? [args[1]]
-  : [...new Set([...legacyStyleFiles, ...Object.keys(semanticDebt), ...legacyOutsideFiles])];
+  : [...new Set([...legacyStyleFiles, ...Object.keys(semanticDebt)])];
 for (const file of files) {
   const relative = path.relative(root, path.resolve(root, file));
   if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) {
@@ -60,6 +60,6 @@ const report = results.map((result, index) => {
   };
 });
 console.log(JSON.stringify({
-  scope: 'semantic diagnostics plus deferred Stylistic files; app.js is semantic-only; execution/parse failures exit nonzero',
+  scope: 'semantic diagnostics plus deferred Stylistic files; execution/parse failures exit nonzero',
   files: report,
 }, null, 2));

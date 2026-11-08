@@ -30,26 +30,27 @@ function reportPath(value) {
   assert(within(TEST_ROOT, target), 'Report must be a file inside test/web-ai-practice/.');
   // Check existing ancestors too, so a junction cannot redirect output outside the test directory.
   let ancestor = path.dirname(target);
-  while (!fs.existsSync(ancestor)) ancestor = path.dirname(ancestor);
+  while (!fs.existsSync(ancestor)) {ancestor = path.dirname(ancestor);}
   const actualRoot = fs.realpathSync(TEST_ROOT);
   assert(ancestor === TEST_ROOT || fs.realpathSync(ancestor) === actualRoot || within(actualRoot, fs.realpathSync(ancestor)), 'Unsafe report ancestor.');
-  if (fs.existsSync(target)) assert(within(actualRoot, fs.realpathSync(target)), 'Unsafe report file.');
+  if (fs.existsSync(target)) {assert(within(actualRoot, fs.realpathSync(target)), 'Unsafe report file.');}
   return target;
 }
 
 function storageKeys() {
   const source = loadWebSource();
+  const credentials = createWebSource(fs.readFileSync(path.join(WEB_ROOT, 'platform/browser-credentials.js'), 'utf8'));
   return {
     state: source.stringConstant('KEY'),
-    session: source.stringConstant('AI_KEY_SESSION_V99'),
-    local: source.stringConstant('AI_KEY_LOCAL_V99'),
+    session: credentials.stringConstant('AI_SESSION'),
+    local: credentials.stringConstant('AI_LOCAL'),
   };
 }
 
 function loadPlaywright() {
   try { return require('playwright'); }
   catch (error) {
-    if (error.code !== 'MODULE_NOT_FOUND' || !error.message.startsWith("Cannot find module 'playwright'")) throw error;
+    if (error.code !== 'MODULE_NOT_FOUND' || !error.message.startsWith("Cannot find module 'playwright'")) {throw error;}
   }
   try { return require(require.resolve('playwright', { paths: [DEPENDENCIES] })); }
   catch (cause) { throw new Error(`Playwright is not already available through require('playwright') or the machine-specific bundled fallback ${DEPENDENCIES}. Provide existing Node + Playwright + Chromium; no install, network access or framework fallback was attempted.`, { cause }); }
@@ -65,7 +66,7 @@ async function startServer() {
       const raw = request.url.split('?')[0];
       const decoded = decodeURIComponent(raw);
       // Reject before URL normalization and verify both lexical and real paths (including junctions).
-      if (!decoded.startsWith('/') || /[\\\0:]/.test(decoded) || decoded.split('/').some(part => part === '..')) {
+      if (!decoded.startsWith('/') || /[\\\0:]/.test(decoded) || decoded.split('/').some((part) => part === '..')) {
         response.writeHead(403); response.end(); return;
       }
       const target = path.resolve(root, `.${decoded === '/' ? '/index.html' : decoded}`);
@@ -80,25 +81,31 @@ async function startServer() {
       response.writeHead(200, { 'Content-Type': MIME[path.extname(actual)] || 'application/octet-stream', 'Content-Length': data.length, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
       response.end(request.method === 'HEAD' ? undefined : data);
     } catch (error) {
-      response.writeHead(error instanceof URIError ? 400 : error.code === 'ENOENT' || error.code === 'ENOTDIR' ? 404 : 500);
+      let status = 500;
+      if (error instanceof URIError) {
+        status = 400;
+      } else if (error.code === 'ENOENT' || error.code === 'ENOTDIR') {
+        status = 404;
+      }
+      response.writeHead(status);
       response.end();
     }
   });
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
-  return { url: `http://127.0.0.1:${server.address().port}/`, root, close: () => new Promise((resolve, reject) => { server.close(error => error ? reject(error) : resolve()); server.closeIdleConnections(); }) };
+  return { url: `http://127.0.0.1:${server.address().port}/`, root, close: () => new Promise((resolve, reject) => { server.close((error) => error ? reject(error) : resolve()); server.closeIdleConnections(); }) };
 }
 
 function baseUrl(value) {
   const url = new URL(value);
   assert(url.protocol === 'http:' && ['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname), '--base-url must be an HTTP loopback static service.');
   assert(!url.username && !url.password && !url.search && !url.hash, 'Base URL cannot contain credentials, query or hash.');
-  if (!url.pathname.endsWith('/') && !url.pathname.endsWith('/index.html')) url.pathname += '/';
+  if (!url.pathname.endsWith('/') && !url.pathname.endsWith('/index.html')) {url.pathname += '/';}
   return url.href;
 }
 
 function deferred() {
   let resolve;
-  const promise = new Promise(done => { resolve = done; });
+  const promise = new Promise((done) => { resolve = done; });
   return { promise, resolve };
 }
 
@@ -111,7 +118,7 @@ class MockAi {
     const entry = { kind, content, status, raw, arrived, released, hold };
     this.entries.push(entry);
     this.queue.push(entry);
-    if (!hold) released.resolve();
+    if (!hold) {released.resolve();}
     return { received: arrived.promise, release: () => released.resolve(), entry };
   }
 
@@ -132,14 +139,14 @@ class MockAi {
     const call = { url: request.url(), method: request.method(), headers: request.headers(), body };
     this.calls.push(call);
     const entry = this.queue.shift();
-    if (entry) entry.request = request;
+    if (entry) {entry.request = request;}
     const errors = [];
-    if (call.url !== MOCK_ENDPOINT || call.method !== 'POST') errors.push('Unexpected mock endpoint or method.');
-    if (body?.model !== MODEL || body?.stream !== false || !Array.isArray(body?.messages)) errors.push('Unexpected AI request shape/model.');
-    if (call.headers.authorization !== `Bearer ${FAKE_KEY}`) errors.push('Only the synthetic session key may be sent.');
-    if (!entry) errors.push('Unplanned AI request.');
-    if (entry?.kind === 'follow' && body?.response_format?.type !== 'json_object') errors.push('Follow-up revision must request a JSON object.');
-    if (entry?.kind === 'analysis' && body?.response_format?.type !== 'json_object') errors.push('Analysis must request a JSON object.');
+    if (call.url !== MOCK_ENDPOINT || call.method !== 'POST') {errors.push('Unexpected mock endpoint or method.');}
+    if (body?.model !== MODEL || body?.stream !== false || !Array.isArray(body?.messages)) {errors.push('Unexpected AI request shape/model.');}
+    if (call.headers.authorization !== `Bearer ${FAKE_KEY}`) {errors.push('Only the synthetic session key may be sent.');}
+    if (!entry) {errors.push('Unplanned AI request.');}
+    if (entry?.kind === 'follow' && body?.response_format?.type !== 'json_object') {errors.push('Follow-up revision must request a JSON object.');}
+    if (entry?.kind === 'analysis' && body?.response_format?.type !== 'json_object') {errors.push('Analysis must request a JSON object.');}
     if (errors.length) {
       this.violations.push(...errors);
       entry?.arrived.resolve(call);
@@ -151,7 +158,7 @@ class MockAi {
     // V38.1 的追问同时返回对话与完整解析；旧字符串样本表示不改动解析的追问。
     const shouldPreserveFollowUpAnalysis = entry.kind === 'follow' && typeof entry.content === 'string' && !entry.raw;
     const requestContext = shouldPreserveFollowUpAnalysis ? JSON.parse(body.messages.at(-1).content) : null;
-    const originalAnalysis = this.entries.find(item => item.kind === 'analysis' && item.content?.analysis === requestContext?.currentAnalysisDraft)?.content;
+    const originalAnalysis = this.entries.find((item) => item.kind === 'analysis' && item.content?.analysis === requestContext?.currentAnalysisDraft)?.content;
     const responseContent = shouldPreserveFollowUpAnalysis
       ? { reply: entry.content, revisedAnalysis: requestContext.currentAnalysisDraft, confidence: originalAnalysis?.confidence || 'HIGH', needsReview: originalAnalysis?.needsReview || false, warning: originalAnalysis?.warning || '' }
       : entry.content;
@@ -160,12 +167,12 @@ class MockAi {
     try { await route.fulfill({ status: entry.status, contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: response }); }
     catch (error) {
       // A stopped request or closed context may no longer accept a response.
-      if (!/closed|disposed|Invalid InterceptionId|not found|already handled|canceled|cancelled/i.test(error.message)) throw error;
+      if (!/closed|disposed|Invalid InterceptionId|not found|already handled|canceled|cancelled/i.test(error.message)) {throw error;}
     }
   }
 
   async shutdown() {
-    this.entries.forEach(entry => entry.released.resolve());
+    this.entries.forEach((entry) => entry.released.resolve());
     await Promise.allSettled([...this.tasks]);
   }
 }
@@ -186,11 +193,11 @@ async function setup(browser, url, keys, { configured = true, rich = false, empt
   await observeAppDialogs(page);
   page.setDefaultTimeout(timeout);
   page.setDefaultNavigationTimeout(timeout * 3);
-  page.on('pageerror', error => pageErrors.push(error.message));
-  page.on('app-dialog', dialog => dialog.accept());
+  page.on('pageerror', (error) => pageErrors.push(error.message));
+  page.on('app-dialog', (dialog) => dialog.accept());
   const location = new URL(url);
   const staticPrefix = location.pathname.endsWith('index.html') ? location.pathname.slice(0, -'index.html'.length) : location.pathname;
-  await context.route('**/*', async route => {
+  await context.route('**/*', async (route) => {
     const request = route.request();
     const destination = new URL(request.url());
     // All fetch/XHR traffic is blocked unless handled by the mock route registered below.
@@ -208,15 +215,15 @@ async function setup(browser, url, keys, { configured = true, rich = false, empt
         );
         bridgeUsed = result.bridgeUsed;
         await route.fulfill({ status: 200, contentType: 'application/javascript; charset=utf-8', body: result.source });
-      } else await route.continue();
+      } else {await route.continue();}
       return;
     }
     blocked.push({ url: request.url(), method: request.method(), type: request.resourceType() });
     await route.abort('blockedbyclient');
   });
   // Last registered route wins; no fall-through to a real network request is permitted.
-  await page.route('https://mock-ai.invalid/**', route => mock.handle(route));
-  if (typeof context.routeWebSocket === 'function') await context.routeWebSocket('**/*', socket => { blocked.push({ url: socket.url(), type: 'websocket' }); socket.close(); });
+  await page.route('https://mock-ai.invalid/**', (route) => mock.handle(route));
+  if (typeof context.routeWebSocket === 'function') {await context.routeWebSocket('**/*', (socket) => { blocked.push({ url: socket.url(), type: 'websocket' }); socket.close(); });}
   await context.addInitScript(({ keys: storage, initial, key, ignoreAbort: ignore }) => {
     if (!sessionStorage.getItem('__webAiPracticeSeeded')) {
       localStorage.clear();
@@ -245,8 +252,8 @@ async function setup(browser, url, keys, { configured = true, rich = false, empt
         // Existing upgradeState normalizes away richContent; seed only our safe fixture after upgrade.
         const prepared = fixture({ configured, rich }).banks[0].questions[0];
         const hook = await page.evaluate(() => typeof window.__webAiPracticeSeedRich === 'function');
-        if (hook) await page.evaluate(prepared => window.__webAiPracticeSeedRich(prepared), prepared);
-        else await page.evaluate(seedRichFixture, prepared);
+        if (hook) {await page.evaluate((prepared) => window.__webAiPracticeSeedRich(prepared), prepared);}
+        else {await page.evaluate(seedRichFixture, prepared);}
       }
     },
     async start() {
@@ -264,15 +271,15 @@ async function setup(browser, url, keys, { configured = true, rich = false, empt
     async submitChoice(key = 'A') { await page.locator(`#practice-card .option[data-key="${key}"]`).click(); await page.locator('#p-submit').click(); },
     async waitCall(entry) { return bounded(entry.received, timeout, 'Expected mocked AI request did not arrive.'); },
     async deliver(entry) {
-      const response = page.waitForResponse(response => response.request() === entry.entry.request, { timeout });
+      const response = page.waitForResponse((response) => response.request() === entry.entry.request, { timeout });
       entry.release();
       const received = await response;
       const error = await received.finished();
       assert.equal(error, null, 'Delayed response was not actually delivered.');
-      await page.evaluate(() => new Promise(resolve => setTimeout(resolve, 0)));
+      await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 0)));
     },
     async idle() {
-      await page.waitForFunction(selector => {
+      await page.waitForFunction((selector) => {
         const panel = document.querySelector(selector);
         return panel && !panel.querySelector('.is-busy') && !panel.querySelector('[data-ai-single-stop-v613]');
       }, SEL.panel, { timeout });
@@ -284,18 +291,18 @@ async function setup(browser, url, keys, { configured = true, rich = false, empt
     async requestAnalysis({ regenerate = false } = {}) {
       const opensSaved = !regenerate && !!String((await snapshot(page)).question.analysis || '').trim();
       await page.locator(regenerate ? SEL.regenerate : SEL.open).click();
-      if (opensSaved) await page.locator(SEL.regenerate).click();
+      if (opensSaved) {await page.locator(SEL.regenerate).click();}
     },
     async generate(result, { regenerate = false, status = 200, raw = false, visibleText } = {}) {
       const entry = mock.enqueue('analysis', result, { status, raw });
       await harness.requestAnalysis({ regenerate });
       const call = await harness.waitCall(entry);
-      if (status === 200 && !raw) await harness.text(visibleText || result.analysis);
-      else await harness.idle();
+      if (status === 200 && !raw) {await harness.text(visibleText || result.analysis);}
+      else {await harness.idle();}
       return call;
     },
     async followInput() {
-      if (!await page.locator(SEL.input).isVisible()) await page.locator(SEL.follow).click();
+      if (!await page.locator(SEL.input).isVisible()) {await page.locator(SEL.follow).click();}
       await page.locator(SEL.input).waitFor();
     },
     async follow(text, reply) {
@@ -310,7 +317,7 @@ async function setup(browser, url, keys, { configured = true, rich = false, empt
     },
     async expandExisting() {
       const count = mock.calls.length;
-      if (await page.locator(SEL.open).isVisible()) await page.locator(SEL.open).click();
+      if (await page.locator(SEL.open).isVisible()) {await page.locator(SEL.open).click();}
       await harness.idle();
       assert.equal(mock.calls.length, count, 'Reopening an existing draft must not generate again.');
     },
@@ -325,44 +332,44 @@ async function setup(browser, url, keys, { configured = true, rich = false, empt
 }
 
 function seedRichFixture(prepared) {
-  const bank = state.banks.find(bank => bank.id === 'web-ai-practice-safe-bank');
-  if (state.banks.length !== 1 || !bank || prepared.id !== 'safe-single-1') throw new Error('Refusing to seed rich fields outside the synthetic fixture.');
-  const question = bank.questions.find(question => question.id === prepared.id);
+  const bank = state.banks.find((bank) => bank.id === 'web-ai-practice-safe-bank');
+  if (state.banks.length !== 1 || !bank || prepared.id !== 'safe-single-1') {throw new Error('Refusing to seed rich fields outside the synthetic fixture.');}
+  const question = bank.questions.find((question) => question.id === prepared.id);
   question.richContent = JSON.parse(JSON.stringify(prepared.richContent));
 }
 
 function readSnapshot() {
-    if (typeof state === 'undefined' || typeof practiceSession === 'undefined') throw new Error('V613 adapter requires the application state and practice session.');
-    const practice = practiceSession.current;
-    // Track reference identity in test globals without adding properties to application objects.
-    const identities = globalThis.__webAiPracticeIdentities ||= { ids: new WeakMap(), next: 1 };
-    const identity = object => {
-      if (!object || typeof object !== 'object') return null;
-      if (!identities.ids.has(object)) identities.ids.set(object, identities.next++);
-      return identities.ids.get(object);
-    };
-    const item = practice.items[practice.idx];
-    const question = item?.question && typeof item.question === 'object' ? item.question : item;
-    const bankId = item?.bankId || state.activeBankId;
-    const key = item?.sessionKey || `${bankId}#${question?.id || ''}`;
-    return JSON.parse(JSON.stringify({
-      question, bank: state.banks.find(bank => bank.id === bankId), key,
-      identities: { practice: identity(practice), answerState: identity(practice.answerState) },
-      practice: {
-        idx: practice.idx, answered: practice.answered, correct: practice.correct, wrong: practice.wrong, start: practice.start,
-        answerState: practice.answerState, details: practice.details, progressKey: practice.progressKey,
-        startMode: practice.startMode, startIndex: practice.startIndex, baseItemKeys: practice.baseItemKeys,
-        items: practice.items.map(entry => ({ bankId: entry.bankId, sessionKey: entry.sessionKey, questionId: (entry.question || entry).id })),
-      },
-      progress: state.settings.practiceProgressV58916, wrongBook: state.wrongBook, favorites: state.favorites,
-      records: state.records, settings: state.settings, activeBankId: state.activeBankId,
-      ui: {
-        progress: document.querySelector('#practice-progress')?.textContent,
-        submitDisabled: document.querySelector('#p-submit')?.disabled, revealDisabled: document.querySelector('#p-reveal')?.disabled,
-        answers: [...document.querySelectorAll('#practice-card .option input, #practice-card .text-answer')].map(input => ({ value: input.value, checked: input.checked, disabled: input.disabled })),
-        nav: document.querySelector('#practice-nav-v26')?.innerHTML,
-      },
-    }));
+  if (typeof state === 'undefined' || typeof practiceSession === 'undefined') {throw new Error('V613 adapter requires the application state and practice session.');}
+  const practice = practiceSession.current;
+  // Track reference identity in test globals without adding properties to application objects.
+  const identities = globalThis.__webAiPracticeIdentities ||= { ids: new WeakMap(), next: 1 };
+  const identity = (object) => {
+    if (!object || typeof object !== 'object') {return null;}
+    if (!identities.ids.has(object)) {identities.ids.set(object, identities.next++);}
+    return identities.ids.get(object);
+  };
+  const item = practice.items[practice.idx];
+  const question = item?.question && typeof item.question === 'object' ? item.question : item;
+  const bankId = item?.bankId || state.activeBankId;
+  const key = item?.sessionKey || `${bankId}#${question?.id || ''}`;
+  return JSON.parse(JSON.stringify({
+    question, bank: state.banks.find((bank) => bank.id === bankId), key,
+    identities: { practice: identity(practice), answerState: identity(practice.answerState) },
+    practice: {
+      idx: practice.idx, answered: practice.answered, correct: practice.correct, wrong: practice.wrong, start: practice.start,
+      answerState: practice.answerState, details: practice.details, progressKey: practice.progressKey,
+      startMode: practice.startMode, startIndex: practice.startIndex, baseItemKeys: practice.baseItemKeys,
+      items: practice.items.map((entry) => ({ bankId: entry.bankId, sessionKey: entry.sessionKey, questionId: (entry.question || entry).id })),
+    },
+    progress: state.settings.practiceProgressV58916, wrongBook: state.wrongBook, favorites: state.favorites,
+    records: state.records, settings: state.settings, activeBankId: state.activeBankId,
+    ui: {
+      progress: document.querySelector('#practice-progress')?.textContent,
+      submitDisabled: document.querySelector('#p-submit')?.disabled, revealDisabled: document.querySelector('#p-reveal')?.disabled,
+      answers: [...document.querySelectorAll('#practice-card .option input, #practice-card .text-answer')].map((input) => ({ value: input.value, checked: input.checked, disabled: input.disabled })),
+      nav: document.querySelector('#practice-nav-v26')?.innerHTML,
+    },
+  }));
 }
 
 async function snapshot(page) {
@@ -372,40 +379,40 @@ async function snapshot(page) {
 
 function immutable(snapshotValue) {
   const value = JSON.parse(JSON.stringify(snapshotValue));
-  const omitAnalysis = question => {
+  const omitAnalysis = (question) => {
     delete question.analysis;
     const rich = question.richContent;
     if (rich?.fields) {
       delete rich.fields.analysis;
       delete rich.features;
-      if (!Object.keys(rich.fields).length && Object.keys(rich).every(key => ['schema', 'fields'].includes(key))) delete question.richContent;
+      if (!Object.keys(rich.fields).length && Object.keys(rich).every((key) => ['schema', 'fields'].includes(key))) {delete question.richContent;}
     }
   };
   omitAnalysis(value.question);
   delete value.bank.updatedAt;
-  value.bank.questions.filter(question => question.id === value.question.id).forEach(omitAnalysis);
+  value.bank.questions.filter((question) => question.id === value.question.id).forEach(omitAnalysis);
   return value;
 }
 
 function assertOnlyAnalysis(before, after, expected) {
   assert.equal(after.question.analysis, expected);
-  assert.equal(after.bank.questions.find(question => question.id === after.question.id).analysis, expected);
+  assert.equal(after.bank.questions.find((question) => question.id === after.question.id).analysis, expected);
   const rich = after.question.richContent;
   if (rich?.fields) {
-    if (rich.fields.analysis) assert.equal(rich.fields.analysis.text, expected, 'Rich analysis still contains the old explanation.');
-    const features = [...new Set(Object.values(rich.fields).flatMap(field => Array.isArray(field) ? field.filter(Boolean).flatMap(entry => entry.features || []) : field?.features || []))].sort();
+    if (rich.fields.analysis) {assert.equal(rich.fields.analysis.text, expected, 'Rich analysis still contains the old explanation.');}
+    const features = [...new Set(Object.values(rich.fields).flatMap((field) => Array.isArray(field) ? field.filter(Boolean).flatMap((entry) => entry.features || []) : field?.features || []))].sort();
     assert.deepEqual([...rich.features].sort(), features, 'Rich feature summary was not recomputed from preserved fields.');
   }
   assert.deepEqual(immutable(after), immutable(before), 'Saving AI analysis changed answers, options, stem, chosen/submission, position or progress.');
-  before.bank.questions.filter(question => question.id !== before.question.id).forEach(question => {
-    assert.deepEqual(after.bank.questions.find(entry => entry.id === question.id), question, 'Another question changed.');
+  before.bank.questions.filter((question) => question.id !== before.question.id).forEach((question) => {
+    assert.deepEqual(after.bank.questions.find((entry) => entry.id === question.id), question, 'Another question changed.');
   });
 }
 
 function assertPayload(call, marker, absent = []) {
   const payload = JSON.stringify(call.body.messages);
   assert(payload.includes(marker), `Request omitted current question ${marker}.`);
-  absent.forEach(value => assert(!payload.includes(value), `Request leaked another question/history: ${value}.`));
+  absent.forEach((value) => assert(!payload.includes(value), `Request leaked another question/history: ${value}.`));
 }
 
 async function assertKeys(page, keys) {

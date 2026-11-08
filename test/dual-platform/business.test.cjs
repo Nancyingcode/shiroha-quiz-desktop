@@ -9,6 +9,27 @@ const { questions, webState, IMAGE } = require('./fixtures/dataset.cjs');
 
 function textFixture(name) { return readFileSync(path.join(__dirname, 'fixtures', name), 'utf8'); }
 
+test('查找表达式、文本截断与随机排序保留输入和原有规则', () => {
+  const { api } = loadWeb();
+  assert.deepEqual(plain(api.parseSlashRegexV51('/foo/im')), { pattern: 'foo', flags: 'im' });
+  assert.equal(api.parseSlashRegexV51('foo'), null);
+  const literal = api.buildFindRegExpV51('a.b', { useRegex: false, caseSensitive: false, global: true });
+  assert.equal(literal.source, 'a\\.b');
+  assert.equal(literal.flags, 'gi');
+  assert.equal(literal.test('A.B'), true);
+  const regex = api.buildFindRegExpV51('/foo/im', { useRegex: true, caseSensitive: false, global: true });
+  assert.equal(regex.source, 'foo');
+  assert.equal(regex.flags, 'gim');
+  assert.throws(() => api.buildFindRegExpV51(''), /请先输入/);
+  assert.throws(() => api.buildFindRegExpV51('a*'), /不能匹配空字符串/);
+  assert.equal(api.short('abcdef', 3), 'abc…');
+  assert.equal(api.short('![](data:image/png;base64,AA)题目', 20), '[图片]题目');
+  const original = Object.freeze([1, 2, 3, 4]);
+  const shuffled = api.shuffle(original);
+  assert.notEqual(shuffled, original);
+  assert.deepEqual(Array.from(shuffled).sort(), Array.from(original));
+});
+
 test('五类题目及历史别名归一化保持题型和答案语义', () => {
   const { api } = loadWeb();
   const fixture = questions();

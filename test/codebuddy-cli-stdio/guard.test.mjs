@@ -38,7 +38,7 @@ test('拒绝损坏 UTF-8 和超过上限的响应', () => {
 
 function events() {
   const base = { session_id: 'session', _requestId: 'request' };
-  const streamed = event => ({ ...base, type: 'stream_event',
+  const streamed = (event) => ({ ...base, type: 'stream_event',
     _meta: { 'codebuddy.ai/modelRequestId': 'model-request' }, event });
   return [
     { type: 'system', subtype: 'init', session_id: 'session' },
@@ -61,17 +61,17 @@ test('取消优先于迟到成功', () => {
   assert.equal(validateCandidate(events(), proof(), true).code, 'cancelled');
 });
 for (const [name, mutate] of [
-  ['assistant不一致', list => { list[7].message.content[0].text = 'refusal'; }],
-  ['result不一致', list => { list[8].result = 'different'; }],
-  ['错session', list => { list[5].session_id = 'other'; }],
-  ['错request', list => { list[8]._requestId = 'other'; }],
-  ['重复终态', list => { list.push(list[8]); }],
-  ['终态后事件', list => { list.push(list[4]); }],
-  ['工具', list => { list[2].event.content_block.type = 'tool_use'; }],
-  ['开始消息嵌套工具', list => { list[1].event.message.content = [{ type: 'tool_use' }]; }],
-  ['最终assistant异常停止', list => { list[7].message.stop_reason = 'tool_use'; }],
-  ['第二模型回合', list => { list.splice(7, 0, list[1]); }],
-  ['取消标记', list => { list[8].terminal_reason = 'aborted_streaming'; }],
+  ['assistant不一致', (list) => { list[7].message.content[0].text = 'refusal'; }],
+  ['result不一致', (list) => { list[8].result = 'different'; }],
+  ['错session', (list) => { list[5].session_id = 'other'; }],
+  ['错request', (list) => { list[8]._requestId = 'other'; }],
+  ['重复终态', (list) => { list.push(list[8]); }],
+  ['终态后事件', (list) => { list.push(list[4]); }],
+  ['工具', (list) => { list[2].event.content_block.type = 'tool_use'; }],
+  ['开始消息嵌套工具', (list) => { list[1].event.message.content = [{ type: 'tool_use' }]; }],
+  ['最终assistant异常停止', (list) => { list[7].message.stop_reason = 'tool_use'; }],
+  ['第二模型回合', (list) => { list.splice(7, 0, list[1]); }],
+  ['取消标记', (list) => { list[8].terminal_reason = 'aborted_streaming'; }],
 ]) {
   test(`宿主拒收${name}`, () => {
     const list = events();
@@ -84,10 +84,10 @@ test('能力值和路径检查不耗预算，并发请求最多一个到达上�
   let calls = 0;
   const upstream = createServer(async (_request, response) => {
     calls += 1;
-    await new Promise(resolve => setTimeout(resolve, 50));
+    await new Promise((resolve) => setTimeout(resolve, 50));
     response.writeHead(200, { 'content-type': 'text/event-stream' }).end(good);
   });
-  await new Promise(resolve => upstream.listen(0, '127.0.0.1', resolve));
+  await new Promise((resolve) => upstream.listen(0, '127.0.0.1', resolve));
   const relay = await createGuardedRelay(`http://127.0.0.1:${upstream.address().port}`);
   const body = JSON.stringify({ model: 'poc-model', stream: true, messages: [] });
   try {
@@ -98,29 +98,29 @@ test('能力值和路径检查不耗预算，并发请求最多一个到达上�
     const responses = await Promise.all([1, 2, 3].map(() => fetch(relay.endpoint + '/chat/completions', {
       method: 'POST', headers: relay.headers, body,
     })));
-    assert.deepEqual(responses.map(response => response.status).sort(), [200, 409, 409]);
+    assert.deepEqual(responses.map((response) => response.status).sort(), [200, 409, 409]);
     assert.equal(calls, 1);
     assert.equal(relay.evidence().forwarded, 1);
     assert.equal(relay.evidence().rejected, 2);
   } finally {
     await relay.close();
     upstream.closeAllConnections();
-    await new Promise(resolve => upstream.close(resolve));
+    await new Promise((resolve) => upstream.close(resolve));
   }
 });
 
 test('关闭转发层取消上游，迟到完成不能恢复证明', async () => {
   let markStarted;
   let markClosed;
-  const started = new Promise(resolve => { markStarted = resolve; });
-  const closed = new Promise(resolve => { markClosed = resolve; });
+  const started = new Promise((resolve) => { markStarted = resolve; });
+  const closed = new Promise((resolve) => { markClosed = resolve; });
   const upstream = createServer((_request, response) => {
     response.once('close', markClosed);
     response.writeHead(200, { 'content-type': 'text/event-stream' });
     response.write(': waiting\n\n');
     markStarted();
   });
-  await new Promise(resolve => upstream.listen(0, '127.0.0.1', resolve));
+  await new Promise((resolve) => upstream.listen(0, '127.0.0.1', resolve));
   const relay = await createGuardedRelay(`http://127.0.0.1:${upstream.address().port}`);
   const downstream = fetch(relay.endpoint + '/chat/completions', {
     method: 'POST', headers: relay.headers,
@@ -136,6 +136,6 @@ test('关闭转发层取消上游，迟到完成不能恢复证明', async () =>
     assert.equal(validateCandidate(events(), relay.evidence()).accepted, false);
   } finally {
     upstream.closeAllConnections();
-    await new Promise(resolve => upstream.close(resolve));
+    await new Promise((resolve) => upstream.close(resolve));
   }
 });

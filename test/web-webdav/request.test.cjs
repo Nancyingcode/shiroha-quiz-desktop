@@ -32,7 +32,7 @@ for (const method of ['PROPFIND', 'MKCOL', 'GET', 'PUT']) {
     });
     const actual = await context.webdavRequestV378(
       { endpoint: 'http://dav.example.invalid/root', username: 'test-user' },
-      'fake-password', 'backup.json', { method, headers: { Depth: '0' } }
+      'fake-password', 'backup.json', { method, headers: { Depth: '0' } },
     );
     assert.equal(actual, response);
     assert.equal(calls.length, 1);
@@ -48,7 +48,7 @@ test('failed HTTPS to HTTP request reports mixed content as a possibility', asyn
   let calls = 0;
   const failure = new TypeError('Failed to fetch');
   const { context, timers } = harness('https:', async () => { calls++; throw failure; });
-  await assert.rejects(context.webdavRequestV378({ endpoint: 'http://dav.example.invalid' }, '', ''), error => {
+  await assert.rejects(context.webdavRequestV378({ endpoint: 'http://dav.example.invalid' }, '', ''), (error) => {
     assert.equal(error.code, 'mixed_content');
     assert.equal(error.cause, failure);
     const diagnostic = context.classifyWebdavErrorV378(error);
@@ -67,7 +67,7 @@ for (const [pageProtocol, endpoint] of [
 ]) {
   test(`${pageProtocol} page failure to ${endpoint} stays a network diagnosis`, async () => {
     const { context, timers } = harness(pageProtocol, async () => { throw new TypeError('Failed to fetch'); });
-    await assert.rejects(context.webdavRequestV378({ endpoint }, '', ''), error => {
+    await assert.rejects(context.webdavRequestV378({ endpoint }, '', ''), (error) => {
       assert.equal(error.code, 'network');
       assert.equal(context.classifyWebdavErrorV378(error).type, '网络 / CORS / TLS');
       return true;
@@ -78,7 +78,7 @@ for (const [pageProtocol, endpoint] of [
 
 test('HTTP response errors keep their status diagnosis even on HTTPS to HTTP', async () => {
   const { context, timers } = harness('https:', async () => ({ status: 401 }));
-  await assert.rejects(context.webdavRequestV378({ endpoint: 'http://dav.example.invalid' }, '', ''), error => {
+  await assert.rejects(context.webdavRequestV378({ endpoint: 'http://dav.example.invalid' }, '', ''), (error) => {
     assert.equal(error.code, 'http');
     assert.equal(error.status, 401);
     assert.equal(context.classifyWebdavErrorV378(error).type, '鉴权失败');
@@ -94,7 +94,7 @@ test('timeout abort keeps its diagnosis and releases the timer', async () => {
   const pending = context.webdavRequestV378({ endpoint: 'http://dav.example.invalid' }, '', '');
   assert.equal(timers.size, 1);
   [...timers][0].callback();
-  await assert.rejects(pending, error => {
+  await assert.rejects(pending, (error) => {
     assert.equal(error.code, 'timeout');
     assert.equal(context.classifyWebdavErrorV378(error).type, '请求超时');
     return true;

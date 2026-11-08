@@ -12,18 +12,18 @@ function argumentsFrom(argv) {
   const options = { timeout: 10000, headed: false, selfTest: false, list: false, filter: '' };
   for (let index = 0; index < argv.length; index++) {
     const token = argv[index];
-    if (token === '--headed') options.headed = true;
-    else if (token === '--self-test') options.selfTest = true;
-    else if (token === '--list') options.list = true;
+    if (token === '--headed') {options.headed = true;}
+    else if (token === '--self-test') {options.selfTest = true;}
+    else if (token === '--list') {options.list = true;}
     else if (['--base-url', '--timeout', '--filter', '--report', '--executable-path'].includes(token)) {
       const value = argv[++index];
       assert(value && !value.startsWith('--'), `Missing value for ${token}.`);
-      if (token === '--base-url') options.url = baseUrl(value);
-      if (token === '--timeout') options.timeout = Number(value);
-      if (token === '--filter') options.filter = value;
-      if (token === '--report') options.report = reportPath(value);
+      if (token === '--base-url') {options.url = baseUrl(value);}
+      if (token === '--timeout') {options.timeout = Number(value);}
+      if (token === '--filter') {options.filter = value;}
+      if (token === '--report') {options.report = reportPath(value);}
       if (token === '--executable-path') { assert(path.isAbsolute(value), 'Browser executable path must be absolute.'); options.executablePath = value; }
-    } else throw new Error(`Unknown argument ${token}. Use --list, --self-test, --base-url, --timeout, --filter, --report, --executable-path or --headed.`);
+    } else {throw new Error(`Unknown argument ${token}. Use --list, --self-test, --base-url, --timeout, --filter, --report, --executable-path or --headed.`);}
   }
   assert(Number.isInteger(options.timeout) && options.timeout >= 1000 && options.timeout <= 60000, '--timeout must be 1000..60000 milliseconds.');
   return options;
@@ -31,10 +31,10 @@ function argumentsFrom(argv) {
 
 function rawGet(url, requestPath) {
   return new Promise((resolve, reject) => {
-    const request = http.request(new URL(url), { path: requestPath, method: 'GET' }, response => {
+    const request = http.request(new URL(url), { path: requestPath, method: 'GET' }, (response) => {
       let body = '';
       response.setEncoding('utf8');
-      response.on('data', chunk => { body += chunk; });
+      response.on('data', (chunk) => { body += chunk; });
       response.on('end', () => resolve({ status: response.statusCode, body }));
     });
     request.on('error', reject);
@@ -58,7 +58,7 @@ async function frameworkSelfTest(browser, url, keys, timeout, ownedServer) {
       assert(bank.body.includes('suppressed') && bank.body.length < 100);
     }
     // Exercise real browser fetch and routing without loading any application/bank data.
-    await h.context.route(url, route => route.fulfill({ contentType: 'text/html', body: '<!doctype html><html><body data-storage-state="ready"><button id="start-practice-btn">Harness self-test</button></body></html>' }));
+    await h.context.route(url, (route) => route.fulfill({ contentType: 'text/html', body: '<!doctype html><html><body data-storage-state="ready"><button id="start-practice-btn">Harness self-test</button></body></html>' }));
     await h.boot();
     await assertKeys(h.page, keys);
     const payload = { model: MODEL, stream: false, messages: [{ role: 'user', content: 'Synthetic self-test.' }], response_format: { type: 'json_object' } };
@@ -80,7 +80,7 @@ async function frameworkSelfTest(browser, url, keys, timeout, ownedServer) {
     assert.equal(JSON.parse(plain.payload.choices[0].message.content).revisedAnalysis, 'SELF_TEST_REVISION');
     const held = h.mock.enqueue('analysis', analysis('SELF_TEST_DELAY'), { hold: true });
     let settled = false;
-    const delayed = call().then(value => { settled = true; return value; });
+    const delayed = call().then((value) => { settled = true; return value; });
     await h.waitCall(held);
     assert.equal(settled, false);
     held.release();
@@ -89,7 +89,7 @@ async function frameworkSelfTest(browser, url, keys, timeout, ownedServer) {
     assert.equal((await call()).status, 503);
     await h.waitCall(failure);
     for (const target of ['https://blocked-network.invalid/v1/chat/completions', new URL('unexpected-fetch', url).href]) {
-      assert.equal(await h.page.evaluate(async target => { try { await fetch(target); return false; } catch { return true; } }, target), true);
+      assert.equal(await h.page.evaluate(async (target) => { try { await fetch(target); return false; } catch { return true; } }, target), true);
     }
     assert.equal(h.blocked.length, 2);
     assert.equal(h.mock.violations.length, 0);
@@ -101,7 +101,7 @@ async function frameworkSelfTest(browser, url, keys, timeout, ownedServer) {
 
 async function main() {
   const events = [];
-  const emit = event => { events.push(event); process.stdout.write(`${JSON.stringify(event)}\n`); };
+  const emit = (event) => { events.push(event); process.stdout.write(`${JSON.stringify(event)}\n`); };
   let server;
   let browser;
   let options;
@@ -109,9 +109,9 @@ async function main() {
   const started = Date.now();
   try {
     options = argumentsFrom(process.argv.slice(2));
-    const selected = cases.filter(test => test.name.includes(options.filter));
+    const selected = cases.filter((test) => test.name.includes(options.filter));
     assert(selected.length || options.selfTest, `No tests match ${options.filter}.`);
-    if (options.list) { selected.forEach(test => emit({ type: 'test', name: test.name })); exitCode = 0; return; }
+    if (options.list) { selected.forEach((test) => emit({ type: 'test', name: test.name })); exitCode = 0; return; }
     const keys = storageKeys();
     const playwright = loadPlaywright();
     server = options.url ? null : await startServer();
@@ -144,7 +144,7 @@ async function main() {
         assert.equal(h.mock.violations.length, 0, h.mock.violations.join(' '));
         assert.equal(h.mock.queue.length, 0, 'Expected mock responses were not requested.');
         assert.equal(h.pageErrors.length, 0, h.pageErrors.join(' '));
-        const suspicious = h.blocked.filter(request => ['fetch', 'xhr', 'websocket'].includes(request.type) || !['GET', 'HEAD'].includes(request.method));
+        const suspicious = h.blocked.filter((request) => ['fetch', 'xhr', 'websocket'].includes(request.type) || !['GET', 'HEAD'].includes(request.method));
         assert.equal(suspicious.length, 0, `Blocked unexpected API request: ${JSON.stringify(suspicious)}`);
       } catch (cause) { error = cause; }
       finally {
@@ -153,7 +153,7 @@ async function main() {
           try { await h.cleanup(); } catch (cause) { error ||= cause; }
         }
       }
-      if (error) failed++; else passed++;
+      if (error) {failed++;} else {passed++;}
       emit({ type: 'case', name: test.name, status: error ? 'failed' : 'passed', durationMs: Date.now() - beginning, ...diagnostics, ...(error ? { error: error.message, stack: error.stack } : {}) });
     }
     exitCode = failed ? 1 : 0;
@@ -161,17 +161,17 @@ async function main() {
   } catch (error) {
     emit({ type: 'fatal', status: 'error', exitCode: 2, error: error.message, stack: error.stack });
   } finally {
-    try { if (browser) await browser.close(); if (server) await server.close(); }
+    try { if (browser) {await browser.close();} if (server) {await server.close();} }
     catch (error) { exitCode = 2; emit({ type: 'fatal', exitCode, error: error.message }); }
     if (options?.report) {
       try {
         const target = reportPath(options.report);
         await fs.mkdir(path.dirname(target), { recursive: true });
-        await fs.writeFile(target, `${events.map(event => JSON.stringify(event)).join('\n')}\n`, { encoding: 'utf8', flag: 'w' });
+        await fs.writeFile(target, `${events.map((event) => JSON.stringify(event)).join('\n')}\n`, { encoding: 'utf8', flag: 'w' });
       } catch (error) { exitCode = 2; process.stderr.write(`Report write failed: ${error.message}\n`); }
     }
     process.exitCode = exitCode;
   }
 }
 
-main().catch(error => { process.stderr.write(`${error.stack}\n`); process.exitCode = 2; });
+main().catch((error) => { process.stderr.write(`${error.stack}\n`); process.exitCode = 2; });

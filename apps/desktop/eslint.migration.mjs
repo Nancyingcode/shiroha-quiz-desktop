@@ -224,25 +224,7 @@ export const styleDebt = {
 export const legacyStyleFiles = Object.keys(styleDebt);
 
 // 这些历史文件原本不在门禁中；单独报告语义债务，迁移后从此清单移除。
-export const legacyOutsideFiles = [
-  'apps/web/app.js',
-  'test/codebuddy-cli-stdio/container-relay-fixture.mjs',
-  'test/codebuddy-cli-stdio/guard.mjs',
-  'test/codebuddy-cli-stdio/guard.test.mjs',
-  'test/codebuddy-cli-stdio/probe.mjs',
-  'test/codebuddy-cli-stdio/verify-guarded.mjs',
-  'test/codebuddy-cli-stdio/verify.mjs',
-  'test/web-ai-practice/cases.cjs',
-  'test/web-ai-practice/dialogs.cjs',
-  'test/web-ai-practice/fixtures.cjs',
-  'test/web-ai-practice/harness.cjs',
-  'test/web-ai-practice/runner.cjs',
-  'test/web-ai-practice/saved-analysis.cjs',
-  'test/web-ai-practice/submit-modes.cjs',
-  'test/web-ai-practice/wrong-analysis.cjs',
-  'test/web-webdav/request.test.cjs',
-];
-
+// 原门禁外文件清单已清空，相关手写脚本均已纳入正式门禁。
 // 仅尚未清零的文件/规则暂缓强制；其余语义规则保持 error，报告不以数量抵扣。
 export const semanticDebt = {
   'apps/desktop/frontend/adapter.js': [

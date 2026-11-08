@@ -17,10 +17,10 @@ async function ready(h) {
 }
 
 const cases = [
-  ...['single', 'total'].map(mode => ({
+  ...['single', 'total'].map((mode) => ({
     name: `practice-clear-options-ai-draft-${mode}`,
     async run(h) {
-      if (mode === 'total') await startTotal(h); else await h.start();
+      if (mode === 'total') {await startTotal(h);} else {await h.start();}
       await h.page.locator('#practice-card .option[data-key="B"]').click();
       await h.generate(analysis('BEFORE_CLEAR'));
       const before = await snapshot(h.page);
@@ -33,20 +33,20 @@ const cases = [
       assert.deepEqual(after.wrongBook, before.wrongBook);
       assert((await h.page.locator(SEL.panel).innerText()).includes('BEFORE_CLEAR'));
       const request = await h.generate(analysis('AFTER_CLEAR'), { regenerate: true });
-      assert(request.body.messages.find(message => message.role === 'user').content.includes('"userAnswer":[]'));
+      assert(request.body.messages.find((message) => message.role === 'user').content.includes('"userAnswer":[]'));
       assert.equal((await snapshot(h.page)).practice.answered, 0);
     },
   })),
-  ...['single', 'total'].map(mode => ({
+  ...['single', 'total'].map((mode) => ({
     name: `practice-review-ai-unsubmitted-${mode}`,
     async run(h) {
-      if (mode === 'total') await startTotal(h); else await h.start();
+      if (mode === 'total') {await startTotal(h);} else {await h.start();}
       await h.page.locator('#practice-card .option[data-key="B"]').click();
       const before = await snapshot(h.page);
       await h.quiet();
       const call = await h.generate(analysis('UNSUBMITTED_AI'));
       assertPayload(call, 'SAFE_Q1', ['SAFE_Q2']);
-      assert(call.body.messages.find(message => message.role === 'user').content.includes('"userAnswer":["B"]'));
+      assert(call.body.messages.find((message) => message.role === 'user').content.includes('"userAnswer":["B"]'));
       assert.equal((await snapshot(h.page)).practice.answered, 0);
       assert.deepEqual((await snapshot(h.page)).records, before.records);
       assert.deepEqual((await snapshot(h.page)).practice.answerState, before.practice.answerState);
@@ -119,7 +119,7 @@ const cases = [
   {
     name: 'submit-modes-total-drafts-and-subjective',
     async run(h) {
-      const sidebarBefore = await h.page.locator('body').evaluate(body => body.classList.contains('side-collapsed'));
+      const sidebarBefore = await h.page.locator('body').evaluate((body) => body.classList.contains('side-collapsed'));
       await startTotal(h);
       const before = await snapshot(h.page);
       await h.page.locator('#practice-card .option[data-key="A"]').click();
@@ -156,7 +156,7 @@ const cases = [
       assert.equal((await snapshot(h.page)).practice.answered, 0);
       await h.page.locator('#p-exit').click();
       await h.page.locator('#start-practice-btn').waitFor({ state: 'visible' });
-      assert.equal(await h.page.locator('body').evaluate(body => body.classList.contains('side-collapsed')), sidebarBefore);
+      assert.equal(await h.page.locator('body').evaluate((body) => body.classList.contains('side-collapsed')), sidebarBefore);
     },
   },
   {
@@ -165,13 +165,13 @@ const cases = [
       await startTotal(h);
       const before = await snapshot(h.page);
       h.page.removeAllListeners('app-dialog');
-      h.page.on('app-dialog', dialog => dialog.dismiss());
+      h.page.on('app-dialog', (dialog) => dialog.dismiss());
       await h.page.locator('#p-submit-all').click();
       await h.page.locator('.option[data-key="A"]').click();
       await h.page.locator('#p-exit').click();
       assert(await h.page.locator('#p-submit-all').isVisible());
       h.page.removeAllListeners('app-dialog');
-      h.page.on('app-dialog', dialog => dialog.accept());
+      h.page.on('app-dialog', (dialog) => dialog.accept());
       await h.page.locator('#p-exit').click();
       await h.page.locator('#start-practice-btn').waitFor({ state: 'visible' });
       const after = await snapshot(h.page);
@@ -188,16 +188,16 @@ const cases = [
       await h.jump(3);
       await h.page.locator('#practice-card .text-answer').fill('Self-assessed wrong answer.');
       const before = await snapshot(h.page);
-      await h.page.evaluate(key => {
+      await h.page.evaluate((key) => {
         const original = Storage.prototype.setItem;
         window.__restoreSubmitStorage = () => { Storage.prototype.setItem = original; };
         Storage.prototype.setItem = function(name, value) {
-          if (name === key) throw new DOMException('Synthetic quota failure', 'QuotaExceededError');
+          if (name === key) {throw new DOMException('Synthetic quota failure', 'QuotaExceededError');}
           return original.call(this, name, value);
         };
       }, h.keys.state);
-      await h.page.locator('#p-submit-all').evaluate(button => { button.click(); button.click(); });
-      await h.page.locator('#p-self-wrong').evaluate(button => { button.click(); button.click(); });
+      await h.page.locator('#p-submit-all').evaluate((button) => { button.click(); button.click(); });
+      await h.page.locator('#p-self-wrong').evaluate((button) => { button.click(); button.click(); });
       await h.page.locator('#platform-status.failed button').waitFor();
       await ready(h);
       const failed = await snapshot(h.page);

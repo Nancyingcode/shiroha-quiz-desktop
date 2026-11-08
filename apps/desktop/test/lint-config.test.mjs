@@ -30,6 +30,7 @@ const invalidCases = [
   ['no-var', 'var value = 1; console.log(value);\n'],
   ['prefer-const', 'let value = 1; console.log(value);\n'],
   ['no-unused-vars', 'const unused = 1;\n'],
+  ['no-undef', 'console.log(unknownName);\n'],
   ['eqeqeq', 'console.log(1 == "1");\n'],
   ['no-nested-ternary', 'console.log(true ? 1 : false ? 2 : 3);\n'],
   ['no-param-reassign', 'function change(value) { value = 2; return value; }\nconsole.log(change(1));\n'],
@@ -98,6 +99,27 @@ test('Node ESM, CommonJS and classic scripts keep separate readonly globals', as
   }
   const [esmInScript] = await linter().lintText('export const value = 1;\n', { filePath: probes[2] });
   assert(esmInScript.messages.some((message) => message.fatal));
+});
+
+test('browser callback and application state globals stay limited to their test files', async () => {
+  const lint = linter();
+  const source = 'console.log(window, document, state, practiceSession);\n';
+  const [harness] = await lint.lintText(source, { filePath: 'test/web-ai-practice/harness.cjs' });
+  assert.equal(harness.errorCount + harness.warningCount, 0, JSON.stringify(harness.messages));
+  const [runner] = await lint.lintText(source, { filePath: 'test/web-ai-practice/runner.cjs' });
+  assert.equal(runner.messages.filter((message) => message.ruleId === 'no-undef').length, 4);
+});
+
+test('handwritten JavaScript under the Tauri project is checked while generated files stay excluded', async () => {
+  const lint = linter();
+  const source = 'var value = 1; console.log(value);\n';
+  const filePath = 'apps/desktop/src-tauri/new-probe.js';
+  assert.equal(await lint.isPathIgnored(path.join(root, filePath)), false);
+  const [result] = await lint.lintText(source, { filePath });
+  assert(result.messages.some((message) => message.ruleId === 'no-var'));
+  for (const generated of ['apps/desktop/src-tauri/target/probe.js', 'apps/desktop/src-tauri/gen/probe.js']) {
+    assert.equal(await lint.isPathIgnored(path.join(root, generated)), true);
+  }
 });
 
 test('duplicate ESM imports are rejected while explicit extensions and named exports pass', async () => {
@@ -210,24 +232,60 @@ test('incremental CLI finds untracked code outside the old scopes and reads comp
   await writeFile(probe, "console.log('valid');\n");
   const valid = f.run('lint-incremental.mjs');
   assert.equal(valid.status, 0, valid.stderr + valid.stdout);
-  assert.match(valid.stdout, /Checked 6 complete/);
+  assert.match(valid.stdout, /Checked 7 complete/);
 });
 
-test('incremental CLI enforces the graduated app.js rules without rewriting source', async (t) => {
+test('app.js enforces the full target rules and incremental CLI does not rewrite it', async (t) => {
   const f = await repositoryFixture(t);
   const app = path.join(f.temporary, 'apps/web/app.js');
-  for (const [rule, source] of invalidCases.filter(([rule]) => [
-    'no-var', 'prefer-const', 'no-nested-ternary',
-  ].includes(rule))) {
-    await writeFile(app, source);
-    const rejected = f.run('lint-incremental.mjs');
-    assert.equal(rejected.status, 1, `${rule}: ${rejected.stderr}${rejected.stdout}`);
-    assert.match(rejected.stdout, new RegExp(rule));
-    assert.equal(await readFile(app, 'utf8'), source);
+  const lint = linter();
+  for (const [rule, source] of invalidCases) {
+    const [result] = await lint.lintText(source, { filePath: 'apps/web/app.js' });
+    assert(result.messages.some((message) => message.ruleId === rule), rule);
   }
+  const invalid = 'var value = 1; console.log(value);\n';
+  await writeFile(app, invalid);
+  const rejected = f.run('lint-incremental.mjs');
+  assert.equal(rejected.status, 1, rejected.stderr + rejected.stdout);
+  assert.match(rejected.stdout, /no-var/);
+  assert.equal(await readFile(app, 'utf8'), invalid);
   await writeFile(app, "console.log('valid');\n");
   const accepted = f.run('lint-incremental.mjs');
   assert.equal(accepted.status, 0, accepted.stderr + accepted.stdout);
+});
+
+test('incremental CLI rejects violations in formerly excluded handwritten scripts', async (t) => {
+  const f = await repositoryFixture(t);
+  const files = [
+    'test/codebuddy-cli-stdio/container-relay-fixture.mjs',
+    'test/codebuddy-cli-stdio/guard.mjs',
+    'test/codebuddy-cli-stdio/guard.test.mjs',
+    'test/codebuddy-cli-stdio/probe.mjs',
+    'test/codebuddy-cli-stdio/verify-guarded.mjs',
+    'test/codebuddy-cli-stdio/verify.mjs',
+    'test/web-ai-practice/cases.cjs',
+    'test/web-ai-practice/dialogs.cjs',
+    'test/web-ai-practice/fixtures.cjs',
+    'test/web-ai-practice/harness.cjs',
+    'test/web-ai-practice/runner.cjs',
+    'test/web-ai-practice/saved-analysis.cjs',
+    'test/web-ai-practice/submit-modes.cjs',
+    'test/web-ai-practice/wrong-analysis.cjs',
+    'test/web-webdav/request.test.cjs',
+  ];
+  const invalid = 'var value = 1; console.log(value);\n';
+  for (const file of files) {
+    const target = path.join(f.temporary, file);
+    await mkdir(path.dirname(target), { recursive: true });
+    await writeFile(target, invalid);
+  }
+  const rejected = f.run('lint-incremental.mjs');
+  assert.equal(rejected.status, 1, rejected.stderr + rejected.stdout);
+  for (const file of files) {
+    const target = path.join(f.temporary, file);
+    assert(rejected.stdout.includes(target), file);
+    assert.equal(await readFile(target, 'utf8'), invalid);
+  }
 });
 
 test('debt CLI reports rule locations but rejects missing files and syntax failures', async (t) => {

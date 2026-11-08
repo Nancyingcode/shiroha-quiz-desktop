@@ -6,13 +6,13 @@ const { snapshot, assertPayload } = require('./harness.cjs');
 
 const options = { emptyAnalysis: true };
 const button = (panel, action) => panel.locator(`[data-review-ai="${action}"]`);
-const stored = h => h.page.evaluate(key => JSON.parse(localStorage.getItem(key)), h.keys.state);
+const stored = (h) => h.page.evaluate((key) => JSON.parse(localStorage.getItem(key)), h.keys.state);
 async function generate(h, panel, text, responseOptions = {}) {
   const entry = h.mock.enqueue('analysis', analysis(text), responseOptions);
   await button(panel, 'generate').click();
   const call = await h.waitCall(entry);
-  if (!responseOptions.status) await panel.locator('.q-multiline-text').filter({ hasText: text }).waitFor();
-  else await panel.locator('[role="alert"]').waitFor();
+  if (!responseOptions.status) {await panel.locator('.q-multiline-text').filter({ hasText: text }).waitFor();}
+  else {await panel.locator('[role="alert"]').waitFor();}
   return call;
 }
 async function save(h, panel) {
@@ -21,7 +21,7 @@ async function save(h, panel) {
   await panel.locator('.review-analysis-saved').waitFor();
 }
 async function wrongBook(h) {
-  if (await h.page.locator('#back-practice-setup').isVisible()) await h.page.locator('#back-practice-setup').click();
+  if (await h.page.locator('#back-practice-setup').isVisible()) {await h.page.locator('#back-practice-setup').click();}
   await h.page.locator('.nav[data-view="wrongbook"]').click();
   return h.page.locator('#wrongbook-list .wrong-item').filter({ hasText: 'SAFE_Q1' }).locator('[data-review-analysis]');
 }
@@ -47,7 +47,7 @@ const cases = [
       const beforeMemory = await snapshot(h.page);
       const call = await generate(h, panel, 'WRONG_BOOK_DRAFT');
       assertPayload(call, 'SAFE_Q1', ['SAFE_Q2', 'SAFE_BLANK', 'SAFE_SHORT', 'SAFE_IMAGE']);
-      assert(call.body.messages.find(message => message.role === 'user').content.includes('"userAnswer":["B"]'));
+      assert(call.body.messages.find((message) => message.role === 'user').content.includes('"userAnswer":["B"]'));
       assert.deepEqual(await stored(h), before, 'Generating persisted an unconfirmed draft.');
       assert.match(await panel.innerText(), /草稿 · 未保存/);
       await save(h, panel);
@@ -104,10 +104,10 @@ const cases = [
       const panel = h.page.locator('#p-feedback [data-review-analysis]');
       await generate(h, panel, 'QUOTA_REVIEW_DRAFT');
       const before = await snapshot(h.page), savedBefore = await stored(h);
-      await h.page.evaluate(key => {
+      await h.page.evaluate((key) => {
         window.__reviewOriginalSet = Storage.prototype.setItem;
         Storage.prototype.setItem = function (name, value) {
-          if (this === localStorage && name === key) throw new DOMException('Synthetic quota', 'QuotaExceededError');
+          if (this === localStorage && name === key) {throw new DOMException('Synthetic quota', 'QuotaExceededError');}
           return window.__reviewOriginalSet.call(this, name, value);
         };
       }, h.keys.state);
@@ -171,7 +171,7 @@ const cases = [
       await panel.locator('[role="alert"]').waitFor();
       assert.match(await panel.innerText(), /来源题库或题目不存在/);
       assert.match(await panel.innerText(), /ORPHAN_RESULT_DRAFT/);
-      assert.equal((await stored(h)).banks.find(bank => bank.id === BANK_ID).questions.some(q => q.id === 'safe-single-1'), false);
+      assert.equal((await stored(h)).banks.find((bank) => bank.id === BANK_ID).questions.some((q) => q.id === 'safe-single-1'), false);
     },
   },
   {
@@ -188,7 +188,7 @@ const cases = [
       await save(h, panel);
       const after = await stored(h);
       assert.deepEqual(after.records, before.records);
-      assert.equal(after.banks[0].questions.filter(q => q.analysis === 'EXAM_RESULT_DRAFT').length, 1);
+      assert.equal(after.banks[0].questions.filter((q) => q.analysis === 'EXAM_RESULT_DRAFT').length, 1);
       await h.page.locator('#exam-review-result').click();
       await h.page.locator('#training-question .training-analysis').filter({ hasText: 'EXAM_RESULT_DRAFT' }).waitFor();
       await h.page.reload();

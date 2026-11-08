@@ -58,22 +58,10 @@ const browserGlobals = Object.fromEntries([
 
 export const excludedFiles = [
   '**/node_modules/**', '**/dist/**', '**/.reports/**', '**/.git/**',
-  'apps/desktop/src-tauri/**', 'apps/web/libs/**', 'apps/web/question-bank.js',
+  'apps/desktop/src-tauri/target/**', 'apps/desktop/src-tauri/gen/**',
+  'apps/web/libs/**', 'apps/web/question-bank.js',
   'test/fixtures/**',
 ];
-
-/** @returns {import('eslint').Linter.Config[]} */
-export function createLegacyAppConfig() {
-  return [{
-    files: ['apps/web/app.js'],
-    languageOptions: { ecmaVersion: 'latest', sourceType: 'script' },
-    rules: {
-      'no-var': baseRules['no-var'],
-      'prefer-const': baseRules['prefer-const'],
-      'no-nested-ternary': semanticRules['no-nested-ternary'],
-    },
-  }];
-}
 
 // 浏览器回调由 Playwright 序列化后执行；仅这些既有宿主文件允许回调内使用浏览器名称。
 const browserCallbackFiles = [
@@ -81,7 +69,18 @@ const browserCallbackFiles = [
   'document-smoke', 'harness-smoke', 'network-smoke', 'smoke',
 ].map((name) => `apps/desktop/scripts/${name}.mjs`);
 
-/** @param {{desktop?: boolean, debt?: boolean, semanticOnly?: boolean}} [options] */
+// Playwright 回调在页面中执行；状态名称只供注入应用 IIFE 的测试桥接使用。
+const webTestCallbackGlobals = {
+  'test/web-ai-practice/cases.cjs': ['localStorage', 'document', 'Storage', 'window', 'DOMException'],
+  'test/web-ai-practice/dialogs.cjs': ['document', 'MutationObserver'],
+  'test/web-ai-practice/harness.cjs': ['sessionStorage', 'localStorage', 'window', 'document', 'state', 'practiceSession'],
+  'test/web-ai-practice/saved-analysis.cjs': ['localStorage'],
+  'test/web-ai-practice/submit-modes.cjs': ['Storage', 'window', 'DOMException'],
+  'test/web-ai-practice/wrong-analysis.cjs': ['localStorage', 'window', 'Storage', 'DOMException'],
+};
+
+/** @param {{desktop?: boolean, debt?: boolean, semanticOnly?: boolean}} [options]
+ * @returns {import('eslint').Linter.Config[]} */
 export function createConfig({ desktop = false, debt = false, semanticOnly = false } = {}) {
   const relative = (/** @type {string} */ file) => desktop ? file.replace(/^apps\/desktop\//, '') : file;
   /** @type {import('eslint').Linter.Config[]} */
@@ -122,6 +121,12 @@ export function createConfig({ desktop = false, debt = false, semanticOnly = fal
       languageOptions: { sourceType: 'script', globals: browserGlobals },
     },
     {
+      files: [relative('apps/web/app.js')],
+      // 共享脚本先于入口加载；旧导出扩展可能不存在，入口以 typeof 检查后才调用。
+      languageOptions: { globals: { ShirohaPlatform: 'readonly', ShirohaTraining: 'readonly',
+        ShirohaDialogs: 'readonly', requestAnimationFrame: 'readonly', renderExportBankSelectorV23: 'readonly' } },
+    },
+    {
       files: [relative('apps/desktop/frontend/bridge.js')],
       languageOptions: { sourceType: 'module' },
     },
@@ -135,6 +140,12 @@ export function createConfig({ desktop = false, debt = false, semanticOnly = fal
       },
     },
   ];
+  for (const [file, names] of Object.entries(webTestCallbackGlobals)) {
+    config.push({
+      files: [relative(file)],
+      languageOptions: { globals: Object.fromEntries(names.map((name) => [name, 'readonly'])) },
+    });
+  }
   if (!debt && !semanticOnly) {
     for (const [file, rules] of [...Object.entries(styleDebt), ...Object.entries(semanticDebt)]) {
       config.push({

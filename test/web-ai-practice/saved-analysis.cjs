@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const { analysis } = require('./fixtures.cjs');
 const { SEL, snapshot } = require('./harness.cjs');
 
-const stored = h => h.page.evaluate(key => JSON.parse(localStorage.getItem(key)), h.keys.state);
+const stored = (h) => h.page.evaluate((key) => JSON.parse(localStorage.getItem(key)), h.keys.state);
 async function openSaved(h, text) {
   const requests = h.mock.calls.length;
   await h.page.locator(SEL.open).click();
@@ -15,7 +15,7 @@ async function openSaved(h, text) {
 }
 
 const cases = [
-  ...['single', 'total'].map(mode => ({
+  ...['single', 'total'].map((mode) => ({
     name: `saved-analysis-${mode}-practice-reopens-and-reloads-without-network`,
     options: { emptyAnalysis: true },
     async run(h) {
@@ -36,7 +36,7 @@ const cases = [
       await openSaved(h, 'PERSISTED_PRACTICE_ANALYSIS');
       assert.equal(h.mock.calls.length, 1);
       await h.page.locator('#p-exit').click();
-      if (await h.page.locator('#back-practice-setup').isVisible()) await h.page.locator('#back-practice-setup').click();
+      if (await h.page.locator('#back-practice-setup').isVisible()) {await h.page.locator('#back-practice-setup').click();}
       await h.page.locator('.nav[data-view="favorites"]').click();
       await h.page.locator('#favorites-list-v596 [data-preview-question="safe-single-1"]').click();
       assert.match(await h.page.locator('#bank-question-detail').innerText(), /PERSISTED_PRACTICE_ANALYSIS/);

@@ -6,7 +6,7 @@ const { SEL, snapshot, assertOnlyAnalysis, assertPayload, assertKeys } = require
 
 async function collapsed(h) {
   await h.page.locator(SEL.open).waitFor();
-  const buttons = await h.page.locator(`${SEL.panel} button:visible`).evaluateAll(elements => elements.map(element => element.hasAttribute('data-ai-single-open-v613')));
+  const buttons = await h.page.locator(`${SEL.panel} button:visible`).evaluateAll((elements) => elements.map((element) => element.hasAttribute('data-ai-single-open-v613')));
   assert.deepEqual(buttons, [true], 'A collapsed panel must contain only the open button.');
   assert.equal(await h.page.locator(`${SEL.panel} ${SEL.text}:visible`).count(), 0);
   assert.equal(await h.page.locator(`${SEL.panel} ${SEL.chat}:visible`).count(), 0);
@@ -19,8 +19,8 @@ async function saveAndCheck(h, expected) {
   await h.page.locator('body[data-storage-state="ready"]').waitFor();
   const after = await snapshot(h.page);
   assertOnlyAnalysis(before, after, expected);
-  const stored = await h.page.evaluate(key => JSON.parse(localStorage.getItem(key)), h.keys.state);
-  const question = stored.banks.find(bank => bank.id === after.bank.id).questions.find(question => question.id === after.question.id);
+  const stored = await h.page.evaluate((key) => JSON.parse(localStorage.getItem(key)), h.keys.state);
+  const question = stored.banks.find((bank) => bank.id === after.bank.id).questions.find((question) => question.id === after.question.id);
   assert.deepEqual(question, after.question, 'Saved draft did not reach localStorage.');
   await assertKeys(h.page, h.keys);
 }
@@ -52,14 +52,14 @@ const cases = [
       assert.equal(before.practice.idx, 1);
       assert.equal(before.practice.answered, 2);
       assert.deepEqual(before.practice.answerState[before.key].chosen, ['B']);
-      assert(await h.page.locator('body').evaluate(body => body.classList.contains('practice-focus')));
+      assert(await h.page.locator('body').evaluate((body) => body.classList.contains('practice-focus')));
       await h.page.locator(SEL.open).click();
       await h.quiet();
       await h.page.locator(`${SEL.panel} ${SEL.settings}`).click();
       await h.page.locator('#ai-settings.active').waitFor({ state: 'visible' });
       await h.page.locator('#ai-endpoint-v99').waitFor({ state: 'visible' });
       await h.page.locator('#ai-model-v99').waitFor({ state: 'visible' });
-      assert.equal(await h.page.locator('body').evaluate(body => body.classList.contains('practice-focus')), false, 'AI settings remained hidden by practice-focus CSS.');
+      assert.equal(await h.page.locator('body').evaluate((body) => body.classList.contains('practice-focus')), false, 'AI settings remained hidden by practice-focus CSS.');
       assert.equal(await h.page.locator('.nav[data-view="ai-settings"].active').count(), 1);
       await h.quiet();
       const after = await snapshot(h.page);
@@ -156,7 +156,7 @@ const cases = [
       assert(!(await h.page.locator(SEL.panel).textContent()).includes('DELAYED_Q1_DRAFT'));
       const current = await snapshot(h.page);
       assert.equal(current.question.id, 'safe-single-2');
-      assert.equal(current.question.analysis, original.bank.questions.find(question => question.id === current.question.id).analysis);
+      assert.equal(current.question.analysis, original.bank.questions.find((question) => question.id === current.question.id).analysis);
     },
   },
   {
@@ -178,7 +178,7 @@ const cases = [
       assert.equal(await h.page.locator(SEL.input).inputValue(), '');
     },
   },
-  ...['exit', 'reset', 'restart'].map(mode => ({
+  ...['exit', 'reset', 'restart'].map((mode) => ({
     name: `late-analysis-cannot-write-new-session-${mode}`, options: { ignoreAbort: true },
     async run(h) {
       await h.start(); await h.reveal();
@@ -188,7 +188,7 @@ const cases = [
       else {
         // The focus layout hides setup controls; reveal layout only, then use the real handlers.
         await h.page.evaluate(() => document.body.classList.remove('practice-focus'));
-        if (mode === 'reset') await h.page.locator('#reset-practice-btn').click();
+        if (mode === 'reset') {await h.page.locator('#reset-practice-btn').click();}
         await h.page.locator('#start-practice-btn').click();
       }
       await h.reveal();
@@ -308,17 +308,17 @@ const cases = [
       assert.deepEqual(await snapshot(h.page), before);
     },
   },
-  ...['answered', 'revealed'].map(mode => ({
+  ...['answered', 'revealed'].map((mode) => ({
     name: `save-only-analysis-preserves-${mode}-practice`,
     async run(h) {
       await h.start();
-      if (mode === 'answered') await h.submitChoice('B'); else await h.reveal();
+      if (mode === 'answered') {await h.submitChoice('B');} else {await h.reveal();}
       const before = await snapshot(h.page);
       await h.generate(analysis('ONLY_THIS_ANALYSIS_IS_SAVED', { suggestedAnswer: 'B', matchesLocalAnswer: false, needsReview: true, warning: 'Synthetic disagreement, never replace local answer.' }));
       await h.follow('UNSAVED_FOLLOW_QUESTION', 'UNSAVED_FOLLOW_REPLY');
       assert.deepEqual(await snapshot(h.page), before);
       await saveAndCheck(h, 'ONLY_THIS_ANALYSIS_IS_SAVED');
-      const raw = await h.page.evaluate(key => localStorage.getItem(key), h.keys.state);
+      const raw = await h.page.evaluate((key) => localStorage.getItem(key), h.keys.state);
       assert(!raw.includes('UNSAVED_FOLLOW_QUESTION') && !raw.includes('UNSAVED_FOLLOW_REPLY'));
     },
   })),
@@ -328,19 +328,19 @@ const cases = [
       await h.start(); await h.reveal();
       await h.generate(analysis('OVERWRITE_DRAFT'));
       const before = await snapshot(h.page);
-      const raw = await h.page.evaluate(key => localStorage.getItem(key), h.keys.state);
+      const raw = await h.page.evaluate((key) => localStorage.getItem(key), h.keys.state);
       let confirmationSeen = false;
       h.page.removeAllListeners('app-dialog');
-      h.page.on('app-dialog', dialog => { confirmationSeen = dialog.type() === 'confirm'; return dialog.dismiss(); });
+      h.page.on('app-dialog', (dialog) => { confirmationSeen = dialog.type() === 'confirm'; return dialog.dismiss(); });
       await h.page.locator(SEL.save).click();
       await h.page.locator('body[data-storage-state="ready"]').waitFor();
       assert.equal(confirmationSeen, true, 'Existing local analysis was overwritten without confirmation.');
       assert.deepEqual(await snapshot(h.page), before);
-      assert.equal(await h.page.evaluate(key => localStorage.getItem(key), h.keys.state), raw);
+      assert.equal(await h.page.evaluate((key) => localStorage.getItem(key), h.keys.state), raw);
       await h.text('OVERWRITE_DRAFT');
       assert(await h.page.locator(SEL.save).isEnabled());
       h.page.removeAllListeners('app-dialog');
-      h.page.on('app-dialog', dialog => dialog.accept());
+      h.page.on('app-dialog', (dialog) => dialog.accept());
       await saveAndCheck(h, 'OVERWRITE_DRAFT');
     },
   },
@@ -359,7 +359,7 @@ const cases = [
       assert(after.question.richContent.features.includes('latex_formula'));
       assert.deepEqual(after.question.richContent.fields.question, before.question.richContent.fields.question);
       assert.deepEqual(after.question.richContent.fields.options, before.question.richContent.fields.options);
-      const raw = await h.page.evaluate(key => localStorage.getItem(key), h.keys.state);
+      const raw = await h.page.evaluate((key) => localStorage.getItem(key), h.keys.state);
       const saved = JSON.parse(raw).banks[0].questions[0];
       assert(!JSON.stringify(saved).includes('OLD_RICH_ANALYSIS'));
       assert(raw.includes('OLD_RICH_ANALYSIS'), 'Historical record was unexpectedly rewritten.');
@@ -401,8 +401,8 @@ const cases = [
       await h.follow('QUOTA_UNSAVED_QUESTION', 'QUOTA_UNSAVED_REPLY');
       const history = await h.page.locator(SEL.chat).textContent();
       const before = await snapshot(h.page);
-      const stored = await h.page.evaluate(key => localStorage.getItem(key), h.keys.state);
-      await h.page.evaluate(key => {
+      const stored = await h.page.evaluate((key) => localStorage.getItem(key), h.keys.state);
+      await h.page.evaluate((key) => {
         const original = Storage.prototype.setItem;
         window.__webAiQuotaTest = { attempts: 0, original };
         Storage.prototype.setItem = function (name, value) {
@@ -418,7 +418,7 @@ const cases = [
         await h.page.locator('body[data-storage-state="ready"]').waitFor();
         assert((await h.page.evaluate(() => window.__webAiQuotaTest.attempts)) > 0, 'Quota injection did not reach the save path.');
         assert.deepEqual(await snapshot(h.page), before, 'Quota failure did not roll back in-memory question/bank/practice.');
-        assert.equal(await h.page.evaluate(key => localStorage.getItem(key), h.keys.state), stored);
+        assert.equal(await h.page.evaluate((key) => localStorage.getItem(key), h.keys.state), stored);
         await h.text('QUOTA_DRAFT_TO_RETRY');
         assert.equal(await h.page.locator(SEL.chat).textContent(), history);
         assert(await h.page.locator(SEL.save).isEnabled(), 'Quota failure incorrectly marked the draft saved.');
@@ -464,16 +464,16 @@ const cases = [
       assertPayload(call, 'SAFE_BLANK', ['SAFE_Q1', 'SAFE_Q2']);
       assert(JSON.stringify(call.body.messages).includes('blankAnswers'));
       await saveAndCheck(h, 'BLANK_ANALYSIS_ONLY');
-      await h.page.locator('#p-submit').evaluate(button => button.click());
+      await h.page.locator('#p-submit').evaluate((button) => button.click());
       assert.equal((await snapshot(h.page)).practice.answered, 1, 'AI save enabled a duplicate submission.');
     },
   },
-  ...['right', 'wrong', 'reveal'].map(mode => ({
+  ...['right', 'wrong', 'reveal'].map((mode) => ({
     name: `short-answer-${mode}-path-unaffected-by-ai`,
     async run(h) {
       await h.start(); await h.jump(3);
       await h.page.locator('#practice-card .text-answer').fill('SAFE_USER_SHORT_ANSWER');
-      if (mode === 'reveal') await h.reveal(); else await h.page.locator('#p-submit').click();
+      if (mode === 'reveal') {await h.reveal();} else {await h.page.locator('#p-submit').click();}
       const pending = await snapshot(h.page);
       assert.equal(pending.practice.answered, 0, 'Short answer was scored before self-assessment.');
       assert.deepEqual(pending.practice.answerState[pending.key].chosen, ['SAFE_USER_SHORT_ANSWER']);

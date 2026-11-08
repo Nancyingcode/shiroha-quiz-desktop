@@ -25,7 +25,7 @@ const server = createServer(async (request, response) => {
   upstreamCount += 1;
   response.writeHead(200, { 'content-type': 'text/event-stream' });
   response.write(': synthetic AppContainer fixture\n\n');
-  await new Promise(resolve => setTimeout(resolve, 6_000));
+  await new Promise((resolve) => setTimeout(resolve, 6_000));
   if (scenario === 'tool') {
     response.end(chunk({ tool_calls: [{ index: 0, id: 'test-tool', type: 'function',
       function: { name: 'Write', arguments: '{}' } }] }, 'tool_calls') + 'data: [DONE]\n\n');
@@ -34,7 +34,7 @@ const server = createServer(async (request, response) => {
   response.write(chunk({ role: 'assistant' }) + chunk({ content: '{"ok":true}' }));
   response.end(scenario === 'eof' ? '' : chunk({}, 'stop') + 'data: [DONE]\n\n');
 });
-await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
 const relay = await createGuardedRelay(`http://127.0.0.1:${server.address().port}`);
 await writeFile(path.join(directory, 'relay-ready.json'), JSON.stringify({
   endpoint: relay.endpoint, headers: relay.headers, pid: process.pid,
@@ -43,7 +43,7 @@ await writeFile(path.join(directory, 'relay-ready.json'), JSON.stringify({
 // The parent records token isolation and owns process cleanup; snapshots contain only synthetic evidence.
 let writing = false;
 const timer = setInterval(async () => {
-  if (writing) return;
+  if (writing) {return;}
   writing = true;
   try {
     await writeFile(path.join(directory, 'relay-proof.json'), JSON.stringify({ scenario, upstreamCount, ...relay.evidence() }));
