@@ -20,7 +20,7 @@ const cases = [
   ...['single', 'total'].map((mode) => ({
     name: `practice-clear-options-ai-draft-${mode}`,
     async run(h) {
-      if (mode === 'total') {await startTotal(h);} else {await h.start();}
+      if (mode === 'total') { await startTotal(h); } else { await h.start(); }
       await h.page.locator('#practice-card .option[data-key="B"]').click();
       await h.generate(analysis('BEFORE_CLEAR'));
       const before = await snapshot(h.page);
@@ -40,7 +40,7 @@ const cases = [
   ...['single', 'total'].map((mode) => ({
     name: `practice-review-ai-unsubmitted-${mode}`,
     async run(h) {
-      if (mode === 'total') {await startTotal(h);} else {await h.start();}
+      if (mode === 'total') { await startTotal(h); } else { await h.start(); }
       await h.page.locator('#practice-card .option[data-key="B"]').click();
       const before = await snapshot(h.page);
       await h.quiet();
@@ -191,8 +191,8 @@ const cases = [
       await h.page.evaluate((key) => {
         const original = Storage.prototype.setItem;
         window.__restoreSubmitStorage = () => { Storage.prototype.setItem = original; };
-        Storage.prototype.setItem = function(name, value) {
-          if (name === key) {throw new DOMException('Synthetic quota failure', 'QuotaExceededError');}
+        Storage.prototype.setItem = function (name, value) {
+          if (name === key) { throw new DOMException('Synthetic quota failure', 'QuotaExceededError'); }
           return original.call(this, name, value);
         };
       }, h.keys.state);

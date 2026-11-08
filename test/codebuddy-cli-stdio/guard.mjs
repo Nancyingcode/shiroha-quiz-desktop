@@ -17,7 +17,7 @@ export function validateUpstream(bytes) {
   let done = false;
   for (const block of source.split('\n\n')) {
     const lines = block.split('\n').filter((line) => line && !line.startsWith(':'));
-    if (lines.length === 0) {continue;}
+    if (lines.length === 0) { continue; }
     assert.ok(lines.every((line) => line.startsWith('data:')), 'unexpected_sse_field');
     assert.equal(done, false, 'data_after_done');
     const data = lines.map((line) => line.slice(5).replace(/^ /, '')).join('\n');
@@ -40,10 +40,10 @@ export function validateUpstream(bytes) {
     const choice = payload.choices[0];
     assert.equal(choice.index, 0, 'unexpected_choice');
     assert.equal(stopped, false, 'data_after_finish');
-    const delta = choice.delta;
+    const { delta } = choice;
     assert.ok(delta && typeof delta === 'object' && !Array.isArray(delta), 'invalid_delta');
     assert.ok(Object.keys(delta).every((key) => ['role', 'content'].includes(key)), 'non_text_delta');
-    if (delta.role !== undefined) {assert.equal(delta.role, 'assistant', 'unexpected_role');}
+    if (delta.role !== undefined) { assert.equal(delta.role, 'assistant', 'unexpected_role'); }
     if (delta.content !== undefined) {
       assert.equal(typeof delta.content, 'string', 'non_text_content');
       text += delta.content;
@@ -60,7 +60,7 @@ export function validateUpstream(bytes) {
 // Evidence is owned by one relay instance per task; it never comes from CLI output or the renderer.
 export function validateCandidate(events, proof, cancelled = false) {
   const fail = (code) => ({ accepted: false, code });
-  if (cancelled) {return fail('cancelled');}
+  if (cancelled) { return fail('cancelled'); }
   if (!proof || proof.state !== 'verified' || proof.forwarded !== 1 || proof.rejected !== 0) {
     return fail('terminal_unverified');
   }
@@ -125,7 +125,7 @@ export function validateCandidate(events, proof, cancelled = false) {
         } else if (part.type === 'message_stop') {
           assert.equal(phase, 'message-ending');
           phase = 'message-stopped';
-        } else {assert.fail('unknown_stream_event');}
+        } else { assert.fail('unknown_stream_event'); }
         assert.equal(event._meta?.['codebuddy.ai/modelRequestId'], modelRequest);
       } else if (event.type === 'assistant') {
         assert.equal(phase, 'message-stopped');
@@ -143,7 +143,7 @@ export function validateCandidate(events, proof, cancelled = false) {
         assert.equal((event.permission_denials ?? []).length, 0);
         assert.equal(event.result, text);
         phase = 'finished';
-      } else {assert.fail('unknown_event');}
+      } else { assert.fail('unknown_event'); }
     }
     assert.equal(phase, 'finished');
     assert.equal(text, proof.text);
@@ -174,8 +174,10 @@ export async function createGuardedRelay(upstream, expectedBearer = undefined) {
   const requests = new Set();
   const controllers = new Set();
   const reply = (response, status, code) => {
-    if (!response.destroyed) {response.writeHead(status, { 'content-type': 'application/json' })
-      .end(JSON.stringify({ error: { code } }));}
+    if (!response.destroyed) {
+      response.writeHead(status, { 'content-type': 'application/json' })
+        .end(JSON.stringify({ error: { code } }));
+    }
   };
   const handle = async (request, response) => {
     if (request.method !== 'POST' || request.url !== '/chat/completions') {
@@ -207,7 +209,7 @@ export async function createGuardedRelay(upstream, expectedBearer = undefined) {
     const controller = new globalThis.AbortController();
     controllers.add(controller);
     response.once('close', () => {
-      if (!response.writableFinished && evidence.state === 'pending') {evidence.state = 'cancelled';}
+      if (!response.writableFinished && evidence.state === 'pending') { evidence.state = 'cancelled'; }
       controller.abort();
     });
     try {
@@ -222,12 +224,12 @@ export async function createGuardedRelay(upstream, expectedBearer = undefined) {
       assert.equal(controller.signal.aborted, false);
       assert.equal(evidence.state, 'pending');
       Object.assign(evidence, validateUpstream(bytes), { state: 'verified' });
-      if (!response.destroyed) {response.writeHead(200, { 'content-type': 'text/event-stream' }).end(bytes);}
+      if (!response.destroyed) { response.writeHead(200, { 'content-type': 'text/event-stream' }).end(bytes); }
     } finally { controllers.delete(controller); }
   };
   const server = createServer((request, response) => {
     const running = handle(request, response).catch(() => {
-      if (evidence.state === 'pending') {evidence.state = 'rejected';}
+      if (evidence.state === 'pending') { evidence.state = 'rejected'; }
       reply(response, 422, 'upstream_unverified');
     }).finally(() => requests.delete(running));
     requests.add(running);
@@ -242,8 +244,8 @@ export async function createGuardedRelay(upstream, expectedBearer = undefined) {
     headers: { 'x-shiroha-run': capability },
     evidence: () => ({ ...evidence }),
     close: async () => {
-      if (evidence.state === 'unused' || evidence.state === 'pending') {evidence.state = 'cancelled';}
-      for (const controller of controllers) {controller.abort();}
+      if (evidence.state === 'unused' || evidence.state === 'pending') { evidence.state = 'cancelled'; }
+      for (const controller of controllers) { controller.abort(); }
       server.closeAllConnections();
       await new Promise((resolve) => server.close(resolve));
       await Promise.allSettled([...requests]);

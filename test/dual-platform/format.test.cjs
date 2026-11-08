@@ -27,17 +27,16 @@ for (const outcome of ['saved', 'cancelled', 'failed']) {
       return output;
     };
     let bridgeCalls = 0;
-    context.ShirohaAndroid = { saveJsonFile() { bridgeCalls++; throw new Error('旧桥接不得调用'); } };
+    context.ShirohaAndroid = { saveJsonFile() { bridgeCalls += 1; throw new Error('旧桥接不得调用'); } };
     const calls = [];
     const error = new Error(outcome === 'cancelled' ? '已取消保存。' : '合成写入失败');
     context.ShirohaPlatform.download = async (name, blob) => {
       calls.push({ name, type: blob.type, text: await blob.text() });
-      if (outcome !== 'saved') {throw error;}
+      if (outcome !== 'saved') { throw error; }
       return 'platform-receipt';
     };
     const text = JSON.stringify(api.buildBackupPayloadV23(before.banks, 'all_data', true));
-    if (outcome === 'saved') {assert.equal(await api.download('fixture.json', text), 'platform-receipt');}
-    else {await assert.rejects(async () => api.download('fixture.json', text), (value) => value === error);}
+    if (outcome === 'saved') { assert.equal(await api.download('fixture.json', text), 'platform-receipt'); } else { await assert.rejects(async () => api.download('fixture.json', text), (value) => value === error); }
     assert.equal(bridgeCalls, 0);
     assert.deepEqual(calls, [{ name: 'fixture.json', type: 'application/json;charset=utf-8', text }]);
     assert.equal(output.value, text);
@@ -59,7 +58,7 @@ test('完整 Web JSON 容器和学习数据往返；跨库相同 ID 不合并', 
   assert.deepEqual(payload.banks[0].questions.map((question) => question.type), ['SINGLE', 'MULTIPLE', 'JUDGE', 'BLANK', 'SHORT', 'SINGLE', 'SINGLE']);
   assert.deepEqual(payload.banks[0].questions[6].extensions, initial.banks[0].questions[6].extensions);
   const restored = plain(api.normalizeBackupPayloadV23(JSON.parse(JSON.stringify(payload)), 'full.json'));
-  for (const key of ['wrongBook', 'favorites', 'records', 'settings', 'crossPlatformMeta', 'activeBankId']) {assert.deepEqual(restored[key], initial[key], key);}
+  for (const key of ['wrongBook', 'favorites', 'records', 'settings', 'crossPlatformMeta', 'activeBankId']) { assert.deepEqual(restored[key], initial[key], key); }
   assert.deepEqual(restored.banks.map((bank) => bank.id), ['bank-a', 'bank-b']);
   assert.deepEqual(restored.banks[0].questions[3].blankAnswers, [['北京', '北京市'], ['京']]);
   assert.equal(restored.banks[0].questions[6].images[0].dataUrl, IMAGE);
@@ -67,7 +66,7 @@ test('完整 Web JSON 容器和学习数据往返；跨库相同 ID 不合并', 
 
 test('选中题库 JSON 单库使用 questions，多库使用 banks，均不含学习数据与设置', () => {
   const { api } = loadWeb({ state: webState() });
-  const banks = api.snapshot().banks;
+  const { banks } = api.snapshot();
   const single = plain(api.buildQuestionBanksExportPayloadV598([banks[0]]));
   const multiple = plain(api.buildQuestionBanksExportPayloadV598(banks));
   assert.equal(single.id, 'bank-a');
@@ -76,7 +75,7 @@ test('选中题库 JSON 单库使用 questions，多库使用 banks，均不含�
   assert.equal(multiple.schemaVersion, 1);
   assert.deepEqual(multiple.banks.map((bank) => bank.id), ['bank-a', 'bank-b']);
   for (const payload of [single, multiple]) {
-    for (const key of ['wrongBook', 'favorites', 'records', 'settings', 'webState', 'crossPlatform']) {assert.equal(Object.hasOwn(payload, key), false, key);}
+    for (const key of ['wrongBook', 'favorites', 'records', 'settings', 'webState', 'crossPlatform']) { assert.equal(Object.hasOwn(payload, key), false, key); }
     assert.equal(api.normalizeBackupPayloadV23(payload, 'selected.json').banks.length, payload === single ? 1 : 2);
   }
 });
@@ -219,8 +218,7 @@ test('原生记录导入保留多空回退、空数组和零分的既有优先�
     const result = input.studyRecords[0].questionResults[0];
     result.question.blankAnswers = sample.blankAnswers;
     result.userAnswer = sample.userAnswer;
-    if (Object.hasOwn(sample, 'userBlankAnswers')) {result.userBlankAnswers = sample.userBlankAnswers;}
-    else {delete result.userBlankAnswers;}
+    if (Object.hasOwn(sample, 'userBlankAnswers')) { result.userBlankAnswers = sample.userBlankAnswers; } else { delete result.userBlankAnswers; }
     result.earnedScore = 0;
     result.maxScore = 0;
     result.autoScored = false;
@@ -312,7 +310,7 @@ test('旧单题库/题目数组与答案别名可读，重复题号及跨库同 
 
 test('完整 JSON、单/多题库 JSON、原生 ZIP 与转换日志均排除独立存储中的假凭据', async () => {
   const { api, logs } = loadWeb({ state: webState(), local: fakeStorage, session: { shiroha_ai_key_session_v99: FAKE_SECRETS.ai, shiroha_webdav_password_session_v378: FAKE_SECRETS.webdav } });
-  const banks = api.snapshot().banks;
+  const { banks } = api.snapshot();
   const full = api.buildBackupPayloadV23(banks, 'all_data', true);
   assert.equal(full.settings.aiImportV99.endpoint, 'https://ai.example.invalid/v1/chat/completions');
   assertNoSecrets(full);

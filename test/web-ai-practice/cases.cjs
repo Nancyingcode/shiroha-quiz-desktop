@@ -184,11 +184,10 @@ const cases = [
       await h.start(); await h.reveal();
       const pending = h.mock.enqueue('analysis', analysis('STALE_OLD_SESSION_RESULT'), { hold: true });
       await h.requestAnalysis(); await h.waitCall(pending);
-      if (mode === 'exit') { await h.page.locator('#p-exit').click(); await h.start(); }
-      else {
+      if (mode === 'exit') { await h.page.locator('#p-exit').click(); await h.start(); } else {
         // The focus layout hides setup controls; reveal layout only, then use the real handlers.
         await h.page.evaluate(() => document.body.classList.remove('practice-focus'));
-        if (mode === 'reset') {await h.page.locator('#reset-practice-btn').click();}
+        if (mode === 'reset') { await h.page.locator('#reset-practice-btn').click(); }
         await h.page.locator('#start-practice-btn').click();
       }
       await h.reveal();
@@ -312,7 +311,7 @@ const cases = [
     name: `save-only-analysis-preserves-${mode}-practice`,
     async run(h) {
       await h.start();
-      if (mode === 'answered') {await h.submitChoice('B');} else {await h.reveal();}
+      if (mode === 'answered') { await h.submitChoice('B'); } else { await h.reveal(); }
       const before = await snapshot(h.page);
       await h.generate(analysis('ONLY_THIS_ANALYSIS_IS_SAVED', { suggestedAnswer: 'B', matchesLocalAnswer: false, needsReview: true, warning: 'Synthetic disagreement, never replace local answer.' }));
       await h.follow('UNSAVED_FOLLOW_QUESTION', 'UNSAVED_FOLLOW_REPLY');
@@ -407,7 +406,7 @@ const cases = [
         window.__webAiQuotaTest = { attempts: 0, original };
         Storage.prototype.setItem = function (name, value) {
           if (this === localStorage && String(name) === key) {
-            window.__webAiQuotaTest.attempts++;
+            window.__webAiQuotaTest.attempts += 1;
             throw new DOMException('Synthetic quota exceeded', 'QuotaExceededError');
           }
           return original.call(this, name, value);
@@ -473,7 +472,7 @@ const cases = [
     async run(h) {
       await h.start(); await h.jump(3);
       await h.page.locator('#practice-card .text-answer').fill('SAFE_USER_SHORT_ANSWER');
-      if (mode === 'reveal') {await h.reveal();} else {await h.page.locator('#p-submit').click();}
+      if (mode === 'reveal') { await h.reveal(); } else { await h.page.locator('#p-submit').click(); }
       const pending = await snapshot(h.page);
       assert.equal(pending.practice.answered, 0, 'Short answer was scored before self-assessment.');
       assert.deepEqual(pending.practice.answerState[pending.key].chosen, ['SAFE_USER_SHORT_ANSWER']);

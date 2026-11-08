@@ -73,13 +73,15 @@ test('ZIP 打包每次取一次当前时间并为所有条目写入相同 DOS �
   context.Date = class extends Date {
     constructor(...args) {
       if (args.length) { return new Date(...args); }
-      calls++;
+      calls += 1;
       return fixed;
     }
   };
   const buffer = await storedArchive(api, [{ name: 'a', text: 'x' }, { name: 'b', text: 'y' }]);
-  assert.equal(createHash('sha256').update(Buffer.from(buffer)).digest('hex'),
-    'b9596cdc7fe5fb3d65eb13fbb534a77ad4024ffff47b91cf5e77d59e52b96ac4');
+  assert.equal(
+    createHash('sha256').update(Buffer.from(buffer)).digest('hex'),
+    'b9596cdc7fe5fb3d65eb13fbb534a77ad4024ffff47b91cf5e77d59e52b96ac4',
+  );
   const view = new DataView(buffer);
   const expectedTime = (7 << 11) | (8 << 5) | 4;
   const expectedDate = (21 << 9) | (5 << 5) | 6;
@@ -106,8 +108,8 @@ test('ZIP 拒绝不安全路径以及加密、无效目录和大小超限', asyn
   }
   const mutations = [
     [(view, central) => view.setUint16(central + 8, 1, true), 'ZIP duplicate, linked or encrypted entry.'],
-    [(view, central) => view.setUint32(central + 20, 40 * 1024 * 1024 + 1, true), 'ZIP entry is too large.'],
-    [(view, central) => view.setUint32(central + 24, 80 * 1024 * 1024 + 1, true), 'ZIP entry is too large.'],
+    [(view, central) => view.setUint32(central + 20, (40 * 1024 * 1024) + 1, true), 'ZIP entry is too large.'],
+    [(view, central) => view.setUint32(central + 24, (80 * 1024 * 1024) + 1, true), 'ZIP entry is too large.'],
     [(view, central) => view.setUint32(central + 42, view.byteLength, true), 'ZIP entry offset is invalid.'],
     [(view) => view.setUint16(view.byteLength - 12, 1201, true), 'ZIP entry count exceeds limit.'],
     [(view) => view.setUint16(view.byteLength - 18, 1, true), 'ZIP directory is invalid.'],
@@ -139,8 +141,10 @@ test('OCR 文档导出使用共享 ZIP 且保留正文和 XML 转义', async () 
   assert.equal(blob.type, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
   const buffer = await blob.arrayBuffer();
   const entries = api.parseZipEntries(buffer);
-  assert.deepEqual(Array.from(entries, (entry) => entry.name),
-    ['[Content_Types].xml', '_rels/.rels', 'word/document.xml']);
+  assert.deepEqual(
+    Array.from(entries, (entry) => entry.name),
+    ['[Content_Types].xml', '_rels/.rels', 'word/document.xml'],
+  );
   const document = await api.unzipEntry(buffer, entries[2]);
   assert.match(document, /测试 &amp; 来源\.pdf/);
   assert.match(document, /自建题目 &lt;第一行&gt;/);

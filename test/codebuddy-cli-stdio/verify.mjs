@@ -47,6 +47,8 @@ assert.equal(cases.get('malformed').result[0].is_error, true);
 const interrupt = cases.get('interrupt');
 assert.equal(interrupt.result[0].terminal_reason, 'aborted_streaming');
 assert.equal(interrupt.controlResponses.find((item) => item.request_id === 'probe-interrupt').interrupted, true);
-assert.deepEqual(interrupt.controlResponses.map((item) => item.request_id),
-  ['probe-initialize', 'probe-get_auth_methods', 'probe-logout', 'probe-interrupt']);
+assert.deepEqual(
+  interrupt.controlResponses.map((item) => item.request_id),
+  ['probe-initialize', 'probe-get_auth_methods', 'probe-logout', 'probe-interrupt'],
+);
 console.log('11 recorded scenarios reproduced. P0 remains BLOCKED: gateway access and incomplete terminal semantics.');

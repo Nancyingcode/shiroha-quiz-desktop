@@ -57,7 +57,7 @@ test('浏览器平台复用存储适配器，只对本应用键或清空事件�
   assert.strictEqual(platform.files, result.browser.files);
   assert.equal(result.calls[0].key, storageKey);
   assert.strictEqual(result.calls[1], result.storage);
-  const adapter = result.calls[0].adapter;
+  const { adapter } = result.calls[0];
   adapter.setItem(storageKey, 'fixture');
   assert.equal(adapter.getItem(storageKey), 'fixture');
   adapter.removeItem(storageKey);

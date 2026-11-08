@@ -5,7 +5,7 @@ const path = require('node:path');
 const { chromium } = require('../../apps/desktop/node_modules/playwright-core');
 const { startServer, WEB_ROOT } = require('../web-ai-practice/harness.cjs');
 const { webState } = require('./fixtures/dataset.cjs');
-let browser, server;
+let browser; let server;
 test.before(async () => {
   server = await startServer(WEB_ROOT);
   browser = await chromium.launch({ headless: true, ...(process.env.SHIROHA_BROWSER_EXECUTABLE ? { executablePath: process.env.SHIROHA_BROWSER_EXECUTABLE } : { channel: 'msedge' }) });
@@ -16,7 +16,7 @@ async function component(t, desktop = false) {
   const page = await browser.newPage({ reducedMotion: 'reduce' }); t.after(() => page.close());
   await page.setContent(`<body class="${desktop ? 'desktop-mist-blue' : ''}"><label>题型<select id="type"><option value="all">全部题型</option><option value="single">单选题</option><option value="disabled" disabled>不可用题型</option><option value="multiple">多选题</option></select></label><button id="next">下一项</button></body>`);
   await page.addStyleTag({ path: path.join(WEB_ROOT, 'styles.css') });
-  if (desktop) {await page.addStyleTag({ path: path.join(WEB_ROOT, '../desktop/frontend/desktop.css') });}
+  if (desktop) { await page.addStyleTag({ path: path.join(WEB_ROOT, '../desktop/frontend/desktop.css') }); }
   return page;
 }
 
@@ -81,9 +81,9 @@ test('窄屏长选项可换行滚动，弹窗内的浮层可点击', async (t) =
     dialog.innerHTML = '<label>来源<select id="long"></select></label>';
     dialog.style.cssText = 'width:280px;max-height:180px;overflow:hidden';
     const select = dialog.querySelector('select');
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < 30; i += 1) {
       const option = globalThis.document.createElement('option');
-      option.value = String(i); option.textContent = `题库 ${i}：` + '超长题库名称用于核对窄屏显示'.repeat(3);
+      option.value = String(i); option.textContent = `题库 ${i}：${'超长题库名称用于核对窄屏显示'.repeat(3)}`;
       select.append(option);
     }
     globalThis.document.body.append(dialog); dialog.showModal();
@@ -138,7 +138,7 @@ test('收起的长题库名称不会挤掉下拉箭头', async (t) => {
 test('真实页面动态下拉框保留题型筛选、题量联动与紧凑分页', async (t) => {
   const context = await browser.newContext(); t.after(() => context.close());
   await context.addInitScript((data) => globalThis.localStorage.setItem('shiroha_quiz_state_v28_4_c1', JSON.stringify(data)), webState());
-  await context.route('**/*', (route) => new URL(route.request().url()).origin === new URL(server.url).origin ? route.continue() : route.abort());
+  await context.route('**/*', (route) => (new URL(route.request().url()).origin === new URL(server.url).origin ? route.continue() : route.abort()));
   const page = await context.newPage();
   await page.goto(server.url);
   await page.locator('body[data-storage-state="ready"]').waitFor();

@@ -24,7 +24,7 @@ for (const file of candidates) {
   try {
     await lstat(target);
   } catch (error) {
-    const code = /** @type {NodeJS.ErrnoException} */ (error).code;
+    const { code } = /** @type {NodeJS.ErrnoException} */ (error);
     if (code === 'ENOENT' || code === 'ENOTDIR') { continue; }
     throw error;
   }

@@ -65,8 +65,11 @@ test('browser typecheck rejects incorrect JSDoc and unavailable Node globals', a
     extends: path.join(desktop, 'tsconfig.platform.json'),
     files: [probe], include: [],
   }));
-  const run = () => spawnSync(process.execPath, [path.join(desktop, 'node_modules/typescript/bin/tsc'), '-p', config],
-    { encoding: 'utf8', windowsHide: true });
+  const run = () => spawnSync(
+    process.execPath,
+    [path.join(desktop, 'node_modules/typescript/bin/tsc'), '-p', config],
+    { encoding: 'utf8', windowsHide: true },
+  );
   await writeFile(probe, "window.document.title = '测试';\n");
   const valid = run();
   assert.ifError(valid.error);

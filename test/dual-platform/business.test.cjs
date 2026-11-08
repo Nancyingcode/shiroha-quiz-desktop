@@ -51,7 +51,7 @@ test('单选、多选、判断严格匹配，多选顺序不影响结果但漏�
     [single, ['A'], true], [single, ['B'], false],
     [multiple, ['C', 'A'], true], [multiple, ['A'], false], [multiple, ['A', 'B', 'C'], false],
     [judge, ['A'], true], [judge, ['B'], false],
-  ]) {assert.equal(api.sameAnswerForQuestion(question, chosen, question.answer), correct);}
+  ]) { assert.equal(api.sameAnswerForQuestion(question, chosen, question.answer), correct); }
 });
 
 test('多空答案按位置接受别名，空白、漏空、交换顺序不判正确', () => {
@@ -60,7 +60,7 @@ test('多空答案按位置接受别名，空白、漏空、交换顺序不判�
   for (const [chosen, correct] of [
     [['北京市', '京'], true], [[' 北京。 ', '京'], true],
     [['北京', ''], false], [['北京'], false], [['京', '北京'], false],
-  ]) {assert.equal(api.sameAnswerForQuestion(question, chosen, question.answer), correct);}
+  ]) { assert.equal(api.sameAnswerForQuestion(question, chosen, question.answer), correct); }
 });
 
 test('自选题号保留去重排序、区间边界和原有错误文案', () => {
@@ -118,7 +118,7 @@ test('多空判定保留位置、空组和标点比较规则，且不更改输�
     [[' a。 ', '京'], true], [['甲,乙', ' 京 '], true],
     [['甲乙', '京'], false], [['京', 'a'], false],
     [['a'], false], [['a', '京', '多余'], false], [['a', ''], false],
-  ]) {assert.equal(api.sameAnswerForQuestion(question, chosen, []), correct);}
+  ]) { assert.equal(api.sameAnswerForQuestion(question, chosen, []), correct); }
   assert.equal(api.sameAnswerForQuestion({ type: 'blank', blankAnswers: [['甲'], []] }, ['甲', ''], []), false);
   assert.deepEqual(question, before);
 });
@@ -199,6 +199,38 @@ test('共享材料绑定到两道题，答案和各自选项保持独立', () =>
   assert.deepEqual(plain(parsed.map((question) => question.options.map((option) => option.text))), [['十棵', '六棵'], ['四棵', '六棵']]);
 });
 
+test('共享材料已在首题时不重复，后续题仍保留材料及各自答案', () => {
+  const { api } = loadWeb();
+  const material = '某学校种植了十棵树，其中六棵为松树，四棵为柏树。';
+  const source = [
+    '根据以下材料，回答1～2题。', material,
+    `1. ${material}学校种植了多少棵树？`, 'A. 十棵', 'B. 六棵', '答案：A',
+    '2. 松树有多少棵？', 'A. 四棵', 'B. 六棵', '答案：B',
+  ].join('\n');
+  const parsed = plain(api.parseTextQuestions(source));
+  assert.equal(parsed.length, 2);
+  for (const question of parsed) { assert.equal(question.question.split(material).length - 1, 1); }
+  assert.deepEqual(parsed.map((question) => question.answer), [['A'], ['B']]);
+  assert.deepEqual(parsed.map((question) => question.options.map((option) => option.text)), [['十棵', '六棵'], ['四棵', '六棵']]);
+});
+
+test('多种解析策略保留同行选项顺序、题号与答案', () => {
+  const { api } = loadWeb();
+  const source = [
+    '单选题',
+    '1. 哪个颜色？ A. 红色 B. 蓝色 C. 绿色', '答案：B',
+    '2. 哪个数字？ A. 一 B. 二 C. 三', '答案：C',
+  ].join('\n');
+  for (const strategy of ['standard', 'compact', 'auto']) {
+    const questions = plain(api.parseTextQuestions(source, strategy));
+    assert.deepEqual(questions.map((question) => String(question.number)), ['1', '2']);
+    assert.deepEqual(questions.map((question) => question.answer), [['B'], ['C']]);
+    assert.deepEqual(questions.map((question) => question.options.map((option) => option.text)), [
+      ['红色', '蓝色', '绿色'], ['一', '二', '三'],
+    ]);
+  }
+});
+
 test('跨题库同 ID 保持独立练习标识和错题状态', () => {
   const { api } = loadWeb({ state: webState() });
   const state = api.snapshot();
@@ -235,6 +267,38 @@ test('错题保存错误选择副本，正确复习不覆盖，重新答错更�
   assert.deepEqual(plain(api.getWrongEntries('bank-a')[0].lastAnswer), []);
 });
 
+test('历史错题的文本计数先转为数字再递增，正确复习不改变错误次数', () => {
+  const initial = webState();
+  initial.wrongBook = { 'bank-a': [{ id: 'same-id', wrongCount: '2', rightCount: '3' }] };
+  const { api } = loadWeb({ state: initial });
+  api.addWrong('same-id', 'bank-a', ['B']);
+  let [entry] = api.getWrongEntries('bank-a');
+  assert.equal(entry.wrongCount, 3);
+  assert.equal(entry.rightCount, 0);
+  api.markRight('same-id', 'bank-a');
+  [entry] = api.getWrongEntries('bank-a');
+  assert.equal(entry.wrongCount, 3);
+  assert.equal(entry.rightCount, 1);
+});
+
+test('练习轮次计数接受文本与 BigInt 时保留原有自增转换', () => {
+  const { api } = loadWeb({ state: webState() });
+  const question = api.snapshot().banks[0].questions[0];
+  const item = { bankId: 'bank-a', question };
+  for (const [value, next] of [['2', 3], [2n, 3n]]) {
+    api.practiceSession.current = { items: [item], idx: 0, answered: value, correct: value, wrong: value, details: [], answerState: {} };
+    api.recordPracticeAnswer(item, ['A'], true);
+    assert.equal(api.practiceSession.current.answered, next);
+    assert.equal(api.practiceSession.current.correct, next);
+    assert.equal(api.practiceSession.current.wrong, value);
+    api.practiceSession.current = { items: [item], idx: 0, answered: value, correct: value, wrong: value, details: [], answerState: {} };
+    api.recordPracticeAnswer(item, ['B'], false);
+    assert.equal(api.practiceSession.current.answered, next);
+    assert.equal(api.practiceSession.current.correct, value);
+    assert.equal(api.practiceSession.current.wrong, next);
+  }
+});
+
 test('现有富文本公式和所有可显示图片位置保持在解析后的题目文本中', () => {
   const { api } = loadWeb();
   const question = api.normalizeQuestion(questions()[6]);
@@ -243,6 +307,20 @@ test('现有富文本公式和所有可显示图片位置保持在解析后的�
   assert(question.options[0].text.includes(IMAGE));
   assert(question.analysis.includes(IMAGE));
   assert.equal(question.images[0].dataUrl, IMAGE);
+});
+
+test('跨端导出保持正文图片顺序并去重结构化图片', () => {
+  const { api } = loadWeb();
+  const first = 'data:image/png;base64,AAAA';
+  const second = 'data:image/png;base64,BBBB';
+  const extra = 'data:image/png;base64,CCCC';
+  const output = api.exportQuestionImagesForCrossExportV83({
+    id: 'image-order', question: `![甲](${first})\n![乙](${second})`,
+    images: [{ dataUrl: first }, { dataUrl: extra, sourceName: '附图', order: 4 }],
+  });
+  assert.deepEqual(plain(output.images.map((image) => image.order)), [1, 2, 4]);
+  assert.deepEqual(plain(output.images.map((image) => image.dataUrl)), [first, second, extra]);
+  assert.equal(output.question, '【甲】\n\n【乙】');
 });
 
 test('答案比较保留空答案、重复选项和输入所有权的既有语义', () => {

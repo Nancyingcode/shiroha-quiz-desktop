@@ -18,8 +18,7 @@ for (const item of observations) {
   assert.equal(item.toolFileExists, false, label);
   assert.equal(item.connectionClosedBeforeCleanup, true, label);
   const cancelled = ['cancel', 'timeout', 'interrupt'].includes(label);
-  if (cancelled) {assert.equal(item.guard.state, 'cancelled', label);}
-  else if (label !== 'stop') {
+  if (cancelled) { assert.equal(item.guard.state, 'cancelled', label); } else if (label !== 'stop') {
     assert.equal(item.guard.state, 'rejected', label);
     assert.equal(item.result[0].is_error, true, label);
   }

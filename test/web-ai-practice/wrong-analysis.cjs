@@ -11,8 +11,7 @@ async function generate(h, panel, text, responseOptions = {}) {
   const entry = h.mock.enqueue('analysis', analysis(text), responseOptions);
   await button(panel, 'generate').click();
   const call = await h.waitCall(entry);
-  if (!responseOptions.status) {await panel.locator('.q-multiline-text').filter({ hasText: text }).waitFor();}
-  else {await panel.locator('[role="alert"]').waitFor();}
+  if (!responseOptions.status) { await panel.locator('.q-multiline-text').filter({ hasText: text }).waitFor(); } else { await panel.locator('[role="alert"]').waitFor(); }
   return call;
 }
 async function save(h, panel) {
@@ -21,7 +20,7 @@ async function save(h, panel) {
   await panel.locator('.review-analysis-saved').waitFor();
 }
 async function wrongBook(h) {
-  if (await h.page.locator('#back-practice-setup').isVisible()) {await h.page.locator('#back-practice-setup').click();}
+  if (await h.page.locator('#back-practice-setup').isVisible()) { await h.page.locator('#back-practice-setup').click(); }
   await h.page.locator('.nav[data-view="wrongbook"]').click();
   return h.page.locator('#wrongbook-list .wrong-item').filter({ hasText: 'SAFE_Q1' }).locator('[data-review-analysis]');
 }
@@ -103,11 +102,11 @@ const cases = [
       await h.start(); await h.submitChoice('B');
       const panel = h.page.locator('#p-feedback [data-review-analysis]');
       await generate(h, panel, 'QUOTA_REVIEW_DRAFT');
-      const before = await snapshot(h.page), savedBefore = await stored(h);
+      const before = await snapshot(h.page); const savedBefore = await stored(h);
       await h.page.evaluate((key) => {
         window.__reviewOriginalSet = Storage.prototype.setItem;
         Storage.prototype.setItem = function (name, value) {
-          if (this === localStorage && name === key) {throw new DOMException('Synthetic quota', 'QuotaExceededError');}
+          if (this === localStorage && name === key) { throw new DOMException('Synthetic quota', 'QuotaExceededError'); }
           return window.__reviewOriginalSet.call(this, name, value);
         };
       }, h.keys.state);

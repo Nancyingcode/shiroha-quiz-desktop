@@ -30,10 +30,10 @@ function reportPath(value) {
   assert(within(TEST_ROOT, target), 'Report must be a file inside test/web-ai-practice/.');
   // Check existing ancestors too, so a junction cannot redirect output outside the test directory.
   let ancestor = path.dirname(target);
-  while (!fs.existsSync(ancestor)) {ancestor = path.dirname(ancestor);}
+  while (!fs.existsSync(ancestor)) { ancestor = path.dirname(ancestor); }
   const actualRoot = fs.realpathSync(TEST_ROOT);
   assert(ancestor === TEST_ROOT || fs.realpathSync(ancestor) === actualRoot || within(actualRoot, fs.realpathSync(ancestor)), 'Unsafe report ancestor.');
-  if (fs.existsSync(target)) {assert(within(actualRoot, fs.realpathSync(target)), 'Unsafe report file.');}
+  if (fs.existsSync(target)) { assert(within(actualRoot, fs.realpathSync(target)), 'Unsafe report file.'); }
   return target;
 }
 
@@ -48,12 +48,10 @@ function storageKeys() {
 }
 
 function loadPlaywright() {
-  try { return require('playwright'); }
-  catch (error) {
-    if (error.code !== 'MODULE_NOT_FOUND' || !error.message.startsWith("Cannot find module 'playwright'")) {throw error;}
+  try { return require('playwright'); } catch (error) {
+    if (error.code !== 'MODULE_NOT_FOUND' || !error.message.startsWith("Cannot find module 'playwright'")) { throw error; }
   }
-  try { return require(require.resolve('playwright', { paths: [DEPENDENCIES] })); }
-  catch (cause) { throw new Error(`Playwright is not already available through require('playwright') or the machine-specific bundled fallback ${DEPENDENCIES}. Provide existing Node + Playwright + Chromium; no install, network access or framework fallback was attempted.`, { cause }); }
+  try { return require(require.resolve('playwright', { paths: [DEPENDENCIES] })); } catch (cause) { throw new Error(`Playwright is not already available through require('playwright') or the machine-specific bundled fallback ${DEPENDENCIES}. Provide existing Node + Playwright + Chromium; no install, network access or framework fallback was attempted.`, { cause }); }
 }
 
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'application/javascript; charset=utf-8', '.mjs': 'application/javascript; charset=utf-8', '.wasm': 'application/wasm', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.png': 'image/png', '.webp': 'image/webp', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.woff': 'font/woff', '.woff2': 'font/woff2', '.ico': 'image/x-icon' };
@@ -92,14 +90,14 @@ async function startServer() {
     }
   });
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
-  return { url: `http://127.0.0.1:${server.address().port}/`, root, close: () => new Promise((resolve, reject) => { server.close((error) => error ? reject(error) : resolve()); server.closeIdleConnections(); }) };
+  return { url: `http://127.0.0.1:${server.address().port}/`, root, close: () => new Promise((resolve, reject) => { server.close((error) => (error ? reject(error) : resolve())); server.closeIdleConnections(); }) };
 }
 
 function baseUrl(value) {
   const url = new URL(value);
   assert(url.protocol === 'http:' && ['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname), '--base-url must be an HTTP loopback static service.');
   assert(!url.username && !url.password && !url.search && !url.hash, 'Base URL cannot contain credentials, query or hash.');
-  if (!url.pathname.endsWith('/') && !url.pathname.endsWith('/index.html')) {url.pathname += '/';}
+  if (!url.pathname.endsWith('/') && !url.pathname.endsWith('/index.html')) { url.pathname += '/'; }
   return url.href;
 }
 
@@ -118,7 +116,7 @@ class MockAi {
     const entry = { kind, content, status, raw, arrived, released, hold };
     this.entries.push(entry);
     this.queue.push(entry);
-    if (!hold) {released.resolve();}
+    if (!hold) { released.resolve(); }
     return { received: arrived.promise, release: () => released.resolve(), entry };
   }
 
@@ -139,14 +137,14 @@ class MockAi {
     const call = { url: request.url(), method: request.method(), headers: request.headers(), body };
     this.calls.push(call);
     const entry = this.queue.shift();
-    if (entry) {entry.request = request;}
+    if (entry) { entry.request = request; }
     const errors = [];
-    if (call.url !== MOCK_ENDPOINT || call.method !== 'POST') {errors.push('Unexpected mock endpoint or method.');}
-    if (body?.model !== MODEL || body?.stream !== false || !Array.isArray(body?.messages)) {errors.push('Unexpected AI request shape/model.');}
-    if (call.headers.authorization !== `Bearer ${FAKE_KEY}`) {errors.push('Only the synthetic session key may be sent.');}
-    if (!entry) {errors.push('Unplanned AI request.');}
-    if (entry?.kind === 'follow' && body?.response_format?.type !== 'json_object') {errors.push('Follow-up revision must request a JSON object.');}
-    if (entry?.kind === 'analysis' && body?.response_format?.type !== 'json_object') {errors.push('Analysis must request a JSON object.');}
+    if (call.url !== MOCK_ENDPOINT || call.method !== 'POST') { errors.push('Unexpected mock endpoint or method.'); }
+    if (body?.model !== MODEL || body?.stream !== false || !Array.isArray(body?.messages)) { errors.push('Unexpected AI request shape/model.'); }
+    if (call.headers.authorization !== `Bearer ${FAKE_KEY}`) { errors.push('Only the synthetic session key may be sent.'); }
+    if (!entry) { errors.push('Unplanned AI request.'); }
+    if (entry?.kind === 'follow' && body?.response_format?.type !== 'json_object') { errors.push('Follow-up revision must request a JSON object.'); }
+    if (entry?.kind === 'analysis' && body?.response_format?.type !== 'json_object') { errors.push('Analysis must request a JSON object.'); }
     if (errors.length) {
       this.violations.push(...errors);
       entry?.arrived.resolve(call);
@@ -164,10 +162,9 @@ class MockAi {
       : entry.content;
     const content = typeof responseContent === 'string' ? responseContent : JSON.stringify(responseContent);
     const response = entry.raw ? content : JSON.stringify(entry.status >= 400 ? { error: { message: 'Synthetic mock failure.' } } : { choices: [{ message: { role: 'assistant', content } }] });
-    try { await route.fulfill({ status: entry.status, contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: response }); }
-    catch (error) {
+    try { await route.fulfill({ status: entry.status, contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: response }); } catch (error) {
       // A stopped request or closed context may no longer accept a response.
-      if (!/closed|disposed|Invalid InterceptionId|not found|already handled|canceled|cancelled/i.test(error.message)) {throw error;}
+      if (!/closed|disposed|Invalid InterceptionId|not found|already handled|canceled|cancelled/i.test(error.message)) { throw error; }
     }
   }
 
@@ -179,8 +176,7 @@ class MockAi {
 
 async function bounded(promise, timeout, message) {
   let timer;
-  try { return await Promise.race([promise, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(message)), timeout); })]); }
-  finally { clearTimeout(timer); }
+  try { return await Promise.race([promise, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(message)), timeout); })]); } finally { clearTimeout(timer); }
 }
 
 async function setup(browser, url, keys, { configured = true, rich = false, emptyAnalysis = false, ignoreAbort = false, timeout = 10000 } = {}) {
@@ -215,7 +211,7 @@ async function setup(browser, url, keys, { configured = true, rich = false, empt
         );
         bridgeUsed = result.bridgeUsed;
         await route.fulfill({ status: 200, contentType: 'application/javascript; charset=utf-8', body: result.source });
-      } else {await route.continue();}
+      } else { await route.continue(); }
       return;
     }
     blocked.push({ url: request.url(), method: request.method(), type: request.resourceType() });
@@ -223,7 +219,7 @@ async function setup(browser, url, keys, { configured = true, rich = false, empt
   });
   // Last registered route wins; no fall-through to a real network request is permitted.
   await page.route('https://mock-ai.invalid/**', (route) => mock.handle(route));
-  if (typeof context.routeWebSocket === 'function') {await context.routeWebSocket('**/*', (socket) => { blocked.push({ url: socket.url(), type: 'websocket' }); socket.close(); });}
+  if (typeof context.routeWebSocket === 'function') { await context.routeWebSocket('**/*', (socket) => { blocked.push({ url: socket.url(), type: 'websocket' }); socket.close(); }); }
   await context.addInitScript(({ keys: storage, initial, key, ignoreAbort: ignore }) => {
     if (!sessionStorage.getItem('__webAiPracticeSeeded')) {
       localStorage.clear();
@@ -252,8 +248,7 @@ async function setup(browser, url, keys, { configured = true, rich = false, empt
         // Existing upgradeState normalizes away richContent; seed only our safe fixture after upgrade.
         const prepared = fixture({ configured, rich }).banks[0].questions[0];
         const hook = await page.evaluate(() => typeof window.__webAiPracticeSeedRich === 'function');
-        if (hook) {await page.evaluate((prepared) => window.__webAiPracticeSeedRich(prepared), prepared);}
-        else {await page.evaluate(seedRichFixture, prepared);}
+        if (hook) { await page.evaluate((prepared) => window.__webAiPracticeSeedRich(prepared), prepared); } else { await page.evaluate(seedRichFixture, prepared); }
       }
     },
     async start() {
@@ -291,18 +286,17 @@ async function setup(browser, url, keys, { configured = true, rich = false, empt
     async requestAnalysis({ regenerate = false } = {}) {
       const opensSaved = !regenerate && !!String((await snapshot(page)).question.analysis || '').trim();
       await page.locator(regenerate ? SEL.regenerate : SEL.open).click();
-      if (opensSaved) {await page.locator(SEL.regenerate).click();}
+      if (opensSaved) { await page.locator(SEL.regenerate).click(); }
     },
     async generate(result, { regenerate = false, status = 200, raw = false, visibleText } = {}) {
       const entry = mock.enqueue('analysis', result, { status, raw });
       await harness.requestAnalysis({ regenerate });
       const call = await harness.waitCall(entry);
-      if (status === 200 && !raw) {await harness.text(visibleText || result.analysis);}
-      else {await harness.idle();}
+      if (status === 200 && !raw) { await harness.text(visibleText || result.analysis); } else { await harness.idle(); }
       return call;
     },
     async followInput() {
-      if (!await page.locator(SEL.input).isVisible()) {await page.locator(SEL.follow).click();}
+      if (!await page.locator(SEL.input).isVisible()) { await page.locator(SEL.follow).click(); }
       await page.locator(SEL.input).waitFor();
     },
     async follow(text, reply) {
@@ -317,7 +311,7 @@ async function setup(browser, url, keys, { configured = true, rich = false, empt
     },
     async expandExisting() {
       const count = mock.calls.length;
-      if (await page.locator(SEL.open).isVisible()) {await page.locator(SEL.open).click();}
+      if (await page.locator(SEL.open).isVisible()) { await page.locator(SEL.open).click(); }
       await harness.idle();
       assert.equal(mock.calls.length, count, 'Reopening an existing draft must not generate again.');
     },
@@ -333,19 +327,27 @@ async function setup(browser, url, keys, { configured = true, rich = false, empt
 
 function seedRichFixture(prepared) {
   const bank = state.banks.find((bank) => bank.id === 'web-ai-practice-safe-bank');
-  if (state.banks.length !== 1 || !bank || prepared.id !== 'safe-single-1') {throw new Error('Refusing to seed rich fields outside the synthetic fixture.');}
+  if (state.banks.length !== 1 || !bank || prepared.id !== 'safe-single-1') { throw new Error('Refusing to seed rich fields outside the synthetic fixture.'); }
   const question = bank.questions.find((question) => question.id === prepared.id);
   question.richContent = JSON.parse(JSON.stringify(prepared.richContent));
 }
 
 function readSnapshot() {
-  if (typeof state === 'undefined' || typeof practiceSession === 'undefined') {throw new Error('V613 adapter requires the application state and practice session.');}
+  if (typeof state === 'undefined' || typeof practiceSession === 'undefined') { throw new Error('V613 adapter requires the application state and practice session.'); }
   const practice = practiceSession.current;
   // Track reference identity in test globals without adding properties to application objects.
-  const identities = globalThis.__webAiPracticeIdentities ||= { ids: new WeakMap(), next: 1 };
+  let identities = globalThis.__webAiPracticeIdentities;
+  if (!identities) {
+    identities = { ids: new WeakMap(), next: 1 };
+    globalThis.__webAiPracticeIdentities = identities;
+  }
   const identity = (object) => {
-    if (!object || typeof object !== 'object') {return null;}
-    if (!identities.ids.has(object)) {identities.ids.set(object, identities.next++);}
+    if (!object || typeof object !== 'object') { return null; }
+    if (!identities.ids.has(object)) {
+      const { next } = identities;
+      identities.next += 1;
+      identities.ids.set(object, next);
+    }
     return identities.ids.get(object);
   };
   const item = practice.items[practice.idx];
@@ -385,7 +387,7 @@ function immutable(snapshotValue) {
     if (rich?.fields) {
       delete rich.fields.analysis;
       delete rich.features;
-      if (!Object.keys(rich.fields).length && Object.keys(rich).every((key) => ['schema', 'fields'].includes(key))) {delete question.richContent;}
+      if (!Object.keys(rich.fields).length && Object.keys(rich).every((key) => ['schema', 'fields'].includes(key))) { delete question.richContent; }
     }
   };
   omitAnalysis(value.question);
@@ -399,8 +401,8 @@ function assertOnlyAnalysis(before, after, expected) {
   assert.equal(after.bank.questions.find((question) => question.id === after.question.id).analysis, expected);
   const rich = after.question.richContent;
   if (rich?.fields) {
-    if (rich.fields.analysis) {assert.equal(rich.fields.analysis.text, expected, 'Rich analysis still contains the old explanation.');}
-    const features = [...new Set(Object.values(rich.fields).flatMap((field) => Array.isArray(field) ? field.filter(Boolean).flatMap((entry) => entry.features || []) : field?.features || []))].sort();
+    if (rich.fields.analysis) { assert.equal(rich.fields.analysis.text, expected, 'Rich analysis still contains the old explanation.'); }
+    const features = [...new Set(Object.values(rich.fields).flatMap((field) => (Array.isArray(field) ? field.filter(Boolean).flatMap((entry) => entry.features || []) : field?.features || [])))].sort();
     assert.deepEqual([...rich.features].sort(), features, 'Rich feature summary was not recomputed from preserved fields.');
   }
   assert.deepEqual(immutable(after), immutable(before), 'Saving AI analysis changed answers, options, stem, chosen/submission, position or progress.');

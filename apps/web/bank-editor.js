@@ -35,7 +35,7 @@
         return;
       }
       if (bankEditSessionV45) {
-        const b = state.banks.find((x)=>x.id === bankEditSessionV45.bankId);
+        const b = state.banks.find((x) => x.id === bankEditSessionV45.bankId);
         panel.classList.remove('hidden');
         const title = $('#bank-edit-title-v45');
         if (title) {
@@ -49,8 +49,7 @@
           dualConfirm.textContent = '保存回题库';
           dualConfirm.disabled = false;
         }
-      }
-      else {
+      } else {
         panel.classList.add('hidden');
         if (confirmBtn) {
           confirmBtn.textContent = '确认导入';
@@ -62,7 +61,7 @@
     }
     function bankEditQuestionSnapshot(questions) {
       // 桌面分页释放、重载正文会改变属性插入顺序；冲突判断只比较实际内容与题目顺序。
-      return JSON.stringify(questions, (_key, value)=>value && typeof value === 'object' && !Array.isArray(value) ? Object.fromEntries(Object.keys(value).sort().map((key)=>[key, value[key]])) : value);
+      return JSON.stringify(questions, (_key, value) => (value && typeof value === 'object' && !Array.isArray(value) ? Object.fromEntries(Object.keys(value).sort().map((key) => [key, value[key]])) : value));
     }
     async function editBankByIdV45(id) {
       if (!await loadNativeBanks([id])) {
@@ -71,15 +70,15 @@
       cancelAiPreviewRequestV991(true);
       resetAiSuggestionsV991();
       closeAiPreviewPanelV991();
-      const bank = state.banks.find((b)=>b.id === id);
+      const bank = state.banks.find((b) => b.id === id);
       if (!bank) {
         toast('没有找到该题库。', 'warn');
         return;
       }
       bankEditSessionV45 = { bankId: id, name: bank.name || '题库', startedAt: now(), sourceQuestions: bankEditQuestionSnapshot(bank.questions) };
-      importDraft.questions = (bank.questions || []).map((q, i)=>({ ...q, ...normalizeQuestion(JSON.parse(JSON.stringify(q)), i), number: q.number }));
+      importDraft.questions = (bank.questions || []).map((q, i) => ({ ...q, ...normalizeQuestion(JSON.parse(JSON.stringify(q)), i), number: q.number }));
       // 预览需要归一化字段；未实际编辑的题目保存时使用原对象，避免删除顺带改变题意和元数据。
-      bankEditSessionV45.previewQuestions = new Map(importDraft.questions.map((q)=>[q.id, JSON.stringify(q)]));
+      bankEditSessionV45.previewQuestions = new Map(importDraft.questions.map((q) => [q.id, JSON.stringify(q)]));
       importDraft.selected.clear();
       importDraft.warnings = [];
       importDraft.report = '从题库管理进入二次编辑：可逐题查看题型、答案、状态提示，并修改后保存回原题库。';
@@ -97,7 +96,7 @@
       }
       await switchViewV45('import');
       renderImportPreview(importDraft.questions);
-      setTimeout(()=>{
+      setTimeout(() => {
         $('#bank-edit-panel-v45')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }, 60);
       toast('已进入题库二次编辑。', 'ok');
@@ -106,11 +105,11 @@
       if (bankEditSessionV45 && !await loadNativeBanks([bankEditSessionV45.bankId])) {
         return;
       }
-      return runMutation(async()=>{
+      return runMutation(async () => {
         if (!bankEditSessionV45) {
           return;
         }
-        const bank = state.banks.find((b)=>b.id === bankEditSessionV45.bankId);
+        const bank = state.banks.find((b) => b.id === bankEditSessionV45.bankId);
         if (!bank) {
           toast('原题库不存在，无法保存。', 'danger');
           return;
@@ -119,12 +118,12 @@
           toast('题库已变化，请退出编辑后重新打开，避免覆盖其他修改。', 'warn');
           return;
         }
-        const keptIds = new Set(importDraft.questions.map((q)=>q.id));
-        const deletedIds = new Set(bank.questions.filter((q)=>!keptIds.has(q.id)).map((q)=>q.id));
+        const keptIds = new Set(importDraft.questions.map((q) => q.id));
+        const deletedIds = new Set(bank.questions.filter((q) => !keptIds.has(q.id)).map((q) => q.id));
         if (deletedIds.size && !await confirmBankQuestionDeletion(bank, deletedIds)) {
           return;
         }
-        const originals = new Map(bank.questions.map((q)=>[q.id, q]));
+        const originals = new Map(bank.questions.map((q) => [q.id, q]));
         const warnings = collectImportWarnings(importDraft.questions);
         const name = ($('#import-bank-name')?.value || bank.name || '题库').trim() || bank.name || '题库';
         const groupName = readImportBankGroupV58();
@@ -132,10 +131,10 @@
         bank.name = name;
         bank.groupName = groupName;
         bank.updatedAt = now();
-        bank.questions = importDraft.questions.map((q, i)=>bankEditSessionV45.previewQuestions.get(q.id) === JSON.stringify(q) ? originals.get(q.id) : cleanImportedQuestion({ ...q, id: q.id || makeId('q', i) }));
+        bank.questions = importDraft.questions.map((q, i) => (bankEditSessionV45.previewQuestions.get(q.id) === JSON.stringify(q) ? originals.get(q.id) : cleanImportedQuestion({ ...q, id: q.id || makeId('q', i) })));
         removeBankQuestionReferences(bank.id, deletedIds);
         const scopeBefore = practiceScopeV8916();
-        if (scopeBefore.type === PRACTICE_SCOPE_GROUP_V8916 && scopeBefore.value === oldGroupName && state.banks.every((x)=>x.id === bank.id || bankGroupNameV58(x) !== oldGroupName)) {
+        if (scopeBefore.type === PRACTICE_SCOPE_GROUP_V8916 && scopeBefore.value === oldGroupName && state.banks.every((x) => x.id === bank.id || bankGroupNameV58(x) !== oldGroupName)) {
           ensurePracticeScopeV8916();
           toast('原练习分组已无题库，已切换为当前题库。', 'warn');
         }

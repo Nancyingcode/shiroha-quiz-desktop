@@ -10,13 +10,14 @@
     return {
       get current() { return current; },
       set current(next) {
-        if (timer !== null) {globalThis.clearInterval(timer);}
+        if (timer !== null) { globalThis.clearInterval(timer); }
         timer = null;
         if (dialog) {
           dialog.close();
           dialog.remove();
           dialog = null;
         }
+        // eslint-disable-next-line no-plusplus -- setter 仍接受字符串和 BigInt；限定类型后才能移除此例外。
         request++;
         current = next;
       },
@@ -36,7 +37,8 @@
     return {
       get current() { return current; },
       set current(next) {
-        if (current.timer !== null) {globalThis.clearInterval(current.timer);}
+        if (current.timer !== null) { globalThis.clearInterval(current.timer); }
+        // eslint-disable-next-line no-plusplus -- setter 仍接受字符串和 BigInt；限定类型后才能移除此例外。
         request++;
         current = next;
       },

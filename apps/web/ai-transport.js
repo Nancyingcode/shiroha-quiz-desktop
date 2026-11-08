@@ -4,24 +4,24 @@
   function create({ platform, harness, response }) {
     async function requestAiChatV99(config, messages, { controller, maxTokens, testMode, plainText, task } = {}) {
       if (harness.isHarness(config.execution)) {
-        if (!platform.harness) {throw new Error('当前平台不支持 Harness，请在桌面端配置。');}
+        if (!platform.harness) { throw new Error('当前平台不支持 Harness，请在桌面端配置。'); }
         const unavailable = harness.taskReason(config, task);
-        if (unavailable) {throw new Error(unavailable);}
+        if (unavailable) { throw new Error(unavailable); }
         if (config.execution.adapter === 'codebuddy' && !harness.configured(config, task)) {
           throw new Error(harness.unavailableReason(config, task));
         }
         return platform.harness.execute(config.execution, task, messages, controller?.signal);
       }
       const base = { model: config.model, messages, temperature: 0, stream: false };
-      if (maxTokens) {base.max_tokens = maxTokens;}
+      if (maxTokens) { base.max_tokens = maxTokens; }
       const attempts = plainText ? [base] : [{ ...base, response_format: { type: 'json_object' } }, base];
       let lastError = null;
-      for (let index = 0; index < attempts.length; index++) {
+      for (let index = 0; index < attempts.length; index += 1) {
         let result;
         try {
           result = await platform.network.ai(config, attempts[index], controller?.signal);
         } catch (error) {
-          if (error?.name === 'AbortError' || platform.credentials.native) {throw error;}
+          if (error?.name === 'AbortError' || platform.credentials.native) { throw error; }
           const failure = new Error('无法访问 AI 接口。请检查服务是否启动、地址是否正确，以及接口是否允许浏览器跨域访问。');
           failure.cause = error;
           failure.network = true;
@@ -68,7 +68,7 @@
         error.aiStage = 'http';
         lastError = error;
         const canRetryWithoutResponseFormat = index === 0 && (result.status === 400 || result.status === 422);
-        if (canRetryWithoutResponseFormat) {continue;}
+        if (canRetryWithoutResponseFormat) { continue; }
         throw error;
       }
       throw lastError || new Error('AI 请求失败。');
@@ -83,10 +83,10 @@
       }, Math.max(10, timeoutSeconds) * 1000);
       try {
         const value = await runner(controller);
-        if (timedOut) {throw new Error(`AI 请求超过 ${timeoutSeconds} 秒，已自动停止。`);}
+        if (timedOut) { throw new Error(`AI 请求超过 ${timeoutSeconds} 秒，已自动停止。`); }
         return value;
       } catch (error) {
-        if (error?.name !== 'AbortError' || !timedOut) {throw error;}
+        if (error?.name !== 'AbortError' || !timedOut) { throw error; }
       } finally {
         clearTimeout(timer);
       }

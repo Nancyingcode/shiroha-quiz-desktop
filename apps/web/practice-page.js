@@ -33,17 +33,16 @@
         return;
       }
       lifecycleBound = true;
-      document.addEventListener('visibilitychange', ()=>{
+      document.addEventListener('visibilitychange', () => {
         if (document.hidden) {
           pausePracticeClock(false);
-        }
-        else {
+        } else {
           showPracticePause();
         }
       });
       window.addEventListener('focus', showPracticePause);
       // WebView2 最小化/恢复不总派发可见性事件；仅补显已暂停状态，待这些路径稳定派发后可移除补显监听。
-      window.addEventListener('shiroha:practice-hidden', ()=>pausePracticeClock());
+      window.addEventListener('shiroha:practice-hidden', () => pausePracticeClock());
       window.addEventListener('resize', showPracticePause);
     }
     function resetPractice() {
@@ -59,7 +58,7 @@
       if (!item || practiceSession.current.completed) {
         return;
       }
-      const key = practiceItemKeyV8916(item), st = getPracticeAnswerStateV26(key);
+      const key = practiceItemKeyV8916(item); const st = getPracticeAnswerStateV26(key);
       if (!st.answered && !st.revealed && !practiceSession.current.totalLocked && $('#practice-card .question-title')) {
         setPracticeAnswerStateV26(key, { chosen: collectAnswer('#practice-card', practiceQuestionV8916(item)) });
       }
@@ -79,7 +78,7 @@
       }
     }
     function updatePracticeClock() {
-      const elapsed = ShirohaTraining.elapsedClock(practiceSession.current.clock, globalThis.performance.now()), node = $('#p-clock');
+      const elapsed = ShirohaTraining.elapsedClock(practiceSession.current.clock, globalThis.performance.now()); const node = $('#p-clock');
       if (node) {
         node.textContent = ShirohaTraining.formatDuration(elapsed / 1000);
       }
@@ -88,7 +87,7 @@
       clearPracticeClockTimer();
       if (practiceSession.current.clock?.state === 'running') {
         const owner = practiceSession.current;
-        const timer = globalThis.setInterval(()=>{
+        const timer = globalThis.setInterval(() => {
           if (practiceSession.current !== owner) {
             globalThis.clearInterval(timer);
             return;
@@ -103,13 +102,13 @@
       if (practiceSession.dialog || practiceSession.current.clock?.state !== 'paused' || !$('#practice.active') || document.hidden || $('#app-dialog[open]')) {
         return;
       }
-      const owner = practiceSession.current, dialog = document.createElement('dialog');
+      const owner = practiceSession.current; const dialog = document.createElement('dialog');
       practiceSession.dialog = dialog;
       dialog.id = 'practice-pause-dialog';
       dialog.className = 'practice-pause-dialog';
       dialog.setAttribute('aria-labelledby', 'practice-pause-title');
       dialog.innerHTML = `<h2 id="practice-pause-title">练习已暂停</h2><p>暂停期间不计时，当前作答已保留。</p><strong id="practice-pause-time">${ShirohaTraining.formatDuration(ShirohaTraining.elapsedClock(owner.clock, globalThis.performance.now()) / 1000)}</strong><button type="button" class="primary" id="practice-resume">继续练习</button>`;
-      const resume = ()=>{
+      const resume = () => {
         if (practiceSession.current !== owner || document.hidden) {
           return;
         }
@@ -121,11 +120,11 @@
         startPracticeClockTicker();
         $('#p-pause')?.focus({ preventScroll: true });
       };
-      dialog.addEventListener('cancel', (event)=>{
+      dialog.addEventListener('cancel', (event) => {
         event.preventDefault();
         resume();
       });
-      dialog.addEventListener('keydown', (event)=>{
+      dialog.addEventListener('keydown', (event) => {
         event.stopPropagation();
         if (event.key === 'Tab') {
           event.preventDefault();
@@ -151,7 +150,7 @@
     }
     function freezePracticeInputs() {
       if (practiceSession.current.clock?.state === 'stopped') {
-        $$('#practice-card input,#practice-card textarea,#p-submit,#p-reveal').forEach((node)=>{
+        $$('#practice-card input,#practice-card textarea,#p-submit,#p-reveal').forEach((node) => {
           node.disabled = true;
         });
       }
@@ -170,7 +169,7 @@
         return;
       }
       head.insertAdjacentHTML('beforeend', `<div class="practice-clock"><span>用时 <b id="p-clock" role="timer" aria-label="本轮有效练习用时" aria-live="off"></b></span><button type="button" class="ghost mini-btn" id="p-pause" ${practiceSession.current.clock.state === 'stopped' ? 'disabled' : ''}>暂停</button></div>`);
-      $('#p-pause').onclick = ()=>pausePracticeClock();
+      $('#p-pause').onclick = () => pausePracticeClock();
       freezePracticeInputs();
       updatePracticeClock();
       if (practiceSession.current.clock.state === 'paused') {
@@ -178,7 +177,7 @@
       }
     }
     async function confirmPracticeAction(message, options) {
-      const owner = practiceSession.current, wasRunning = owner.clock?.state === 'running';
+      const owner = practiceSession.current; const wasRunning = owner.clock?.state === 'running';
       pausePracticeClock(false);
       const accepted = await globalThis.ShirohaDialogs.confirm(message, options);
       if (!accepted && practiceSession.current === owner && wasRunning && !document.hidden) {
@@ -188,7 +187,7 @@
       return accepted && practiceSession.current === owner;
     }
     function practiceReviewItems() {
-      return (practiceSession.current.reviewItems || trainingSessionItems(practiceSession.current.items)).map((item, index)=>{
+      return (practiceSession.current.reviewItems || trainingSessionItems(practiceSession.current.items)).map((item, index) => {
         const answer = getPracticeAnswerStateV26(practiceItemKeyV8916(practiceSession.current.items[index]));
         return { ...item, chosen: answer.chosen || [], revealed: answer.revealed };
       });
@@ -196,9 +195,9 @@
     function startWrongPractice() {
       const limit = $('#wrong-practice-limit')?.value || 'custom';
       const customCount = readCustomCountV60('#wrong-practice-custom-count', 20);
-      $$('.nav').forEach((b)=>b.classList.remove('active'));
+      $$('.nav').forEach((b) => b.classList.remove('active'));
       document.querySelector('[data-view="practice"]').classList.add('active');
-      $$('.view').forEach((v)=>v.classList.remove('active'));
+      $$('.view').forEach((v) => v.classList.remove('active'));
       $('#practice').classList.add('active');
       $('#page-title').textContent = '刷题练习';
       $('#practice-source').value = 'wrong';
@@ -223,12 +222,13 @@
       restoreSidebarAfterFocusV47();
     }
     function practiceWrongRows(record) {
-      return (record.details || []).map((detail, index)=>({ detail, index })).filter(({ detail })=>!detail.correct);
+      return (record.details || []).map((detail, index) => ({ detail, index })).filter(({ detail }) => !detail.correct);
     }
     function renderPracticeWrongRows(record, items) {
-      return items.map(({ detail, index })=>{
-        const snapshot = detail.nativeQuestion || detail, q = snapshot.id ? snapshot : { ...snapshot, id: detail.questionId || '' }, chosen = blankUserAnswersFromDetailV58914(detail), answer = detail.answer || q.answer || [];
+      return items.map(({ detail, index }) => {
+        const snapshot = detail.nativeQuestion || detail; const q = snapshot.id ? snapshot : { ...snapshot, id: detail.questionId || '' }; const chosen = blankUserAnswersFromDetailV58914(detail); const answer = detail.answer || q.answer || [];
         const comparison = isMultiBlankQuestionV58914(q) ? renderMultiBlankComparisonV58914(q.blankAnswers, chosen, true) : `<div class="q-multiline-text"><b>你的答案：</b>${practiceReviewAnswerHtml(q, chosen)}</div><div class="q-multiline-text"><b>${q.type === 'short' ? '参考答案（自评）' : '正确答案'}：</b>${hasAnswerValueV58914(answer) ? practiceReviewAnswerHtml(q, answer) : '题库未提供答案'}</div>`;
+        // eslint-disable-next-line prefer-template -- 历史数据字段可能是对象，保留 + 的默认转换；字段类型受约束后移除此例外。
         return `<article class="exam-q" data-wrong-question-index="${index}"><div class="qmeta"><b>第 ${index + 1} 题</b><span class="pill">${label(q.type)}</span><span>${esc(detail.sourceBankName || record.bankName || '')}</span></div><div class="question-title">${renderQuestionBodyV83(q)}</div>${renderReviewOptions({ ...q, answer }, chosen)}${isTextType(q.type) ? `<div class="feedback bad">${comparison}</div>` : renderReviewAnswerSummary({ ...q, answer }, chosen, '未作答')}${renderReviewAnalysis({ bankId: detail.sourceBankId || record.bankId || '', question: q }, chosen, 'result:' + record.id + ':' + index)}</article>`;
       }).join('');
     }
@@ -237,11 +237,12 @@
       return `<section id="p-wrong-overview" aria-label="本轮错题一览"><h3>错题一览（${wrong.length}）</h3><div id="p-wrong-overview-list" aria-label="本轮错题一览">${wrong.length ? renderPracticeWrongRows(record, items) : '<div class="notice ok">本轮没有错题，全部答对了。</div>'}</div></section>`;
     }
     function renderPracticeWrongPage(record) {
-      const target = document.getElementById('p-wrong-overview-list'), wrong = practiceWrongRows(record);
+      const target = document.getElementById('p-wrong-overview-list'); const wrong = practiceWrongRows(record);
       if (!target || !wrong.length) {
         return;
       }
-      const rows = nativePage(wrong, 'practice-wrong:' + record.id, target, ()=>renderPracticeWrongPage(record));
+      // eslint-disable-next-line prefer-template -- 历史数据字段可能是对象，保留 + 的默认转换；字段类型受约束后移除此例外。
+      const rows = nativePage(wrong, 'practice-wrong:' + record.id, target, () => renderPracticeWrongPage(record));
       target.innerHTML = renderPracticeWrongRows(record, rows);
       updateReviewAnalysisPanels();
     }
@@ -254,7 +255,7 @@
         return;
       }
       stopPracticeClock();
-      return runMutation(async()=>{
+      return runMutation(async () => {
         if (practiceSession.current.completed || !practiceSession.current.items.length) {
           return;
         }
@@ -297,16 +298,17 @@
         }
         $('#practice-card > .notice').textContent = `${trainingCompletion(rec)}，记录已保存。可查看本轮全部题目的作答情况。`;
         $('#practice-card .score-card').insertAdjacentHTML('afterend', `<p class="training-result-summary">${trainingCompletion(rec)} · 未作答 ${rec.reviewSummary.unanswered} 题 · 用时 ${ShirohaTraining.formatDuration(rec.duration)}</p><div class="actions"><button type="button" class="primary" id="practice-review-result">查看复盘</button></div>`);
-        $('#practice-review-result').onclick = ()=>openTrainingReview(rec.id, 'practice');
-        $('#back-practice-setup').onclick = ()=>exitPracticeFocus();
-        $('#again-practice').onclick = ()=>startPractice();
+        $('#practice-review-result').onclick = () => openTrainingReview(rec.id, 'practice');
+        $('#back-practice-setup').onclick = () => exitPracticeFocus();
+        $('#again-practice').onclick = () => startPractice();
         showNotice(trainingCompletion(rec), `已答 ${total} 道，正确率 ${rec.accuracy}%。`, 'ok');
         renderAll();
       });
     }
     async function startPractice(scopeOverrideV8916) {
+      // eslint-disable-next-line no-plusplus -- setter 仍接受字符串和 BigInt；限定类型后才能移除此例外。
       const request = ++practiceSession.request;
-      const overrideType = String(scopeOverrideV8916 && scopeOverrideV8916.type || '').toLowerCase();
+      const overrideType = String((scopeOverrideV8916 && scopeOverrideV8916.type) || '').toLowerCase();
       const override = [PRACTICE_SCOPE_BANK_V8916, PRACTICE_SCOPE_GROUP_V8916].includes(overrideType) ? normalizePracticeScopeV8916(scopeOverrideV8916) : null;
       const limit = $('#practice-limit')?.value || 'custom';
       const customCount = readCustomCountV60('#practice-custom-count', 20);
@@ -346,7 +348,7 @@
         progressKey: selection.progressKey,
         baseItemKeys: selection.baseItems.map(practiceItemKeyV8916),
       };
-      const session = practiceSession.current, sessionRequest = practiceSession.request;
+      const session = practiceSession.current; const sessionRequest = practiceSession.request;
       practiceSession.current.submitMode = $('#practice-submit-mode')?.value === 'total' ? 'total' : 'single';
       if (!practiceSession.current.items.length) {
         $('#practice-card').innerHTML = '<div class="empty">当前条件下没有题目。</div>';
@@ -368,8 +370,7 @@
       let startText = '';
       if (selection.startMode === PRACTICE_START_CONTINUE_V58916) {
         startText = ` · 从第 ${selection.startIndex + 1} 题继续`;
-      }
-      else if (selection.startMode === PRACTICE_START_CUSTOM_V58916) {
+      } else if (selection.startMode === PRACTICE_START_CUSTOM_V58916) {
         startText = ' · 自选题号';
       }
       practiceSession.current.reviewItems = trainingSessionItems(practiceSession.current.items);
@@ -382,7 +383,7 @@
       startPracticeClockTicker();
     }
     function totalPracticeFilledCount() {
-      return practiceSession.current.items.filter((item)=>hasAnswerValueV58914(getPracticeAnswerStateV26(practiceItemKeyV8916(item)).chosen)).length;
+      return practiceSession.current.items.filter((item) => hasAnswerValueV58914(getPracticeAnswerStateV26(practiceItemKeyV8916(item)).chosen)).length;
     }
     async function canLeaveTotalPractice(target) {
       if (practiceSession.current.submitMode !== 'total' || practiceSession.current.completed) {
@@ -427,7 +428,7 @@
       return `共 ${practiceSession.current.items.length} 题 · 已填写 ${filled} 题 · 未填写 ${practiceSession.current.items.length - filled} 题`;
     }
     function renderTotalPracticeNav() {
-      return `<div id="practice-nav-v26" class="practice-nav-v26"><b>答题卡 · ✓ 已填写 / ○ 未填写</b><div class="practice-nav-grid-v26">${practiceSession.current.items.map((item, index)=>{
+      return `<div id="practice-nav-v26" class="practice-nav-v26"><b>答题卡 · ✓ 已填写 / ○ 未填写</b><div class="practice-nav-grid-v26">${practiceSession.current.items.map((item, index) => {
         const filled = hasAnswerValueV58914(getPracticeAnswerStateV26(practiceItemKeyV8916(item)).chosen);
         return `<button type="button" class="${index === practiceSession.current.idx ? 'current' : ''}" data-practice-jump="${index}" aria-label="第 ${index + 1} 题，${filled ? '已填写' : '未填写'}" ${practiceSession.current.totalLocked ? 'disabled' : ''}>${index + 1}${filled ? ' ✓' : ' ○'}</button>`;
       }).join('')}</div></div>`;
@@ -437,40 +438,42 @@
       if (!item) {
         return;
       }
-      const q = practiceQuestionV8916(item), key = practiceItemKeyV8916(item), st = getPracticeAnswerStateV26(key), locked = !!practiceSession.current.totalLocked;
+      const q = practiceQuestionV8916(item); const key = practiceItemKeyV8916(item); const st = getPracticeAnswerStateV26(key); const locked = !!practiceSession.current.totalLocked;
       $('#practice-progress').textContent = `${practiceSession.current.idx + 1} / ${practiceSession.current.items.length}`;
       $('#practice-card').innerHTML = `<div class="practice-focus-head"><b>${esc(practiceSession.current.scopeName || '刷题练习')} · 总提交</b><span class="practice-round-progress">本轮进度 · 第 ${practiceSession.current.idx + 1} / ${practiceSession.current.items.length} 题</span><div class="practice-tools-v26"><button class="ghost mini-btn" id="p-favorite">${isFavoriteV27(q.id, practiceItemBankIdV8916(item)) ? '取消收藏' : '收藏题目'}</button><button class="ghost mini-btn" id="p-edit-v120" disabled title="本轮总提交结束后可编辑题目">编辑题目</button><button class="ghost mini-btn" id="p-exit" ${locked ? 'disabled' : ''}>退出练习</button></div></div>${questionHtml(q, false, 0, item)}<div class="actions practice-actions-v44"><button class="ghost" id="p-prev" ${locked || practiceSession.current.idx === 0 ? 'disabled' : ''}>上一题</button><button class="ghost" id="p-next" ${locked || practiceSession.current.idx === practiceSession.current.items.length - 1 ? 'disabled' : ''}>下一题</button><button class="primary" id="p-submit-all">${locked ? '继续提交' : '总提交'}</button></div><p id="p-total-status" role="status">${totalPracticeStatus()}${locked ? ' · 答案已锁定，请完成自评与保存。' : ' · 提交前可修改答案。'}</p><div id="p-feedback" role="status"></div><div id="p-ai-v613"></div>${renderTotalPracticeNav()}`;
       applyAnswerStateV26('#practice-card', q, st.chosen || []);
       const session = practiceSession.current;
-      const capture = ()=>{
+      const capture = () => {
         setPracticeAnswerStateV26(key, { chosen: collectAnswer('#practice-card', q) });
-        $('#p-total-status').textContent = totalPracticeStatus() + ' · 提交前可修改答案。';
+        $('#p-total-status').textContent = `${totalPracticeStatus()} · 提交前可修改答案。`;
         $('#practice-nav-v26').outerHTML = renderTotalPracticeNav();
         bindPracticeNavV30();
       };
-      bindAnswerOptionControls('#practice-card', q, practiceSession.current.idx + 1, ()=>canEditPracticeOptions(session, key), capture);
+      bindAnswerOptionControls('#practice-card', q, practiceSession.current.idx + 1, () => canEditPracticeOptions(session, key), capture);
       // 草稿属于本轮，不写入学习记录；输入时采集可覆盖切题、收藏重绘和键盘操作。
-      $$('#practice-card .text-answer').forEach((input)=>{
+      $$('#practice-card .text-answer').forEach((input) => {
         input.disabled = locked;
         if (!locked) {
           input.addEventListener('input', capture);
         }
       });
-      $('#p-favorite').onclick = async()=>{
+      $('#p-favorite').onclick = async () => {
         if (await toggleFavoriteV27(q.id, practiceItemBankIdV8916(item))) {
           renderPracticeQuestion();
         }
       };
-      $('#p-prev').onclick = ()=>{
+      $('#p-prev').onclick = () => {
+        // eslint-disable-next-line no-plusplus -- 轮次状态可由调用方替换，保留字符串和 BigInt 的转换；限定字段类型后移除此例外。
         practiceSession.current.idx--;
         renderPracticeQuestion();
       };
-      $('#p-next').onclick = ()=>{
+      $('#p-next').onclick = () => {
+        // eslint-disable-next-line no-plusplus -- 轮次状态可由调用方替换，保留字符串和 BigInt 的转换；限定字段类型后移除此例外。
         practiceSession.current.idx++;
         renderPracticeQuestion();
       };
       $('#p-submit-all').onclick = submitTotalPractice;
-      $('#p-exit').onclick = async ()=>{
+      $('#p-exit').onclick = async () => {
         if (!await confirmPracticeAction('本轮答案尚未提交。退出将放弃本轮草稿，不生成练习记录。确定退出？')) {
           return;
         }
@@ -495,8 +498,8 @@
           setPracticeAnswerStateV26(key, { selfCorrect: correct });
           continueTotalPractice();
         };
-        $('#p-self-right').onclick = ()=>assess(true);
-        $('#p-self-wrong').onclick = ()=>assess(false);
+        $('#p-self-right').onclick = () => assess(true);
+        $('#p-self-wrong').onclick = () => assess(false);
         $('#p-self-right').focus();
       }
     }
@@ -520,8 +523,7 @@
           stopPracticeClock();
         }
         return continueTotalPractice();
-      }
-      finally {
+      } finally {
         delete session.confirmingTotal;
         refreshAnswerOptionControls();
       }
@@ -535,7 +537,7 @@
       }
       renderPracticeQuestion();
       // 自评仅暂存在本轮；全部就绪后用同一事务更新错题、进度和记录，失败整体回滚。
-      return runMutation(()=>{
+      return runMutation(() => {
         if (practiceSession.current.completed || practiceSession.current.submitMode !== 'total' || !practiceSession.current.totalLocked) {
           return;
         }
@@ -548,8 +550,7 @@
           if (hasAnswer) {
             if (question.type === 'short') {
               correct = answerState.selfCorrect === true;
-            }
-            else {
+            } else {
               correct = sameAnswerForQuestion(question, chosen, question.answer);
             }
           }
@@ -581,34 +582,34 @@
       bindPracticeAnswerDraft(q, key, st);
       if (answerLocked()) {
         showAnsweredStateV26(q, st);
-      }
-      else {
+      } else {
         renderPracticeAiPanelV613();
       }
-      $('#p-exit').onclick = async ()=>{
+      $('#p-exit').onclick = async () => {
         if (await confirmPracticeAction('已作答部分会保存为一条记录。', { title: '退出本轮练习？', cancelLabel: '继续练习', acceptLabel: '保存并退出' })) {
           finishPractice(true);
         }
       };
-      $('#p-favorite').onclick = async()=>{
+      $('#p-favorite').onclick = async () => {
         if (await toggleFavoriteV27(q.id, bid)) {
           renderPracticeQuestion();
         }
       };
-      $('#p-edit-v120').onclick = ()=>openPracticeEditQuestionV120();
-      $('#p-prev').onclick = ()=>{
+      $('#p-edit-v120').onclick = () => openPracticeEditQuestionV120();
+      $('#p-prev').onclick = () => {
         if (practiceSession.current.idx > 0) {
+          // eslint-disable-next-line no-plusplus -- 轮次状态可由调用方替换，保留字符串和 BigInt 的转换；限定字段类型后移除此例外。
           practiceSession.current.idx--;
           renderPracticeQuestion();
         }
       };
-      $('#p-submit').onclick = ()=>submitPractice(item, false);
-      $('#p-reveal').onclick = ()=>submitPractice(item, true);
-      $('#p-next').onclick = ()=>{
+      $('#p-submit').onclick = () => submitPractice(item, false);
+      $('#p-reveal').onclick = () => submitPractice(item, true);
+      $('#p-next').onclick = () => {
         if (practiceSession.current.idx >= practiceSession.current.items.length - 1) {
           finishPractice();
-        }
-        else {
+        } else {
+          // eslint-disable-next-line no-plusplus -- 轮次状态可由调用方替换，保留字符串和 BigInt 的转换；限定字段类型后移除此例外。
           practiceSession.current.idx++;
           renderPracticeQuestion();
         }
@@ -624,22 +625,22 @@
         return;
       }
       window.__shirohaPracticeHotkeysV44Bound = true;
-      document.addEventListener('keydown', (e)=>{
+      document.addEventListener('keydown', (e) => {
         if (!document.body.classList.contains('practice-focus') || !practiceSession.current?.items?.length || e.isComposing || e.ctrlKey || e.metaKey || e.altKey) {
           return;
         }
-        const target = e.target;
-        const tag = (target && target.tagName || '').toUpperCase();
-        const type = String(target && target.type || '').toLowerCase();
+        const { target } = e;
+        const tag = ((target && target.tagName) || '').toUpperCase();
+        const type = String((target && target.type) || '').toLowerCase();
         const editable = target && (target.isContentEditable || tag === 'TEXTAREA' || tag === 'SELECT' || (tag === 'INPUT' && !['radio', 'checkbox', 'button', 'submit'].includes(type)));
-        if (editable || tag === 'BUTTON' && (e.key === 'Enter' || e.key === ' ')) {
+        if (editable || (tag === 'BUTTON' && (e.key === 'Enter' || e.key === ' '))) {
           return;
         }
         const q = practiceQuestionV8916(currentPracticeItemV8916());
         if (!q) {
           return;
         }
-        const clickIfReady = (selector)=>{
+        const clickIfReady = (selector) => {
           const btn = $(selector);
           if (btn && !btn.disabled) {
             btn.click();
@@ -702,7 +703,7 @@
       }
     }
     function bindPracticeNavV30() {
-      $$('#practice-card [data-practice-jump]').forEach((btn)=>btn.onclick = ()=>{
+      $$('#practice-card [data-practice-jump]').forEach((btn) => btn.onclick = () => {
         practiceSession.current.idx = Number(btn.dataset.practiceJump);
         renderPracticeQuestion();
       });
@@ -716,12 +717,12 @@
       practiceSession.current.answerState[id] = { ...getPracticeAnswerStateV26(id), ...next };
     }
     function bindPracticeAnswerDraft(q, key, stateValue) {
-      const session = practiceSession.current, capture = ()=>setPracticeAnswerStateV26(key, { chosen: collectAnswer('#practice-card', q) });
-      bindAnswerOptionControls('#practice-card', q, practiceSession.current.idx + 1, ()=>canEditPracticeOptions(session, key), capture);
+      const session = practiceSession.current; const capture = () => setPracticeAnswerStateV26(key, { chosen: collectAnswer('#practice-card', q) });
+      bindAnswerOptionControls('#practice-card', q, practiceSession.current.idx + 1, () => canEditPracticeOptions(session, key), capture);
       if (stateValue.answered || stateValue.revealed) {
         return;
       }
-      $$('#practice-card .text-answer').forEach((input)=>{
+      $$('#practice-card .text-answer').forEach((input) => {
         input.oninput = capture;
       });
     }
@@ -732,8 +733,7 @@
         let correctness = '';
         if (st.correct === true) {
           correctness = 'ok';
-        }
-        else if (st.correct === false) {
+        } else if (st.correct === false) {
           correctness = 'bad';
         }
         const cls = [i === practiceSession.current.idx ? 'current' : '', st.answered ? 'done' : '', correctness, isFavoriteV27(q.id, practiceItemBankIdV8916(item)) ? 'favorite' : ''].filter(Boolean).join(' ');
@@ -742,8 +742,8 @@
       return `<div id="practice-nav-v26" class="practice-nav-v26"><b>答题卡</b><div class="practice-nav-grid-v26">${buttons}</div></div>`;
     }
     async function submitPractice(item, reveal) {
-      return runMutation(async()=>{
-        const q = practiceQuestionV8916(item), key = practiceItemKeyV8916(item);
+      return runMutation(async () => {
+        const q = practiceQuestionV8916(item); const key = practiceItemKeyV8916(item);
         const chosen = collectAnswer('#practice-card', q);
         if (!hasAnswerValueV58914(chosen) && !reveal) {
           $('#p-feedback').innerHTML = '<div class="feedback warn">请先作答，再提交。</div>';
@@ -756,8 +756,7 @@
         const ok = !reveal && sameAnswerForQuestion(q, chosen, q.answer);
         if (!reveal) {
           recordPracticeAnswer(item, chosen, ok);
-        }
-        else {
+        } else {
           setPracticeAnswerStateV26(key, { chosen, revealed: true, correct: null });
         }
         await saveSilent();
@@ -772,23 +771,21 @@
       const wrong = st.answered && st.correct === false && !st.revealed;
       let analysis = '';
       if (wrong) {
-        analysis = renderReviewAnalysis(currentPracticeItemV8916(), st.chosen || [], 'practice:' + practiceSession.current.start);
-      }
-      else if (q.analysis) {
-        analysis = '<br>解析：' + renderQuestionContent(q.analysis);
+        analysis = renderReviewAnalysis(currentPracticeItemV8916(), st.chosen || [], `practice:${practiceSession.current.start}`);
+      } else if (q.analysis) {
+        analysis = `<br>解析：${renderQuestionContent(q.analysis)}`;
       }
       let feedbackClass = 'bad';
       let feedbackTitle = '✕ 这题要再看一遍';
       if (st.revealed) {
         feedbackClass = 'warn';
         feedbackTitle = '已显示参考答案';
-      }
-      else if (st.correct) {
+      } else if (st.correct) {
         feedbackClass = 'ok';
         feedbackTitle = '✓ 回答正确';
       }
-      $('#p-feedback').innerHTML = `<div class="feedback ${feedbackClass}"><b>${feedbackTitle}</b>${isMultiBlankQuestionV58914(q) ? renderMultiBlankComparisonV58914(q.blankAnswers, st.chosen || [], true) : '｜' + feedbackAnswerHtmlV58914(q, st.chosen || [])}${analysis}</div>`;
-      const sub = $('#p-submit'), rev = $('#p-reveal');
+      $('#p-feedback').innerHTML = `<div class="feedback ${feedbackClass}"><b>${feedbackTitle}</b>${isMultiBlankQuestionV58914(q) ? renderMultiBlankComparisonV58914(q.blankAnswers, st.chosen || [], true) : `｜${feedbackAnswerHtmlV58914(q, st.chosen || [])}`}${analysis}</div>`;
+      const sub = $('#p-submit'); const rev = $('#p-reveal');
       if (sub) {
         sub.disabled = true;
       }
@@ -799,45 +796,43 @@
       updateReviewAnalysisPanels();
     }
     function showSubjectiveFeedback(item, chosen, reveal) {
-      const q = practiceQuestionV8916(item), key = practiceItemKeyV8916(item), user = chosen.join('；') || '未填写';
+      const q = practiceQuestionV8916(item); const key = practiceItemKeyV8916(item); const user = chosen.join('；') || '未填写';
       setPracticeAnswerStateV26(key, { chosen, revealed: !!reveal });
-      $('#p-feedback').innerHTML = `<div class="feedback warn"><b>你的作答：</b><div class="q-multiline-text">${renderQuestionContent(user)}</div><b>参考答案：</b><div class="q-multiline-text">${renderQuestionContent(q.answer.join('；') || '未提供')}</div>${q.analysis ? '<b>解析：</b><div class="q-multiline-text">' + renderQuestionContent(q.analysis) + '</div>' : ''}<div class="actions"><button class="primary" id="p-self-right">判为正确</button><button class="danger" id="p-self-wrong">判为错误</button></div></div>`;
+      $('#p-feedback').innerHTML = `<div class="feedback warn"><b>你的作答：</b><div class="q-multiline-text">${renderQuestionContent(user)}</div><b>参考答案：</b><div class="q-multiline-text">${renderQuestionContent(q.answer.join('；') || '未提供')}</div>${q.analysis ? `<b>解析：</b><div class="q-multiline-text">${renderQuestionContent(q.analysis)}</div>` : ''}<div class="actions"><button class="primary" id="p-self-right">判为正确</button><button class="danger" id="p-self-wrong">判为错误</button></div></div>`;
       $('#p-submit').disabled = true;
       $('#p-reveal').disabled = true;
-      $('#p-self-right').onclick = async ()=>{
-        return runMutation(async()=>{
-          recordPracticeAnswer(item, chosen, true);
-          $('#p-self-right').disabled = true;
-          $('#p-self-wrong').disabled = true;
-          await saveSilent();
-          renderStats();
-          renderPracticeQuestion();
-        });
-      };
-      $('#p-self-wrong').onclick = async ()=>{
-        return runMutation(async()=>{
-          recordPracticeAnswer(item, chosen, false);
-          $('#p-self-right').disabled = true;
-          $('#p-self-wrong').disabled = true;
-          await saveSilent();
-          renderStats();
-          renderPracticeQuestion();
-        });
-      };
+      $('#p-self-right').onclick = async () => runMutation(async () => {
+        recordPracticeAnswer(item, chosen, true);
+        $('#p-self-right').disabled = true;
+        $('#p-self-wrong').disabled = true;
+        await saveSilent();
+        renderStats();
+        renderPracticeQuestion();
+      });
+      $('#p-self-wrong').onclick = async () => runMutation(async () => {
+        recordPracticeAnswer(item, chosen, false);
+        $('#p-self-right').disabled = true;
+        $('#p-self-wrong').disabled = true;
+        await saveSilent();
+        renderStats();
+        renderPracticeQuestion();
+      });
       renderPracticeAiPanelV613();
     }
     function recordPracticeAnswer(item, chosen, ok) {
-      const q = practiceQuestionV8916(item), key = practiceItemKeyV8916(item), bid = practiceItemBankIdV8916(item);
+      const q = practiceQuestionV8916(item); const key = practiceItemKeyV8916(item); const bid = practiceItemBankIdV8916(item);
       const current = getPracticeAnswerStateV26(key);
       if (current.answered) {
         return;
       }
+      // eslint-disable-next-line no-plusplus -- 轮次状态可由调用方替换，保留字符串和 BigInt 的转换；限定字段类型后移除此例外。
       practiceSession.current.answered++;
       if (ok) {
+        // eslint-disable-next-line no-plusplus -- 轮次状态可由调用方替换，保留字符串和 BigInt 的转换；限定字段类型后移除此例外。
         practiceSession.current.correct++;
         markRight(q.id, bid);
-      }
-      else {
+      } else {
+        // eslint-disable-next-line no-plusplus -- 轮次状态可由调用方替换，保留字符串和 BigInt 的转换；限定字段类型后移除此例外。
         practiceSession.current.wrong++;
         addWrong(q.id, bid, chosen);
       }
@@ -860,9 +855,9 @@
       $('#practice-submit-mode').focus();
     }
     function switchPracticeSourceV27(source) {
-      $$('.nav').forEach((b)=>b.classList.remove('active'));
+      $$('.nav').forEach((b) => b.classList.remove('active'));
       document.querySelector('[data-view="practice"]').classList.add('active');
-      $$('.view').forEach((v)=>v.classList.remove('active'));
+      $$('.view').forEach((v) => v.classList.remove('active'));
       $('#practice').classList.add('active');
       $('#page-title').textContent = '刷题练习';
       $('#practice-source').value = source;

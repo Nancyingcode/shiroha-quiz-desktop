@@ -151,7 +151,7 @@ test('A2 真实 Web 完整、历史选中备份和双端原生兼容载荷满足
   const full = plain(api.buildBackupPayloadV23(api.snapshot().banks, 'all_data', true));
   const selected = plain(api.buildBackupPayloadV23([api.snapshot().banks[0]], 'selected_banks', false));
   const native = plain(loadWeb({ state: webState() }).api.buildNativeCompatibleBackupZipV611().payload);
-  for (const payload of [full, selected, native, androidBackup()]) {assert.equal(validation.validateBackup(payload).ok, true, payload.kind);}
+  for (const payload of [full, selected, native, androidBackup()]) { assert.equal(validation.validateBackup(payload).ok, true, payload.kind); }
   rejects(validation.validateBackup({ ...androidBackup(), schemaVersion: 4 }), 'unsupported_version');
 });
 
@@ -228,7 +228,7 @@ test('冻结拒绝会在 JSON 交换中丢失的稀疏数组和隐藏字段', ()
 test('校验拒绝访问器和类实例，不能在冻结时执行 getter', () => {
   let reads = 0;
   const request = commit();
-  Object.defineProperty(request.changes[0], 'bankId', { get() { reads++; return 'bank-1'; }, enumerable: true });
+  Object.defineProperty(request.changes[0], 'bankId', { get() { reads += 1; return 'bank-1'; }, enumerable: true });
   rejects(validation.freezeCommit(request, ready()), 'invalid_input');
   assert.equal(reads, 0);
   class Setting { constructor() { this.value = '不能丢弃原型语义'; } }

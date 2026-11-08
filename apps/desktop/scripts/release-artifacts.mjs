@@ -14,11 +14,11 @@ const notesName = 'release-notes.md';
 export function releaseContext(input) {
   const { ref = '', commit = '', repository = '', runId = '', runAttempt = '' } = input;
   const match = /^refs\/tags\/desktop-v((?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*))$/.exec(ref);
-  if (!match || match[0] !== ref) {throw new Error('Release 必须使用 desktop-v<major>.<minor>.<patch> 标签');}
-  if (!/^[a-f0-9]{40}$/.test(commit) || commit.length !== 40) {throw new Error('Release commit 必须是完整 SHA');}
-  if (!/^[A-Za-z0-9][A-Za-z0-9_.-]*\/[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(repository) || /\s/.test(repository)) {throw new Error('Release repository 无效');}
+  if (!match || match[0] !== ref) { throw new Error('Release 必须使用 desktop-v<major>.<minor>.<patch> 标签'); }
+  if (!/^[a-f0-9]{40}$/.test(commit) || commit.length !== 40) { throw new Error('Release commit 必须是完整 SHA'); }
+  if (!/^[A-Za-z0-9][A-Za-z0-9_.-]*\/[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(repository) || /\s/.test(repository)) { throw new Error('Release repository 无效'); }
   for (const value of [runId, runAttempt]) {
-    if (!/^[1-9]\d*$/.test(value) || /\s/.test(value)) {throw new Error('Release run identity 无效');}
+    if (!/^[1-9]\d*$/.test(value) || /\s/.test(value)) { throw new Error('Release run identity 无效'); }
   }
   return { ref, tag: ref.slice('refs/tags/'.length), version: match[1], commit, repository, runId, runAttempt };
 }
@@ -51,9 +51,9 @@ async function rejectLinkedPath(file) {
     current = path.join(current, part);
     try {
       const stat = await lstat(current);
-      if (stat.isSymbolicLink()) {throw new Error(`Release 不接受链接路径: ${current}`);}
+      if (stat.isSymbolicLink()) { throw new Error(`Release 不接受链接路径: ${current}`); }
     } catch (error) {
-      if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {return;}
+      if (error instanceof Error && 'code' in error && error.code === 'ENOENT') { return; }
       throw error;
     }
   }
@@ -63,7 +63,7 @@ async function rejectLinkedPath(file) {
 async function nonemptyFile(file) {
   await rejectLinkedPath(file);
   const stat = await lstat(file);
-  if (!stat.isFile() || stat.size === 0) {throw new Error(`Release 需要非空普通文件: ${file}`);}
+  if (!stat.isFile() || stat.size === 0) { throw new Error(`Release 需要非空普通文件: ${file}`); }
   return stat;
 }
 
@@ -78,14 +78,14 @@ function cargoVersion(source, lockfile) {
   const blocks = source.split(lockfile ? /^\[\[package\]\]\s*$/m : /^\[package\]\s*$/m).slice(1);
   const packages = blocks.map((block) => block.split(/^\[/m)[0]);
   const application = packages.filter((block) => /^name\s*=\s*"shiroha-quiz-desktop"\s*$/m.test(block));
-  if (application.length !== 1) {throw new Error('Cargo 应用包版本记录缺失或重复');}
+  if (application.length !== 1) { throw new Error('Cargo 应用包版本记录缺失或重复'); }
   return /^version\s*=\s*"([^"]+)"\s*$/m.exec(application[0])?.[1];
 }
 
 /** @param {string} root @param {ReleaseContext} context */
 export async function validateVersions(root, context) {
   const validated = releaseContext(context);
-  if (validated.tag !== context.tag || validated.version !== context.version) {throw new Error('Release 版本上下文不一致');}
+  if (validated.tag !== context.tag || validated.version !== context.version) { throw new Error('Release 版本上下文不一致'); }
   /** @param {string} name */
   const read = (name) => readText(path.join(root, name));
   const pkg = JSON.parse(await read('package.json'));
@@ -93,7 +93,7 @@ export async function validateVersions(root, context) {
   const config = JSON.parse(await read('src-tauri/tauri.conf.json'));
   const versions = [pkg?.version, lock?.version, lock?.packages?.['']?.version, config?.version,
     cargoVersion(await read('src-tauri/Cargo.toml'), false), cargoVersion(await read('src-tauri/Cargo.lock'), true)];
-  if (versions.some((version) => version !== context.version)) {throw new Error('Release 标签与应用/锁文件版本不一致');}
+  if (versions.some((version) => version !== context.version)) { throw new Error('Release 标签与应用/锁文件版本不一致'); }
 }
 
 /** @param {ReleaseContext} context */
@@ -105,7 +105,7 @@ function metadata(context) {
 async function verifyMetadata(root, context) {
   await validateVersions(root, context);
   const stored = await readText(path.join(releaseDirectory(root, context), metadataName));
-  if (stored !== metadata(context)) {throw new Error('Release 元数据与当前标签、提交或运行不一致');}
+  if (stored !== metadata(context)) { throw new Error('Release 元数据与当前标签、提交或运行不一致'); }
 }
 
 /** @param {string} root @param {ReleaseContext} context */
@@ -122,11 +122,11 @@ export async function initializeRelease(root, context) {
 /** @param {string} root @param {ReleaseContext} context @param {string} kind */
 export async function stageArtifact(root, context, kind) {
   const names = binaryNames(context);
-  if (kind !== 'exe' && kind !== 'nsis' && kind !== 'offline') {throw new Error('Release 制品类型无效');}
+  if (kind !== 'exe' && kind !== 'nsis' && kind !== 'offline') { throw new Error('Release 制品类型无效'); }
   await verifyMetadata(root, context);
   const output = releaseDirectory(root, context);
-  if (kind !== 'exe') {await nonemptyFile(path.join(output, names.exe));}
-  if (kind === 'offline') {await nonemptyFile(path.join(output, names.nsis));}
+  if (kind !== 'exe') { await nonemptyFile(path.join(output, names.exe)); }
+  if (kind === 'offline') { await nonemptyFile(path.join(output, names.nsis)); }
   const source = kind === 'exe'
     ? path.join(root, 'src-tauri/target/x86_64-pc-windows-msvc/release/shiroha-quiz-desktop.exe')
     : path.join(root, `src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/Shiroha Quiz_${context.version}_x64-setup.exe`);
@@ -141,7 +141,7 @@ async function sha256(file) {
   await nonemptyFile(file);
   const hash = createHash('sha256');
   // 离线安装包包含完整运行时；流式摘要避免把多个大附件同时载入内存。
-  for await (const chunk of createReadStream(file)) {hash.update(chunk);}
+  for await (const chunk of createReadStream(file)) { hash.update(chunk); }
   return hash.digest('hex');
 }
 
@@ -151,8 +151,8 @@ async function checksums(root, context) {
   const directory = releaseDirectory(root, context);
   /** @type {Map<string, string>} */
   const digests = new Map();
-  for (const name of [...Object.values(names), metadataName]) {digests.set(name, await sha256(path.join(directory, name)));}
-  if (digests.get(names.nsis) === digests.get(names.offline)) {throw new Error('普通和离线安装包字节相同，请分别在构建后收集');}
+  for (const name of [...Object.values(names), metadataName]) { digests.set(name, await sha256(path.join(directory, name))); }
+  if (digests.get(names.nsis) === digests.get(names.offline)) { throw new Error('普通和离线安装包字节相同，请分别在构建后收集'); }
   return [...digests].map(([name, digest]) => `${digest}  ${name}\n`).join('');
 }
 
@@ -186,7 +186,7 @@ export async function finalizeRelease(root, context) {
   await verifyMetadata(root, context);
   const output = releaseDirectory(root, context);
   const sums = await checksums(root, context);
-  for (const name of [notesName, checksumName]) {await rejectLinkedPath(path.join(output, name));}
+  for (const name of [notesName, checksumName]) { await rejectLinkedPath(path.join(output, name)); }
   await writeFile(path.join(output, notesName), releaseNotes(context), { flag: 'wx' });
   await writeFile(path.join(output, checksumName), sums, { flag: 'wx' });
   await verifyRelease(root, context);
@@ -198,9 +198,9 @@ export async function verifyRelease(root, context) {
   const output = releaseDirectory(root, context);
   const assetNames = [...Object.values(binaryNames(context)), metadataName, checksumName];
   const expected = [...assetNames, notesName].sort();
-  if (JSON.stringify((await readdir(output)).sort()) !== JSON.stringify(expected)) {throw new Error('Release 文件清单不匹配');}
-  if (await readText(path.join(output, checksumName)) !== await checksums(root, context)) {throw new Error('Release SHA-256 校验失败');}
-  if (await readText(path.join(output, notesName)) !== releaseNotes(context)) {throw new Error('Release 发布说明不匹配');}
+  if (JSON.stringify((await readdir(output)).sort()) !== JSON.stringify(expected)) { throw new Error('Release 文件清单不匹配'); }
+  if (await readText(path.join(output, checksumName)) !== await checksums(root, context)) { throw new Error('Release SHA-256 校验失败'); }
+  if (await readText(path.join(output, notesName)) !== releaseNotes(context)) { throw new Error('Release 发布说明不匹配'); }
   return assetNames.map((name) => path.join(output, name));
 }
 

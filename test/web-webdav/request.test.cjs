@@ -32,7 +32,9 @@ for (const method of ['PROPFIND', 'MKCOL', 'GET', 'PUT']) {
     });
     const actual = await context.webdavRequestV378(
       { endpoint: 'http://dav.example.invalid/root', username: 'test-user' },
-      'fake-password', 'backup.json', { method, headers: { Depth: '0' } },
+      'fake-password',
+      'backup.json',
+      { method, headers: { Depth: '0' } },
     );
     assert.equal(actual, response);
     assert.equal(calls.length, 1);
@@ -44,10 +46,20 @@ for (const method of ['PROPFIND', 'MKCOL', 'GET', 'PUT']) {
   });
 }
 
+test('AI 请求的凭据对象沿用拼接时的默认类型转换', async () => {
+  const hints = [];
+  const apiKey = { [Symbol.toPrimitive](hint) { hints.push(hint);return hint === 'default' ? 'fake-key' : 'other'; } };
+  const calls = [];
+  const { context } = harness('https:', async (url, options) => { calls.push({ url, options });return { status: 200 }; });
+  await context.ShirohaBrowserNetwork.ai({ endpoint: 'https://service.example.invalid', apiKey }, {});
+  assert.equal(calls[0].options.headers.Authorization, 'Bearer fake-key');
+  assert.deepEqual(hints, ['default']);
+});
+
 test('failed HTTPS to HTTP request reports mixed content as a possibility', async () => {
   let calls = 0;
   const failure = new TypeError('Failed to fetch');
-  const { context, timers } = harness('https:', async () => { calls++; throw failure; });
+  const { context, timers } = harness('https:', async () => { calls += 1; throw failure; });
   await assert.rejects(context.webdavRequestV378({ endpoint: 'http://dav.example.invalid' }, '', ''), (error) => {
     assert.equal(error.code, 'mixed_content');
     assert.equal(error.cause, failure);

@@ -4,10 +4,10 @@ import { createServer } from 'node:http';
 import { validateUpstream, createGuardedRelay, validateCandidate } from './guard.mjs';
 
 const TEXT = '{"ok":true}';
-const chunk = (delta, finish_reason = null) => `data: ${JSON.stringify({
-  id: 'fixture', choices: [{ index: 0, delta, finish_reason }],
+const chunk = (delta, finishReason = null) => `data: ${JSON.stringify({
+  id: 'fixture', choices: [{ index: 0, delta, finish_reason: finishReason }],
 })}\n\n`;
-const good = chunk({ role: 'assistant' }) + chunk({ content: TEXT }) + chunk({}, 'stop') + 'data: [DONE]\n\n';
+const good = `${chunk({ role: 'assistant' }) + chunk({ content: TEXT }) + chunk({}, 'stop')}data: [DONE]\n\n`;
 
 test('完整原始 SSE 才生成正文证明', () => {
   assert.equal(validateUpstream(Buffer.from(good)).text, TEXT);
@@ -16,16 +16,16 @@ test('完整原始 SSE 才生成正文证明', () => {
 
 for (const [name, source] of Object.entries({
   eof: chunk({ content: TEXT }),
-  doneOnly: chunk({ content: TEXT }) + 'data: [DONE]\n\n',
+  doneOnly: `${chunk({ content: TEXT })}data: [DONE]\n\n`,
   stopOnly: chunk({ content: TEXT }) + chunk({}, 'stop'),
-  filtered: chunk({ content: TEXT }) + chunk({}, 'content_filter') + 'data: [DONE]\n\n',
-  length: chunk({ content: TEXT }) + chunk({}, 'length') + 'data: [DONE]\n\n',
-  tool: chunk({ tool_calls: [{ id: 'tool', function: { name: 'Write' } }] }) + chunk({}, 'stop') + 'data: [DONE]\n\n',
+  filtered: `${chunk({ content: TEXT }) + chunk({}, 'content_filter')}data: [DONE]\n\n`,
+  length: `${chunk({ content: TEXT }) + chunk({}, 'length')}data: [DONE]\n\n`,
+  tool: `${chunk({ tool_calls: [{ id: 'tool', function: { name: 'Write' } }] }) + chunk({}, 'stop')}data: [DONE]\n\n`,
   malformed: good.replace('data: [DONE]', 'data: {broken'),
-  duplicate: good + 'data: [DONE]\n\n',
+  duplicate: `${good}data: [DONE]\n\n`,
   lateText: good + chunk({ content: 'late' }),
-  error: 'data: {"error":{"message":"failure"}}\n\n' + good,
-  extraChoice: 'data: {"id":"fixture","choices":[{"index":0,"delta":{}},{"index":1,"delta":{}}]}\n\n' + good,
+  error: `data: {"error":{"message":"failure"}}\n\n${good}`,
+  extraChoice: `data: {"id":"fixture","choices":[{"index":0,"delta":{}},{"index":1,"delta":{}}]}\n\n${good}`,
 })) {
   test(`拒绝 ${name}，不依赖 CLI 自报 success`, () => {
     assert.throws(() => validateUpstream(Buffer.from(source)));
@@ -33,7 +33,7 @@ for (const [name, source] of Object.entries({
 }
 test('拒绝损坏 UTF-8 和超过上限的响应', () => {
   assert.throws(() => validateUpstream(Buffer.from([0xff])));
-  assert.throws(() => validateUpstream(Buffer.alloc(1024 * 1024 + 1)));
+  assert.throws(() => validateUpstream(Buffer.alloc((1024 * 1024) + 1)));
 });
 
 function events() {
@@ -91,11 +91,11 @@ test('能力值和路径检查不耗预算，并发请求最多一个到达上�
   const relay = await createGuardedRelay(`http://127.0.0.1:${upstream.address().port}`);
   const body = JSON.stringify({ model: 'poc-model', stream: true, messages: [] });
   try {
-    assert.equal((await fetch(relay.endpoint + '/chat/completions', { method: 'POST', body })).status, 403);
-    assert.equal((await fetch(relay.endpoint + '/internal/hooks/services/invoke', {
+    assert.equal((await fetch(`${relay.endpoint}/chat/completions`, { method: 'POST', body })).status, 403);
+    assert.equal((await fetch(`${relay.endpoint}/internal/hooks/services/invoke`, {
       method: 'POST', headers: relay.headers, body,
     })).status, 404);
-    const responses = await Promise.all([1, 2, 3].map(() => fetch(relay.endpoint + '/chat/completions', {
+    const responses = await Promise.all([1, 2, 3].map(() => fetch(`${relay.endpoint}/chat/completions`, {
       method: 'POST', headers: relay.headers, body,
     })));
     assert.deepEqual(responses.map((response) => response.status).sort(), [200, 409, 409]);
@@ -122,7 +122,7 @@ test('关闭转发层取消上游，迟到完成不能恢复证明', async () =>
   });
   await new Promise((resolve) => upstream.listen(0, '127.0.0.1', resolve));
   const relay = await createGuardedRelay(`http://127.0.0.1:${upstream.address().port}`);
-  const downstream = fetch(relay.endpoint + '/chat/completions', {
+  const downstream = fetch(`${relay.endpoint}/chat/completions`, {
     method: 'POST', headers: relay.headers,
     body: JSON.stringify({ model: 'poc-model', stream: true }),
   }).catch(() => null);

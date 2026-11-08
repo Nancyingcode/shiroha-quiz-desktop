@@ -38,18 +38,18 @@
         box.innerHTML = '';
         return;
       }
-      const q = practiceQuestionV8916(item), key = practiceItemKeyV8916(item), st = getPracticeAnswerStateV26(key);
+      const q = practiceQuestionV8916(item); const key = practiceItemKeyV8916(item); const st = getPracticeAnswerStateV26(key);
       if (!aiSingleAllowedV613(item)) {
         box.innerHTML = '';
         return;
       }
-      const review = reviewAiSessions.get(JSON.stringify(['practice:' + practiceSession.current.start, item.bankId || '', q.id || '']));
+      const review = reviewAiSessions.get(JSON.stringify([`practice:${practiceSession.current.start}`, item.bankId || '', q.id || '']));
       const inlineWrongAnalysis = st.answered && st.correct === false && (!String(q.analysis || '').trim() || !!review?.analysis);
       if (inlineWrongAnalysis) {
         box.innerHTML = '';
         return;
       }
-      const session = aiSingleSessionV613(key), result = session.analysis, busy = !!session.loading;
+      const session = aiSingleSessionV613(key); const result = session.analysis; const busy = !!session.loading;
       const savedAnalysis = String(q.analysis || '').trim();
       const hasSavedAnalysis = !result && !!savedAnalysis;
       const entryText = result || hasSavedAnalysis ? '查看 AI 解析' : 'AI 解析';
@@ -70,7 +70,7 @@
       const { configured, config } = aiSingleConfigV613();
       const isHarness = isAiHarnessExecutionV99(config.execution);
       const generationDisabled = !configured || busy;
-      const blocks = [`<div class="practice-ai-head-v613"><div><b>AI 单题解析</b><span>${configured || isHarness ? esc(aiExecutionLabelV99(config)) + (config.model ? ' · ' + esc(config.model) : '') : '尚未配置 AI 服务'}</span></div><span class="pill practice-ai-status-v613${busy ? ' is-busy' : ''}">${panelStatus}</span></div>`];
+      const blocks = [`<div class="practice-ai-head-v613"><div><b>AI 单题解析</b><span>${configured || isHarness ? esc(aiExecutionLabelV99(config)) + (config.model ? ` · ${esc(config.model)}` : '') : '尚未配置 AI 服务'}</span></div><span class="pill practice-ai-status-v613${busy ? ' is-busy' : ''}">${panelStatus}</span></div>`];
       blocks.push(`<div class="actions practice-ai-actions-v613"><button class="ghost mini-btn" type="button" data-ai-single-close-v613="1" aria-expanded="true">收起 AI 面板</button>${busy ? '<button class="ghost mini-btn" type="button" data-ai-single-stop-v613="1">停止请求</button>' : ''}</div>`);
       if (aiSingleHasImagesV613(item)) {
         blocks.push('<p class="practice-ai-warn-v613">本次仅发送文字，未发送题目图片；AI 无法读取图表细节，请人工核对。</p>');
@@ -93,12 +93,10 @@
           blocks.push(`<p class="practice-ai-note-v613">${esc(result.warning)}</p>`);
         }
         blocks.push(`<div class="actions practice-ai-actions-v613"><button class="primary mini-btn" type="button" data-ai-single-save-v613="1" ${(!result.analysis || busy || saved) ? 'disabled' : ''}>${saved ? '已写入题库解析' : '保存到题库解析'}</button><button class="ghost mini-btn" type="button" data-ai-single-analysis-v613="1" ${generationDisabled ? 'disabled' : ''}>重新生成</button><button class="ghost mini-btn" type="button" data-ai-single-follow-v613="1" ${busy ? 'disabled' : ''}>${session.followUpOpen ? '收起追问' : '追问'}</button></div>`);
-      }
-      else if (hasSavedAnalysis) {
+      } else if (hasSavedAnalysis) {
         blocks.push(`<p class="practice-ai-hint-v613">题库已保存解析</p><div class="practice-ai-text-v613">${renderQuestionContent(savedAnalysis)}</div>`);
         blocks.push(`<div class="actions practice-ai-actions-v613"><button class="ghost mini-btn" type="button" data-ai-single-analysis-v613="1" ${generationDisabled ? 'disabled' : ''}>重新生成</button>${configured ? '' : '<button class="ghost mini-btn" type="button" data-ai-single-settings-v613="1">前往 AI 设置</button>'}</div>`);
-      }
-      else {
+      } else {
         blocks.push('<p class="practice-ai-hint-v613">只把当前这道题的题干、选项、答案和你的作答发给 AI，生成一段简短解析；结果先作为草稿，确认后再写入题库。</p>');
         blocks.push(`<div class="actions practice-ai-actions-v613"><button class="primary mini-btn" type="button" data-ai-single-analysis-v613="1" ${generationDisabled ? 'disabled' : ''}>${busy ? '生成中……' : 'AI 解析'}</button>${configured ? '' : '<button class="ghost mini-btn" type="button" data-ai-single-settings-v613="1">前往 AI 设置</button>'}</div>`);
       }
@@ -109,7 +107,7 @@
         blocks.push(`<p class="notice ok practice-ai-message-v613">${esc(session.notice)}</p>`);
       }
       if (session.messages.length) {
-        blocks.push(`<div class="practice-ai-chat-v613"><b>追问记录</b>${session.messages.map((message)=>`<div class="practice-ai-msg-v613 is-${message.role}"><span>${message.role === 'user' ? '你' : 'AI'}</span><div>${message.role === 'user' ? esc(message.content) : renderQuestionContent(message.content)}</div></div>`).join('')}</div>`);
+        blocks.push(`<div class="practice-ai-chat-v613"><b>追问记录</b>${session.messages.map((message) => `<div class="practice-ai-msg-v613 is-${message.role}"><span>${message.role === 'user' ? '你' : 'AI'}</span><div>${message.role === 'user' ? esc(message.content) : renderQuestionContent(message.content)}</div></div>`).join('')}</div>`);
       }
       if (session.followUpOpen && result) {
         blocks.push(`<div class="practice-ai-follow-v613"><textarea id="practice-ai-follow-input-v613" rows="2" placeholder="例如：为什么 C 选项不对？" ${busy ? 'disabled' : ''}>${esc(session.draft || '')}</textarea><button class="primary mini-btn" type="button" data-ai-single-send-v613="1" ${generationDisabled ? 'disabled' : ''}>发送追问</button></div>`);
@@ -120,8 +118,8 @@
     function bindPracticeAiPanelV613() {
       const open = $('#p-ai-v613 [data-ai-single-open-v613]');
       if (open) {
-        open.onclick = ()=>{
-          const item = currentPracticeItemV8916(), session = aiSingleSessionV613(practiceItemKeyV8916(item));
+        open.onclick = () => {
+          const item = currentPracticeItemV8916(); const session = aiSingleSessionV613(practiceItemKeyV8916(item));
           session.expanded = true;
           renderPracticeAiPanelV613();
           if (!session.analysis && !session.loading && !String(practiceQuestionV8916(item).analysis || '').trim()) {
@@ -131,25 +129,25 @@
       }
       const close = $('#p-ai-v613 [data-ai-single-close-v613]');
       if (close) {
-        close.onclick = ()=>{
+        close.onclick = () => {
           aiSingleSessionV613(practiceItemKeyV8916(currentPracticeItemV8916())).expanded = false;
           renderPracticeAiPanelV613();
         };
       }
       const stop = $('#p-ai-v613 [data-ai-single-stop-v613]');
       if (stop) {
-        stop.onclick = ()=>{
+        stop.onclick = () => {
           const session = aiSingleSessionV613(practiceItemKeyV8916(currentPracticeItemV8916()));
           practiceAiSessions.stop(session);
         };
       }
       const analysis = $('#p-ai-v613 [data-ai-single-analysis-v613]');
       if (analysis) {
-        analysis.onclick = ()=>runAiSingleAnalysisV613();
+        analysis.onclick = () => runAiSingleAnalysisV613();
       }
       const follow = $('#p-ai-v613 [data-ai-single-follow-v613]');
       if (follow) {
-        follow.onclick = ()=>{
+        follow.onclick = () => {
           const session = aiSingleSessionV613(practiceItemKeyV8916(currentPracticeItemV8916()));
           session.followUpOpen = !session.followUpOpen;
           renderPracticeAiPanelV613();
@@ -161,25 +159,25 @@
       }
       const save = $('#p-ai-v613 [data-ai-single-save-v613]');
       if (save) {
-        save.onclick = ()=>saveAiSingleAnalysisV613();
+        save.onclick = () => saveAiSingleAnalysisV613();
       }
       const settings = $('#p-ai-v613 [data-ai-single-settings-v613]');
       if (settings) {
-        settings.onclick = async ()=>{
+        settings.onclick = async () => {
           exitPracticeFocus();
           await switchViewV45('ai-settings');
         };
       }
       const send = $('#p-ai-v613 [data-ai-single-send-v613]');
       if (send) {
-        send.onclick = ()=>runAiSingleFollowUpV613();
+        send.onclick = () => runAiSingleFollowUpV613();
       }
       const input = $('#practice-ai-follow-input-v613');
       if (input) {
-        input.oninput = ()=>{
+        input.oninput = () => {
           aiSingleSessionV613(practiceItemKeyV8916(currentPracticeItemV8916())).draft = input.value;
         };
-        input.onkeydown = (event)=>{
+        input.onkeydown = (event) => {
           if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
             event.preventDefault();
             runAiSingleFollowUpV613();
@@ -188,7 +186,7 @@
       }
     }
     function reviewAnalysisText(item) {
-      const q = practiceQuestionV8916(item), local = String(q.analysis || '').trim();
+      const q = practiceQuestionV8916(item); const local = String(q.analysis || '').trim();
       if (local) {
         return local;
       }
@@ -196,14 +194,14 @@
       return String(bank?.questions[index]?.analysis || '').trim();
     }
     function renderReviewAnalysis(item, chosen, scope) {
-      const q = practiceQuestionV8916(item), key = JSON.stringify([scope, item.bankId || '', q.id || '']);
+      const q = practiceQuestionV8916(item); const key = JSON.stringify([scope, item.bankId || '', q.id || '']);
       const session = reviewAiSessions.getOrCreate(key, item, chosen);
       return `<section class="review-analysis" data-review-analysis="${esc(key)}" aria-label="题目解析" aria-live="polite">${reviewAnalysisContent(session)}</section>`;
     }
     function reviewAnalysisContent(session) {
-      const text = reviewAnalysisText(session.item), result = session.analysis;
+      const text = reviewAnalysisText(session.item); const result = session.analysis;
       const title = '<b class="review-analysis-title">解析</b>';
-      const button = (action, label, primary = false, disabled = false)=>`<button type="button" class="${primary ? 'primary' : 'ghost'} mini-btn" data-review-ai="${action}" ${disabled ? 'disabled' : ''}>${label}</button>`;
+      const button = (action, label, primary = false, disabled = false) => `<button type="button" class="${primary ? 'primary' : 'ghost'} mini-btn" data-review-ai="${action}" ${disabled ? 'disabled' : ''}>${label}</button>`;
       const error = session.error ? `<p class="review-analysis-warning" role="alert">${esc(session.error)}</p>` : '';
       if (session.loading) {
         return `${title}<p role="status">正在生成 AI 解析…</p><p class="muted">生成后核对草稿，再保存到题库。${result ? '已有草稿已保留。' : ''}</p><div class="actions">${button('stop', '停止生成')}</div>`;
@@ -223,8 +221,8 @@
     }
     function updateReviewAnalysisPanels() {
       const mounted = new Set();
-      $$('[data-review-analysis]').forEach((panel)=>{
-        const key = panel.dataset.reviewAnalysis, session = reviewAiSessions.get(key);
+      $$('[data-review-analysis]').forEach((panel) => {
+        const key = panel.dataset.reviewAnalysis; const session = reviewAiSessions.get(key);
         if (!session) {
           return;
         }
@@ -244,8 +242,8 @@
         return;
       }
       reviewEventsBound = true;
-      document.addEventListener('click', async (event)=>{
-        const button = event.target.closest?.('[data-review-ai]'), panel = button?.closest('[data-review-analysis]');
+      document.addEventListener('click', async (event) => {
+        const button = event.target.closest?.('[data-review-ai]'); const panel = button?.closest('[data-review-analysis]');
         const session = panel && reviewAiSessions.get(panel.dataset.reviewAnalysis);
         if (!session || button.disabled) {
           return;

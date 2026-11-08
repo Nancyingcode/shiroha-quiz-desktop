@@ -24,14 +24,14 @@ export async function documentSmoke(page) {
   const require = createRequire(import.meta.url);
   /** @type {{loadWeb: () => {api: {zipStoreFiles(files: Array<{name: string, text?: string, data?: Uint8Array}>): Blob}}}} */
   const { loadWeb } = require(fileURLToPath(new URL('../../../test/dual-platform/web-source.cjs', import.meta.url)));
-  const api = loadWeb().api;
+  const { api } = loadWeb();
   const lines = ['1. 中国的首都是哪里？', 'A. 北京', 'B. 上海', '答案：A'];
   const jpeg = await page.evaluate((lines) => {
     const canvas = document.createElement('canvas'); canvas.width = 1200; canvas.height = 600;
-    const ctx = canvas.getContext('2d'); if (!ctx) {throw new Error('canvas');}
+    const ctx = canvas.getContext('2d'); if (!ctx) { throw new Error('canvas'); }
     ctx.fillStyle = 'white'; ctx.fillRect(0, 0, 1200, 600);
     ctx.fillStyle = 'black'; ctx.font = '56px SimSun';
-    lines.forEach((line, index) => ctx.fillText(line, 60, 100 + index * 110));
+    lines.forEach((line, index) => ctx.fillText(line, 60, 100 + (index * 110)));
     const data = canvas.toDataURL('image/jpeg', 0.95).split(',')[1]; canvas.width = 1; canvas.height = 1;
     return data;
   }, lines);
@@ -95,7 +95,7 @@ export async function documentSmoke(page) {
       assert.match(await page.locator('#ocr-status').innerText(), /OCR 完成/);
       await page.evaluate(() => {
         const api = /** @type {OcrApi} */ (Reflect.get(window, 'Tesseract'));
-        const createWorker = api.createWorker;
+        const { createWorker } = api;
         api.createWorker = (language, mode, options) => {
           api.createWorker = createWorker;
           let cancelled = false;
@@ -130,7 +130,7 @@ export async function documentSmoke(page) {
       assert.match(extracted, /!\[DOCX图片1\]\(data:image\/(?:jpeg|webp);base64,/);
       assert.match(extracted, /【DOCX公式OMML：\(1\)\/\(2\)】/);
     }
-    if (!['csv', 'xlsx'].includes(extension)) {await page.locator('#parse-import-btn').click();}
+    if (!['csv', 'xlsx'].includes(extension)) { await page.locator('#parse-import-btn').click(); }
     await page.waitForFunction(() => document.querySelectorAll('#import-preview tbody tr').length > 0);
     const name = `阶段E-${extension}`;
     await page.locator('#import-bank-name').fill(name);
@@ -140,11 +140,11 @@ export async function documentSmoke(page) {
   }
   await page.reload();
   await page.locator('body[data-storage-state="ready"]').waitFor();
-  for (const name of names) {assert.equal(await page.locator('#active-bank-select option').filter({ hasText: name }).count(), 1);}
+  for (const name of names) { assert.equal(await page.locator('#active-bank-select option').filter({ hasText: name }).count(), 1); }
   const restored = await page.evaluate(async () => {
     const platform = /** @type {{storage: import('../../web/platform/runtime.d.ts').BrowserStorage}} */ (Reflect.get(window, 'ShirohaPlatform'));
     const snapshot = await platform.storage.read();
-    if (!snapshot) {throw new Error('保存后没有快照');}
+    if (!snapshot) { throw new Error('保存后没有快照'); }
     await platform.storage.ensureAll?.(snapshot);
     return snapshot.banks;
   });

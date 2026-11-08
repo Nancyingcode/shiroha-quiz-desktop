@@ -9,8 +9,8 @@ const { Linter } = require('../../apps/desktop/node_modules/eslint');
 const webRoot = path.resolve(__dirname, '../../apps/web');
 
 function memberName(node) {
-  if (node?.type === 'Identifier') {return node.name;}
-  if (node?.type !== 'MemberExpression' || node.computed) {return null;}
+  if (node?.type === 'Identifier') { return node.name; }
+  if (node?.type !== 'MemberExpression' || node.computed) { return null; }
   return `${memberName(node.object)}.${memberName(node.property)}`;
 }
 
@@ -26,8 +26,10 @@ function createWebSource(source) {
     languageOptions: { ecmaVersion: 'latest', sourceType: 'script' },
     rules: {},
   });
-  assert(!messages.some((message) => message.fatal),
-    `测试源码无法解析：${messages.map((message) => message.message).join('; ')}`);
+  assert(
+    !messages.some((message) => message.fatal),
+    `测试源码无法解析：${messages.map((message) => message.message).join('; ')}`,
+  );
   const code = linter.getSourceCode();
   const program = code.ast.body;
   const wrappers = program.filter(isIife);
@@ -36,9 +38,11 @@ function createWebSource(source) {
     assert.equal(wrappers.length, 1, '应用 IIFE 必须唯一。');
     assert.equal(program.length, 1, '应用 IIFE 外出现了额外语句。');
     wrapper = wrappers[0].expression;
-    assert(wrapper.arguments.length === 0 && wrapper.callee.params.length === 0
+    assert(
+      wrapper.arguments.length === 0 && wrapper.callee.params.length === 0
       && !wrapper.callee.id && !wrapper.callee.async && !wrapper.callee.generator,
-    '应用 IIFE 契约已改变。');
+      '应用 IIFE 契约已改变。',
+    );
   }
   const body = wrapper ? wrapper.callee.body.body : program;
 
@@ -76,8 +80,10 @@ function createWebSource(source) {
         && node.kind === 'const').flatMap((node) => node.declarations);
       const entry = unique(declarations.filter((node) => node.id.type === 'Identifier'
         && node.id.name === name), `常量 ${name}`);
-      assert(entry.init?.type === 'Literal' && typeof entry.init.value === 'string',
-        `常量 ${name} 必须是字符串字面量。`);
+      assert(
+        entry.init?.type === 'Literal' && typeof entry.init.value === 'string',
+        `常量 ${name} 必须是字符串字面量。`,
+      );
       return entry.init.value;
     },
     replaceStartup(bridge) {
@@ -85,7 +91,7 @@ function createWebSource(source) {
       return source.slice(0, node.range[0]) + bridge + source.slice(node.range[1]);
     },
     injectIife(bridge) {
-      if (!wrapper) {return { source, bridgeUsed: false };}
+      if (!wrapper) { return { source, bridgeUsed: false }; }
       startup();
       const offset = wrapper.callee.body.range[1] - 1;
       return { source: source.slice(0, offset) + bridge + source.slice(offset), bridgeUsed: true };
@@ -93,7 +99,7 @@ function createWebSource(source) {
     closeHookSource() {
       const node = unique(body.filter((statement) => {
         if (statement.type !== 'IfStatement'
-          || memberName(statement.test) !== 'globalThis.ShirohaDesktopHost') {return false;}
+          || memberName(statement.test) !== 'globalThis.ShirohaDesktopHost') { return false; }
         const consequent = statement.consequent.type === 'BlockStatement'
           ? statement.consequent.body : [statement.consequent];
         const assignment = consequent.length === 1 && consequent[0].type === 'ExpressionStatement'

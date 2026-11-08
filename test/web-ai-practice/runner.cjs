@@ -10,20 +10,17 @@ const { TEST_ROOT, WEB_ROOT, within, reportPath, storageKeys, loadPlaywright, st
 
 function argumentsFrom(argv) {
   const options = { timeout: 10000, headed: false, selfTest: false, list: false, filter: '' };
-  for (let index = 0; index < argv.length; index++) {
+  for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index];
-    if (token === '--headed') {options.headed = true;}
-    else if (token === '--self-test') {options.selfTest = true;}
-    else if (token === '--list') {options.list = true;}
-    else if (['--base-url', '--timeout', '--filter', '--report', '--executable-path'].includes(token)) {
-      const value = argv[++index];
+    if (token === '--headed') { options.headed = true; } else if (token === '--self-test') { options.selfTest = true; } else if (token === '--list') { options.list = true; } else if (['--base-url', '--timeout', '--filter', '--report', '--executable-path'].includes(token)) {
+      const value = argv[(index += 1)];
       assert(value && !value.startsWith('--'), `Missing value for ${token}.`);
-      if (token === '--base-url') {options.url = baseUrl(value);}
-      if (token === '--timeout') {options.timeout = Number(value);}
-      if (token === '--filter') {options.filter = value;}
-      if (token === '--report') {options.report = reportPath(value);}
+      if (token === '--base-url') { options.url = baseUrl(value); }
+      if (token === '--timeout') { options.timeout = Number(value); }
+      if (token === '--filter') { options.filter = value; }
+      if (token === '--report') { options.report = reportPath(value); }
       if (token === '--executable-path') { assert(path.isAbsolute(value), 'Browser executable path must be absolute.'); options.executablePath = value; }
-    } else {throw new Error(`Unknown argument ${token}. Use --list, --self-test, --base-url, --timeout, --filter, --report, --executable-path or --headed.`);}
+    } else { throw new Error(`Unknown argument ${token}. Use --list, --self-test, --base-url, --timeout, --filter, --report, --executable-path or --headed.`); }
   }
   assert(Number.isInteger(options.timeout) && options.timeout >= 1000 && options.timeout <= 60000, '--timeout must be 1000..60000 milliseconds.');
   return options;
@@ -118,8 +115,7 @@ async function main() {
     const url = options.url || server.url;
     emit({ type: 'start', mode: options.selfTest ? 'framework-self-test' : 'web-ai-practice', baseUrl: url, webRoot: WEB_ROOT, tests: options.selfTest ? 1 : selected.length, storageKeys: keys, timeoutMs: options.timeout, realApiAllowed: false });
     const executablePath = options.executablePath || playwright.chromium.executablePath();
-    try { await fs.access(executablePath); }
-    catch (cause) { throw new Error(`Browser executable unavailable: ${executablePath}. Supply --executable-path for an installed Chromium/Edge binary. No download or framework fallback was attempted.`, { cause }); }
+    try { await fs.access(executablePath); } catch (cause) { throw new Error(`Browser executable unavailable: ${executablePath}. Supply --executable-path for an installed Chromium/Edge binary. No download or framework fallback was attempted.`, { cause }); }
     emit({ type: 'browser', executablePath, isolatedContext: true });
     browser = await playwright.chromium.launch({ executablePath, headless: !options.headed, args: ['--disable-background-networking', '--disable-component-update'] });
     if (options.selfTest) {
@@ -146,14 +142,13 @@ async function main() {
         assert.equal(h.pageErrors.length, 0, h.pageErrors.join(' '));
         const suspicious = h.blocked.filter((request) => ['fetch', 'xhr', 'websocket'].includes(request.type) || !['GET', 'HEAD'].includes(request.method));
         assert.equal(suspicious.length, 0, `Blocked unexpected API request: ${JSON.stringify(suspicious)}`);
-      } catch (cause) { error = cause; }
-      finally {
+      } catch (cause) { error = cause; } finally {
         if (h) {
           diagnostics = { mockRequests: h.mock.calls.length, blockedRequests: h.blocked, pageErrors: h.pageErrors, mockViolations: h.mock.violations, readOnlyIifeBridge: h.bridgeUsed };
           try { await h.cleanup(); } catch (cause) { error ||= cause; }
         }
       }
-      if (error) {failed++;} else {passed++;}
+      if (error) { failed += 1; } else { passed += 1; }
       emit({ type: 'case', name: test.name, status: error ? 'failed' : 'passed', durationMs: Date.now() - beginning, ...diagnostics, ...(error ? { error: error.message, stack: error.stack } : {}) });
     }
     exitCode = failed ? 1 : 0;
@@ -161,8 +156,7 @@ async function main() {
   } catch (error) {
     emit({ type: 'fatal', status: 'error', exitCode: 2, error: error.message, stack: error.stack });
   } finally {
-    try { if (browser) {await browser.close();} if (server) {await server.close();} }
-    catch (error) { exitCode = 2; emit({ type: 'fatal', exitCode, error: error.message }); }
+    try { if (browser) { await browser.close(); } if (server) { await server.close(); } } catch (error) { exitCode = 2; emit({ type: 'fatal', exitCode, error: error.message }); }
     if (options?.report) {
       try {
         const target = reportPath(options.report);

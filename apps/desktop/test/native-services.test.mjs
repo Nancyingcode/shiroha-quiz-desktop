@@ -11,16 +11,16 @@ test('整体撤销凭据后同步 Harness 修订，仍能保存直接 API 执行
     document: { getElementById: () => null, addEventListener() {} },
     ShirohaBrowser: {}, ShirohaBrowserCredentials: {}, ShirohaSaveQueue: { create: () => ({}) },
     ShirohaDesktopHost: { invoke: async (/** @type {string} */ command, /** @type {{request:{kind:string,revision?:number}}} */ args) => {
-      if (command === 'service_credential' && args.request.kind === 'invalidate') { revision++; return {}; }
+      if (command === 'service_credential' && args.request.kind === 'invalidate') { revision += 1; return {}; }
       assert.equal(command, 'harness_control');
       if (args.request.kind === 'save') {
-        if (args.request.revision !== revision) {throw { code: 'harness_stale' };}
-        revision++;
+        if (args.request.revision !== revision) { throw { code: 'harness_stale' }; }
+        revision += 1;
       }
       return status();
     } },
   };
-  for (const file of ['adapter.js', 'harness.js']) {vm.runInNewContext(await readFile(new URL(`../frontend/${file}`, import.meta.url), 'utf8'), scope);}
+  for (const file of ['adapter.js', 'harness.js']) { vm.runInNewContext(await readFile(new URL(`../frontend/${file}`, import.meta.url), 'utf8'), scope); }
   const platform = vm.runInNewContext('ShirohaPlatform', scope);
   await platform.harness.initialize();
   await platform.credentials.reset();
@@ -72,8 +72,8 @@ test('desktop credentials expose status only and commit staged secrets explicitl
     localStorage: { getItem: () => null },
     ShirohaDesktopHost: { invoke: async (/** @type {string} */ command, /** @type {{request:{kind:string,operation?:{kind:string}},secret?:string|null}} */ args) => {
       calls.push({ command, args });
-      if (args.request.kind === 'stage') {return { id: 'staged' };}
-      if (args.request.kind === 'status') {return { state: 'remembered' };}
+      if (args.request.kind === 'stage') { return { id: 'staged' }; }
+      if (args.request.kind === 'status') { return { state: 'remembered' }; }
       return {};
     } },
   };
@@ -95,8 +95,8 @@ test('desktop credential input preserves, replaces or clears each service throug
     ShirohaBrowser: {}, ShirohaBrowserCredentials: {}, ShirohaSaveQueue: { create: () => ({}) },
     ShirohaDesktopHost: { invoke: async (/** @type {string} */ _command, /** @type {{request:Record<string,unknown>}} */ args) => {
       requests.push(args.request);
-      if (args.request.kind === 'stage') {return { id: `stage-${requests.length}` };}
-      if (args.request.kind === 'status') {return { state: 'session' };}
+      if (args.request.kind === 'stage') { return { id: `stage-${requests.length}` }; }
+      if (args.request.kind === 'status') { return { state: 'session' }; }
       return {};
     } },
   };
@@ -111,7 +111,7 @@ test('desktop credential input preserves, replaces or clears each service throug
       const staged = requests.at(-1);
       assert(staged);
       assert.equal(staged.kind, 'stage');
-      const input = /** @type {{kind:string,value?:string}} */ (staged.input);
+      const { input } = /** @type {{input: {kind:string,value?:string}}} */ (staged);
       assert.equal(input.kind, kind);
       assert.equal(input.value, kind === 'replace' ? value : undefined);
       assert.equal(staged.remember, remember);

@@ -34,6 +34,7 @@
     }
 
     function stop(session) {
+      // eslint-disable-next-line no-plusplus -- 会话可由调用方修改，保留字符串和 BigInt 的转换；限定请求号类型后移除此例外。
       session.requestId++;
       session.controller?.abort();
       session.controller = null;
@@ -43,19 +44,20 @@
     }
 
     function isCurrentRequest(owner, key, session, requestId, item, fingerprint) {
-      return practice.current() === owner && sessions.get(key) === session &&
-        session.requestId === requestId && question.fingerprint(item) === fingerprint;
+      return practice.current() === owner && sessions.get(key) === session
+        && session.requestId === requestId && question.fingerprint(item) === fingerprint;
     }
 
     async function runAnalysis() {
       const item = question.current();
-      if (!question.allowed(item)) {return;}
+      if (!question.allowed(item)) { return; }
       const key = question.key(item);
       const session = getSession(key);
-      if (session.loading) {return;}
+      if (session.loading) { return; }
       const owner = practice.current();
+      // eslint-disable-next-line no-plusplus -- 会话可由调用方修改，保留字符串和 BigInt 的转换；限定请求号类型后移除此例外。
       const requestId = ++session.requestId;
-      const fingerprint = session.fingerprint;
+      const { fingerprint } = session;
       const { configured, requestConfig } = request.config();
       if (!configured) {
         session.error = requestConfig.execution?.reason || '尚未配置 AI 服务，请先在“AI 设置”中选择并配置执行方式。';
@@ -75,7 +77,7 @@
           session.controller = controller;
           return request.chat(requestConfig, request.analysisMessages(item, chosen), { controller, task: 'question_analysis' });
         });
-        if (!isCurrentAnalysis()) {return;}
+        if (!isCurrentAnalysis()) { return; }
         const parsed = result.analysis(response.content);
         if (question.hasImages(item)) {
           parsed.confidence = 'LOW';
@@ -103,14 +105,15 @@
 
     async function runFollowUp() {
       const item = question.current();
-      if (!question.allowed(item)) {return;}
+      if (!question.allowed(item)) { return; }
       const key = question.key(item);
       const session = getSession(key);
       const text = String(session.draft || '').trim();
-      if (session.loading || !session.analysis) {return;}
+      if (session.loading || !session.analysis) { return; }
       const owner = practice.current();
+      // eslint-disable-next-line no-plusplus -- 会话可由调用方修改，保留字符串和 BigInt 的转换；限定请求号类型后移除此例外。
       const requestId = ++session.requestId;
-      const fingerprint = session.fingerprint;
+      const { fingerprint } = session;
       if (!text) {
         session.error = '请先输入追问内容。';
         view.render();
@@ -137,7 +140,7 @@
           const draft = { analysis: session.analysis, initialAnalysis: session.initialAnalysis, messages: history };
           return request.chat(requestConfig, request.followUpMessages(item, chosen, draft, text), { controller, task: 'question_followup' });
         });
-        if (!isCurrentFollowUp()) {return;}
+        if (!isCurrentFollowUp()) { return; }
         const parsed = result.followUp(response.content);
         if (question.hasImages(item)) {
           parsed.confidence = 'LOW';
@@ -176,7 +179,8 @@
 
     function remove(key) {
       const session = sessions.get(key);
-      if (!session) {return;}
+      if (!session) { return; }
+      // eslint-disable-next-line no-plusplus -- 会话可由调用方修改，保留字符串和 BigInt 的转换；限定请求号类型后移除此例外。
       session.requestId++;
       session.controller?.abort();
       sessions.delete(key);
@@ -200,17 +204,18 @@
     }
 
     function retain(mounted) {
-      sessions.forEach((_session, key) => { if (!mounted.has(key)) {remove(key);} });
+      sessions.forEach((_session, key) => { if (!mounted.has(key)) { remove(key); } });
     }
 
     async function run(session) {
-      if (session.loading || session.saving) {return;}
+      if (session.loading || session.saving) { return; }
       const { configured, requestConfig } = request.config();
       if (!configured) {
         session.error = '尚未配置 AI 服务，请先完成设置。';
         view.render();
         return;
       }
+      // eslint-disable-next-line no-plusplus -- 会话可由调用方修改，保留字符串和 BigInt 的转换；限定请求号类型后移除此例外。
       const requestId = ++session.requestId;
       const source = question.source(session.item);
       const sourceQuestion = source.bank?.questions[source.index];
@@ -225,11 +230,11 @@
           session.controller = controller;
           return request.chat(requestConfig, request.analysisMessages(session.item, session.chosen), { controller, task: 'question_analysis' });
         });
-        if (!isCurrentReviewRequest()) {return;}
+        if (!isCurrentReviewRequest()) { return; }
         const current = question.source(session.item);
         const currentQuestion = current.bank?.questions[current.index];
-        const sourceChanged = sourceFingerprint !== null &&
-          (!currentQuestion || question.fingerprint(currentQuestion) !== sourceFingerprint);
+        const sourceChanged = sourceFingerprint !== null
+          && (!currentQuestion || question.fingerprint(currentQuestion) !== sourceFingerprint);
         if (sourceChanged || question.fingerprint(session.item) !== session.fingerprint) {
           throw new Error('来源题目已发生变化，请重新打开题目后再生成。');
         }
@@ -255,7 +260,7 @@
     }
 
     async function save(session) {
-      if (session.loading || session.saving || !session.analysis) {return;}
+      if (session.loading || session.saving || !session.analysis) { return; }
       session.saving = true;
       view.render();
       try {
@@ -272,6 +277,7 @@
     }
 
     function stop(session) {
+      // eslint-disable-next-line no-plusplus -- 会话可由调用方修改，保留字符串和 BigInt 的转换；限定请求号类型后移除此例外。
       session.requestId++;
       session.controller?.abort();
       session.controller = null;

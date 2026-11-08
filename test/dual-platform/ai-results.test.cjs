@@ -71,3 +71,10 @@ test('HTTP 分类保留认证、地址、限流及服务端错误', () => {
   assert.match(api.aiHttpErrorMessage(503, ''), /内部错误/);
   assert.equal(api.aiHttpErrorMessage(400, '错误详情'), 'AI 接口返回 HTTP 400：错误详情');
 });
+
+test('HTTP 错误详情保留对象的默认转换提示', () => {
+  const hints = [];
+  const detail = { [Symbol.toPrimitive](hint) { hints.push(hint);return hint; } };
+  assert.equal(results().aiHttpErrorMessage(400, detail), 'AI 接口返回 HTTP 400：default');
+  assert.deepEqual(hints, ['default']);
+});

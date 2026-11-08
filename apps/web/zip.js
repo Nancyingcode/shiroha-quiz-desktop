@@ -10,35 +10,35 @@
     const trimmedName = String(name || '').trim();
     const hasUnsafePrefix = !trimmedName || trimmedName.includes('\0') || trimmedName.includes('\\')
       || trimmedName.startsWith('/') || trimmedName.startsWith('./') || /^[A-Za-z]:/.test(trimmedName);
-    if (hasUnsafePrefix) {return false;}
+    if (hasUnsafePrefix) { return false; }
     // DOCX/XLSX may contain explicit directory entries such as "word/".
     // Allow one trailing slash, while continuing to reject empty middle segments and path traversal.
     const normalized = trimmedName.endsWith('/') ? trimmedName.slice(0, -1) : trimmedName;
-    if (!normalized) {return false;}
+    if (!normalized) { return false; }
     return normalized.split('/').every((part) => part && part !== '.' && part !== '..');
   }
 
   function assertZipEntrySafeV33(entry, bufLength) {
-    if (!entry || !isSafeZipEntryNameV33(entry.name)) {throw new Error('ZIP entry name is unsafe.');}
+    if (!entry || !isSafeZipEntryNameV33(entry.name)) { throw new Error('ZIP entry name is unsafe.'); }
     const exceedsSizeLimit = entry.compSize > ZIP_MAX_ENTRY_COMPRESSED_V33
       || entry.uncompSize > ZIP_MAX_ENTRY_UNCOMPRESSED_V33;
-    if (exceedsSizeLimit) {throw new Error('ZIP entry is too large.');}
-    if (entry.localOffset < 0 || entry.localOffset >= bufLength) {throw new Error('ZIP entry offset is invalid.');}
+    if (exceedsSizeLimit) { throw new Error('ZIP entry is too large.'); }
+    if (entry.localOffset < 0 || entry.localOffset >= bufLength) { throw new Error('ZIP entry offset is invalid.'); }
   }
 
   function parseZipEntries(buf) {
     const view = new DataView(buf);
     const bytes = new Uint8Array(buf);
     let eocd = -1;
-    for (let i = bytes.length - 22; i >= Math.max(0, bytes.length - 66000); i--) {
+    for (let i = bytes.length - 22; i >= Math.max(0, bytes.length - 66000); i -= 1) {
       if (view.getUint32(i, true) === 0x06054b50) {
         eocd = i;
         break;
       }
     }
-    if (eocd < 0) {throw new Error('无法识别 docx 压缩结构');}
+    if (eocd < 0) { throw new Error('无法识别 docx 压缩结构'); }
     const total = view.getUint16(eocd + 10, true);
-    if (total > ZIP_MAX_ENTRIES_V33) {throw new Error('ZIP entry count exceeds limit.');}
+    if (total > ZIP_MAX_ENTRIES_V33) { throw new Error('ZIP entry count exceeds limit.'); }
     const cdOffset = view.getUint32(eocd + 16, true);
     let off = cdOffset;
     const out = [];
@@ -46,10 +46,10 @@
     const names = new Set();
     const invalidDirectory = view.getUint16(eocd + 4, true) || view.getUint16(eocd + 6, true)
       || view.getUint16(eocd + 8, true) !== total || cdOffset + view.getUint32(eocd + 12, true) !== eocd;
-    if (invalidDirectory) {throw new Error('ZIP directory is invalid.');}
-    for (let i = 0; i < total; i++) {
-      if (off < 0 || off + 46 > bytes.length) {throw new Error('ZIP central directory is truncated.');}
-      if (view.getUint32(off, true) !== 0x02014b50) {throw new Error('ZIP directory is invalid.');}
+    if (invalidDirectory) { throw new Error('ZIP directory is invalid.'); }
+    for (let i = 0; i < total; i += 1) {
+      if (off < 0 || off + 46 > bytes.length) { throw new Error('ZIP central directory is truncated.'); }
+      if (view.getUint32(off, true) !== 0x02014b50) { throw new Error('ZIP directory is invalid.'); }
       const method = view.getUint16(off + 10, true);
       const compSize = view.getUint32(off + 20, true);
       const uncompSize = view.getUint32(off + 24, true);
@@ -64,12 +64,12 @@
       const isDuplicate = names.has(name);
       const isLink = ((view.getUint32(off + 38, true) >>> 16) & 0xf000) === 0xa000;
       const isEncrypted = (view.getUint16(off + 8, true) & 1) !== 0;
-      if (isDuplicate || isLink || isEncrypted) {throw new Error('ZIP duplicate, linked or encrypted entry.');}
+      if (isDuplicate || isLink || isEncrypted) { throw new Error('ZIP duplicate, linked or encrypted entry.'); }
       names.add(name);
       const entry = { name, method, compSize, uncompSize, localOffset, checksum: view.getUint32(off + 16, true) };
       assertZipEntrySafeV33(entry, bytes.length);
       totalUncompressed += uncompSize;
-      if (totalUncompressed > ZIP_MAX_TOTAL_UNCOMPRESSED_V33) {throw new Error('ZIP total size exceeds limit.');}
+      if (totalUncompressed > ZIP_MAX_TOTAL_UNCOMPRESSED_V33) { throw new Error('ZIP total size exceeds limit.'); }
       out.push(entry);
       off += 46 + nameLen + extraLen + commentLen;
     }
@@ -94,24 +94,24 @@
     const invalidData = dataStart + entry.compSize > bytes.length
       || utf8(bytes.slice(off + 30, off + 30 + nameLen)) !== entry.name
       || view.getUint16(off + 8, true) !== entry.method;
-    if (invalidData) {throw new Error('ZIP entry data is invalid.');}
+    if (invalidData) { throw new Error('ZIP entry data is invalid.'); }
     const data = bytes.slice(dataStart, dataStart + entry.compSize);
     let result;
     if (entry.method === 0) {
       result = data;
     } else {
-      if (entry.method !== 8) {throw new Error('ZIP compression is unsupported.');}
-      if (!('DecompressionStream' in window)) {throw new Error('当前浏览器不支持本地解压，请使用新版 Chrome/Edge。');}
+      if (entry.method !== 8) { throw new Error('ZIP compression is unsupported.'); }
+      if (!('DecompressionStream' in window)) { throw new Error('当前浏览器不支持本地解压，请使用新版 Chrome/Edge。'); }
       const reader = new Blob([data]).stream().pipeThrough(new window.DecompressionStream('deflate-raw')).getReader();
       const chunks = [];
       let size = 0;
       try {
         while (true) {
           const part = await reader.read();
-          if (part.done) {break;}
+          if (part.done) { break; }
           size += part.value.byteLength;
           const exceedsOutputLimit = size > entry.uncompSize || size > ZIP_MAX_ENTRY_UNCOMPRESSED_V33;
-          if (exceedsOutputLimit) {throw new Error('ZIP entry output is too large.');}
+          if (exceedsOutputLimit) { throw new Error('ZIP entry output is too large.'); }
           chunks.push(part.value);
         }
       } finally {
@@ -127,7 +127,7 @@
     }
     const invalidSize = result.byteLength !== entry.uncompSize;
     const invalidChecksum = !invalidSize && crc32(result) !== entry.checksum;
-    if (invalidSize || invalidChecksum) {throw new Error('ZIP entry integrity check failed.');}
+    if (invalidSize || invalidChecksum) { throw new Error('ZIP entry integrity check failed.'); }
     return result;
   }
 
@@ -206,7 +206,7 @@
     if (!crc32.table) {
       crc32.table = Array.from({ length: 256 }, (_, n) => {
         let c = n;
-        for (let k = 0; k < 8; k++) {
+        for (let k = 0; k < 8; k += 1) {
           c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
         }
         return c >>> 0;

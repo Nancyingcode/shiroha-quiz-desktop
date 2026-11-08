@@ -14,7 +14,7 @@
 
   function listPageNumbers(page, pages, compact = false) {
     const radius = compact ? 1 : 2;
-    const windowSize = radius * 2 + 1;
+    const windowSize = (radius * 2) + 1;
     if (pages <= windowSize + 2) {
       return Array.from({ length: pages }, (_, index) => index + 1);
     }
@@ -33,7 +33,7 @@
     } else if (start > 3) {
       numbers.push('ellipsis');
     }
-    for (let number = Math.max(2, start); number <= Math.min(pages - 1, end); number++) {
+    for (let number = Math.max(2, start); number <= Math.min(pages - 1, end); number += 1) {
       numbers.push(number);
     }
     if (end === pages - 2) {

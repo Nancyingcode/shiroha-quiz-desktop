@@ -76,7 +76,7 @@ async function listen(server) {
 async function availablePort() {
   const server = createServer();
   const port = await listen(server);
-  await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve(undefined)));
+  await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve(undefined))));
   return port;
 }
 
@@ -87,17 +87,18 @@ function running(child) {
 
 /** @param {import('node:child_process').ChildProcess} child */
 async function stopChild(child) {
-  if (!running(child)) {return;}
+  if (!running(child)) { return; }
   // 只关闭本脚本启动的 PID；正常关闭允许 WebView2 刷新本次隔离测试的存储。
-  await execute('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
+  await execute('powershell.exe', [
+    '-NoProfile', '-NonInteractive', '-Command',
     `$p=Get-Process -Id ${child.pid} -ErrorAction SilentlyContinue; if($p){[void]$p.CloseMainWindow()}`,
   ], { windowsHide: true, timeout: CLOSE_TIMEOUT_MS }).catch(() => undefined);
   const end = Date.now() + CLOSE_TIMEOUT_MS;
-  while (running(child) && Date.now() < end) {await delay(POLL_MS);}
+  while (running(child) && Date.now() < end) { await delay(POLL_MS); }
   if (running(child)) {
     await execute('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true, timeout: CLOSE_TIMEOUT_MS });
     const forcedEnd = Date.now() + CLOSE_TIMEOUT_MS;
-    while (running(child) && Date.now() < forcedEnd) {await delay(POLL_MS);}
+    while (running(child) && Date.now() < forcedEnd) { await delay(POLL_MS); }
     assert(!running(child), '测试进程仍在运行，未尝试清理其数据目录');
   }
 }
@@ -138,10 +139,10 @@ async function launch(executable, profile, proxyPort) {
     const endpoint = `http://127.0.0.1:${port}`;
     const end = Date.now() + START_TIMEOUT_MS;
     while (true) {
-      if (launchError) {throw launchError;}
+      if (launchError) { throw launchError; }
       assert(running(child), '桌面测试进程在 CDP 就绪前退出');
       const ready = await fetch(`${endpoint}/json/version`, { signal: globalThis.AbortSignal.timeout(1_000) }).then((response) => response.ok).catch(() => false);
-      if (ready) {break;}
+      if (ready) { break; }
       assert(Date.now() < end, 'WebView2 调试端口未就绪');
       await delay(POLL_MS);
     }
@@ -156,8 +157,7 @@ async function launch(executable, profile, proxyPort) {
     const requests = [];
     await context.route('**/*', async (route) => {
       const url = route.request().url();
-      if (localResource(url)) { requests.push(url); await route.continue(); }
-      else { blocked.push(url); await route.abort('blockedbyclient'); }
+      if (localResource(url)) { requests.push(url); await route.continue(); } else { blocked.push(url); await route.abort('blockedbyclient'); }
     });
     const page = context.pages()[0] ?? await context.waitForEvent('page', { timeout: START_TIMEOUT_MS });
     page.on('pageerror', (error) => errors.push(error.message));
@@ -223,7 +223,7 @@ async function visualLayout(page, screenshotName) {
     const main = document.querySelector('.main');
     const side = document.querySelector('.side');
     const active = document.querySelector('.view.active');
-    if (!main || !side || !active) {throw new Error('没有找到桌面布局主体');}
+    if (!main || !side || !active) { throw new Error('没有找到桌面布局主体'); }
     const focus = document.body.classList.contains('practice-focus') || document.body.classList.contains('exam-focus');
     const collapsed = document.body.classList.contains('side-collapsed');
     const sideStyle = window.getComputedStyle(side);
@@ -242,8 +242,8 @@ async function visualLayout(page, screenshotName) {
     const toggleRect = toggle?.getBoundingClientRect();
     const titleRect = document.querySelector('#desktop-window-drag span')?.getBoundingClientRect();
     const controlsRect = document.querySelector('.desktop-window-controls')?.getBoundingClientRect();
-    if (!toggle || !toggleRect || !titleRect || !captionRect || !controlsRect) {throw new Error('没有找到标题文字、导航开关或窗口控制区');}
-    const toggleHit = document.elementFromPoint(toggleRect.left + toggleRect.width / 2, toggleRect.top + toggleRect.height / 2);
+    if (!toggle || !toggleRect || !titleRect || !captionRect || !controlsRect) { throw new Error('没有找到标题文字、导航开关或窗口控制区'); }
+    const toggleHit = document.elementFromPoint(toggleRect.left + (toggleRect.width / 2), toggleRect.top + (toggleRect.height / 2));
     const navigationFits = Array.from(side.querySelectorAll('.nav')).every((item) => {
       const itemRect = item.getBoundingClientRect();
       return itemRect.left >= sideRect.left && itemRect.right <= sideRect.right + 1
@@ -289,8 +289,8 @@ async function visualLayout(page, screenshotName) {
     assert(!layout.navigationHasShadow, '普通页面导航出现独立阴影');
     assert(layout.mainLeft >= layout.navigationRight - 1, `${layout.view} 导航与正文边界重叠：${JSON.stringify(layout)}`);
   }
-  if (!layout.collapsed) {assert(layout.navigationFits, '导航文字越过侧栏可视边界');}
-  if (layout.focus && !layout.collapsed) {assert(!layout.navigationTransparent, '专注模式临时导航缺少阅读底色');}
+  if (!layout.collapsed) { assert(layout.navigationFits, '导航文字越过侧栏可视边界'); }
+  if (layout.focus && !layout.collapsed) { assert(!layout.navigationTransparent, '专注模式临时导航缺少阅读底色'); }
   return { ...layout, screenshot };
 }
 
@@ -350,7 +350,7 @@ async function titlebarSmoke(runtime) {
   assert.equal(await page.locator('body.side-collapsed').count(), collapsedBeforeDoubleClick, '双击导航开关未完成两次切换');
   assert(!(await nativeWindowState(runtime)).maximized, '双击导航开关错误触发了窗口最大化');
   await page.locator('#desktop-window-minimize').click();
-  let minimized = (await nativeWindowState(runtime)).minimized;
+  let { minimized } = await nativeWindowState(runtime);
   const minimizeDeadline = Date.now() + CLOSE_TIMEOUT_MS;
   while (!minimized && Date.now() < minimizeDeadline) {
     await delay(POLL_MS);
@@ -370,7 +370,7 @@ async function navigationTooltipSmoke(page, label) {
   await toggle.hover();
   await page.waitForFunction((expected) => {
     const node = document.getElementById('sidebar-toggle');
-    if (!node) {return false;}
+    if (!node) { return false; }
     const tooltip = window.getComputedStyle(node, '::after');
     return node.matches(':hover') && tooltip.content.includes(expected)
       && Number(tooltip.opacity) >= 0.99 && tooltip.visibility !== 'hidden';
@@ -408,7 +408,7 @@ async function toggleNavigationMotion(page) {
     const app = document.querySelector('.app');
     const side = document.querySelector('.side');
     const toggle = document.getElementById('sidebar-toggle');
-    if (!main || !app || !side || !toggle) {throw new Error('没有找到导航切换布局');}
+    if (!main || !app || !side || !toggle) { throw new Error('没有找到导航切换布局'); }
     const start = main.getBoundingClientRect().left;
     toggle.click();
     const positions = [main.getBoundingClientRect().left];
@@ -446,7 +446,7 @@ async function scrollbarSmoke(page) {
     }));
     for (const style of styles) {
       assert.equal(style.width, 12, `${style.element} 滚动条未保留完整拖动区域`);
-      assert.equal(style.width - style.inset * 2, 4, `${style.element} 可见滑块宽度不正确`);
+      assert.equal(style.width - (style.inset * 2), 4, `${style.element} 可见滑块宽度不正确`);
       assert.equal(style.clip, 'content-box');
       const channels = style.color.match(/[\d.]+/g)?.map(Number) ?? [];
       assert(channels.length === 4 && channels[0] < channels[2] && channels[3] >= 0.3 && channels[3] <= 0.6, `${style.element} 滑块未使用半透明灰蓝色`);
@@ -458,11 +458,11 @@ async function scrollbarSmoke(page) {
     await input.hover();
     await page.mouse.wheel(0, 360);
     await page.waitForFunction(() => (document.getElementById('import-text')?.scrollTop ?? 0) > 0);
-    await input.evaluate((node)=>{node.scrollTop = 0;});
+    await input.evaluate((node) => { node.scrollTop = 0; });
     const bounds = await input.boundingBox();assert(bounds);
     await page.mouse.move(bounds.x + bounds.width - 6, bounds.y + 18);await page.mouse.down();
     await page.mouse.move(bounds.x + bounds.width - 6, bounds.y + 80, { steps: 8 });await page.mouse.up();
-    await page.waitForFunction(()=>(document.getElementById('import-text')?.scrollTop ?? 0) > 0);
+    await page.waitForFunction(() => (document.getElementById('import-text')?.scrollTop ?? 0) > 0);
     await page.evaluate(() => window.scrollTo(0, 0));
     const viewport = page.viewportSize() ?? await page.evaluate(() => ({ width: window.innerWidth, height: window.innerHeight }));
     await page.mouse.move(viewport.width - 30, viewport.height / 2);
@@ -495,12 +495,12 @@ async function desktopVisualSmoke(runtime) {
         assert(await text.isVisible() && (await text.innerText()).trim(), `首页文字不可见或为空：${selector}`);
       }
       const home = await visualLayout(page, `mist-blue-home-${size.name}.png`);
-      if (size.name === 'default') {navigationTooltips.push(await navigationTooltipSmoke(page, '收起左侧导航'));}
+      if (size.name === 'default') { navigationTooltips.push(await navigationTooltipSmoke(page, '收起左侧导航')); }
       const collapseMotion = await toggleNavigationMotion(page);
       await page.waitForFunction(() => document.body.classList.contains('side-collapsed'));
       const collapsed = await visualLayout(page, `mist-blue-home-${size.name}-collapsed.png`);
       assert(Math.abs(home.navigationToggle.left - collapsed.navigationToggle.left) <= 1 && Math.abs(home.navigationToggle.top - collapsed.navigationToggle.top) <= 1, '收起导航导致标题栏开关位置移动');
-      if (size.name === 'default') {navigationTooltips.push(await navigationTooltipSmoke(page, '展开左侧导航'));}
+      if (size.name === 'default') { navigationTooltips.push(await navigationTooltipSmoke(page, '展开左侧导航')); }
       assert(home.mainLeft - collapsed.mainLeft > 100 && collapsed.mainWidth - home.mainWidth > 100, '普通页面收起导航后正文没有左移并扩展');
       assert(collapseMotion.completed && collapseMotion.intermediateFrames > 0, '收起导航缺少正文连续移动的动画');
       const expandMotion = await toggleNavigationMotion(page);
@@ -519,13 +519,13 @@ async function desktopVisualSmoke(runtime) {
       await page.locator('.nav[data-view="import"]').click();
       await page.locator('#import.view.active').waitFor({ state: 'visible' });
       const importLayout = await visualLayout(page, `mist-blue-import-${size.name}.png`);
-      if (size.name === 'minimum') {scrollbars = await scrollbarSmoke(page);}
+      if (size.name === 'minimum') { scrollbars = await scrollbarSmoke(page); }
       snapshots.push({ requestedWindow: size, home, collapsed, collapseMotion, expandMotion, import: importLayout });
     }
   } finally {
     await page.emulateMedia({ reducedMotion: null });
     await resizeTestWindow(runtime, original);
-    if (await page.locator('body.side-collapsed').count()) {await page.locator('#sidebar-toggle').click();}
+    if (await page.locator('body.side-collapsed').count()) { await page.locator('#sidebar-toggle').click(); }
     await page.locator('.nav[data-view="dashboard"]').click();
   }
   return { nativeWindowResized: true, scrollbars, navigationKeyboard, navigationTooltips, snapshots };
@@ -537,19 +537,19 @@ async function notificationVisualSmoke(page) {
     const node = document.getElementById(id);
     return { id, exists: !!node, hidden: node?.hidden ?? true, text: node?.textContent ?? '', className: node?.className ?? '' };
   }));
-  const input = page.locator('#import-text'), mode = page.locator('#import-mode');
+  const input = page.locator('#import-text'); const mode = page.locator('#import-mode');
   const importState = { text: await input.inputValue(), mode: await mode.inputValue(), view: await page.locator('.view.active').getAttribute('id') };
   /** @param {string} type @param {string} title */
   const markNotice = async (type, title) => page.locator(`#app-toast .toast-item.${type}:not([data-visual-smoke])`).last().evaluate((node, fixture) => {
     node.setAttribute('data-visual-smoke', fixture.type);
-    const heading = node.querySelector('b'), paragraph = node.querySelector('p');
-    if (!heading || !paragraph) {throw new Error('业务通知缺少标题或正文');}
+    const heading = node.querySelector('b'); const paragraph = node.querySelector('p');
+    if (!heading || !paragraph) { throw new Error('业务通知缺少标题或正文'); }
     heading.textContent = fixture.title;
     paragraph.textContent = `通知外观验证：${'QuizBackupFilename'.repeat(8)}.json`;
   }, { type, title });
   /** @param {string} selector */
   const appearance = async (selector) => page.locator(selector).evaluateAll((nodes) => nodes.map((node) => {
-    const style = window.getComputedStyle(node), rect = node.getBoundingClientRect();
+    const style = window.getComputedStyle(node); const rect = node.getBoundingClientRect();
     const paragraph = node.querySelector('p');
     return { background: style.backgroundColor, border: Number.parseFloat(style.borderTopWidth), radius: Number.parseFloat(style.borderRadius), shadow: style.boxShadow,
       fits: rect.left >= 0 && rect.right <= window.innerWidth + 1 && rect.top >= (document.getElementById('desktop-titlebar')?.getBoundingClientRect().bottom ?? 0) && rect.bottom <= window.innerHeight + 1 && node.scrollWidth <= node.clientWidth + 1,
@@ -579,7 +579,7 @@ async function notificationVisualSmoke(page) {
     assert.equal(notices.length, 3); verify(notices);
     await page.screenshot({ path: screenshot });
     for (const type of ['ok', 'warn', 'danger']) {
-      const notice = page.locator(`[data-visual-smoke="${type}"]`), close = notice.getByRole('button', { name: '关闭', exact: true });
+      const notice = page.locator(`[data-visual-smoke="${type}"]`); const close = notice.getByRole('button', { name: '关闭', exact: true });
       assert.match(await notice.innerText(), /通知外观验证：/);
       await close.focus(); await close.press('Enter');
       assert.equal(await notice.count(), 0, '通知关闭按钮无法通过键盘操作');
@@ -587,14 +587,14 @@ async function notificationVisualSmoke(page) {
     await page.evaluate(() => {
       const platform = document.getElementById('platform-status');
       const status = document.getElementById('desktop-window-status');
-      if (!platform || !status) {throw new Error('平台或窗口状态提示缺失');}
+      if (!platform || !status) { throw new Error('平台或窗口状态提示缺失'); }
       platform.hidden = false; platform.className = 'platform-status'; platform.textContent = '正在保存：通知外观验证';
       status.hidden = false; status.textContent = '窗口操作提示：通知外观验证';
     });
     const normal = await appearance('#platform-status, #desktop-window-status'); assert.equal(normal.length, 2); verify(normal);
     await page.evaluate(() => {
       const platform = document.getElementById('platform-status');
-      if (!platform) {throw new Error('平台状态提示缺失');}
+      if (!platform) { throw new Error('平台状态提示缺失'); }
       platform.classList.add('failed'); platform.textContent = '保存失败：通知外观验证';
       const retry = document.createElement('button'); retry.textContent = '测试恢复';
       retry.onclick = () => { retry.dataset.activated = 'true'; };
@@ -609,9 +609,9 @@ async function notificationVisualSmoke(page) {
     await input.fill(importState.text); await mode.selectOption(importState.mode);
     await page.evaluate((saved) => {
       document.querySelectorAll('[data-visual-smoke]').forEach((node) => node.remove());
-      saved.forEach((state) => { const node = document.getElementById(state.id); if (node) { if (!state.exists) {node.remove();} else { node.hidden = state.hidden; node.textContent = state.text; node.className = state.className; } } });
+      saved.forEach((state) => { const node = document.getElementById(state.id); if (node) { if (!state.exists) { node.remove(); } else { node.hidden = state.hidden; node.textContent = state.text; node.className = state.className; } } });
     }, original);
-    if (importState.view) {await page.locator(`.nav[data-view="${importState.view}"]`).click();}
+    if (importState.view) { await page.locator(`.nav[data-view="${importState.view}"]`).click(); }
   }
 }
 
@@ -634,7 +634,7 @@ async function focusVisualSmoke(runtime, mode) {
         assert(await control.evaluate((node) => {
           const rect = node.getBoundingClientRect();
           return [0.25, 0.5, 0.75].every((fraction) => {
-            const hit = document.elementFromPoint(rect.left + rect.width * fraction, rect.top + rect.height / 2);
+            const hit = document.elementFromPoint(rect.left + (rect.width * fraction), rect.top + (rect.height / 2));
             return node === hit || node.contains(hit);
           });
         }), `专注模式按钮被遮挡或超出视口：${selector}`);
@@ -664,8 +664,8 @@ async function practiceAndExamFocusSmoke(runtime) {
   await page.screenshot({ path: path.join(path.dirname(SCREENSHOT_PATH), 'centered-dialog.png'), fullPage: true });
   const bounds = await dialog.boundingBox();
   const viewport = await page.evaluate(() => ({ width: window.innerWidth, height: window.innerHeight }));
-  assert(bounds && Math.abs(bounds.x + bounds.width / 2 - viewport.width / 2) < 2, '弹框未水平居中');
-  assert(bounds && Math.abs(bounds.y + bounds.height / 2 - viewport.height / 2) < 2, '弹框未垂直居中');
+  assert(bounds && Math.abs((bounds.x + (bounds.width / 2)) - (viewport.width / 2)) < 2, '弹框未水平居中');
+  assert(bounds && Math.abs((bounds.y + (bounds.height / 2)) - (viewport.height / 2)) < 2, '弹框未垂直居中');
   await page.keyboard.press('Escape');
   assert.equal(await page.locator('#p-exit').isVisible(), true);
   await page.locator('#p-exit').click();
@@ -720,18 +720,18 @@ async function mathSmoke(page) {
     const script = page.locator('script[src$="/libs/mathjax/tex-mml-chtml.js"]');
     if (await script.count()) {
       await page.waitForFunction(() => typeof (/** @type {TestWindow} */ (window)).MathJax?.typesetPromise === 'function');
-    } else {await page.addScriptTag({ url: new URL('./libs/mathjax/tex-mml-chtml.js', page.url()).href });}
+    } else { await page.addScriptTag({ url: new URL('./libs/mathjax/tex-mml-chtml.js', page.url()).href }); }
   }
   return page.evaluate(async () => {
     const math = (/** @type {TestWindow} */ (window)).MathJax;
-    if (!math) {throw new Error('本地 MathJax 未加载');}
+    if (!math) { throw new Error('本地 MathJax 未加载'); }
     await math.startup?.promise;
     const node = document.createElement('div');
     node.textContent = '\\(x^2 + 1\\)';
     document.body.append(node);
     try {
       await math.typesetPromise([node]);
-      if (!node.querySelector('mjx-container')) {throw new Error('公式未生成 MathJax 输出');}
+      if (!node.querySelector('mjx-container')) { throw new Error('公式未生成 MathJax 输出'); }
       return { rendered: true };
     } finally { node.remove(); }
   });
@@ -746,14 +746,14 @@ async function pdfSmoke(page) {
     const worker = new pdf.PDFWorker({ name: 'desktop-smoke' });
     try {
       await worker.promise;
-      if (!(worker.port instanceof window.Worker)) {throw new Error('PDF.js 降级为 fake worker，未证明模块 Worker 可用');}
+      if (!(worker.port instanceof window.Worker)) { throw new Error('PDF.js 降级为 fake worker，未证明模块 Worker 可用'); }
       const base = new URL('./libs/', location.href).href;
       const document = await pdf.getDocument({ data: new Uint8Array(bytes), worker, cMapUrl: `${base}cmaps/`, cMapPacked: true, standardFontDataUrl: `${base}standard_fonts/`, wasmUrl: `${base}wasm/` }).promise;
       try {
         const page = await document.getPage(1);
         const content = await page.getTextContent();
         const text = content.items.map((item) => item.str ?? '').join(' ');
-        if (!text.includes('DESKTOP SMOKE')) {throw new Error('最小 PDF 文本提取失败');}
+        if (!text.includes('DESKTOP SMOKE')) { throw new Error('最小 PDF 文本提取失败'); }
         return { text, realWorker: true };
       } finally { await document.destroy(); }
     } finally { worker.destroy(); }
@@ -765,7 +765,7 @@ async function ocrSmoke(page) {
   await page.addScriptTag({ url: new URL('./libs/ocr/tesseract/tesseract.min.js', page.url()).href });
   return page.evaluate(async () => {
     const tesseract = (/** @type {TestWindow} */ (window)).Tesseract;
-    if (!tesseract) {throw new Error('本地 Tesseract 未加载');}
+    if (!tesseract) { throw new Error('本地 Tesseract 未加载'); }
     const base = new URL('./libs/ocr/', location.href).href;
     // 禁用语言缓存，防止“缓存命中”掩盖安装包遗漏 eng 语言资源。
     const worker = await tesseract.createWorker('eng', 1, { workerPath: `${base}tesseract/worker.min.js`, corePath: `${base}core`, langPath: `${base}lang`, workerBlobURL: true, cacheMethod: 'none' });
@@ -773,11 +773,11 @@ async function ocrSmoke(page) {
       const canvas = document.createElement('canvas');
       canvas.width = 600; canvas.height = 180;
       const context = canvas.getContext('2d');
-      if (!context) {throw new Error('Canvas 2D 不可用');}
+      if (!context) { throw new Error('Canvas 2D 不可用'); }
       context.fillStyle = '#fff'; context.fillRect(0, 0, canvas.width, canvas.height);
       context.fillStyle = '#000'; context.font = '100px Arial'; context.fillText('TEST', 40, 125);
       const { data } = await worker.recognize(canvas);
-      if (!data.text.trim()) {throw new Error('OCR 未返回非空文本');}
+      if (!data.text.trim()) { throw new Error('OCR 未返回非空文本'); }
       return { text: data.text.trim(), confidence: data.confidence };
     } finally { await worker.terminate(); }
   });
@@ -830,7 +830,7 @@ async function practiceDeselectSmoke(page) {
     assert(!(await input.isChecked()), '键盘重复选择应取消选中');
     assert.equal(await page.locator('#practice-card .option.selected').count(), 0);
   }
-  if (await page.locator('#p-total-status').count()) {assert.match(await page.locator('#p-total-status').innerText(), /已填写 0 题/);}
+  if (await page.locator('#p-total-status').count()) { assert.match(await page.locator('#p-total-status').innerText(), /已填写 0 题/); }
 }
 
 /** @param {Page} page @param {string} bankName @param {string} analysisText */
@@ -861,7 +861,7 @@ async function totalPracticeSmoke(runtime, bankName, origin) {
   const { page } = runtime;
   await page.locator('.nav[data-view="ai-settings"]').click();
   await page.locator('#ai-provider-v99').selectOption('custom');
-  await page.locator('#ai-endpoint-v99').fill(origin + '/practice-analysis');
+  await page.locator('#ai-endpoint-v99').fill(`${origin}/practice-analysis`);
   await page.locator('#ai-model-v99').fill('mock-model');
   await page.locator('#ai-api-key-v99').fill('native-fixture-key');
   await page.locator('#ai-remember-key-v99').uncheck();
@@ -905,7 +905,7 @@ async function totalPracticeSmoke(runtime, bankName, origin) {
   await page.locator('#practice-review-result').click();
   await page.locator('#training-question .option.wrong[data-key="B"]').waitFor();
   assert.equal(await page.locator('#training-question .option.correct').getAttribute('data-key'), 'A');
-  assert.equal(await page.locator('#training-question .training-reference-answer').evaluate((node)=>window.getComputedStyle(node).color), 'rgb(35, 114, 79)');
+  assert.equal(await page.locator('#training-question .training-reference-answer').evaluate((node) => window.getComputedStyle(node).color), 'rgb(35, 114, 79)');
   await page.screenshot({ path: path.join(path.dirname(SCREENSHOT_PATH), 'training-review.png'), fullPage: true });
   await page.locator('#training-review-back').click();
   await page.locator('#again-practice').click();
@@ -1014,7 +1014,7 @@ async function main() {
   // CDP 连接前也拒绝互联网流量；代理不转发任何请求，不依赖系统代理或用户网络设置。
   const proxy = createServer((socket) => { socket.on('error', () => undefined); socket.end('HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n'); });
   const cleanup = () => cleaning ??= (async () => {
-    if (runtime) {await stop(runtime);}
+    if (runtime) { await stop(runtime); }
     proxy.close();
     networkMock.close();
     for (const item of profiles) {
@@ -1028,9 +1028,8 @@ async function main() {
   process.once('SIGINT', interrupt); process.once('SIGTERM', interrupt);
   /** @param {string} name @param {() => Promise<unknown>} action */
   const check = async (name, action) => {
-    console.log('正在验证：' + name);
-    try { checks.push({ name, ok: true, detail: await deadline(action(), RESOURCE_TIMEOUT_MS) }); }
-    catch (error) { checks.push({ name, ok: false, error: errorText(error) }); }
+    console.log(`正在验证：${name}`);
+    try { checks.push({ name, ok: true, detail: await deadline(action(), RESOURCE_TIMEOUT_MS) }); } catch (error) { checks.push({ name, ok: false, error: errorText(error) }); }
   };
   try {
     const proxyPort = await listen(proxy);
@@ -1038,13 +1037,13 @@ async function main() {
     const { page } = runtime;
     await check('原生 AI、WebDAV、凭据保存与取消撤销', async () => {
       const result = await nativeServiceSmoke(page, networkMock.origin);
-      assert(networkMock.requests.some((request)=>request.url === '/chat' && request.authenticated), '原生请求未使用已保存假凭据');
-      assert.equal(networkMock.requests.filter((request)=>request.method === 'PUT' && request.url?.includes('shiroha-web-backup-')).length, 1, '重试重复写入历史文件');
+      assert(networkMock.requests.some((request) => request.url === '/chat' && request.authenticated), '原生请求未使用已保存假凭据');
+      assert.equal(networkMock.requests.filter((request) => request.method === 'PUT' && request.url?.includes('shiroha-web-backup-')).length, 1, '重试重复写入历史文件');
       return result;
     });
     await check('原生 IPC 白名单与非法输入保全', async () => page.evaluate(async () => {
       const host = (/** @type {NativeTestWindow} */ (window)).ShirohaDesktopHost;
-      if (!host) {throw new Error('本地桥接缺失');}
+      if (!host) { throw new Error('本地桥接缺失'); }
       const before = JSON.stringify(await host.invoke('local_initialize'));
       for (const [command, args] of /** @type {Array<[string,Record<string,unknown>]>} */ ([
         ['unknown_native_command', {}], ['plugin:fs|read_text_file', { path: 'C:/outside' }],
@@ -1052,9 +1051,9 @@ async function main() {
         ['local_write', { snapshot: { schemaVersion: 999 }, operationId: 'invalid', expectedRevision: 0 }],
       ])) {
         let rejected = false; try { await host.invoke(command, args); } catch { rejected = true; }
-        if (!rejected) {throw new Error('未拒绝非法调用');}
+        if (!rejected) { throw new Error('未拒绝非法调用'); }
       }
-      if (JSON.stringify(await host.invoke('local_initialize')) !== before) {throw new Error('非法调用改变了数据修订');}
+      if (JSON.stringify(await host.invoke('local_initialize')) !== before) { throw new Error('非法调用改变了数据修订'); }
       return { rejected: 4, dataPreserved: true };
     }));
     await check('启动资源与按需插画', async () => {
@@ -1123,7 +1122,7 @@ async function main() {
     const bankName = `桌面原型验证-${randomUUID().slice(0, 8)}`;
     await check('LocalStorage 写入回读', async () => page.evaluate(({ key, value }) => {
       localStorage.setItem(key, value);
-      if (localStorage.getItem(key) !== value) {throw new Error('LocalStorage 即时回读失败');}
+      if (localStorage.getItem(key) !== value) { throw new Error('LocalStorage 即时回读失败'); }
       return { readable: true };
     }, marker));
     await check('界面导入题库并练习', () => importAndPractice(page, bankName));
@@ -1135,9 +1134,9 @@ async function main() {
     });
     await check('空解析错题主动 AI 生成、确认保存与原生重载', () => wrongAnalysisSmoke(page));
     await check('训练复盘主动 AI 生成、确认保存与原生重载', () => trainingReviewAnalysisSmoke(page));
-    await check('订阅 Harness 登录、既有 AI 任务与取消草稿保全', ()=>harnessSmoke(page, ()=>practiceImportedBank(page, bankName)));
-    await check('Harness 下载中切换与组件缓存复用', ()=>harnessSwitchingSmoke(page, profile));
-    await check('CodeBuddy CLI 登录引导、单题解析、追问与配置保全', ()=>codebuddyCliSmoke(page, profile, ()=>practiceImportedBank(page, bankName)));
+    await check('订阅 Harness 登录、既有 AI 任务与取消草稿保全', () => harnessSmoke(page, () => practiceImportedBank(page, bankName)));
+    await check('Harness 下载中切换与组件缓存复用', () => harnessSwitchingSmoke(page, profile));
+    await check('CodeBuddy CLI 登录引导、单题解析、追问与配置保全', () => codebuddyCliSmoke(page, profile, () => practiceImportedBank(page, bankName)));
     await check('MathJax 本地公式', () => mathSmoke(page));
     await check('PDF.js 本地模块与 Worker', () => pdfSmoke(page));
     await check('Tesseract 本地 OCR', () => ocrSmoke(page));
@@ -1154,15 +1153,15 @@ async function main() {
       await resizeTestWindow(first, { width: 1100, height: 760 });
       await page.locator('#desktop-window-close').click();
       const end = Date.now() + CLOSE_TIMEOUT_MS;
-      while (running(first.child) && Date.now() < end) {await delay(POLL_MS);}
+      while (running(first.child) && Date.now() < end) { await delay(POLL_MS); }
       assert(!running(first.child), '关闭按钮未关闭测试进程');
       return { closed: true };
     });
     await stop(runtime); runtime = undefined;
     runtime = await launch(executable, profile, proxyPort);
     const memoryRestart = runtime;
-    await check('CodeBuddy CLI 登录在重启后重新核验', ()=>codebuddyCliAfterRestart(memoryRestart.page));
-    await check('CodeBuddy CLI 过期引导、重启复用与退出跨重启验证', ()=>codebuddyCliPersistenceSmoke(memoryRestart.page, profile, async()=>{
+    await check('CodeBuddy CLI 登录在重启后重新核验', () => codebuddyCliAfterRestart(memoryRestart.page));
+    await check('CodeBuddy CLI 过期引导、重启复用与退出跨重启验证', () => codebuddyCliPersistenceSmoke(memoryRestart.page, profile, async () => {
       assert(runtime);
       await stop(runtime); runtime = undefined;
       runtime = await launch(executable, profile, proxyPort);
@@ -1179,14 +1178,14 @@ async function main() {
     });
     await check('重启后数据保留', async () => {
       await restarted.page.evaluate(({ key, value }) => {
-        if (localStorage.getItem(key) !== value) {throw new Error('重启后 LocalStorage 值不匹配');}
+        if (localStorage.getItem(key) !== value) { throw new Error('重启后 LocalStorage 值不匹配'); }
         localStorage.removeItem(key);
       }, marker);
       assert.deepEqual(restarted.errors, [], '重启出现 JS 错误');
       return { persisted: true };
     });
-    await check('重启后复盘快照按需读取且保留原错选答案', async()=>{
-      const page = restarted.page;
+    await check('重启后复盘快照按需读取且保留原错选答案', async () => {
+      const { page } = restarted;
       await page.locator('.nav[data-view="records"]').click();
       await page.locator('#records .record-item').filter({ hasText: /错误[1-9]/ }).first().locator('[data-training-review]').click();
       await page.locator('#training-question .option.wrong[data-key="B"]').waitFor();
@@ -1203,32 +1202,32 @@ async function main() {
     });
     await check('真实 IPC 覆盖快照与恢复', async () => restarted.page.evaluate(async () => {
       const host = (/** @type {NativeTestWindow} */ (window)).ShirohaDesktopHost;
-      if (!host) {throw new Error('本地桥接缺失');}
+      if (!host) { throw new Error('本地桥接缺失'); }
       const harnessStatus = async () => /** @type {import('../../web/platform/runtime.d.ts').HarnessStatus} */ (await host.invoke('harness_control', { request: { kind: 'status' } }));
-      if ((await harnessStatus()).runtimePath !== 'isolated-fake-codex.exe') {throw new Error('恢复验收只允许隔离假 Harness');}
+      if ((await harnessStatus()).runtimePath !== 'isolated-fake-codex.exe') { throw new Error('恢复验收只允许隔离假 Harness'); }
       await host.invoke('harness_control', { request: { kind: 'inspect' } });
       await host.invoke('harness_control', { request: { kind: 'login' } });
       const loginDeadline = Date.now() + 5000;
       while (!(await harnessStatus()).ready) {
-        if (Date.now() >= loginDeadline) {throw new Error('恢复前假订阅未就绪');}
-        await new Promise((resolve)=>setTimeout(resolve, 20));
+        if (Date.now() >= loginDeadline) { throw new Error('恢复前假订阅未就绪'); }
+        await new Promise((resolve) => setTimeout(resolve, 20));
       }
       await host.invoke('service_credential', { request: { kind: 'invalidate' } });
-      if ((await harnessStatus()).ready) {throw new Error('覆盖导入的凭据失效入口未撤销 Harness 就绪状态');}
+      if ((await harnessStatus()).ready) { throw new Error('覆盖导入的凭据失效入口未撤销 Harness 就绪状态'); }
       await host.invoke('harness_control', { request: { kind: 'inspect' } });
-      if (!(await harnessStatus()).ready) {throw new Error('恢复后主动检测不能重新启用隔离订阅');}
+      if (!(await harnessStatus()).ready) { throw new Error('恢复后主动检测不能重新启用隔离订阅'); }
       const before = await host.invoke('local_read');
       const state = /** @type {{revision:number}} */ (await host.invoke('local_initialize'));
       const checkpoint = /** @type {{snapshotId:string}} */ (await host.invoke('local_checkpoint'));
       const empty = { schemaVersion: 1, banks: [], activeBankId: '', wrongBook: {}, favorites: {}, records: [], settings: {}, crossPlatformMeta: {} };
       const replaced = /** @type {{revision:number}} */ (await host.invoke('local_replace', { snapshot: empty, operationId: 'smoke-replace', expectedRevision: state.revision }));
       const result = /** @type {{banks:unknown[]}} */ (await host.invoke('local_read'));
-      if (result.banks.length) {throw new Error('覆盖未提交');}
-      if ((await harnessStatus()).ready) {throw new Error('覆盖数据未要求重新检测 Harness');}
+      if (result.banks.length) { throw new Error('覆盖未提交'); }
+      if ((await harnessStatus()).ready) { throw new Error('覆盖数据未要求重新检测 Harness'); }
       await host.invoke('harness_control', { request: { kind: 'inspect' } });
       await host.invoke('local_query', { query: { kind: 'restore', snapshot_id: checkpoint.snapshotId, operation_id: 'smoke-restore', expected_revision: replaced.revision } });
-      if (JSON.stringify(await host.invoke('local_read')) !== JSON.stringify(before)) {throw new Error('恢复内容不一致');}
-      if ((await harnessStatus()).ready) {throw new Error('恢复点恢复未要求重新检测 Harness');}
+      if (JSON.stringify(await host.invoke('local_read')) !== JSON.stringify(before)) { throw new Error('恢复内容不一致'); }
+      if ((await harnessStatus()).ready) { throw new Error('恢复点恢复未要求重新检测 Harness'); }
       return { restored: true, snapshotRetained: true, harnessRequiresInspect: true };
     }));
     await stop(runtime); runtime = undefined;
@@ -1249,45 +1248,45 @@ async function main() {
       await migrated.page.getByText('确认迁移旧原型数据', { exact: true }).click();
       await migrated.page.locator('#app-dialog [data-dialog-accept]').click();
       await migrated.page.locator('#active-bank-select option[value="legacy-bank"]').waitFor({ state: 'attached' });
-      await migrated.page.waitForFunction(()=>localStorage.getItem('shiroha_webdav_password_local_v378') === null);
+      await migrated.page.waitForFunction(() => localStorage.getItem('shiroha_webdav_password_local_v378') === null);
       await migrated.page.evaluate(async () => {
         const host = (/** @type {NativeTestWindow} */ (window)).ShirohaDesktopHost;
-        if (!host) {throw new Error('本地桥接缺失');}
+        if (!host) { throw new Error('本地桥接缺失'); }
         const data =/** @type {{banks:Array<{questions:Array<{extension:{preserved:boolean}}>}>,serviceConfigurations:{webdav:{endpoint:string}}}} */ (await host.invoke('local_read'));
-        if (!data.banks[0].questions[0].extension.preserved || data.serviceConfigurations.webdav.endpoint !== 'https://fixture.invalid') {throw new Error('迁移丢失字段');}
-        if (!localStorage.getItem('shiroha_quiz_state_v28_4_c1') || localStorage.getItem('shiroha_webdav_password_local_v378') !== null || localStorage.getItem('unknown-legacy-key') !== 'preserve') {throw new Error('旧来源被清理');}
+        if (!data.banks[0].questions[0].extension.preserved || data.serviceConfigurations.webdav.endpoint !== 'https://fixture.invalid') { throw new Error('迁移丢失字段'); }
+        if (!localStorage.getItem('shiroha_quiz_state_v28_4_c1') || localStorage.getItem('shiroha_webdav_password_local_v378') !== null || localStorage.getItem('unknown-legacy-key') !== 'preserve') { throw new Error('旧来源被清理'); }
       });
-      const credentialState = await migrated.page.evaluate(async()=>{const host = (/** @type {NativeTestWindow} */(window)).ShirohaDesktopHost;if (!host) {throw new Error('bridge');} return host.invoke('service_credential', { request: { kind: 'status', config: { service: 'webdav', endpoint: 'https://fixture.invalid', username: 'fixture', remoteDir: 'backup' } } });});
+      const credentialState = await migrated.page.evaluate(async () => { const host = (/** @type {NativeTestWindow} */(window)).ShirohaDesktopHost;if (!host) { throw new Error('bridge'); } return host.invoke('service_credential', { request: { kind: 'status', config: { service: 'webdav', endpoint: 'https://fixture.invalid', username: 'fixture', remoteDir: 'backup' } } }); });
       assert.deepEqual(credentialState, { state: 'remembered' });
       return { dataMigrated: true, credentialsMigrated: true, legacyDataPreserved: true };
     });
     await stop(runtime); runtime = undefined;
     runtime = await launch(executable, migrationProfile, proxyPort);
     const migratedRestart = runtime;
-    await check('迁移后重启使用 SQLite', async()=>{
+    await check('迁移后重启使用 SQLite', async () => {
       await migratedRestart.page.locator('#active-bank-select option[value="legacy-bank"]').waitFor({ state: 'attached' });
       assert.equal(await migratedRestart.page.getByText('确认迁移旧原型数据', { exact: true }).count(), 0);
       return { restarted: true };
     });
-    await check('C8 题库分页、按需正文与完整导出', async()=>{
-      await migratedRestart.page.evaluate(async()=>{
-        const host = (/** @type {NativeTestWindow} */(window)).ShirohaDesktopHost;if (!host) {throw new Error('bridge');}
+    await check('C8 题库分页、按需正文与完整导出', async () => {
+      await migratedRestart.page.evaluate(async () => {
+        const host = (/** @type {NativeTestWindow} */(window)).ShirohaDesktopHost;if (!host) { throw new Error('bridge'); }
         const current = /** @type {{revision:number}} */ (await host.invoke('local_initialize'));
-        const banks = ['lazy-a', 'lazy-b'].map((id)=>({ id, name: id, groupName: 'C8', questions: Array.from({ length: 65 }, (_, i)=>({ id: 'q' + i, number: i + 1, type: 'single', question: id + ' 正文 ' + i, options: [{ key: 'A', text: '正确' }, { key: 'B', text: '错误' }], answer: ['A'], extension: { preserved: true } })) }));
+        const banks = ['lazy-a', 'lazy-b'].map((id) => ({ id, name: id, groupName: 'C8', questions: Array.from({ length: 65 }, (_, i) => ({ id: `q${i}`, number: i + 1, type: 'single', question: `${id} 正文 ${i}`, options: [{ key: 'A', text: '正确' }, { key: 'B', text: '错误' }], answer: ['A'], extension: { preserved: true } })) }));
         Object.assign(banks[0].questions[0], { category: '较长的分类名称：综合基础知识', score: 12.5 });
         await host.invoke('local_replace', { operationId: 'lazy-fixture', expectedRevision: current.revision, snapshot: { schemaVersion: 1, banks, activeBankId: 'lazy-a', wrongBook: {}, favorites: { 'lazy-a': ['q64', 'q0'] }, records: [{ id: 'old-record', mode: 'practice', name: '历史记录', bankName: '已删除题库', date: '2026-10-23T00:00:00Z', total: 1, answered: 1, correct: 0, wrong: 1, accuracy: 0, duration: 1, details: [{ question: '已删除题目的历史正文', type: 'single', chosen: ['B'], answer: ['A'], correct: false }] }], settings: {}, crossPlatformMeta: {} } });
       });
-      await migratedRestart.page.addInitScript(()=>{
+      await migratedRestart.page.addInitScript(() => {
         const calls = /** @type {string[]} */ ([]);
         Object.defineProperty(window, '__nativeCalls', { value: calls });
         Object.defineProperty(window, 'ShirohaDesktopHost', { configurable: true, set(host) {
-          const original = host.invoke;host.invoke = (/** @type {string} */command, /** @type {{query?:{kind?:string}}} */args)=>{calls.push(command + ':' + (args?.query?.kind || ''));return original(command, args);};
+          const original = host.invoke;host.invoke = (/** @type {string} */command, /** @type {{query?:{kind?:string}}} */args) => { calls.push(`${command}:${args?.query?.kind || ''}`);return original(command, args); };
           Object.defineProperty(window, 'ShirohaDesktopHost', { value: host, configurable: true });
         } });
       });
       await migratedRestart.page.reload();
       await migratedRestart.page.locator('#active-bank-select option[value="lazy-a"]').waitFor({ state: 'attached' });
-      const initialCalls = await migratedRestart.page.evaluate(()=>Reflect.get(window, '__nativeCalls'));
+      const initialCalls = await migratedRestart.page.evaluate(() => Reflect.get(window, '__nativeCalls'));
       assert(!initialCalls.includes('local_read:') && !initialCalls.includes('local_query:details'), 'startup loaded bodies');
       await migratedRestart.page.locator('.nav[data-view="banks"]').click();
       await migratedRestart.page.locator('#bank-preview tbody tr').first().getByText('lazy-a 正文 0', { exact: true }).waitFor();
@@ -1307,9 +1306,9 @@ async function main() {
       await migratedRestart.page.locator('[data-preview-question]').first().click();
       assert.equal(await migratedRestart.page.locator('#bank-question-detail .bank-detail-body').innerText(), 'lazy-a 正文 0');
       assert(await migratedRestart.page.locator('#bank-question-detail .bank-detail-option').count() > 0);
-      await migratedRestart.page.evaluate(()=>Object.defineProperty(window.navigator, 'clipboard', { configurable: true, value: { writeText: async(/** @type {string} */ text)=>{Reflect.set(window, '__previewCopied', text);} } }));
+      await migratedRestart.page.evaluate(() => Object.defineProperty(window.navigator, 'clipboard', { configurable: true, value: { writeText: async (/** @type {string} */ text) => { Reflect.set(window, '__previewCopied', text); } } }));
       await migratedRestart.page.locator('[data-copy-question]').click();
-      assert.equal(await migratedRestart.page.evaluate(()=>Reflect.get(window, '__previewCopied')), 'lazy-a 正文 0');
+      assert.equal(await migratedRestart.page.evaluate(() => Reflect.get(window, '__previewCopied')), 'lazy-a 正文 0');
       await previewPager.getByRole('button', { name: '下一页', exact: true }).click();
       await migratedRestart.page.locator('#bank-preview tbody tr').first().getByText('lazy-a 正文 50', { exact: true }).waitFor();
       assert.equal(await migratedRestart.page.locator('#bank-question-detail').count(), 0);
@@ -1329,7 +1328,7 @@ async function main() {
       assert.equal(await favorites.locator('.bank-detail-option.is-answer').count(), 1);
       await migratedRestart.page.screenshot({ path: path.join(path.dirname(SCREENSHOT_PATH), 'favorites-detail.png'), fullPage: true });
       await favorites.locator('[data-close-detail]').click();
-      assert(await favorites.locator('[data-preview-question="q64"]').evaluate((node)=>node === document.activeElement));
+      assert(await favorites.locator('[data-preview-question="q64"]').evaluate((node) => node === document.activeElement));
       await migratedRestart.page.locator('.nav[data-view="banks"]').click();
       await migratedRestart.page.locator('[data-practice-group-v8916="C8"]').click();
       await migratedRestart.page.locator('.nav[data-view="practice"]').click();
@@ -1344,8 +1343,8 @@ async function main() {
       assert.equal(await migratedRestart.page.locator('#practice-card .practice-source-number').innerText(), '题库第 1 题');
       await migratedRestart.page.locator('#p-exit').click();
       await migratedRestart.page.locator('#app-dialog [data-dialog-accept]').click();
-      await migratedRestart.page.waitForFunction(()=>!document.body.classList.contains('practice-focus'));
-      if (await migratedRestart.page.evaluate(()=>document.body.classList.contains('side-collapsed'))) {await migratedRestart.page.locator('#sidebar-toggle').click();}
+      await migratedRestart.page.waitForFunction(() => !document.body.classList.contains('practice-focus'));
+      if (await migratedRestart.page.evaluate(() => document.body.classList.contains('side-collapsed'))) { await migratedRestart.page.locator('#sidebar-toggle').click(); }
       await migratedRestart.page.locator('.nav[data-view="dashboard"]').click();
       await migratedRestart.page.locator('.nav[data-view="banks"]').click();
       const bankMenu = migratedRestart.page.locator('.bank-item').filter({ has: migratedRestart.page.locator('[data-editbank-v45="lazy-a"]') });
@@ -1354,18 +1353,18 @@ async function main() {
       await migratedRestart.page.locator('#import-bank-name').fill('lazy-a edited');
       await migratedRestart.page.locator('#bank-edit-save-v45').click();
       await migratedRestart.page.locator('#active-bank-select option[value="lazy-a"]').filter({ hasText: 'lazy-a edited' }).waitFor({ state: 'attached' });
-      await migratedRestart.page.evaluate(async()=>{
-        const storage = /** @type {import('../../web/platform/runtime.d.ts').BrowserStorage} */ (Reflect.get(window, 'ShirohaPlatform').storage);
+      await migratedRestart.page.evaluate(async () => {
+        const { storage } = /** @type {{storage: import('../../web/platform/runtime.d.ts').BrowserStorage}} */ (Reflect.get(window, 'ShirohaPlatform'));
         await storage.initialize();const data = /** @type {import('../../web/platform/contracts.d.ts').Snapshot} */ (await storage.read());
         await storage.ensureQuestions?.(data, [{ bankId: 'lazy-a', questionId: 'q0' }, { bankId: 'lazy-b', questionId: 'q0' }]);
-        if (data.banks[0].questions[0].question === data.banks[1].questions[0].question) {throw new Error('跨库同 ID 混淆');}
+        if (data.banks[0].questions[0].question === data.banks[1].questions[0].question) { throw new Error('跨库同 ID 混淆'); }
         await storage.ensureAll?.(data);
-        if (data.banks.some((bank)=>bank.questions.some((q)=>!q.question || !q.extension))) {throw new Error('完整导出缺失正文或扩展');}
+        if (data.banks.some((bank) => bank.questions.some((q) => !q.question || !q.extension))) { throw new Error('完整导出缺失正文或扩展'); }
       });
       return { questions: 130, defaultPageSize: 10, pageSizes: [20, 50], directLastPage: 5, lastPage: 15, initialBodies: 0, crossBankIdentity: true };
     });
-    await check('自选题号同时设置题量，仅加载范围内指定数量', async()=>{
-      const page = migratedRestart.page;
+    await check('自选题号同时设置题量，仅加载范围内指定数量', async () => {
+      const { page } = migratedRestart;
       await page.reload();await page.locator('body[data-storage-state="ready"]').waitFor();
       await page.locator('.nav[data-view="banks"]').click();
       await page.locator('[data-practice-group-v8916="C8"]').click();
@@ -1382,11 +1381,11 @@ async function main() {
       assert.equal(await page.locator('#practice-card .practice-source-number').innerText(), '题库第 65 题');
       await page.locator('#p-exit').click();
       await page.locator('#app-dialog [data-dialog-accept]').click();
-      await page.waitForFunction(()=>!document.body.classList.contains('practice-focus'));
+      await page.waitForFunction(() => !document.body.classList.contains('practice-focus'));
       return { range: '65-66', requested: 1, actual: 1 };
     });
     await check('单个自选起点按题量连续跨库出题', async () => {
-      const page = migratedRestart.page;
+      const { page } = migratedRestart;
       await page.reload();
       await page.locator('body[data-storage-state="ready"]').waitFor();
       await page.locator('.nav[data-view="banks"]').click();
@@ -1409,8 +1408,8 @@ async function main() {
       await page.waitForFunction(() => !document.body.classList.contains('practice-focus'));
       return { start: 65, requested: 3, actual: 3, acrossBanks: true };
     });
-    await check('本轮错题一览分页保留题号、全部选项和完整题量', async()=>{
-      const page = migratedRestart.page;
+    await check('本轮错题一览分页保留题号、全部选项和完整题量', async () => {
+      const { page } = migratedRestart;
       // 前一用例用独立快照读取完整导出；重载后页面与适配器重新共享同一读取基线。
       await page.reload();await page.locator('body[data-storage-state="ready"]').waitFor();
       await page.locator('.nav[data-view="practice"]').click();
@@ -1421,7 +1420,7 @@ async function main() {
       await page.locator('#p-submit-all').click();
       await page.locator('#app-dialog [data-dialog-accept]').click();
       await page.locator('#again-practice').waitFor();
-      const overview = page.locator('#p-wrong-overview'), pager = page.locator('#p-wrong-overview-list-pager');
+      const overview = page.locator('#p-wrong-overview'); const pager = page.locator('#p-wrong-overview-list-pager');
       assert.equal(await overview.locator('[data-wrong-question-index]').count(), 10);
       assert.match(await overview.locator('h3').innerText(), /13/);
       await pager.getByRole('button', { name: '第 2 页', exact: true }).click();
@@ -1436,28 +1435,28 @@ async function main() {
       await page.locator('.nav[data-view="banks"]').click();
       return { totalWrong: 13, defaultPageSize: 10, secondPage: 3, expandedPageSize: 20 };
     });
-    await check('题库预览四列文字与操作按钮保持单行', async()=>{
-      const page = migratedRestart.page;
-      const original = await page.evaluate(()=>({ width: window.innerWidth, height: window.innerHeight }));
+    await check('题库预览四列文字与操作按钮保持单行', async () => {
+      const { page } = migratedRestart;
+      const original = await page.evaluate(() => ({ width: window.innerWidth, height: window.innerHeight }));
       await page.reload();await page.locator('body[data-storage-state="ready"]').waitFor();
       await page.locator('.nav[data-view="banks"]').click();
       await page.locator('#bank-preview').getByText('较长的分类名称：综合基础知识', { exact: true }).waitFor();
       try {
         for (const size of VISUAL_WINDOW_SIZES) {
           await resizeTestWindow(migratedRestart, size);
-          const failures = await page.locator('#bank-preview').evaluate((table)=>{
+          const failures = await page.locator('#bank-preview').evaluate((table) => {
             const failures = [];
             for (const row of /** @type {HTMLTableElement} */(table).rows) {
               for (const index of [2, 5, 6, 7]) {
                 const cell = row.cells[index];
-                if (!cell) {continue;}
+                if (!cell) { continue; }
                 const nodes = index === 7 && cell.querySelector('button') ? [...cell.querySelectorAll('button')] : [cell];
                 const tops = new Set();
                 for (const node of nodes) {
                   const range = document.createRange();range.selectNodeContents(node);
-                  for (const rect of range.getClientRects()) {tops.add(Math.round(rect.top));}
+                  for (const rect of range.getClientRects()) { tops.add(Math.round(rect.top)); }
                 }
-                if (tops.size > 1 || cell.scrollWidth > cell.clientWidth + 1) {failures.push(cell.textContent);}
+                if (tops.size > 1 || cell.scrollWidth > cell.clientWidth + 1) { failures.push(cell.textContent); }
               }
             }
             return failures;
@@ -1469,8 +1468,8 @@ async function main() {
       } finally { await resizeTestWindow(migratedRestart, original); }
       return { sizes: VISUAL_WINDOW_SIZES };
     });
-    await check('题库试题跨页批量删除、未加载正文保全与持久化', async()=>{
-      const page = migratedRestart.page;
+    await check('题库试题跨页批量删除、未加载正文保全与持久化', async () => {
+      const { page } = migratedRestart;
       await page.reload();await page.locator('body[data-storage-state="ready"]').waitFor();
       await page.locator('.nav[data-view="banks"]').click();
       await page.locator('#bank-preview-pager select').selectOption('50');
@@ -1486,19 +1485,19 @@ async function main() {
       assert.equal(await page.locator('[data-select-bank-question]').count(), 49);
       await page.screenshot({ path: fileURLToPath(new URL('../.reports/question-deletion.png', import.meta.url)) });
       await page.reload();await page.locator('body[data-storage-state="ready"]').waitFor();
-      await page.evaluate(async()=>{
-        const host = (/** @type {NativeTestWindow} */(window)).ShirohaDesktopHost;if (!host) {throw new Error('bridge');}
+      await page.evaluate(async () => {
+        const host = (/** @type {NativeTestWindow} */(window)).ShirohaDesktopHost;if (!host) { throw new Error('bridge'); }
         const data = /** @type {import('../../web/platform/contracts.d.ts').Snapshot} */ (await host.invoke('local_read'));
-        const a = data.banks.find((bank)=>bank.id === 'lazy-a'), b = data.banks.find((bank)=>bank.id === 'lazy-b');
-        if (!a || a.questions.length !== 49 || !b || b.questions.length !== 65) {throw new Error('删除数量或题库隔离错误');}
-        if (a.questions.some((q)=>q.id === 'q0' || Number(q.id.slice(1)) >= 50)) {throw new Error('已删除题目重载后恢复');}
-        if (data.banks.some((bank)=>bank.questions.some((q)=>!q.question || !q.extension))) {throw new Error('未删除题目正文或扩展丢失');}
-        if (!data.records.some((record)=>record.id === 'old-record')) {throw new Error('历史记录丢失');}
+        const a = data.banks.find((bank) => bank.id === 'lazy-a'); const b = data.banks.find((bank) => bank.id === 'lazy-b');
+        if (!a || a.questions.length !== 49 || !b || b.questions.length !== 65) { throw new Error('删除数量或题库隔离错误'); }
+        if (a.questions.some((q) => q.id === 'q0' || Number(q.id.slice(1)) >= 50)) { throw new Error('已删除题目重载后恢复'); }
+        if (data.banks.some((bank) => bank.questions.some((q) => !q.question || !q.extension))) { throw new Error('未删除题目正文或扩展丢失'); }
+        if (!data.records.some((record) => record.id === 'old-record')) { throw new Error('历史记录丢失'); }
       });
       return { deleted: 16, remaining: 49, otherBank: 65, reloaded: true };
     });
-    const repairCheckpoint = /** @type {{snapshotId:string}} */ (await migratedRestart.page.evaluate(async()=>{
-      const host = (/** @type {NativeTestWindow} */(window)).ShirohaDesktopHost;if (!host) {throw new Error('bridge');} return host.invoke('local_checkpoint');
+    const repairCheckpoint = /** @type {{snapshotId:string}} */ (await migratedRestart.page.evaluate(async () => {
+      const host = (/** @type {NativeTestWindow} */(window)).ShirohaDesktopHost;if (!host) { throw new Error('bridge'); } return host.invoke('local_checkpoint');
     }));
     await stop(runtime);runtime = undefined;
     const broken = Buffer.from('C8 synthetic corrupt database');
@@ -1506,7 +1505,7 @@ async function main() {
     await writeFile(path.join(migrationProfile, 'library.sqlite3-wal'), Buffer.from('invalid WAL fixture'));
     runtime = await launch(executable, migrationProfile, proxyPort);
     const repaired = runtime;
-    await check('损坏数据库界面恢复且保留原文件', async()=>{
+    await check('损坏数据库界面恢复且保留原文件', async () => {
       const status = repaired.page.locator('#platform-status');
       await status.getByRole('button', { name: '查找本机恢复点', exact: true }).click();
       await status.getByLabel('修复使用的恢复点').selectOption(repairCheckpoint.snapshotId);
@@ -1520,13 +1519,13 @@ async function main() {
     await stop(runtime);runtime = undefined;
     runtime = await launch(executable, migrationProfile, proxyPort);
     const repairedRestart = runtime;
-    await check('修复后重启读取活动数据库', async()=>{
+    await check('修复后重启读取活动数据库', async () => {
       await repairedRestart.page.locator('#active-bank-select option[value="lazy-a"]').waitFor({ state: 'attached' });
       assert.deepEqual(repairedRestart.errors, []);
       return { restarted: true };
     });
-    const repairBackup = await repairedRestart.page.evaluate(async()=>{
-      const host = (/** @type {NativeTestWindow} */(window)).ShirohaDesktopHost;if (!host) {throw new Error('bridge');} return host.invoke('local_read');
+    const repairBackup = await repairedRestart.page.evaluate(async () => {
+      const host = (/** @type {NativeTestWindow} */(window)).ShirohaDesktopHost;if (!host) { throw new Error('bridge'); } return host.invoke('local_read');
     });
     await stop(runtime);runtime = undefined;
     const generation = JSON.parse(await readFile(path.join(migrationProfile, 'active.json'), 'utf8'));
@@ -1536,7 +1535,7 @@ async function main() {
     await writeFile(path.join(damaged, 'library.sqlite3-wal'), Buffer.from('invalid WAL fixture'));
     runtime = await launch(executable, migrationProfile, proxyPort);
     const importedRecovery = runtime;
-    await check('损坏数据库从兼容备份修复', async()=>{
+    await check('损坏数据库从兼容备份修复', async () => {
       const input = importedRecovery.page.locator('#platform-status').getByLabel('选择兼容备份修复数据');
       await input.waitFor();
       await input.setInputFiles({ name: 'synthetic-recovery.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(repairBackup)) });
@@ -1545,10 +1544,8 @@ async function main() {
       assert.deepEqual(await readFile(path.join(damaged, 'library.sqlite3')), broken);
       return { imported: true, originalPreserved: true };
     });
-  } catch (error) { checks.push({ name: '启动或运行', ok: false, error: errorText(error) }); }
-  finally {
-    try { await cleanup(); }
-    catch (error) { checks.push({ name: '隔离资源清理', ok: false, error: errorText(error), detail: { profile } }); }
+  } catch (error) { checks.push({ name: '启动或运行', ok: false, error: errorText(error) }); } finally {
+    try { await cleanup(); } catch (error) { checks.push({ name: '隔离资源清理', ok: false, error: errorText(error), detail: { profile } }); }
     process.off('SIGINT', interrupt); process.off('SIGTERM', interrupt);
   }
   const ok = checks.length > 0 && checks.every((result) => result.ok);

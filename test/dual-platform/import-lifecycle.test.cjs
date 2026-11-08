@@ -5,7 +5,7 @@ const test = require('node:test');
 const vm = require('node:vm');
 const { runWebScripts } = require('./source-tools.cjs');
 
-function fixture() {
+function fixture({ readPdf = async () => { throw new Error('损坏'); } } = {}) {
   const events = [];
   const fields = {
     '#import-text': { value: '旧文本', dataset: { tableImportV49: '1' } },
@@ -18,7 +18,7 @@ function fixture() {
     readers: {
       readTable: async () => ({ questions: ['表格'] }),
       readDocx: async () => 'Word 正文',
-      readPdf: async () => { throw new Error('损坏'); },
+      readPdf,
       readText: async () => '文本内容',
     },
     ocr: {
@@ -55,10 +55,20 @@ test('PDF 读取失败保留原文本和题目草稿并提示 OCR；双文件按
   assert.deepEqual(JSON.parse(JSON.stringify(draft.sourceMeta)), { name: '题目.docx', size: 9, type: 'dual' });
 });
 
+test('读取失败信息为对象时保留原来的默认类型转换', async () => {
+  const hints = [];
+  const message = { [Symbol.toPrimitive](hint) { hints.push(hint);return hint === 'default' ? '原始错误' : '不同错误'; } };
+  const { draft, events } = fixture({ readPdf: async () => { throw { message }; } });
+  await draft.readImportFile({ target: { files: [{ name: '损坏.pdf', size: 5 }] } });
+  assert.match(events.find((event) => event[0] === 'ocr')[1], /原始错误/);
+  assert.match(events.filter((event) => event[0] === 'toast').at(-1)[1], /原始错误/);
+  assert.deepEqual(hints, ['default', 'default']);
+});
+
 test('AI 失败恢复原草稿引用；单文件与双文件清空保持原有字段边界', () => {
   const { draft } = fixture();
   const questions = [{ question: '草稿', score: 0, enabled: false }];
-  const selected = draft.selected;
+  const { selected } = draft;
   selected.add(0);
   draft.questions = questions;
   draft.warnings = ['需核对'];

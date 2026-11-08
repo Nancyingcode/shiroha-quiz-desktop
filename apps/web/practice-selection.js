@@ -32,16 +32,16 @@
       }
     }
     function bindLimitControlsV60() {
-      [['practice', '#practice-limit', '#practice-custom-count'], ['wrong', '#wrong-practice-limit', '#wrong-practice-custom-count']].forEach(([scope, sel, inputSel])=>{
+      [['practice', '#practice-limit', '#practice-custom-count'], ['wrong', '#wrong-practice-limit', '#wrong-practice-custom-count']].forEach(([scope, sel, inputSel]) => {
         const select = $(sel);
         const input = $(inputSel);
         if (select && !select.dataset.boundV60) {
           select.dataset.boundV60 = '1';
-          select.addEventListener('change', ()=>syncLimitControlV60(scope));
+          select.addEventListener('change', () => syncLimitControlV60(scope));
         }
         if (input && !input.dataset.boundV60) {
           input.dataset.boundV60 = '1';
-          input.addEventListener('input', ()=>{
+          input.addEventListener('input', () => {
             if (Number(input.value) < 1) {
               input.value = '1';
             }
@@ -65,16 +65,16 @@
       const banks = practiceScopeBanksV8916(scopeOverride);
       let items = practiceSessionItemsForBanksV8916(banks);
       if (source === 'wrong') {
-        const byBank = new Map(banks.map((b)=>[b.id, new Set(getWrongEntries(b.id).filter((e)=>e.status !== '已掌握').map((e)=>e.id))]));
-        items = items.filter((item)=>byBank.get(item.bankId)?.has(item.question.id));
+        const byBank = new Map(banks.map((b) => [b.id, new Set(getWrongEntries(b.id).filter((e) => e.status !== '已掌握').map((e) => e.id))]));
+        items = items.filter((item) => byBank.get(item.bankId)?.has(item.question.id));
       }
       if (source === 'favorite') {
-        const byBank = new Map(banks.map((b)=>[b.id, new Set(getFavoriteIdsV27(b.id))]));
-        items = items.filter((item)=>byBank.get(item.bankId)?.has(item.question.id));
+        const byBank = new Map(banks.map((b) => [b.id, new Set(getFavoriteIdsV27(b.id))]));
+        items = items.filter((item) => byBank.get(item.bankId)?.has(item.question.id));
       }
       if (type && type !== 'all') {
         const t = type === 'multi' ? 'multiple' : type;
-        items = items.filter((item)=>item.question.type === t);
+        items = items.filter((item) => item.question.type === t);
       }
       if (order === 'random') {
         items = shuffle(items);
@@ -97,16 +97,16 @@
       const banks = practiceScopeBanksV8916(scopeOverride);
       let items = practiceSessionItemsForBanksV8916(banks);
       if (source === 'wrong') {
-        const byBank = new Map(banks.map((b)=>[b.id, new Set(getWrongEntries(b.id).filter((e)=>e.status !== '已掌握').map((e)=>e.id))]));
-        items = items.filter((item)=>byBank.get(item.bankId)?.has(item.question.id));
+        const byBank = new Map(banks.map((b) => [b.id, new Set(getWrongEntries(b.id).filter((e) => e.status !== '已掌握').map((e) => e.id))]));
+        items = items.filter((item) => byBank.get(item.bankId)?.has(item.question.id));
       }
       if (source === 'favorite') {
-        const byBank = new Map(banks.map((b)=>[b.id, new Set(getFavoriteIdsV27(b.id))]));
-        items = items.filter((item)=>byBank.get(item.bankId)?.has(item.question.id));
+        const byBank = new Map(banks.map((b) => [b.id, new Set(getFavoriteIdsV27(b.id))]));
+        items = items.filter((item) => byBank.get(item.bankId)?.has(item.question.id));
       }
       if (type && type !== 'all') {
         const t = type === 'multi' ? 'multiple' : type;
-        items = items.filter((item)=>item.question.type === t);
+        items = items.filter((item) => item.question.type === t);
       }
       return items;
     }
@@ -165,11 +165,9 @@
       }
       if (order !== 'sequence' && select.value === PRACTICE_START_CONTINUE_V58916) {
         select.value = PRACTICE_START_FROM_V58916;
-      }
-      else if (preferContinue && progress) {
+      } else if (preferContinue && progress) {
         select.value = PRACTICE_START_CONTINUE_V58916;
-      }
-      else if (select.value === PRACTICE_START_CONTINUE_V58916 && !progress) {
+      } else if (select.value === PRACTICE_START_CONTINUE_V58916 && !progress) {
         select.value = PRACTICE_START_FROM_V58916;
       }
       syncPracticeStartModeFieldsV58916();
@@ -180,11 +178,11 @@
         select.dataset.boundV58916 = '1';
         select.addEventListener('change', syncPracticeStartModeFieldsV58916);
       }
-      ['#practice-type', '#practice-source', '#practice-order'].forEach((selector)=>{
+      ['#practice-type', '#practice-source', '#practice-order'].forEach((selector) => {
         const el = $(selector);
         if (el && !el.dataset.practiceStartBoundV58916) {
           el.dataset.practiceStartBoundV58916 = '1';
-          el.addEventListener('change', ()=>syncPracticeStartUiV58916(true));
+          el.addEventListener('change', () => syncPracticeStartUiV58916(true));
         }
       });
       syncPracticeStartUiV58916(true);
@@ -208,28 +206,24 @@
         if (isStartingNumber) {
           startIndex = parsed.indexes[0];
           items = baseItems.slice(startIndex);
-        }
-        else {
+        } else {
           items = parsed.indexes.map((index) => baseItems[index]).filter(Boolean);
         }
         if (order === 'random') {
           items = shuffle(items);
         }
         items = applyQuestionLimitV60(items, limit, customCount);
-      }
-      else if (order === 'sequence') {
+      } else if (order === 'sequence') {
         if (startMode === PRACTICE_START_CONTINUE_V58916) {
           const progress = resolvePracticeProgressV58916(scope, source, type, baseItems);
           if (progress) {
             startIndex = progress.index;
-          }
-          else {
+          } else {
             startMode = PRACTICE_START_FROM_V58916;
           }
         }
         items = applyQuestionLimitV60(baseItems.slice(startIndex), limit, customCount);
-      }
-      else {
+      } else {
         items = applyQuestionLimitV60(shuffle([...baseItems]), limit, customCount);
       }
       return { items, baseItems, startMode, progressKey, startIndex, error: '' };
@@ -260,8 +254,7 @@
       const store = practiceProgressStoreV58916();
       if (nextIndex >= round.baseItemKeys.length) {
         delete store[round.progressKey];
-      }
-      else {
+      } else {
         store[round.progressKey] = {
           nextSessionKey: round.baseItemKeys[nextIndex],
           nextIndex,
