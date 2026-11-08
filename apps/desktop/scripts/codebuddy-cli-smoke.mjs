@@ -28,7 +28,7 @@ async function loginFixture(profile, expired = false) {
 /** @param {Page} page */
 async function credentialSnapshot(page) {
   const config = await apiSettings(page);
-  const credential = await page.evaluate((value)=>{
+  const credential = await page.evaluate((value) => {
     const platform = /** @type {import('../../web/platform/runtime.d.ts').BrowserGlobals['ShirohaPlatform']} */ (Reflect.get(window, 'ShirohaPlatform'));
     return platform.credentials.status('ai', { endpoint: value.endpoint, rememberKey: value.remember });
   }, config);
@@ -42,14 +42,14 @@ export async function codebuddyCliSmoke(page, profile, startPractice) {
   await page.locator('#ai-execution-harness').check();
   assert.equal((await executionStatus(page)).runtimePath, 'isolated-fake-codex.exe');
   await page.locator('#ai-harness-login').click();
-  await page.waitForFunction(()=>document.querySelector('#ai-harness-auth-status')?.textContent?.includes('订阅已登录'));
+  await page.waitForFunction(() => document.querySelector('#ai-harness-auth-status')?.textContent?.includes('订阅已登录'));
   await selectProvider(page, 'codebuddy');
   assert.equal((await executionStatus(page)).runtimePath, 'isolated-fake-codebuddy.exe');
   await waitForPhase(page, 'signed_out');
   await page.locator('#ai-codebuddy-cli-guide').waitFor({ state: 'visible' });
   assert.match(await page.locator('#ai-codebuddy-cli-guide').innerText(), /打开终端[\s\S]*codebuddy[\s\S]*国内站[\s\S]*刷新登录状态/);
-  for (const name of ['login', 'remember', 'logout', 'login-url']) {assert.equal(await page.locator(`#ai-codebuddy-${name}`).count(), 0);}
-  const denied = await page.evaluate(async()=>{
+  for (const name of ['login', 'remember', 'logout', 'login-url']) { assert.equal(await page.locator(`#ai-codebuddy-${name}`).count(), 0); }
+  const denied = await page.evaluate(async () => {
     const host = /** @type {{invoke(command:string,args:Record<string,unknown>):Promise<unknown>}} */ (Reflect.get(window, 'ShirohaDesktopHost'));
     let rejected = 0;
     for (const request of [{ kind: 'login', revision: 0 }, { kind: 'logout' }, { kind: 'set_remember', revision: 0, remember: true }, { kind: 'refresh', revision: 0, path: 'untrusted' }]) {
@@ -63,9 +63,9 @@ export async function codebuddyCliSmoke(page, profile, startPractice) {
   await page.locator('#ai-codebuddy-cli-guide').waitFor({ state: 'hidden' });
   assert.equal(signedIn.rememberLogin, false);
   assert.equal(signedIn.persistenceState, 'none');
-  await page.waitForFunction(()=>Reflect.get(window, 'ShirohaPlatform')?.harness?.status().ready);
+  await page.waitForFunction(() => Reflect.get(window, 'ShirohaPlatform')?.harness?.status().ready);
   await page.locator('#ai-test-connection-v99').click();
-  await page.waitForFunction(()=>document.querySelector('#ai-settings-status-v99')?.textContent?.includes('CodeBuddy 测试执行成功'));
+  await page.waitForFunction(() => document.querySelector('#ai-settings-status-v99')?.textContent?.includes('CodeBuddy 测试执行成功'));
   await questionSmoke(page, startPractice);
   assert.doesNotMatch(await persistedState(page), /synthetic-memory-session|synthetic-user/);
   const file = await fixtureFile(profile);
@@ -115,10 +115,10 @@ export async function codebuddyCliPersistenceSmoke(initialPage, profile, restart
   await page.locator('.nav[data-view="ai-settings"]').click();
   await selectProvider(page, 'codex');
   await page.locator('#ai-harness-logout').click();
-  await page.waitForFunction(()=>document.querySelector('#ai-harness-auth-status')?.textContent === '尚未登录订阅');
+  await page.waitForFunction(() => document.querySelector('#ai-harness-auth-status')?.textContent === '尚未登录订阅');
   await page.locator('#ai-execution-api').check();
   await page.locator('#ai-save-settings-v99').click();
-  await page.waitForFunction(()=>Reflect.get(window, 'ShirohaPlatform')?.harness?.status().mode === 'api');
+  await page.waitForFunction(() => Reflect.get(window, 'ShirohaPlatform')?.harness?.status().mode === 'api');
   await page.locator('.nav[data-view="dashboard"]').click();
   return { expiryGuidance: true, cliReverifiedAfterRestart: true, cliLogoutSurvivesRestart: true, noAppCredentials: true };
 }

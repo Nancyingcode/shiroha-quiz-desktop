@@ -4,8 +4,8 @@ import { createServer } from 'node:http';
 import { validateUpstream, createGuardedRelay, validateCandidate } from './guard.mjs';
 
 const TEXT = '{"ok":true}';
-const chunk = (delta, finish_reason = null) => `data: ${JSON.stringify({
-  id: 'fixture', choices: [{ index: 0, delta, finish_reason }],
+const chunk = (delta, finishReason = null) => `data: ${JSON.stringify({
+  id: 'fixture', choices: [{ index: 0, delta, finish_reason: finishReason }],
 })}\n\n`;
 const good = chunk({ role: 'assistant' }) + chunk({ content: TEXT }) + chunk({}, 'stop') + 'data: [DONE]\n\n';
 
@@ -33,7 +33,7 @@ for (const [name, source] of Object.entries({
 }
 test('拒绝损坏 UTF-8 和超过上限的响应', () => {
   assert.throws(() => validateUpstream(Buffer.from([0xff])));
-  assert.throws(() => validateUpstream(Buffer.alloc(1024 * 1024 + 1)));
+  assert.throws(() => validateUpstream(Buffer.alloc((1024 * 1024) + 1)));
 });
 
 function events() {

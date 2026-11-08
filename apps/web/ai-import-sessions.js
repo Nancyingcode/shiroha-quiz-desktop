@@ -30,13 +30,13 @@
       let stored = 0;
       for (const raw of results) {
         const item = mode === 'analysis' ? normalizeAnalysis(raw, batchItems) : normalizeReview(raw, batchItems);
-        if (!item) {continue;}
+        if (!item) { continue; }
         const target = batchItems.find((value) => value.id === item.questionId);
         const currentIndex = findIndex(item.questionId, item.index);
         const current = importDraft.questions[currentIndex];
-        if (!target || !current || aiQuestionFingerprintV991(current) !== target.fingerprint) {continue;}
+        if (!target || !current || aiQuestionFingerprintV991(current) !== target.fingerprint) { continue; }
         if (mode === 'analysis') {
-          if (item.analysis || item.note) {analysisSuggestions.set(item.questionId, item);stored++;}
+          if (item.analysis || item.note) { analysisSuggestions.set(item.questionId, item);stored++; }
         } else if (item.issues.length || item.note || item.canApply) {
           reviewSuggestions.set(item.questionId, item);
           stored++;
@@ -46,7 +46,6 @@
     }
 
     function cancelAiImportRequestV99(silent) {
-
       if (!aiImportRequestV99.running) {
         return;
       }
@@ -70,11 +69,9 @@
       if (!silent) {
         setAiImportStatusV99('已请求取消，停止接收本次整理结果；现有识别结果未被修改。', 'warn');
       }
-
     }
 
     function cancelAiPreviewRequestV991(silent) {
-
       if (!aiPreviewRequestV991.running) {
         return;
       }
@@ -97,41 +94,35 @@
       if (!silent) {
         setAiPreviewStatusV991('已请求取消，停止接收本次结果；已生成的建议会保留。', 'warn');
       }
-
     }
 
     async function requestAiPreviewBatchV991(mode, requestConfig, batchItems, owner) {
-
       const controller = new AbortController();
       owner.controller = controller;
       let timedOut = false;
-      const timer = setTimeout(()=>{
+      const timer = setTimeout(() => {
         timedOut = true;
         controller.abort();
       }, requestConfig.timeoutSeconds * 1000);
 
       try {
-        const result = await requestAiChatV99(requestConfig, mode === 'analysis' ? buildAiAnalysisMessagesV991(batchItems.map((x)=>x.payload)) : buildAiReviewMessagesV991(batchItems.map((x)=>x.payload)), { controller, task: mode === 'analysis' ? 'batch_analysis' : 'batch_review' });
-        if (timedOut) {throw new Error(`当前批次请求超过 ${requestConfig.timeoutSeconds} 秒，已自动停止。`);}
+        const result = await requestAiChatV99(requestConfig, mode === 'analysis' ? buildAiAnalysisMessagesV991(batchItems.map((x) => x.payload)) : buildAiReviewMessagesV991(batchItems.map((x) => x.payload)), { controller, task: mode === 'analysis' ? 'batch_analysis' : 'batch_review' });
+        if (timedOut) { throw new Error(`当前批次请求超过 ${requestConfig.timeoutSeconds} 秒，已自动停止。`); }
         return result;
-      }
-      catch(error) {
+      } catch (error) {
         if (error?.name === 'AbortError' && timedOut) {
           throw new Error(`当前批次请求超过 ${requestConfig.timeoutSeconds} 秒，已自动停止。`, { cause: error });
         }
         throw error;
-      }
-      finally {
+      } finally {
         clearTimeout(timer);
         if (aiPreviewRequestV991 === owner && owner.controller === controller) {
           owner.controller = null;
         }
       }
-
     }
 
     async function startAiPreviewTaskV991() {
-
       if (aiPreviewRequestV991.running || aiImportRequestV99.running) {
         return;
       }
@@ -151,7 +142,7 @@
       const scope = $('#ai-preview-scope-v991')?.value || 'range';
       const condition = $('#ai-preview-condition-v992')?.value || 'missing';
       const details = collectAiPreviewTargetDetailsV992(mode, scope, condition);
-      const indexes = details.indexes;
+      const { indexes } = details;
 
       if (details.error) {
         setAiPreviewStatusV991(details.error, 'warn');
@@ -176,19 +167,17 @@
       const owner = { running: true, mode, cancelled: false, controller: null };
       aiPreviewRequestV991 = owner;
       syncAiImportActionV99();
-      let processed = 0, stored = 0;
+      let processed = 0; let stored = 0;
 
-      const isCurrentPreviewRequest = ()=>aiPreviewRequestV991 === owner && !owner.cancelled;
+      const isCurrentPreviewRequest = () => aiPreviewRequestV991 === owner && !owner.cancelled;
 
       try {
-
         for (let offset = 0;offset < indexes.length;offset += batchSize) {
-
           if (!isCurrentPreviewRequest()) {
             return;
           }
           const part = indexes.slice(offset, offset + batchSize);
-          const batchItems = part.map((index)=>{
+          const batchItems = part.map((index) => {
             const q = importDraft.questions[index];
             return { id: aiQuestionKeyV991(q, index), index, question: q, fingerprint: aiQuestionFingerprintV991(q), payload: aiQuestionPayloadV991(q, index, importIssueStatus(q, importDraft.diagnostics?.profile || {})) };
           });
@@ -202,32 +191,27 @@
           stored += storeAiBatchResultsV991(mode, result.content, batchItems);
           processed += batchItems.length;
           renderImportPreview(importDraft.questions);
-
         }
 
-        if (!isCurrentPreviewRequest()) {return;}
+        if (!isCurrentPreviewRequest()) { return; }
         setAiPreviewStatusV991(`${aiPreviewModeLabelV991(mode)}完成：处理 ${processed} 道题，生成 ${stored} 条建议。建议不会自动修改题目，请逐题采纳或忽略。`, 'ok');
         showNotice(aiPreviewModeLabelV991(mode), `已生成 ${stored} 条建议，请在预览表中逐题核对。`, 'ok');
-
-      } catch(error) {
+      } catch (error) {
         if (!isCurrentPreviewRequest()) {
           return;
         }
         setAiPreviewStatusV991(`${error.message || '处理失败'}${processed ? ` 已完成 ${processed} 道题，已有建议已保留。` : ''}`, 'warn');
         showNotice(aiPreviewModeLabelV991(mode), error.message || '处理失败。', 'danger');
-      }
-      finally {
+      } finally {
         if (isCurrentPreviewRequest()) {
           aiPreviewRequestV991 = { running: false, mode: '', cancelled: false, controller: null };
           syncAiImportActionV99();
           refreshAiPreviewPanelV991();
         }
       }
-
     }
 
     async function startAiImportV99() {
-
       if (aiImportRequestV99.running || aiPreviewRequestV991.running) {
         return;
       }
@@ -246,7 +230,7 @@
       }
 
       const range = aiImportRangeV992();
-      const text = range.text;
+      const { text } = range;
 
       if (range.scope === 'selection' && !text) {
         setAiImportStatusV99('当前没有有效的选中文本。请先在导入文本框中选中需要整理的内容。', 'warn');
@@ -272,17 +256,16 @@
       syncAiImportActionV99();
       setAiImportStatusV99('正在调用 AI 结构化整理题库。将优先生成 questions，结构校验失败时自动退回文本清洗。');
 
-      const isCurrentImportRequest = ()=>aiImportRequestV99 === owner && !owner.cancelled;
+      const isCurrentImportRequest = () => aiImportRequestV99 === owner && !owner.cancelled;
 
       const previous = importDraft.snapshot();
 
-      const requestPass = async(mode, fallbackReason = '')=>withAiTimeoutV99(config.timeoutSeconds, (controller)=>{
+      const requestPass = async (mode, fallbackReason = '') => withAiTimeoutV99(config.timeoutSeconds, (controller) => {
         owner.controller = controller;
         return requestAiChatV99(requestConfig, buildAiMessagesV99(text, { requestedMode: mode, fallbackReason, currentQuestions: context.currentQuestions, warnings: context.warnings }), { controller, task: 'import_organize' });
       });
 
       try {
-
         let primary = null;
         let primaryError = '';
 
@@ -294,7 +277,7 @@
 
         try {
           primary = parseAiRefactorPayloadV384(primaryResult.content);
-        } catch(error) {
+        } catch (error) {
           primaryError = String(error?.message || '结构化 JSON 无法解析');
         }
 
@@ -304,14 +287,11 @@
 
         if (primary?.structuredUsable) {
           payload = { ...primary, mode: 'direct_questions' };
-        }
-        else if (primary?.cleanedText) {
+        } else if (primary?.cleanedText) {
           fallbackReason = [...(primary.structuredIssues || []), 'AI 未返回可用结构化题目'].filter(Boolean).join('；');
           payload = { ...primary, mode: 'clean_text' };
           usedFallback = true;
-        }
-        else {
-
+        } else {
           fallbackReason = [primaryError, ...(primary?.structuredIssues || []), primary && !primary.questions?.length ? 'AI 未返回可用结构化题目' : ''].filter(Boolean).join('；') || '结构化结果不可用';
 
           setAiImportStatusV99(`结构化结果不可用，正在自动切换文本清洗兜底：${fallbackReason.slice(0, 160)}`, 'warn');
@@ -328,7 +308,6 @@
           }
 
           payload = { ...payload, mode: 'clean_text' };
-
         }
 
         let questions = [];
@@ -337,13 +316,10 @@
         let parserWarnings = [];
 
         if (payload.mode === 'direct_questions') {
-
           questions = payload.questions;
           modeLabel = 'AI 结构化整理';
           parserReport = 'AI 直接返回经过结构校验的题目对象；仍需人工核对后导入。';
-
         } else {
-
           importDraft.warnings = [];
           importDraft.report = '';
           importDraft.diagnostics = null;
@@ -352,7 +328,7 @@
             questions = parseTextQuestions(payload.cleanedText, $('#import-strategy')?.value || 'auto');
             parserReport = importDraft.report;
             parserWarnings = [...importDraft.warnings];
-          } catch(error) {
+          } catch (error) {
             questions = [];
             parserWarnings = [`AI 清洗文本进入本地解析器时失败：${error.message || error}`];
           }
@@ -362,14 +338,13 @@
           if (!questions.length) {
             throw new Error('AI 已返回清洗文本，但本地解析器没有识别到有效题目。原有预览未被修改。');
           }
-
         }
 
         importDraft.questions = questions;
         importDraft.selected.clear();
         resetAiSuggestionsV991();
 
-        const structuredWarnings = (payload.structuredIssues || []).map((x)=>`结构化校验：${x}`);
+        const structuredWarnings = (payload.structuredIssues || []).map((x) => `结构化校验：${x}`);
         const fallbackNotes = usedFallback && fallbackReason ? [`结构化结果不可用，已自动使用文本兜底：${fallbackReason}`] : [];
 
         importDraft.warnings = [`${modeLabel}结果必须人工核对。`, ...fallbackNotes, ...structuredWarnings, ...parserWarnings, ...(payload.notes || [])].filter(Boolean).slice(0, 40);
@@ -385,9 +360,7 @@
           const risk = largeImportRiskMessageV376(importDraft.questions);
           showNotice('AI 整理完成', `${modeLabel}得到 ${importDraft.questions.length} 道题，必须人工核对后再导入。${risk ? ` ${risk}` : ''}`, risk ? 'warn' : 'ok');
         }
-
-      } catch(error) {
-
+      } catch (error) {
         if (!isCurrentImportRequest()) {
           return;
         }
@@ -399,7 +372,6 @@
 
         setAiImportStatusV99(message, 'warn');
         showNotice('AI 整理', message, isCancelled ? 'warn' : 'danger');
-
       } finally {
         if (isCurrentImportRequest()) {
           aiImportRequestV99 = { running: false, controller: null };
@@ -407,7 +379,6 @@
           refreshAiImportPanelV99();
         }
       }
-
     }
 
     return {

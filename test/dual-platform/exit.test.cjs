@@ -62,7 +62,7 @@ test('failed native cancellation keeps the window open and reports failure', asy
 
 test('退出协调等待 Harness 取消，失败时保留窗口', async () => {
   let cancelled = false;
-  const f = fixture({ confirm: ()=>true, ShirohaPlatform: { harness: { status: ()=>({ busy: true }), async cancelAll() {cancelled = true;throw new Error('Harness 尚未停止');} }, network: {}, saves: { idle: async()=>{} } } });
+  const f = fixture({ confirm: () => true, ShirohaPlatform: { harness: { status: () => ({ busy: true }), async cancelAll() { cancelled = true;throw new Error('Harness 尚未停止'); } }, network: {}, saves: { idle: async () => {} } } });
   assert.equal(await f.close(), false);
   assert.equal(cancelled, true);
   assert.deepEqual(f.status, ['Harness 尚未停止']);

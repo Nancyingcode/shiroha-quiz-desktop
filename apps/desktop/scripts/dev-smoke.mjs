@@ -53,20 +53,18 @@ async function listen(server, port = 0) {
 
 /** @param {import('node:net').Server} server */
 async function closeServer(server) {
-  if (!server.listening) {return;}
-  await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve(undefined)));
+  if (!server.listening) { return; }
+  await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve(undefined))));
 }
 
 async function availablePort() {
   const reservation = createServer();
-  try { return await listen(reservation); }
-  finally { await closeServer(reservation); }
+  try { return await listen(reservation); } finally { await closeServer(reservation); }
 }
 
 async function requireFreeDevelopmentPort() {
   const reservation = createServer();
-  try { await listen(reservation, DEV_PORT); }
-  catch (error) {
+  try { await listen(reservation, DEV_PORT); } catch (error) {
     throw new Error(`开发端口 ${DEV_PORT} 无法使用，请先正常关闭占用该端口的开发实例；测试不会结束其他进程。${errorText(error)}`, { cause: error });
   } finally { await closeServer(reservation); }
 }
@@ -86,11 +84,11 @@ async function waitForDebugger(child, port, launchError) {
   const deadline = Date.now() + START_TIMEOUT_MS;
   while (Date.now() < deadline) {
     const error = launchError();
-    if (error) {throw error;}
+    if (error) { throw error; }
     assert(running(child), 'npm run dev 在 WebView2 就绪前退出，详见开发进程日志');
     const ready = await fetch(`${endpoint}/json/version`, { signal: AbortSignal.timeout(1_000) })
       .then((response) => response.ok).catch(() => false);
-    if (ready) {return endpoint;}
+    if (ready) { return endpoint; }
     await delay(POLL_MS);
   }
   throw new Error(`npm run dev 未在 ${START_TIMEOUT_MS / 1000} 秒内启动 WebView2`);
@@ -100,9 +98,8 @@ async function waitForDebugger(child, port, launchError) {
 async function nativeState(page) {
   const result = await page.evaluate(async () => {
     const host = (/** @type {TestWindow} */ (window)).ShirohaDesktopHost;
-    if (!host) {throw new Error('原生桥接缺失');}
-    try { return await host.invoke('local_initialize'); }
-    catch (error) { throw new Error(`local_initialize: ${JSON.stringify(error)}`, { cause: error }); }
+    if (!host) { throw new Error('原生桥接缺失'); }
+    try { return await host.invoke('local_initialize'); } catch (error) { throw new Error(`local_initialize: ${JSON.stringify(error)}`, { cause: error }); }
   });
   assert(result && typeof result === 'object' && 'revision' in result && 'hasData' in result, '原生初始化回包无效');
   assert(typeof result.revision === 'number' && Number.isSafeInteger(result.revision), '原生修订号无效');
@@ -133,11 +130,11 @@ async function stopDevelopment(child, page) {
       delay(CLOSE_TIMEOUT_MS, undefined, { ref: false }),
     ]);
   }
-  if (!running(child)) {return;}
+  if (!running(child)) { return; }
   await execute('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true, timeout: CLOSE_TIMEOUT_MS })
-    .catch((error) => { if (running(child)) {throw error;} });
+    .catch((error) => { if (running(child)) { throw error; } });
   const deadline = Date.now() + CLOSE_TIMEOUT_MS;
-  while (running(child) && Date.now() < deadline) {await delay(POLL_MS);}
+  while (running(child) && Date.now() < deadline) { await delay(POLL_MS); }
   assert(!running(child), '本次开发进程尚未退出，保留隔离目录');
 }
 
@@ -186,8 +183,7 @@ async function main() {
   const stop = () => stopping ??= child ? stopDevelopment(child, page) : Promise.resolve();
   const cleanup = () => cleaning ??= (async () => {
     let stopped = false;
-    try { await stop(); stopped = true; }
-    finally {
+    try { await stop(); stopped = true; } finally {
       await browser?.close().catch(() => undefined);
       await closeServer(proxy);
       if (profile) {
@@ -205,8 +201,7 @@ async function main() {
   /** @param {string} name @param {() => Promise<unknown>} action */
   const check = async (name, action) => {
     assert(!interrupted, '开发模式回归已中断');
-    try { const detail = await action(); checks.push({ name, ok: true, detail }); console.log(`通过：${name}`); }
-    catch (error) { checks.push({ name, ok: false, error: errorText(error) }); throw error; }
+    try { const detail = await action(); checks.push({ name, ok: true, detail }); console.log(`通过：${name}`); } catch (error) { checks.push({ name, ok: false, error: errorText(error) }); throw error; }
   };
   try {
     await check('开发端口可用', requireFreeDevelopmentPort);
@@ -229,19 +224,20 @@ async function main() {
     /** @type {Error|undefined} */
     let launchError;
     child.on('error', (error) => { launchError = error; });
-    for (const stream of [child.stdout, child.stderr]) {stream?.on('data', (chunk) => {
-      const text = String(chunk);
-      developmentLog = (developmentLog + text).slice(-LOG_LIMIT);
-      process.stdout.write(text);
-    });}
+    for (const stream of [child.stdout, child.stderr]) {
+      stream?.on('data', (chunk) => {
+        const text = String(chunk);
+        developmentLog = (developmentLog + text).slice(-LOG_LIMIT);
+        process.stdout.write(text);
+      });
+    }
     const endpoint = await waitForDebugger(child, debugPort, () => launchError);
     browser = await chromium.connectOverCDP(endpoint, { timeout: ACTION_TIMEOUT_MS });
     const context = browser.contexts()[0];
     assert(context, '未取得本次 WebView2 context');
     await context.route('**/*', async (route) => {
       const url = route.request().url();
-      if (localResource(url)) {await route.continue();}
-      else { blockedRequests.push(url); await route.abort('blockedbyclient'); }
+      if (localResource(url)) { await route.continue(); } else { blockedRequests.push(url); await route.abort('blockedbyclient'); }
     });
     page = context.pages()[0] ?? await context.waitForEvent('page', { timeout: ACTION_TIMEOUT_MS });
     const activePage = page;
@@ -299,10 +295,10 @@ async function main() {
       checks, profile, retainedProfile, cleanupError, interrupted, errors, blockedRequests, developmentLog,
     }, null, 2));
     console.log(`开发模式回归报告：${REPORT_PATH}`);
-    if (retainedProfile) {console.log(`保留本次隔离目录：${profile}`);}
-    if (cleanupError) {console.error(`清理未完成：${cleanupError}`);}
+    if (retainedProfile) { console.log(`保留本次隔离目录：${profile}`); }
+    if (cleanupError) { console.error(`清理未完成：${cleanupError}`); }
   }
-  if (cleanupError) {throw new Error(`清理未完成：${cleanupError}`);}
+  if (cleanupError) { throw new Error(`清理未完成：${cleanupError}`); }
 }
 
 main().catch((error) => { console.error(errorText(error)); process.exitCode = 1; });

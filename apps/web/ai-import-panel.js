@@ -15,9 +15,9 @@
     const { importChars: AI_IMPORT_MAX_CHARS_V99, items: AI_PREVIEW_MAX_ITEMS_V991,
       analysisBatch: AI_ANALYSIS_DEFAULT_BATCH_V991, reviewBatch: AI_REVIEW_DEFAULT_BATCH_V991 } = limits;
     // 文本选择与预览范围只属于当前导入页；重新输入时丢弃旧选择。
-    let aiPreviewPanelModeV991 = 'review', aiImportTextSelectionV992 = { start: 0, end: 0, text: '' };
+    let aiPreviewPanelModeV991 = 'review'; let aiImportTextSelectionV992 = { start: 0, end: 0, text: '' };
     function bindAiImportEventsV99() {
-      ShirohaPlatform.harness?.bind(()=>{
+      ShirohaPlatform.harness?.bind(() => {
         updateAiConnectionPillV99('idle');
         syncAiImportActionV99();
         refreshAiImportPanelV99();
@@ -26,12 +26,12 @@
       }, aiTasksBusyV99);
       const provider = $('#ai-provider-v99');
       if (provider) {
-        provider.onchange = ()=>{
+        provider.onchange = () => {
           const endpoint = $('#ai-endpoint-v99');
           if (!endpoint) {
             return;
           }
-          const presets = Object.values(AI_PROVIDER_PRESETS_V99).map((x)=>x.endpoint).filter(Boolean);
+          const presets = Object.values(AI_PROVIDER_PRESETS_V99).map((x) => x.endpoint).filter(Boolean);
           if (!endpoint.value.trim() || presets.includes(endpoint.value.trim()) || endpoint.value.trim() === endpoint.dataset.lastPreset) {
             endpoint.value = AI_PROVIDER_PRESETS_V99[provider.value]?.endpoint || '';
           }
@@ -72,26 +72,25 @@
       }
       const cancel = $('#ai-import-cancel-btn-v99');
       if (cancel) {
-        cancel.onclick = ()=>{
+        cancel.onclick = () => {
           if (aiImportSessions.importRequest.running) {
             cancelAiImportRequestV99(false);
-          }
-          else {
+          } else {
             closeAiImportPanelV99();
           }
         };
       }
       const settings = $('#ai-import-settings-btn-v99');
       if (settings) {
-        settings.onclick = async ()=>await switchViewV45('ai-settings');
+        settings.onclick = async () => await switchViewV45('ai-settings');
       }
       const review = $('#ai-review-import-btn-v991');
       if (review) {
-        review.onclick = ()=>openAiPreviewPanelV991('review');
+        review.onclick = () => openAiPreviewPanelV991('review');
       }
       const analysis = $('#ai-analysis-import-btn-v991');
       if (analysis) {
-        analysis.onclick = ()=>openAiPreviewPanelV991('analysis');
+        analysis.onclick = () => openAiPreviewPanelV991('analysis');
       }
       const previewStart = $('#ai-preview-start-btn-v991');
       if (previewStart) {
@@ -99,23 +98,22 @@
       }
       const previewCancel = $('#ai-preview-cancel-btn-v991');
       if (previewCancel) {
-        previewCancel.onclick = ()=>{
+        previewCancel.onclick = () => {
           if (aiImportSessions.previewRequest.running) {
             cancelAiPreviewRequestV991(false);
-          }
-          else {
+          } else {
             closeAiPreviewPanelV991();
           }
         };
       }
       const previewSettings = $('#ai-preview-settings-btn-v991');
       if (previewSettings) {
-        previewSettings.onclick = async ()=>await switchViewV45('ai-settings');
+        previewSettings.onclick = async () => await switchViewV45('ai-settings');
       }
       const importText = $('#import-text');
       if (importText && !importText.dataset.aiSelectionBoundV992) {
         importText.dataset.aiSelectionBoundV992 = '1';
-        const capture = ()=>{
+        const capture = () => {
           captureAiImportSelectionV992();
           if (!$('#ai-import-panel-v99')?.classList.contains('ai-hidden-v99')) {
             refreshAiImportPanelV99();
@@ -124,45 +122,45 @@
         importText.addEventListener('select', capture);
         importText.addEventListener('mouseup', capture);
         importText.addEventListener('keyup', capture);
-        importText.addEventListener('input', ()=>{
+        importText.addEventListener('input', () => {
           aiImportTextSelectionV992 = { start: 0, end: 0, text: '' };
           if (!$('#ai-import-panel-v99')?.classList.contains('ai-hidden-v99')) {
             refreshAiImportPanelV99();
           }
         });
       }
-      $$('input[name="ai-import-scope-v992"]').forEach((input)=>input.onchange = ()=>refreshAiImportPanelV99());
+      $$('input[name="ai-import-scope-v992"]').forEach((input) => input.onchange = () => refreshAiImportPanelV99());
       const previewScope = $('#ai-preview-scope-v991');
       if (previewScope) {
-        previewScope.onchange = ()=>{
+        previewScope.onchange = () => {
           clearAiPreviewStatusStickyV991();
           refreshAiPreviewPanelV991();
         };
       }
       const previewCondition = $('#ai-preview-condition-v992');
       if (previewCondition) {
-        previewCondition.onchange = ()=>{
+        previewCondition.onchange = () => {
           clearAiPreviewStatusStickyV991();
           refreshAiPreviewPanelV991();
         };
       }
       const previewRangeStart = $('#ai-preview-range-start-v992');
       if (previewRangeStart) {
-        previewRangeStart.oninput = ()=>{
+        previewRangeStart.oninput = () => {
           clearAiPreviewStatusStickyV991();
           refreshAiPreviewPanelV991();
         };
       }
       const previewRangeEnd = $('#ai-preview-range-end-v992');
       if (previewRangeEnd) {
-        previewRangeEnd.oninput = ()=>{
+        previewRangeEnd.oninput = () => {
           clearAiPreviewStatusStickyV991();
           refreshAiPreviewPanelV991();
         };
       }
       const previewBatch = $('#ai-preview-batch-v991');
       if (previewBatch) {
-        previewBatch.oninput = ()=>{
+        previewBatch.oninput = () => {
           clearAiPreviewStatusStickyV991();
           refreshAiPreviewPanelV991();
         };
@@ -301,16 +299,13 @@
         if (!configured) {
           privacy.textContent = aiUnavailableReasonV99(config, 'import_organize');
           privacy.className = 'notice warn';
-        }
-        else if (isHarness) {
+        } else if (isHarness) {
           privacy.textContent = aiHarnessPrivacyV99(config, `本次${range.label}及相关核对上下文`) + '只返回待核对结果，不发送本地题库文件或图片。';
           privacy.className = 'notice warn';
-        }
-        else if (isLocalAiEndpointV99(config.endpoint)) {
+        } else if (isLocalAiEndpointV99(config.endpoint)) {
           privacy.textContent = '当前使用本地 AI 服务。浏览器仍需获得跨域访问权限；整理结果只会在成功后替换当前预览。';
           privacy.className = 'notice';
-        }
-        else {
+        } else {
           privacy.textContent = `本次${range.label}将发送到远程 AI 接口。请确认题库内容允许上传，并确保所用密钥和服务可信。`;
           privacy.className = 'notice warn';
         }
@@ -334,23 +329,21 @@
       return mode === 'analysis' ? 'AI 补解析' : 'AI 核对';
     }
     function importRowsForAiV991() {
-      return (importDraft.questions || []).map((q, i)=>({ q, i, status: importIssueStatus(q, importDraft.diagnostics?.profile || {}) }));
+      return (importDraft.questions || []).map((q, i) => ({ q, i, status: importIssueStatus(q, importDraft.diagnostics?.profile || {}) }));
     }
     function visibleImportIndexesV991() {
       let rows = importRowsForAiV991();
       if (importDraft.filter === 'problem') {
-        rows = rows.filter((r)=>r.status !== '正常');
-      }
-      else if (importDraft.filter === 'normal') {
-        rows = rows.filter((r)=>r.status === '正常');
-      }
-      else if (importDraft.filter === 'priority') {
-        rows.sort((a, b)=>{
-          const aw = a.status === '正常' ? 1 : 0, bw = b.status === '正常' ? 1 : 0;
+        rows = rows.filter((r) => r.status !== '正常');
+      } else if (importDraft.filter === 'normal') {
+        rows = rows.filter((r) => r.status === '正常');
+      } else if (importDraft.filter === 'priority') {
+        rows.sort((a, b) => {
+          const aw = a.status === '正常' ? 1 : 0; const bw = b.status === '正常' ? 1 : 0;
           return aw - bw || a.i - b.i;
         });
       }
-      return rows.map((r)=>r.i);
+      return rows.map((r) => r.i);
     }
     function aiPreviewScopeOptionsV991(mode) {
       return mode === 'analysis' ? [['range', '自定义题号范围'], ['selected', '已选择题目'], ['visible', '当前筛选结果'], ['all', '全部题目']] : [['range', '自定义题号范围'], ['problem', '仅异常题'], ['selected', '已选择题目'], ['visible', '当前筛选结果'], ['all', '全部题目']];
@@ -373,7 +366,7 @@
       if (last > total) {
         return { indexes: [], error: `结束题号不能超过当前识别结果的 ${total} 题。`, first, last };
       }
-      return { indexes: Array.from({ length: last - first + 1 }, (_, i)=>first - 1 + i), error: '', first, last };
+      return { indexes: Array.from({ length: last - first + 1 }, (_, i) => first - 1 + i), error: '', first, last };
     }
     function aiPreviewBaseIndexesV992(mode, scope) {
       const rows = importRowsForAiV991();
@@ -381,30 +374,29 @@
         return aiPreviewRangeStateV992();
       }
       if (scope === 'selected') {
-        return { indexes: [...importDraft.selected].filter((i)=>i >= 0 && i < importDraft.questions.length).sort((a, b)=>a - b), error: '' };
+        return { indexes: [...importDraft.selected].filter((i) => i >= 0 && i < importDraft.questions.length).sort((a, b) => a - b), error: '' };
       }
       if (scope === 'visible') {
         return { indexes: visibleImportIndexesV991(), error: '' };
       }
       if (mode === 'review' && scope === 'problem') {
-        return { indexes: rows.filter((r)=>r.status !== '正常').map((r)=>r.i), error: '' };
+        return { indexes: rows.filter((r) => r.status !== '正常').map((r) => r.i), error: '' };
       }
-      return { indexes: rows.map((r)=>r.i), error: '' };
+      return { indexes: rows.map((r) => r.i), error: '' };
     }
     function collectAiPreviewTargetDetailsV992(mode, scope, condition) {
       const base = aiPreviewBaseIndexesV992(mode, scope);
       if (base.error) {
         return { baseIndexes: [], indexes: [], error: base.error };
       }
-      const baseIndexes = [...new Set(base.indexes)].filter((i)=>i >= 0 && i < importDraft.questions.length);
+      const baseIndexes = [...new Set(base.indexes)].filter((i) => i >= 0 && i < importDraft.questions.length);
       let indexes = baseIndexes;
       if (mode === 'analysis') {
         const rule = condition || 'missing';
         if (rule === 'missing') {
-          indexes = baseIndexes.filter((i)=>!String(importDraft.questions[i]?.analysis || '').trim());
-        }
-        else if (rule === 'short') {
-          indexes = baseIndexes.filter((i)=>String(importDraft.questions[i]?.analysis || '').trim().length < 20);
+          indexes = baseIndexes.filter((i) => !String(importDraft.questions[i]?.analysis || '').trim());
+        } else if (rule === 'short') {
+          indexes = baseIndexes.filter((i) => String(importDraft.questions[i]?.analysis || '').trim().length < 20);
         }
       }
       return { baseIndexes, indexes, error: '' };
@@ -467,8 +459,8 @@
       const options = aiPreviewScopeOptionsV991(mode);
       const wanted = resetScope ? 'range' : (scope?.value || '');
       if (scope) {
-        scope.innerHTML = options.map(([value, label])=>`<option value="${value}">${label}</option>`).join('');
-        scope.value = options.some(([value])=>value === wanted) ? wanted : options[0][0];
+        scope.innerHTML = options.map(([value, label]) => `<option value="${value}">${label}</option>`).join('');
+        scope.value = options.some(([value]) => value === wanted) ? wanted : options[0][0];
       }
       if (conditionField) {
         conditionField.classList.toggle('ai-hidden-v99', mode !== 'analysis');
@@ -540,24 +532,19 @@
         if (!configured) {
           status.textContent = aiUnavailableReasonV99(config, task);
           status.className = 'notice warn';
-        }
-        else if (details.error) {
+        } else if (details.error) {
           status.textContent = details.error;
           status.className = 'notice warn';
-        }
-        else if (!details.baseIndexes.length) {
+        } else if (!details.baseIndexes.length) {
           status.textContent = '当前范围没有题目。';
           status.className = 'notice';
-        }
-        else if (!details.indexes.length && mode === 'analysis') {
+        } else if (!details.indexes.length && mode === 'analysis') {
           status.textContent = `范围内有 ${details.baseIndexes.length} 道题，但没有符合当前解析条件的题目。`;
           status.className = 'notice';
-        }
-        else if (details.indexes.length > AI_PREVIEW_MAX_ITEMS_V991) {
+        } else if (details.indexes.length > AI_PREVIEW_MAX_ITEMS_V991) {
           status.textContent = `实际处理 ${details.indexes.length} 道题，超过单次任务 ${AI_PREVIEW_MAX_ITEMS_V991} 道上限。请缩小题号范围或改用勾选后处理，程序不会静默截断。`;
           status.className = 'notice warn';
-        }
-        else {
+        } else {
           status.textContent = `范围内 ${details.baseIndexes.length} 道，实际处理 ${details.indexes.length} 道；按每批 ${batchSize} 道提交，预计请求 ${requests} 次。AI 结果只作为建议。${isHarness ? ' ' + aiHarnessPrivacyV99(config, '所选题目的文字与参考答案') : ''}`;
           status.className = 'notice';
         }
@@ -578,8 +565,7 @@
       el.className = 'notice' + (type ? ' ' + type : '');
       if (sticky) {
         el.dataset.stickyV991 = '1';
-      }
-      else {
+      } else {
         delete el.dataset.stickyV991;
       }
     }
@@ -609,7 +595,7 @@
         blocks.push(`<div><b>建议题干</b><p>${esc(s.changes.question)}</p></div>`);
       }
       if ('options' in s.changes) {
-        blocks.push(`<div><b>建议选项</b><p>${esc((s.changes.options || []).map((o)=>`${o.key}. ${o.text}`).join('\n'))}</p></div>`);
+        blocks.push(`<div><b>建议选项</b><p>${esc((s.changes.options || []).map((o) => `${o.key}. ${o.text}`).join('\n'))}</p></div>`);
       }
       if ('answer' in s.changes) {
         blocks.push(`<div><b>建议答案</b><p>${esc((s.changes.answer || []).join('、'))}</p></div>`);
@@ -698,14 +684,14 @@
       }
     }
     function bindAiSuggestionActionsV991() {
-      $$('[data-ai-review-apply-v991]').forEach((btn)=>btn.onclick = ()=>applyAiReviewSuggestionV991(btn.dataset.aiReviewApplyV991));
-      $$('[data-ai-review-ignore-v991]').forEach((btn)=>btn.onclick = ()=>{
+      $$('[data-ai-review-apply-v991]').forEach((btn) => btn.onclick = () => applyAiReviewSuggestionV991(btn.dataset.aiReviewApplyV991));
+      $$('[data-ai-review-ignore-v991]').forEach((btn) => btn.onclick = () => {
         aiImportSessions.deleteReview(btn.dataset.aiReviewIgnoreV991);
         renderImportPreview(importDraft.questions);
       });
-      $$('[data-ai-analysis-apply-v991]').forEach((btn)=>btn.onclick = ()=>applyAiAnalysisSuggestionV991(btn.dataset.aiAnalysisApplyV991));
-      $$('[data-ai-analysis-edit-v991]').forEach((btn)=>btn.onclick = ()=>editAiAnalysisSuggestionV991(btn.dataset.aiAnalysisEditV991));
-      $$('[data-ai-analysis-ignore-v991]').forEach((btn)=>btn.onclick = ()=>{
+      $$('[data-ai-analysis-apply-v991]').forEach((btn) => btn.onclick = () => applyAiAnalysisSuggestionV991(btn.dataset.aiAnalysisApplyV991));
+      $$('[data-ai-analysis-edit-v991]').forEach((btn) => btn.onclick = () => editAiAnalysisSuggestionV991(btn.dataset.aiAnalysisEditV991));
+      $$('[data-ai-analysis-ignore-v991]').forEach((btn) => btn.onclick = () => {
         aiImportSessions.deleteAnalysis(btn.dataset.aiAnalysisIgnoreV991);
         renderImportPreview(importDraft.questions);
       });

@@ -35,6 +35,18 @@ export const semanticRules = {
   'no-new-wrappers': 'error',
   radix: 'error',
   'no-restricted-globals': ['error', 'isNaN', 'isFinite'],
+  'prefer-object-spread': 'error',
+  'default-param-last': 'error',
+  'no-multi-assign': 'error',
+  'one-var': ['error', 'never'],
+  'arrow-body-style': ['error', 'as-needed'],
+  'new-cap': 'error',
+  camelcase: ['error', { properties: 'never' }],
+  'class-methods-use-this': 'error',
+  'prefer-destructuring': ['error', {
+    VariableDeclarator: { array: false, object: true },
+    AssignmentExpression: { array: false, object: false },
+  }, { enforceForRenamedProperties: false }],
 };
 
 /** @type {import('eslint').Linter.RulesRecord} */
@@ -63,6 +75,18 @@ export const styleRules = {
   '@stylistic/function-call-spacing': ['error', 'never'],
   '@stylistic/no-trailing-spaces': 'error',
   '@stylistic/comma-style': ['error', 'last'],
+  '@stylistic/arrow-spacing': 'error',
+  '@stylistic/block-spacing': ['error', 'always'],
+  '@stylistic/space-before-function-paren': ['error', { anonymous: 'always', named: 'never', asyncArrow: 'always' }],
+  '@stylistic/function-paren-newline': ['error', 'multiline-arguments'],
+  '@stylistic/operator-linebreak': ['error', 'before', { overrides: { '=': 'none' } }],
+  '@stylistic/brace-style': ['error', '1tbs', { allowSingleLine: true }],
+  '@stylistic/padded-blocks': ['error', 'never'],
+  '@stylistic/no-multiple-empty-lines': ['error', { max: 1, maxEOF: 0, maxBOF: 0 }],
+  '@stylistic/nonblock-statement-body-position': ['error', 'beside'],
+  '@stylistic/quote-props': ['error', 'as-needed'],
+  '@stylistic/no-confusing-arrow': ['error', { allowParens: true }],
+  '@stylistic/no-mixed-operators': 'error',
 };
 
 /** @type {import('eslint').Linter.Globals} */
@@ -107,7 +131,7 @@ const webTestCallbackGlobals = {
 /** @param {{desktop?: boolean, debt?: boolean, semanticOnly?: boolean}} [options]
  * @returns {import('eslint').Linter.Config[]} */
 export function createConfig({ desktop = false, debt = false, semanticOnly = false } = {}) {
-  const relative = (/** @type {string} */ file) => desktop ? file.replace(/^apps\/desktop\//, '') : file;
+  const relative = (/** @type {string} */ file) => (desktop ? file.replace(/^apps\/desktop\//, '') : file);
   const extensionPattern = (/** @type {string} */ file) => relative(file).replace(
     /\.(mjs|cjs|js)$/i,
     (suffix) => `.${[...suffix.slice(1)].map((letter) => `[${letter.toLowerCase()}${letter.toUpperCase()}]`).join('')}`,

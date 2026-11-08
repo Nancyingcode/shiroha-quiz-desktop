@@ -9,7 +9,7 @@ async function observeAppDialogs(page) {
       type: () => kind,
       message: () => message,
       accept: (value) => act(async () => {
-        if (kind === 'prompt' && value !== undefined) {await page.locator('#app-dialog-input').fill(value);}
+        if (kind === 'prompt' && value !== undefined) { await page.locator('#app-dialog-input').fill(value); }
         await page.locator('#app-dialog [data-dialog-accept]').click();
       }),
       dismiss: () => act(() => page.locator('#app-dialog [data-dialog-close]').click()),
@@ -20,7 +20,7 @@ async function observeAppDialogs(page) {
     const seen = new WeakSet();
     const check = () => {
       const dialog = document.getElementById('app-dialog');
-      if (!dialog?.open || seen.has(dialog)) {return;}
+      if (!dialog?.open || seen.has(dialog)) { return; }
       seen.add(dialog);
       let kind = 'confirm';
       if (!dialog.querySelector('input').hidden) {

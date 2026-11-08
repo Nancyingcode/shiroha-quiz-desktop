@@ -49,6 +49,7 @@ function fixture() {
     /** @param {() => void} callback */
     constructor(callback) { resize = callback; }
     /** @param {Element} element */
+    // eslint-disable-next-line class-methods-use-this -- 模拟 ResizeObserver 实例接口；移除该模拟时同步删除例外。
     observe(element) { observed.push(element); }
   }
   let maximized = false;

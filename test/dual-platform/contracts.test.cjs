@@ -151,7 +151,7 @@ test('A2 真实 Web 完整、历史选中备份和双端原生兼容载荷满足
   const full = plain(api.buildBackupPayloadV23(api.snapshot().banks, 'all_data', true));
   const selected = plain(api.buildBackupPayloadV23([api.snapshot().banks[0]], 'selected_banks', false));
   const native = plain(loadWeb({ state: webState() }).api.buildNativeCompatibleBackupZipV611().payload);
-  for (const payload of [full, selected, native, androidBackup()]) {assert.equal(validation.validateBackup(payload).ok, true, payload.kind);}
+  for (const payload of [full, selected, native, androidBackup()]) { assert.equal(validation.validateBackup(payload).ok, true, payload.kind); }
   rejects(validation.validateBackup({ ...androidBackup(), schemaVersion: 4 }), 'unsupported_version');
 });
 

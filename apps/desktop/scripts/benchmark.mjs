@@ -99,7 +99,7 @@ async function availablePort() {
   });
   const address = server.address();
   assert(address && typeof address !== 'string', '无法取得调试端口');
-  await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve(undefined)));
+  await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve(undefined))));
   return address.port;
 }
 
@@ -119,8 +119,11 @@ function verifyRoot(owned) {
 
 /** @param {string} command */
 async function powershell(command) {
-  return execute('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', `$ErrorActionPreference='Stop'; ${command}`],
-    { encoding: 'utf8', windowsHide: true, timeout: START_TIMEOUT_MS, maxBuffer: MIB_BYTES });
+  return execute(
+    'powershell.exe',
+    ['-NoProfile', '-NonInteractive', '-Command', `$ErrorActionPreference='Stop'; ${command}`],
+    { encoding: 'utf8', windowsHide: true, timeout: START_TIMEOUT_MS, maxBuffer: MIB_BYTES },
+  );
 }
 
 /** @param {OwnedProcess} owned */
@@ -165,15 +168,15 @@ function running(child) {
 
 /** @param {OwnedProcess} owned */
 async function stopOwned(owned) {
-  if (!running(owned.child)) {return;}
+  if (!running(owned.child)) { return; }
   // 关闭前重新核验可执行文件与启动时间，仅处理本轮自己创建的进程。
   await powershell(`${verifyRoot(owned)} $p=Get-Process -Id $root.ProcessId; [void]$p.CloseMainWindow()`);
   const end = Date.now() + CLOSE_TIMEOUT_MS;
-  while (running(owned.child) && Date.now() < end) {await delay(POLL_MS);}
+  while (running(owned.child) && Date.now() < end) { await delay(POLL_MS); }
   if (running(owned.child)) {
     await powershell(`${verifyRoot(owned)} & taskkill.exe /PID $root.ProcessId /T /F; if($LASTEXITCODE -ne 0){throw '结束测试进程失败'}`);
     const forcedEnd = Date.now() + CLOSE_TIMEOUT_MS;
-    while (running(owned.child) && Date.now() < forcedEnd) {await delay(POLL_MS);}
+    while (running(owned.child) && Date.now() < forcedEnd) { await delay(POLL_MS); }
   }
   assert(!running(owned.child), '测试进程仍在运行，保留临时目录');
 }
@@ -202,11 +205,11 @@ async function measure(executable, profile, index, fixture, storageKey = '') {
     const endpoint = `http://127.0.0.1:${port}`;
     const end = Date.now() + START_TIMEOUT_MS;
     while (true) {
-      if (launchError) {throw launchError;}
+      if (launchError) { throw launchError; }
       assert(running(child), '测试进程在 CDP 就绪前退出');
       assert(Date.now() < end, '等待 CDP 超时');
       try {
-        if ((await fetch(`${endpoint}/json/version`, { signal: AbortSignal.timeout(1_000) })).ok) {break;}
+        if ((await fetch(`${endpoint}/json/version`, { signal: AbortSignal.timeout(1_000) })).ok) { break; }
       } catch { /* 启动期间调试端口尚未监听，按固定间隔重试。 */ }
       await delay(POLL_MS);
     }
@@ -215,7 +218,7 @@ async function measure(executable, profile, index, fixture, storageKey = '') {
     while (!page) {
       assert(Date.now() < end && running(child), '等待 WebView 页面超时');
       page = browser.contexts()[0]?.pages()[0];
-      if (!page) {await delay(POLL_MS);}
+      if (!page) { await delay(POLL_MS); }
     }
     page.setDefaultTimeout(START_TIMEOUT_MS);
     await page.waitForURL('http://tauri.localhost/**');
@@ -250,8 +253,7 @@ async function measure(executable, profile, index, fixture, storageKey = '') {
       ...(fixtureResult ? { fixture: fixtureResult } : {}),
     };
   } finally {
-    try { await stopOwned(owned); }
-    finally { await browser?.close().catch(() => undefined); }
+    try { await stopOwned(owned); } finally { await browser?.close().catch(() => undefined); }
   }
 }
 

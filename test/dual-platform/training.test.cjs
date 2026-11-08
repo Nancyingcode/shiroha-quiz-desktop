@@ -81,9 +81,9 @@ test('旧记录只使用已保存明细，缺少原题与本轮题号时保留�
 });
 
 test('完整备份往返保留复盘扩展，合并导入时未答快照的题库引用同步映射', () => {
-  const helper = training(), initial = webState(), record = initial.records[0];
+  const helper = training(); const initial = webState(); const record = initial.records[0];
   record.total = 3;
-  record.review = plain(helper.buildReview([...record.details.map((detail)=>({ bankId: detail.sourceBankId, question: detail.nativeQuestion })), { bankId: 'bank-a', question: question('not-submitted', '未答快照') }], record.details, { completion: 'ended_early', submitMode: 'single', timing: 'active' }));
+  record.review = plain(helper.buildReview([...record.details.map((detail) => ({ bankId: detail.sourceBankId, question: detail.nativeQuestion })), { bankId: 'bank-a', question: question('not-submitted', '未答快照') }], record.details, { completion: 'ended_early', submitMode: 'single', timing: 'active' }));
   record.reviewSummary = plain(helper.reviewSummary(record.review, record.details));
   const { api } = loadWeb({ state: initial });
   const payload = plain(api.buildBackupPayloadV23(api.snapshot().banks, 'all_data', true));
@@ -92,7 +92,7 @@ test('完整备份往返保留复盘扩展，合并导入时未答快照的题�
   assert.deepEqual(restored.records[0].reviewSummary, record.reviewSummary);
   restored.records[0].id = 'imported-training';
   api.mergeBackupBanksV23(restored);
-  const merged = api.snapshot(), imported = merged.records.find((value)=>value.id === 'imported-training');
+  const merged = api.snapshot(); const imported = merged.records.find((value) => value.id === 'imported-training');
   assert.notEqual(imported.review.items[2].sourceBankId, 'bank-a');
   assert.equal(imported.review.items[2].sourceBankId, imported.details[0].sourceBankId);
   assert.equal(imported.review.items[2].question.question, '未答快照');

@@ -5,7 +5,7 @@ const path = require('node:path');
 const { chromium } = require('../../apps/desktop/node_modules/playwright-core');
 const { startServer, WEB_ROOT } = require('../web-ai-practice/harness.cjs');
 const { webState } = require('./fixtures/dataset.cjs');
-let browser, server;
+let browser; let server;
 test.before(async () => {
   server = await startServer(WEB_ROOT);
   browser = await chromium.launch({ headless: true, ...(process.env.SHIROHA_BROWSER_EXECUTABLE ? { executablePath: process.env.SHIROHA_BROWSER_EXECUTABLE } : { channel: 'msedge' }) });
@@ -28,8 +28,8 @@ test('确认框居中、取消无副作用、焦点循环恢复且按键不泄�
   });
   const box = await page.locator('#app-dialog').boundingBox();
   const viewport = page.viewportSize();
-  assert.ok(Math.abs(box.x + box.width / 2 - viewport.width / 2) < 2);
-  assert.ok(Math.abs(box.y + box.height / 2 - viewport.height / 2) < 2);
+  assert.ok(Math.abs((box.x + (box.width / 2)) - (viewport.width / 2)) < 2);
+  assert.ok(Math.abs((box.y + (box.height / 2)) - (viewport.height / 2)) < 2);
   assert.equal(await page.locator('[data-dialog-cancel]').evaluate((el) => el === globalThis.document.activeElement), true);
   for (let i = 0; i < 6; i++) {
     await page.keyboard.press('Tab');
@@ -74,7 +74,7 @@ test('真实练习退出取消保留作答、确认保存；事务内输入弹�
   const page = await context.newPage();
   const errors = []; page.on('pageerror', (error) => errors.push(error.message));
   page.on('dialog', async (dialog) => { errors.push('意外原生框：' + dialog.message()); await dialog.dismiss(); });
-  await context.route('**/*', (route) => new URL(route.request().url()).origin === new URL(server.url).origin ? route.continue() : route.abort());
+  await context.route('**/*', (route) => (new URL(route.request().url()).origin === new URL(server.url).origin ? route.continue() : route.abort()));
   await page.goto(server.url);
   await page.locator('body[data-storage-state="ready"]').waitFor();
   await page.locator('.nav[data-view="practice"]').click();
@@ -104,7 +104,7 @@ test('退出确认期间考试到时自动交卷，迟到的确认不清空成�
   const context = await browser.newContext(); t.after(() => context.close());
   const initial = webState(); initial.records = [];
   await context.addInitScript((data) => globalThis.localStorage.setItem('shiroha_quiz_state_v28_4_c1', JSON.stringify(data)), initial);
-  await context.route('**/*', (route) => new URL(route.request().url()).origin === new URL(server.url).origin ? route.continue() : route.abort());
+  await context.route('**/*', (route) => (new URL(route.request().url()).origin === new URL(server.url).origin ? route.continue() : route.abort()));
   const page = await context.newPage();
   await page.goto(server.url);
   await page.locator('body[data-storage-state="ready"]').waitFor();

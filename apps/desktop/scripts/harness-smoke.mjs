@@ -8,7 +8,7 @@ import path from 'node:path';
 async function executionStatus(page) {
   return page.evaluate(() => {
     const platform = /** @type {import('../../web/platform/runtime.d.ts').BrowserGlobals['ShirohaPlatform']} */ (Reflect.get(window, 'ShirohaPlatform'));
-    if (!platform.harness) {throw new Error('Harness 平台接口缺失');}
+    if (!platform.harness) { throw new Error('Harness 平台接口缺失'); }
     return platform.harness.status();
   });
 }
@@ -56,7 +56,7 @@ async function persistedState(page) {
 export async function harnessSmoke(page, startPractice) {
   await page.locator('.nav[data-view="ai-settings"]').click();
   const originalApi = await apiSettings(page);
-  const originalCredential = await page.evaluate((config)=>{
+  const originalCredential = await page.evaluate((config) => {
     const platform = /** @type {import('../../web/platform/runtime.d.ts').BrowserGlobals['ShirohaPlatform']} */ (Reflect.get(window, 'ShirohaPlatform'));
     return platform.credentials.status('ai', { endpoint: config.endpoint, rememberKey: config.remember });
   }, originalApi);
@@ -76,14 +76,14 @@ export async function harnessSmoke(page, startPractice) {
     assert.deepEqual(await apiSettings(page), originalApi, '自动准备改变了原 API 设置');
 
     await page.locator('#ai-harness-login').click();
-    await page.waitForFunction(()=>document.querySelector('#ai-harness-auth-status')?.textContent?.includes('订阅已登录'));
+    await page.waitForFunction(() => document.querySelector('#ai-harness-auth-status')?.textContent?.includes('订阅已登录'));
     const loggedIn = await executionStatus(page);
     assert.equal(loggedIn.mode, 'harness', '登录未自动保存 Harness 执行方式');
     assert.equal(loggedIn.credentialStatus, 'subscription');
     assert.equal(loggedIn.runtimeSource, 'managed');
     assert.deepEqual(await apiSettings(page), originalApi, '登录自动保存改变了原 API 设置');
     await page.locator('#ai-test-connection-v99').click();
-    await page.waitForFunction(()=>document.querySelector('#ai-settings-status-v99')?.textContent?.includes('Codex 测试执行成功'));
+    await page.waitForFunction(() => document.querySelector('#ai-settings-status-v99')?.textContent?.includes('Codex 测试执行成功'));
 
     await page.locator('.nav[data-view="practice"]').click();
     await page.locator('#practice-submit-mode').selectOption('total');
@@ -93,28 +93,27 @@ export async function harnessSmoke(page, startPractice) {
     const beforeAi = await persistedState(page);
     await page.locator('[data-ai-single-open-v613]').click();
     await page.locator('[data-ai-single-analysis-v613]').click();
-    await page.waitForFunction(()=>document.querySelector('#p-ai-v613 .practice-ai-text-v613')?.textContent?.includes('隔离 Harness 测试解析。'));
+    await page.waitForFunction(() => document.querySelector('#p-ai-v613 .practice-ai-text-v613')?.textContent?.includes('隔离 Harness 测试解析。'));
     assert(await page.locator('#practice-card .option[data-key="B"] input').isChecked(), 'AI 改变了作答草稿');
     assert.match(await page.locator('#p-total-status').innerText(), /已填写 1 题/);
     const initialAnalysis = await page.locator('.practice-ai-text-v613').innerText();
     await page.locator('[data-ai-single-follow-v613]').click();
     await page.locator('#practice-ai-follow-input-v613').fill('请补充测试题的解题步骤。');
     await page.locator('[data-ai-single-send-v613]').click();
-    await page.waitForFunction(()=>!!document.querySelector('.practice-ai-chat-v613 .is-assistant'));
+    await page.waitForFunction(() => !!document.querySelector('.practice-ai-chat-v613 .is-assistant'));
     assert.equal(await page.locator('.practice-ai-chat-v613 .is-assistant').count(), 1);
     const revisedAnalysis = await page.locator('.practice-ai-text-v613').innerText();
     assert(revisedAnalysis.trim() && revisedAnalysis !== initialAnalysis, '追问未更新独立解析草稿');
     assert.equal(await persistedState(page), beforeAi, '生成或追问未经采纳就改变了题库或学习数据');
 
-    const cancelled = await page.evaluate(async()=>{
+    const cancelled = await page.evaluate(async () => {
       const platform = /** @type {import('../../web/platform/runtime.d.ts').BrowserGlobals['ShirohaPlatform']} */ (Reflect.get(window, 'ShirohaPlatform'));
-      const harness = platform.harness;if (!harness) {throw new Error('Harness 平台接口缺失');}
+      const { harness } = platform;if (!harness) { throw new Error('Harness 平台接口缺失'); }
       const controller = new window.AbortController();
       const pending = harness.execute(harness.snapshot(), 'question_analysis', [{ role: 'user', content: '自建取消测试，无用户数据。' }], controller.signal);
       controller.abort();
-      try { await pending; throw new Error('取消后的结果仍返回给业务'); }
-      catch(error) { if (!error || typeof error !== 'object' || !('name' in error) || error.name !== 'AbortError') {throw error;} }
-      if (harness.status().busy) {throw new Error('取消完成后仍处于忙碌状态');}
+      try { await pending; throw new Error('取消后的结果仍返回给业务'); } catch (error) { if (!error || typeof error !== 'object' || !('name' in error) || error.name !== 'AbortError') { throw error; } }
+      if (harness.status().busy) { throw new Error('取消完成后仍处于忙碌状态'); }
       return true;
     });
     assert.equal(await persistedState(page), beforeAi, '取消任务改变了题库或学习数据');
@@ -122,12 +121,12 @@ export async function harnessSmoke(page, startPractice) {
     await page.locator('#p-exit').click();
     await page.locator('#app-dialog [data-dialog-accept]').click();
     practiceStarted = false;
-    await page.waitForFunction(()=>!document.body.classList.contains('practice-focus'));
+    await page.waitForFunction(() => !document.body.classList.contains('practice-focus'));
     await page.locator('#practice-submit-mode').selectOption('single');
 
     await page.locator('.nav[data-view="ai-settings"]').click();
     await page.locator('#ai-harness-logout').click();
-    await page.waitForFunction(()=>document.querySelector('#ai-harness-auth-status')?.textContent === '尚未登录订阅');
+    await page.waitForFunction(() => document.querySelector('#ai-harness-auth-status')?.textContent === '尚未登录订阅');
     const loggedOut = await executionStatus(page);
     assert.equal(loggedOut.mode, 'harness', '退出登录静默切换了执行方式');
     assert.equal(loggedOut.ready, false);
@@ -135,7 +134,7 @@ export async function harnessSmoke(page, startPractice) {
 
     await page.locator('#ai-harness-advanced > summary').click();
     await page.locator('#ai-harness-choose').click();
-    await page.waitForFunction(()=>{
+    await page.waitForFunction(() => {
       const platform = /** @type {import('../../web/platform/runtime.d.ts').BrowserGlobals['ShirohaPlatform']} */ (Reflect.get(window, 'ShirohaPlatform'));
       return platform.harness?.status().runtimeSource === 'custom';
     });
@@ -143,7 +142,7 @@ export async function harnessSmoke(page, startPractice) {
     await page.locator('#ai-harness-inspect').click();
     await preparedRuntime(page, 'custom');
     await page.locator('#ai-save-settings-v99').click();
-    await page.waitForFunction(()=>document.querySelector('#ai-settings-status-v99')?.textContent?.includes('Harness 设置已保存'));
+    await page.waitForFunction(() => document.querySelector('#ai-settings-status-v99')?.textContent?.includes('Harness 设置已保存'));
     await page.locator('#ai-harness-use-managed').click();
     const managedAgain = await preparedRuntime(page, 'managed');
     assert.equal(managedAgain.mode, 'harness');
@@ -152,20 +151,22 @@ export async function harnessSmoke(page, startPractice) {
     await page.locator('#ai-harness-advanced > summary').click();
     await page.locator('#ai-execution-api').check();
     await page.locator('#ai-save-settings-v99').click();
-    await page.waitForFunction(()=>document.querySelector('#ai-settings-status-v99')?.textContent?.includes('设置已保存'));
+    await page.waitForFunction(() => document.querySelector('#ai-settings-status-v99')?.textContent?.includes('设置已保存'));
     assert.equal((await executionStatus(page)).mode, 'api');
     assert.deepEqual(await apiSettings(page), originalApi, '切回 API 后原配置丢失');
-    assert.equal(await page.evaluate((config)=>{
+    assert.equal(await page.evaluate((config) => {
       const platform = /** @type {import('../../web/platform/runtime.d.ts').BrowserGlobals['ShirohaPlatform']} */ (Reflect.get(window, 'ShirohaPlatform'));
       return platform.credentials.status('ai', { endpoint: config.endpoint, rememberKey: config.remember });
     }, originalApi), originalCredential, 'Harness 登录或退出清除了原 API 凭据');
     return { fakeRuntime: true, automaticPreparation: true, loginWithoutManualSetup: true, advancedCustomRuntime: true, managedRuntimeRestored: true, subscriptionLogin: true, connectionTest: true, questionAnalysis: true, followUp: true, cancelled, draftOnly: true, apiPreserved: true, logoutUnavailable: true };
   } finally {
-    if (isolatedRuntime) {await page.evaluate(async()=>{
-      const platform = /** @type {import('../../web/platform/runtime.d.ts').BrowserGlobals['ShirohaPlatform']} */ (Reflect.get(window, 'ShirohaPlatform'));
-      await platform.harness?.cancelAll();
-      if (platform.harness?.status().mode !== 'api') {await platform.harness?.saveMode('api');}
-    });}
+    if (isolatedRuntime) {
+      await page.evaluate(async () => {
+        const platform = /** @type {import('../../web/platform/runtime.d.ts').BrowserGlobals['ShirohaPlatform']} */ (Reflect.get(window, 'ShirohaPlatform'));
+        await platform.harness?.cancelAll();
+        if (platform.harness?.status().mode !== 'api') { await platform.harness?.saveMode('api'); }
+      });
+    }
     if (practiceStarted && await page.locator('#p-exit').isVisible()) {
       await page.locator('#p-exit').click();
       await page.locator('#app-dialog [data-dialog-accept]').click();
@@ -184,11 +185,11 @@ export async function harnessSwitchingSmoke(page, profile) {
   try {
     await page.locator('#ai-harness-advanced > summary').click();
     await page.locator('#ai-harness-use-managed').click();
-    await page.waitForFunction(()=>{
+    await page.waitForFunction(() => {
       const platform =/** @type {import('../../web/platform/runtime.d.ts').BrowserGlobals['ShirohaPlatform']} */ (Reflect.get(window, 'ShirohaPlatform'));
-      return platform.harness?.status().componentTasks?.some((task)=>task.adapter === 'codex');
+      return platform.harness?.status().componentTasks?.some((task) => task.adapter === 'codex');
     });
-    const task = (await executionStatus(page)).componentTasks?.find((task)=>task.adapter === 'codex');
+    const task = (await executionStatus(page)).componentTasks?.find((task) => task.adapter === 'codex');
     assert(task);
     assert.equal(await page.locator('#ai-harness-adapter').isEnabled(), true);
     await page.locator('#ai-harness-adapter').selectOption('codebuddy');
@@ -197,29 +198,29 @@ export async function harnessSwitchingSmoke(page, profile) {
     assert.match(await page.locator('#ai-harness-background-status').innerText(), /Codex.*后台继续/);
     await page.locator('#ai-harness-background-view').click();
     await page.locator('#ai-codex-settings').waitFor({ state: 'visible' });
-    assert.equal((await executionStatus(page)).componentTasks?.find((item)=>item.adapter === 'codex')?.id, task.id);
+    assert.equal((await executionStatus(page)).componentTasks?.find((item) => item.adapter === 'codex')?.id, task.id);
   } finally {
     await rm(marker, { force: true });
   }
-  await page.waitForFunction(()=>{
+  await page.waitForFunction(() => {
     const platform =/** @type {import('../../web/platform/runtime.d.ts').BrowserGlobals['ShirohaPlatform']} */ (Reflect.get(window, 'ShirohaPlatform'));
     return platform.harness?.status().componentTasks?.length === 0;
   });
   const codexPath = (await preparedRuntime(page, 'managed')).runtimePath;
   for (const provider of ['codebuddy', 'codex', 'codebuddy', 'codex']) {
     await page.locator('#ai-harness-adapter').selectOption(provider);
-    await page.waitForFunction((expected)=>{
+    await page.waitForFunction((expected) => {
       const platform =/** @type {import('../../web/platform/runtime.d.ts').BrowserGlobals['ShirohaPlatform']} */ (Reflect.get(window, 'ShirohaPlatform'));
       const state = platform.harness?.status();
       return state?.adapter === expected && state.runtimeState === 'ready' && !state.busy;
     }, provider);
     const state = await executionStatus(page);
     assert.equal(state.componentTasks?.length, 0, '已有组件切换后不应重启准备');
-    if (provider === 'codex') {assert.equal(state.runtimePath, codexPath);}
+    if (provider === 'codex') { assert.equal(state.runtimePath, codexPath); }
   }
   await page.locator('#ai-harness-advanced > summary').click();
   await page.locator('#ai-execution-api').check();
   await page.locator('#ai-save-settings-v99').click();
-  await page.waitForFunction(()=>document.querySelector('#ai-settings-status-v99')?.textContent?.includes('设置已保存'));
+  await page.waitForFunction(() => document.querySelector('#ai-settings-status-v99')?.textContent?.includes('设置已保存'));
   return { switchDuringDownload: true, backgroundTaskRetained: true, cacheReused: true };
 }

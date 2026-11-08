@@ -27,10 +27,10 @@ async function runGh(args) {
 /** @param {ReleaseContext} context @param {GhRunner} run */
 async function listReleases(context, run) {
   const pages = JSON.parse(await run(['api', '--paginate', '--slurp', `repos/${context.repository}/releases?per_page=100`]));
-  if (!Array.isArray(pages) || pages.some((page) => !Array.isArray(page))) {throw new Error('GitHub Release 列表响应无效');}
+  if (!Array.isArray(pages) || pages.some((page) => !Array.isArray(page))) { throw new Error('GitHub Release 列表响应无效'); }
   /** @type {RemoteRelease[]} */
   const releases = pages.flat();
-  if (releases.some((release) => !release || typeof release.tag_name !== 'string' || typeof release.draft !== 'boolean')) {throw new Error('GitHub Release 记录无效');}
+  if (releases.some((release) => !release || typeof release.tag_name !== 'string' || typeof release.draft !== 'boolean')) { throw new Error('GitHub Release 记录无效'); }
   return releases;
 }
 
@@ -40,12 +40,12 @@ async function verifyRemoteTag(context, run) {
   // 注释标签可以指向另一个标签；限制解引用层数，异常对象不能被当作已验证提交。
   for (let depth = 0; depth < maximumTagDepth; depth += 1) {
     const { object } = JSON.parse(await run(['api', endpoint]));
-    if (!object || !/^[a-f0-9]{40}$/.test(object.sha) || object.sha.length !== 40) {throw new Error('GitHub 标签对象无效');}
+    if (!object || !/^[a-f0-9]{40}$/.test(object.sha) || object.sha.length !== 40) { throw new Error('GitHub 标签对象无效'); }
     if (object.type === 'commit') {
-      if (object.sha !== context.commit) {throw new Error('GitHub 标签已改变，拒绝上传其他提交的制品');}
+      if (object.sha !== context.commit) { throw new Error('GitHub 标签已改变，拒绝上传其他提交的制品'); }
       return;
     }
-    if (object.type !== 'tag') {throw new Error('GitHub 标签未指向提交');}
+    if (object.type !== 'tag') { throw new Error('GitHub 标签未指向提交'); }
     endpoint = `repos/${context.repository}/git/tags/${object.sha}`;
   }
   throw new Error('GitHub 标签嵌套超过允许层数');
@@ -55,7 +55,7 @@ async function verifyRemoteTag(context, run) {
 export async function createReleaseDraft(root, context, run = runGh) {
   const assets = await verifyRelease(root, context);
   const existing = (await listReleases(context, run)).some((release) => release.tag_name === context.tag);
-  if (existing) {throw new Error('同标签 Release 已存在（可能是草稿），请核对后处理；不会覆盖附件');}
+  if (existing) { throw new Error('同标签 Release 已存在（可能是草稿），请核对后处理；不会覆盖附件'); }
   await verifyRemoteTag(context, run);
   const directory = releaseDirectory(root, context);
   try {
@@ -67,10 +67,10 @@ export async function createReleaseDraft(root, context, run = runGh) {
     const remoteAssets = draft?.assets;
     const hasCompleteDraft = draft?.draft === true && draft.prerelease === true
       && Array.isArray(remoteAssets) && remoteAssets.length === assets.length;
-    if (!hasCompleteDraft) {throw new Error('草稿状态或附件数量不匹配');}
+    if (!hasCompleteDraft) { throw new Error('草稿状态或附件数量不匹配'); }
     for (const file of assets) {
       const remote = remoteAssets.find((asset) => asset.name === path.basename(file));
-      if (!remote || remote.size !== (await stat(file)).size) {throw new Error('草稿附件名称或大小不匹配');}
+      if (!remote || remote.size !== (await stat(file)).size) { throw new Error('草稿附件名称或大小不匹配'); }
     }
   } catch (error) {
     const detail = error instanceof Error ? error.message : '未知上传错误';

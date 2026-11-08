@@ -9,7 +9,7 @@ for (const fail of [false, true]) {
   test(`PDF extraction releases document after ${fail ? 'failure' : 'success'}`, async () => {
     let destroyed = 0;
     const pdf = { numPages: 1, getPage: async () => ({ getTextContent: async () => {
-      if (fail) {throw new Error('damaged page');}
+      if (fail) { throw new Error('damaged page'); }
       return { items: [{ str: 'A self authored question with enough text for extraction', transform: [0, 0, 0, 0, 0, 0] }] };
     } }), destroy: async () => { destroyed++; } };
     const context = vm.createContext({ Uint8Array, TextDecoder });
@@ -35,7 +35,7 @@ function ocrFixture({ recognize, viewport = { width: 1000, height: 1000 } }) {
   const document = {
     querySelector: (selector) => elements[selector.slice(1)] || null,
     createElement(tag) {
-      if (tag === 'script') {return {};}
+      if (tag === 'script') { return {}; }
       if (tag === 'canvas') {
         const canvas = { width: 0, height: 0, getContext: () => ({}) };
         stats.canvases.push(canvas);

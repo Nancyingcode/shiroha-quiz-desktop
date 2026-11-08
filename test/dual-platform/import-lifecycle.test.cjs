@@ -58,7 +58,7 @@ test('PDF 读取失败保留原文本和题目草稿并提示 OCR；双文件按
 test('AI 失败恢复原草稿引用；单文件与双文件清空保持原有字段边界', () => {
   const { draft } = fixture();
   const questions = [{ question: '草稿', score: 0, enabled: false }];
-  const selected = draft.selected;
+  const { selected } = draft;
   selected.add(0);
   draft.questions = questions;
   draft.warnings = ['需核对'];

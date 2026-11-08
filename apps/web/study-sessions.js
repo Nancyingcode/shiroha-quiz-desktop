@@ -10,7 +10,7 @@
     return {
       get current() { return current; },
       set current(next) {
-        if (timer !== null) {globalThis.clearInterval(timer);}
+        if (timer !== null) { globalThis.clearInterval(timer); }
         timer = null;
         if (dialog) {
           dialog.close();
@@ -36,7 +36,7 @@
     return {
       get current() { return current; },
       set current(next) {
-        if (current.timer !== null) {globalThis.clearInterval(current.timer);}
+        if (current.timer !== null) { globalThis.clearInterval(current.timer); }
         request++;
         current = next;
       },

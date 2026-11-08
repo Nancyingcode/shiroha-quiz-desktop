@@ -52,10 +52,10 @@
   }
 
   function parseCrossPlatformTime(value, fallback = Date.now()) {
-    if (value == null || value === '') {return fallback;}
-    if (typeof value === 'number' && Number.isFinite(value)) {return value;}
+    if (value == null || value === '') { return fallback; }
+    if (typeof value === 'number' && Number.isFinite(value)) { return value; }
     const numeric = Number(value);
-    if (Number.isFinite(numeric) && numeric > 0) {return numeric;}
+    if (Number.isFinite(numeric) && numeric > 0) { return numeric; }
     const parsed = Date.parse(String(value));
     return Number.isFinite(parsed) ? parsed : fallback;
   }
@@ -77,7 +77,7 @@
     function toNative(record, bankMap) {
       const bankId = record.bankId || '';
       const bank = bankId ? bankMap.get(bankId) : null;
-      const questionMap = new Map((bank && bank.questions || []).map((question) => [question.id, question]));
+      const questionMap = new Map(((bank && bank.questions) || []).map((question) => [question.id, question]));
       const questionResults = (record.details || []).map((detail, index) => {
         const questionId = detail.questionId || '';
         const savedQuestion = detail.nativeQuestion && typeof detail.nativeQuestion === 'object'
@@ -93,15 +93,12 @@
         }
         const isMultiBlank = isMultiBlankQuestionV58914(question);
         let userAnswer = [];
-        if (Array.isArray(detail.userAnswer)) {userAnswer = detail.userAnswer;}
-        else if (Array.isArray(detail.chosen)) {userAnswer = detail.chosen;}
+        if (Array.isArray(detail.userAnswer)) { userAnswer = detail.userAnswer; } else if (Array.isArray(detail.chosen)) { userAnswer = detail.chosen; }
         const directBlankAnswers = Array.isArray(detail.userBlankAnswers) ? detail.userBlankAnswers : null;
         let userBlankAnswers = directBlankAnswers || [];
-        if (!userBlankAnswers.length && isMultiBlank) {userBlankAnswers = userAnswer;}
+        if (!userBlankAnswers.length && isMultiBlank) { userBlankAnswers = userAnswer; }
         let answerText;
-        if (detail.nativeAnswerText != null) {answerText = String(detail.nativeAnswerText);}
-        else if (Array.isArray(detail.answer)) {answerText = detail.answer.join(' / ');}
-        else {answerText = String(detail.answer || '');}
+        if (detail.nativeAnswerText != null) { answerText = String(detail.nativeAnswerText); } else if (Array.isArray(detail.answer)) { answerText = detail.answer.join(' / '); } else { answerText = String(detail.answer || ''); }
         const result = {
           question: serializeQuestion(question), userAnswer: [...userAnswer], correct: !!detail.correct,
           answerText,
@@ -110,7 +107,7 @@
           autoScored: detail.autoScored !== false, sourceBankId: detail.sourceBankId || bankId || null,
           sourceBankName: detail.sourceBankName || bank?.name || '',
         };
-        if (userBlankAnswers.length || isMultiBlank) {result.userBlankAnswers = [...userBlankAnswers];}
+        if (userBlankAnswers.length || isMultiBlank) { result.userBlankAnswers = [...userBlankAnswers]; }
         return result;
       });
       return {
@@ -138,9 +135,9 @@
         const directBlankAnswers = Array.isArray(result.userBlankAnswers)
           ? result.userBlankAnswers.map((value) => String(value ?? '')) : null;
         let userBlankAnswers = directBlankAnswers || [];
-        if (!userBlankAnswers.length && blankAnswers.length) {userBlankAnswers = [...userAnswer];}
+        if (!userBlankAnswers.length && blankAnswers.length) { userBlankAnswers = [...userAnswer]; }
         let score = result.correct ? 1 : 0;
-        if (earned != null) {score = Number(earned);}
+        if (earned != null) { score = Number(earned); }
         const detail = {
           questionId: question.id || '', question: question.question || '',
           type: normalizeWebQuestionType(question.type) || String(question.type || '').toLowerCase(),
@@ -154,15 +151,15 @@
           sourceBankId: result.sourceBankId || record.bankId || '',
           sourceBankName: result.sourceBankName || record.bankName || '', time: '',
         };
-        if (blankAnswers.length) {detail.blankAnswers = cloneBlankAnswersV58914(blankAnswers);}
-        if (userBlankAnswers.length || blankAnswers.length) {detail.userBlankAnswers = [...userBlankAnswers];}
+        if (blankAnswers.length) { detail.blankAnswers = cloneBlankAnswersV58914(blankAnswers); }
+        if (userBlankAnswers.length || blankAnswers.length) { detail.userBlankAnswers = [...userBlankAnswers]; }
         return detail;
       });
       const total = Number(record.total || details.length || 0);
       const correct = Number(record.correct || details.filter((detail) => detail.correct).length || 0);
       details.forEach((detail, index) => {
         const result = (record.questionResults || [])[index];
-        if (result && result.question) {detail.nativeQuestion = result.question;}
+        if (result && result.question) { detail.nativeQuestion = result.question; }
       });
       return {
         id: record.id || makeId('rec'), mode: record.title || record.source || '练习',

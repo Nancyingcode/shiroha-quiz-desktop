@@ -32,8 +32,11 @@ async function fixture(t) {
     GIT_CONFIG_GLOBAL: globalConfig, GIT_CONFIG_NOSYSTEM: '1', HUSKY: '1',
     XDG_CONFIG_HOME: path.join(temporary, 'config'),
   });
-  const git = (/** @type {string[]} */ args, cwd = repository) => spawnSync('git', args,
-    { cwd, env, encoding: 'utf8', windowsHide: true });
+  const git = (/** @type {string[]} */ args, cwd = repository) => spawnSync(
+    'git',
+    args,
+    { cwd, env, encoding: 'utf8', windowsHide: true },
+  );
   expectSuccess(git(['init', '--initial-branch=main']));
   expectSuccess(git(['config', 'user.name', 'Hook Fixture']));
   expectSuccess(git(['config', 'user.email', 'hook@example.invalid']));

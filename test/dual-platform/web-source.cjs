@@ -51,12 +51,12 @@ function loadWeb({ state, local = {}, session = {}, scoreDefaults = {}, determin
   const logs = [];
   const document = {
     getElementById(id) {
-      if (id === 'shiroha-rich-question-style-v55') {return {};}
+      if (id === 'shiroha-rich-question-style-v55') { return {}; }
       return null;
     },
     addEventListener() {},
     querySelector(selector) {
-      if (selector.startsWith('#score-')) {return { value: String(scoreDefaults[selector.slice(7)] ?? 1) };}
+      if (selector.startsWith('#score-')) { return { value: String(scoreDefaults[selector.slice(7)] ?? 1) }; }
       throw new Error(`业务特征测试意外依赖 DOM：${selector}`);
     },
     querySelectorAll() { throw new Error('业务特征测试意外查询 DOM 集合。'); },

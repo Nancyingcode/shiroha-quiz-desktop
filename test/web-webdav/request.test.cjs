@@ -32,7 +32,9 @@ for (const method of ['PROPFIND', 'MKCOL', 'GET', 'PUT']) {
     });
     const actual = await context.webdavRequestV378(
       { endpoint: 'http://dav.example.invalid/root', username: 'test-user' },
-      'fake-password', 'backup.json', { method, headers: { Depth: '0' } },
+      'fake-password',
+      'backup.json',
+      { method, headers: { Depth: '0' } },
     );
     assert.equal(actual, response);
     assert.equal(calls.length, 1);

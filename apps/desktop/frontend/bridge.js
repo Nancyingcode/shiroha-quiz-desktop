@@ -9,7 +9,7 @@ void host.window.onCloseRequested(async (event) => {
   if (closing) { event.preventDefault(); return; }
   closing = true;
   try {
-    if (!await host.canClose()) {event.preventDefault();}
+    if (!await host.canClose()) { event.preventDefault(); }
   } catch {
     event.preventDefault();
   } finally { closing = false; }

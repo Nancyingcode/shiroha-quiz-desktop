@@ -65,7 +65,7 @@ async function waitForPhase(page, phase) {
   // Playwright 的页面谓词会把 Promise 当真值；异步 IPC 必须在 Node 侧等待已匹配的快照。
   while (true) {
     const current = await status(page);
-    if (current.phase === phase && !current.busy) {return current;}
+    if (current.phase === phase && !current.busy) { return current; }
     assert(Date.now() < deadline, `等待 ${phase} 超时，当前为 ${current.phase}`);
     await delay(LOGIN_POLL_MS);
   }
@@ -78,7 +78,7 @@ async function apiSettings(page) {
 
 /** @param {Page} page */
 async function persistedState(page) {
-  return page.evaluate(async()=>{
+  return page.evaluate(async () => {
     const platform =/** @type {import('../../web/platform/runtime.d.ts').BrowserGlobals['ShirohaPlatform']} */ (Reflect.get(window, 'ShirohaPlatform'));
     const host =/** @type {{invoke(command:string):Promise<unknown>}} */ (Reflect.get(window, 'ShirohaDesktopHost'));
     await platform.saves.idle();return JSON.stringify(await host.invoke('local_read'));
@@ -96,32 +96,31 @@ async function questionSmoke(page, startPractice) {
     const before = await persistedState(page);
     await page.locator('[data-ai-single-open-v613]').click();
     await page.locator('[data-ai-single-analysis-v613]').click();
-    await page.waitForFunction(()=>document.querySelector('.practice-ai-text-v613')?.textContent?.includes('隔离 CodeBuddy 测试解析。'));
+    await page.waitForFunction(() => document.querySelector('.practice-ai-text-v613')?.textContent?.includes('隔离 CodeBuddy 测试解析。'));
     assert(await page.locator('#practice-card .option[data-key="B"] input').isChecked(), 'CodeBuddy 不能改动答题草稿');
     assert.match(await page.locator('#p-ai-v613').innerText(), /CodeBuddy Harness/);
     assert.match(await page.locator('#p-ai-v613').innerText(), /deepseek-v4\.1-flash/, '解析面板须显示执行快照中的模型');
     await page.locator('[data-ai-single-follow-v613]').click();
     await page.locator('#practice-ai-follow-input-v613').fill('请补充这道合成题的推理步骤。');
     await page.locator('[data-ai-single-send-v613]').click();
-    await page.waitForFunction(()=>document.querySelector('.practice-ai-text-v613')?.textContent?.includes('隔离 CodeBuddy 测试修订解析。'));
+    await page.waitForFunction(() => document.querySelector('.practice-ai-text-v613')?.textContent?.includes('隔离 CodeBuddy 测试修订解析。'));
     assert.match(await page.locator('.practice-ai-chat-v613 .is-assistant').innerText(), /隔离 CodeBuddy 测试追问。/);
     assert.match(await page.locator('#p-ai-v613').innerText(), /人工确认/);
     assert.equal(await persistedState(page), before, '单题和追问未经采纳不得改变题库或学习数据');
     const savedDraft = await page.locator('.practice-ai-text-v613').innerText();
-    await page.evaluate(async()=>{
+    await page.evaluate(async () => {
       const platform =/** @type {import('../../web/platform/runtime.d.ts').BrowserGlobals['ShirohaPlatform']} */ (Reflect.get(window, 'ShirohaPlatform'));
-      const harness = platform.harness;if (!harness) {throw new Error('Harness 缺失');}
+      const { harness } = platform;if (!harness) { throw new Error('Harness 缺失'); }
       const controller = new window.AbortController();
       const pending = harness.execute(harness.snapshot(), 'question_analysis', [{ role: 'user', content: '隔离取消测试' }], controller.signal);
       controller.abort();
-      try {await pending;throw new Error('取消结果仍被返回');}
-      catch(error) {if (!error || typeof error !== 'object' || !('name' in error) || error.name !== 'AbortError') {throw error;}}
-      if (harness.status().busy) {throw new Error('取消未收敛');}
+      try { await pending;throw new Error('取消结果仍被返回'); } catch (error) { if (!error || typeof error !== 'object' || !('name' in error) || error.name !== 'AbortError') { throw error; } }
+      if (harness.status().busy) { throw new Error('取消未收敛'); }
     });
     assert.equal(await persistedState(page), before);
     assert.equal(await page.locator('.practice-ai-text-v613').innerText(), savedDraft);
     const beforeSave =/** @type {import('../../web/platform/contracts.d.ts').Snapshot} */ (JSON.parse(before));
-    const sourceBank = beforeSave.banks.find((bank)=>bank.id === beforeSave.activeBankId);
+    const sourceBank = beforeSave.banks.find((bank) => bank.id === beforeSave.activeBankId);
     assert(sourceBank && sourceBank.questions.length === 1, '人工保存验收须定位当前隔离单题题库');
     const sourceQuestion = sourceBank.questions[0];
     const conversation = await page.locator('.practice-ai-chat-v613').innerText();
@@ -130,17 +129,17 @@ async function questionSmoke(page, startPractice) {
     const nextFollowUp = '保留的下一条合成追问草稿。';
     await page.locator('#practice-ai-follow-input-v613').fill(nextFollowUp);
     /** @param {import('playwright-core').Locator} dialog */
-    const confirmReplacement = (dialog)=>dialog.locator('[data-dialog-accept]').click();
+    const confirmReplacement = (dialog) => dialog.locator('[data-dialog-accept]').click();
     await page.locator('[data-ai-single-save-v613]').click();
-    if (sourceQuestion.analysis && sourceQuestion.analysis !== savedDraft) {await confirmReplacement(page.locator('#app-dialog'));}
-    await page.waitForFunction(()=>document.querySelector('[data-ai-single-save-v613]')?.textContent?.includes('已写入题库解析'));
+    if (sourceQuestion.analysis && sourceQuestion.analysis !== savedDraft) { await confirmReplacement(page.locator('#app-dialog')); }
+    await page.waitForFunction(() => document.querySelector('[data-ai-single-save-v613]')?.textContent?.includes('已写入题库解析'));
     const afterSave =/** @type {import('../../web/platform/contracts.d.ts').Snapshot} */ (JSON.parse(await persistedState(page)));
-    const savedBank = afterSave.banks.find((bank)=>bank.id === sourceBank.id);
+    const savedBank = afterSave.banks.find((bank) => bank.id === sourceBank.id);
     assert(savedBank, '保存后来源题库必须存在');
-    assert.deepEqual(afterSave.banks, beforeSave.banks.map((bank)=>bank.id === sourceBank.id ? {
+    assert.deepEqual(afterSave.banks, beforeSave.banks.map((bank) => (bank.id === sourceBank.id ? {
       ...bank, updatedAt: savedBank.updatedAt,
-      questions: bank.questions.map((question)=>question.id === sourceQuestion.id ? { ...question, analysis: savedDraft } : question),
-    } : bank), '人工保存只能更新当前题解析和所属题库更新时间，题干、选项、答案及其他题目必须保留');
+      questions: bank.questions.map((question) => (question.id === sourceQuestion.id ? { ...question, analysis: savedDraft } : question)),
+    } : bank)), '人工保存只能更新当前题解析和所属题库更新时间，题干、选项、答案及其他题目必须保留');
     assert.deepEqual(afterSave.records, beforeSave.records, '保存解析不能提交答案或新增练习记录');
     assert.equal(afterSave.activeBankId, beforeSave.activeBankId);
     assert(await page.locator('[data-ai-single-save-v613]').isDisabled());
@@ -150,8 +149,8 @@ async function questionSmoke(page, startPractice) {
     assert.equal(await page.locator('.practice-ai-chat-v613').innerText(), conversation, '人工保存必须保留追问记录');
     assert.equal(await page.locator('#practice-ai-follow-input-v613').inputValue(), nextFollowUp, '人工保存必须保留未发送的追问草稿');
   } finally {
-    if (started && await page.locator('#p-exit').isVisible()) {await page.locator('#p-exit').click();await page.locator('#app-dialog [data-dialog-accept]').click();}
-    await page.waitForFunction(()=>!document.body.classList.contains('practice-focus'));
+    if (started && await page.locator('#p-exit').isVisible()) { await page.locator('#p-exit').click();await page.locator('#app-dialog [data-dialog-accept]').click(); }
+    await page.waitForFunction(() => !document.body.classList.contains('practice-focus'));
     await page.locator('#practice-submit-mode').selectOption('single');
     await page.locator('.nav[data-view="ai-settings"]').click();
   }
@@ -161,7 +160,7 @@ async function questionSmoke(page, startPractice) {
 export async function codebuddyLoginSmoke(page, startPractice) {
   await page.locator('.nav[data-view="ai-settings"]').click();
   const originalApi = await apiSettings(page);
-  const originalCredential = await page.evaluate((config)=>{
+  const originalCredential = await page.evaluate((config) => {
     const platform =/** @type {import('../../web/platform/runtime.d.ts').BrowserGlobals['ShirohaPlatform']} */ (Reflect.get(window, 'ShirohaPlatform'));
     return platform.credentials.status('ai', { endpoint: config.endpoint, rememberKey: config.remember });
   }, originalApi);
@@ -174,7 +173,7 @@ export async function codebuddyLoginSmoke(page, startPractice) {
   const codex = await executionStatus(page);
   assert.equal(codex.credentialStatus, 'subscription');
   await selectProvider(page, 'codebuddy');
-  await page.waitForFunction(()=>{
+  await page.waitForFunction(() => {
     const platform =/** @type {import('../../web/platform/runtime.d.ts').BrowserGlobals['ShirohaPlatform']} */ (Reflect.get(window, 'ShirohaPlatform'));
     const current = platform.harness?.status();return current?.runtimeState === 'ready' && !current.busy;
   });
@@ -206,7 +205,7 @@ export async function codebuddyLoginSmoke(page, startPractice) {
   assert.equal(loggedIn.busy, false, `登录完成后不应仍繁忙：${loggedIn.phase}`);
   assert.equal(loggedIn.loginUrl, '');
   assert.deepEqual(Object.keys(loggedIn).sort(), ['phase', 'revision', 'loginUrl', 'message', 'browserOpened', 'busy', 'rememberLogin', 'persistenceState', 'persistenceErrorCode'].sort(), '登录状态不得公开令牌或个人标识');
-  await page.waitForFunction(()=>{
+  await page.waitForFunction(() => {
     const platform =/** @type {import('../../web/platform/runtime.d.ts').BrowserGlobals['ShirohaPlatform']} */ (Reflect.get(window, 'ShirohaPlatform'));
     const current = platform.harness?.status();return current?.adapter === 'codebuddy' && current.ready && !current.busy;
   });
@@ -216,37 +215,35 @@ export async function codebuddyLoginSmoke(page, startPractice) {
   assert.equal(available.model, 'deepseek-v4.1-flash');assert.equal(available.timeoutSeconds, 120);
   await page.locator('#ai-execution-api').check();
   await page.locator('#ai-save-settings-v99').click();
-  await page.waitForFunction(()=>{
+  await page.waitForFunction(() => {
     const platform =/** @type {import('../../web/platform/runtime.d.ts').BrowserGlobals['ShirohaPlatform']} */ (Reflect.get(window, 'ShirohaPlatform'));
     return platform.harness?.status().mode === 'api';
   });
   await page.locator('#ai-execution-harness').check();
   assert(await page.locator('#ai-codebuddy-model').isDisabled(), '执行方式未保存时不能建立模型草稿');
   await page.locator('#ai-save-settings-v99').click();
-  await page.waitForFunction(()=>{
+  await page.waitForFunction(() => {
     const platform =/** @type {import('../../web/platform/runtime.d.ts').BrowserGlobals['ShirohaPlatform']} */ (Reflect.get(window, 'ShirohaPlatform'));
     return platform.harness?.status().mode === 'harness';
   });
   assert.equal((await status(page)).phase, 'signed_in', '切换执行方式不得注销 CodeBuddy');
-  assert.deepEqual(await page.locator('#ai-codebuddy-model option').evaluateAll((options)=>options.map((option)=>/** @type {HTMLOptionElement} */ (option).value)), ['deepseek-v4.1-flash', 'hy4-preview', 'hy3', 'default']);
+  assert.deepEqual(await page.locator('#ai-codebuddy-model option').evaluateAll((options) => options.map((option) => /** @type {HTMLOptionElement} */ (option).value)), ['deepseek-v4.1-flash', 'hy4-preview', 'hy3', 'default']);
   await selectCodeBuddyModel(page, 'hy4-preview');
   const staleModelRequest = await page.evaluate(async (snapshot) => {
     const host = /** @type {{invoke(command:string,args:Record<string,unknown>):Promise<unknown>}} */ (Reflect.get(window, 'ShirohaDesktopHost'));
-    try { await host.invoke('harness_execute', { request: { id: window.crypto.randomUUID(), revision: snapshot.revision, accountRevision: snapshot.accountRevision, task: 'connection_test', messages: [{ role: 'user', content: '过期模型快照' }] } }); return ''; }
-    catch(error) { return error && typeof error === 'object' && 'code' in error ? error.code : 'unknown'; }
+    try { await host.invoke('harness_execute', { request: { id: window.crypto.randomUUID(), revision: snapshot.revision, accountRevision: snapshot.accountRevision, task: 'connection_test', messages: [{ role: 'user', content: '过期模型快照' }] } }); return ''; } catch (error) { return error && typeof error === 'object' && 'code' in error ? error.code : 'unknown'; }
   }, available);
   assert.equal(staleModelRequest, 'harness_stale', '旧模型快照必须在执行前拒绝');
   await selectCodeBuddyModel(page, 'deepseek-v4.1-flash');
   await page.locator('#ai-test-connection-v99').click();
-  await page.waitForFunction(()=>document.querySelector('#ai-settings-status-v99')?.textContent?.includes('CodeBuddy 测试执行成功'));
-  const deniedTasks = await page.evaluate(async()=>{
+  await page.waitForFunction(() => document.querySelector('#ai-settings-status-v99')?.textContent?.includes('CodeBuddy 测试执行成功'));
+  const deniedTasks = await page.evaluate(async () => {
     const host =/** @type {{invoke(command:string,args:Record<string,unknown>):Promise<unknown>}} */ (Reflect.get(window, 'ShirohaDesktopHost'));
     const platform =/** @type {import('../../web/platform/runtime.d.ts').BrowserGlobals['ShirohaPlatform']} */ (Reflect.get(window, 'ShirohaPlatform'));
-    const snapshot = platform.harness?.snapshot();if (!snapshot) {throw new Error('Harness 缺失');}
+    const snapshot = platform.harness?.snapshot();if (!snapshot) { throw new Error('Harness 缺失'); }
     const errors = [];
     for (const task of ['import_organize', 'batch_review', 'batch_analysis']) {
-      try {await host.invoke('harness_execute', { request: { id: window.crypto.randomUUID(), revision: snapshot.revision, accountRevision: snapshot.accountRevision, task, messages: [{ role: 'user', content: '隔离拒绝测试' }] } });errors.push('accepted');}
-      catch(error) {errors.push(error && typeof error === 'object' && 'code' in error ? error.code : 'unknown');}
+      try { await host.invoke('harness_execute', { request: { id: window.crypto.randomUUID(), revision: snapshot.revision, accountRevision: snapshot.accountRevision, task, messages: [{ role: 'user', content: '隔离拒绝测试' }] } });errors.push('accepted'); } catch (error) { errors.push(error && typeof error === 'object' && 'code' in error ? error.code : 'unknown'); }
     }
     return errors;
   });
@@ -266,8 +263,7 @@ export async function codebuddyLoginSmoke(page, startPractice) {
   assert.equal(await page.locator('#ai-test-connection-v99').isVisible(), false);
   const blocked = await page.evaluate(async (revision) => {
     const host = /** @type {{invoke(command:string,args:Record<string,unknown>):Promise<unknown>}} */ (Reflect.get(window, 'ShirohaDesktopHost'));
-    try { await host.invoke('harness_execute', { request: { id: window.crypto.randomUUID(), revision, task: 'connection_test', messages: [{ role: 'user', content: '合成拒绝用例' }] } }); return ''; }
-    catch (error) { return error && typeof error === 'object' && 'code' in error ? error.code : 'unknown'; }
+    try { await host.invoke('harness_execute', { request: { id: window.crypto.randomUUID(), revision, task: 'connection_test', messages: [{ role: 'user', content: '合成拒绝用例' }] } }); return ''; } catch (error) { return error && typeof error === 'object' && 'code' in error ? error.code : 'unknown'; }
   }, unavailable.revision);
   assert.equal(blocked, 'harness_provider_unavailable', '未接入提供方不得回退 Codex');
   assert.equal((await status(page)).phase, 'signed_in');
@@ -284,7 +280,7 @@ export async function codebuddyLoginSmoke(page, startPractice) {
   await selectProvider(page, 'codebuddy');
   await selectCodeBuddyModel(page, 'hy3');
   assert.deepEqual(await apiSettings(page), originalApi);
-  assert.equal(await page.evaluate((config)=>{
+  assert.equal(await page.evaluate((config) => {
     const platform =/** @type {import('../../web/platform/runtime.d.ts').BrowserGlobals['ShirohaPlatform']} */ (Reflect.get(window, 'ShirohaPlatform'));
     return platform.credentials.status('ai', { endpoint: config.endpoint, rememberKey: config.remember });
   }, originalApi), originalCredential);

@@ -13,7 +13,6 @@
     }
 
     function normalizeAiConfigV99(value) {
-
       const raw = value && typeof value === 'object' ? value : {};
 
       const provider = AI_PROVIDER_PRESETS_V99[raw.provider] ? raw.provider : 'ollama';
@@ -21,7 +20,6 @@
       const timeout = Math.min(600, Math.max(10, Number(raw.timeoutSeconds || 120) || 120));
 
       return { provider, endpoint: String(raw.endpoint || AI_PROVIDER_PRESETS_V99[provider].endpoint || '').trim(), model: String(raw.model || '').trim(), timeoutSeconds: timeout, rememberKey: !!raw.rememberKey };
-
     }
 
     function aiProviderLabelV99(provider) {
@@ -29,16 +27,15 @@
     }
 
     function aiHarnessLabelV99(adapter) {
-
-      switch (adapter) {case 'codex'
-        :return 'Codex';
+      switch (adapter) {
+        case 'codex'
+          :return 'Codex';
         case 'codebuddy'
           :return 'CodeBuddy';
         case 'deepseek'
           :return 'DeepSeek';
         default:return '未知 Harness';
       }
-
     }
 
     function isAiHarnessExecutionV99(execution) {
@@ -46,7 +43,6 @@
     }
 
     function aiHarnessTaskReasonV99(config, task) {
-
       if (!isAiHarnessExecutionV99(config.execution)) {
         return '';
       }
@@ -60,7 +56,6 @@
       }
 
       return `${aiHarnessLabelV99(config.execution.adapter)} 当前尚未开放模型执行，本次不会发送题目内容。`;
-
     }
 
     function aiUnavailableReasonV99(config, task) {
@@ -68,7 +63,6 @@
     }
 
     function aiHarnessPrivacyV99(config, subject) {
-
       if (config.execution?.adapter === 'codex') {
         return `${subject}将经 Codex 发送到 OpenAI，使用已登录的订阅额度。`;
       }
@@ -78,11 +72,9 @@
       }
 
       return `${aiHarnessLabelV99(config.execution?.adapter)} 当前尚未开放模型执行，本次不会发送题目内容。`;
-
     }
 
     function aiExecutionConfigV99() {
-
       const execution = ShirohaPlatform.harness?.snapshot();
 
       if (isAiHarnessExecutionV99(execution)) {
@@ -93,11 +85,9 @@
       }
 
       return { ...ensureAiImportStateV99(), execution };
-
     }
 
     function aiConfiguredV99(config, task = 'connection_test') {
-
       if (!isAiHarnessExecutionV99(config.execution)) {
         return !!(config.endpoint && config.model);
       }
@@ -107,18 +97,15 @@
       }
 
       return config.execution.adapter === 'codex' || (Number.isSafeInteger(config.execution.accountRevision) && config.execution.accountRevision >= 0);
-
     }
 
     function aiExecutionLabelV99(config) {
-
       if (!isAiHarnessExecutionV99(config.execution)) {
         return aiProviderLabelV99(config.provider);
       }
 
       const label = aiHarnessLabelV99(config.execution.adapter);
       return label === '未知 Harness' ? label : `${label} Harness`;
-
     }
 
     function aiRequestConfigV99(config) {
@@ -126,7 +113,6 @@
     }
 
     function normalizeAiEndpointV99(value, provider) {
-
       let text = String(value || '').trim();
 
       if (!text) {
@@ -141,7 +127,7 @@
 
       try {
         url = new URL(text);
-      } catch(error) {
+      } catch (error) {
         throw new Error('接口地址格式不正确，请填写完整的 http:// 或 https:// 地址。', { cause: error });
       }
       if (!/^https?:$/.test(url.protocol)) {
@@ -152,19 +138,16 @@
 
       if (!path || path === '/') {
         url.pathname = '/v1/chat/completions';
-      }
-      else if (/\/v1$/i.test(path)) {
+      } else if (/\/v1$/i.test(path)) {
         url.pathname = path + '/chat/completions';
       }
 
       url.hash = '';
 
       return url.toString().replace(/\/$/, '');
-
     }
 
     function isLocalAiEndpointV99(endpoint) {
-
       try {
         const host = new URL(endpoint).hostname.toLowerCase();
         return host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '[::1]';
@@ -174,7 +157,6 @@
     }
 
     function readAiFormV99() {
-
       const provider = $('#ai-provider-v99')?.value || 'ollama';
 
       const endpoint = normalizeAiEndpointV99($('#ai-endpoint-v99')?.value || '', provider);
@@ -200,11 +182,9 @@
       }
 
       return { provider, endpoint, model, timeoutSeconds, rememberKey, apiKey };
-
     }
 
     function setAiSettingsStatusV99(message, type = '') {
-
       const el = $('#ai-settings-status-v99');
       if (!el) {
         return;
@@ -212,7 +192,6 @@
 
       el.textContent = message;
       el.className = 'notice' + (type ? ' ' + type : '');
-
     }
 
     function aiCurrentOriginV375() {
@@ -232,7 +211,6 @@
     }
 
     function sanitizeAiDiagnosticDetailV375(text, config) {
-
       let detail = String(text || '').replace(/\s+/g, ' ').trim();
 
       if (config) {
@@ -240,11 +218,9 @@
       }
 
       return detail.slice(0, 520);
-
     }
 
     function aiOllamaCorsCommandV375(diag) {
-
       if (ShirohaPlatform.credentials.native || !diag || diag.provider !== 'ollama') {
         return '';
       }
@@ -254,11 +230,9 @@
       const origins = [origin, 'http://localhost', 'http://127.0.0.1', 'http://localhost:*', 'http://127.0.0.1:*'].filter(Boolean).join(',');
 
       return `setx OLLAMA_ORIGINS "${origins}"\n\n然后完全退出并重新启动 Ollama，再回到 Shiroha Quiz 点击“测试连接”。`;
-
     }
 
     function buildAiDiagnosticV375(error, config, mode = 'error') {
-
       const cfg = config || {};
       const endpoint = String(cfg.endpoint || '').trim();
       const provider = String(cfg.provider || 'custom');
@@ -297,127 +271,94 @@
       let level = '';
       let steps;
       if (mode === 'ok') {
-
         summary = '连接测试成功';
         level = 'ok';
         statusMessage = '连接测试成功。请点击“保存设置”，导入页才会使用当前配置。';
 
         steps = ['当前接口已能返回有效响应。', native ? '如更换模型、地址或 API Key 后，请重新测试。' : '如更换模型、地址或跨域配置后，请重新测试。'];
-
       } else if (code === 'timeout' || (!status && /超过\s*\d+\s*秒/.test(error?.message || ''))) {
-
         summary = '请求超时';
         level = 'warn';
         statusMessage = error.message || 'AI 请求超时，请检查服务连接。';
         steps = ['确认模型已经加载完成。', '适当增加请求超时时间。', '本地小显存模型首次响应可能较慢。'];
-
       } else if (code === 'cancelled' || error?.name === 'AbortError') {
-
         summary = '请求已取消';
         level = 'warn';
         statusMessage = error.message || 'AI 请求已取消。';
         steps = ['需要继续时，请重新测试连接。'];
-
       } else if (nativeError) {
-
         summary = nativeError[0];
         level = 'warn';
         statusMessage = error.message || summary;
         steps = [nativeError[1]];
-
       } else if (native && (code === 'network_unavailable' || network)) {
-
         summary = local ? '无法连接本地 AI 服务' : '无法连接 AI 服务';
         level = 'warn';
         statusMessage = error.message || '无法连接 AI 服务，请检查地址、证书和网络。';
 
         steps = [local ? '确认本地 AI 服务正在运行且监听对应地址和端口。' : '确认接口域名可解析、证书受信任且当前网络能够连接服务。', '核对接口地址及服务端日志后重新测试。'];
-
       } else if (network) {
-
         summary = local ? '疑似 CORS 拦截、本地服务未启动或地址不可达' : '浏览器无法访问该接口';
         level = 'warn';
 
         statusMessage = local ? '无法访问本地 AI 接口。请检查服务是否启动、地址是否正确，以及是否允许当前网页跨域访问。' : '无法访问 AI 接口。请检查网络、地址、HTTPS/HTTP 混用和接口跨域设置。';
 
         steps = local ? ['确认 Ollama / LM Studio 正在运行。', '确认接口地址和端口正确。', '如果当前页面来自 GitHub Pages，需要在本地 AI 服务里允许该页面 Origin 跨域访问。', '设置跨域后要完全重启本地 AI 服务，再重新测试。'] : ['确认接口地址能从当前浏览器访问。', '确认服务端允许当前网页跨域请求。', '如果是远程服务，优先使用自己的后端代理转发请求，避免在纯前端暴露密钥。'];
-
       } else if (status === 401) {
-
         summary = '鉴权失败';
         level = 'warn';
         statusMessage = '鉴权失败，请检查 API Key 或服务权限。';
         steps = ['确认 API Key 是否填写正确。', '本地 Ollama 通常不需要 API Key，可以留空。', '如果是远程 OpenAI-compatible 服务，请确认 Key 仍有效且有模型调用权限。'];
-
       } else if (status === 403) {
-
         if (native) {
           summary = '服务拒绝访问';
           level = 'warn';
           statusMessage = 'AI 服务拒绝访问，请检查 API Key、模型权限或服务端访问限制。';
           steps = ['确认 API Key 有效且允许调用当前模型。', '检查服务端 IP 白名单、访问权限和日志。'];
-        }
-        else {
+        } else {
           summary = local ? '本地服务拒绝当前网页访问，优先检查 CORS / Origin' : '服务拒绝访问';
           level = 'warn';
           statusMessage = local ? '本地 AI 服务拒绝当前网页访问，优先检查 OLLAMA_ORIGINS 或服务端跨域设置。' : 'AI 服务拒绝访问，请检查权限、来源限制或跨域设置。';
           steps = local ? ['如果使用 Ollama，请把当前页面 Origin 加入 OLLAMA_ORIGINS。', '如果使用 LM Studio，请检查本地服务器是否开启跨域访问。', '修改后完全重启本地 AI 服务。'] : ['确认账号、Key、IP 白名单和 Origin 白名单。', '确认当前模型是否允许被调用。'];
         }
-
       } else if (status === 404) {
-
         summary = '接口路径不存在';
         level = 'warn';
         statusMessage = '接口不存在或路径不正确，请检查 Chat Completions 地址。';
         steps = ['Ollama / LM Studio 的 OpenAI-compatible 地址通常应以 /v1/chat/completions 结尾。', '如果只填到 /v1，本页面会自动补全为 /v1/chat/completions。', '确认服务端版本是否支持 Chat Completions。'];
-
       } else if (status === 405) {
-
         summary = '接口不支持当前请求方法';
         level = 'warn';
         statusMessage = '接口不支持 Chat Completions POST 请求，请检查地址或服务类型。';
         steps = ['不要填写浏览器管理页面地址，应填写 API 地址。', '确认目标接口支持 POST /v1/chat/completions。'];
-
       } else if (status === 400 || status === 422) {
-
         summary = '请求格式或模型名称可能不匹配';
         level = 'warn';
         statusMessage = '接口已响应，但请求格式或模型名称可能不匹配。';
         steps = ['确认模型名称与本地服务中显示的模型名称完全一致。', '如果服务不支持 response_format，本页面已自动重试普通 JSON 请求；仍失败时请查看错误详情。'];
-
       } else if (status === 429) {
-
         summary = '请求频率或额度受限';
         level = 'warn';
         statusMessage = '请求过于频繁或账户额度不足。';
         steps = ['稍后重试。', '如果是远程服务，请检查账户额度、速率限制和模型权限。'];
-
       } else if (status >= 500) {
-
         summary = 'AI 服务内部错误';
         level = 'warn';
         statusMessage = 'AI 服务内部错误，请稍后重试或查看本地服务日志。';
         steps = ['检查模型是否已成功加载。', '查看本地 AI 服务控制台日志。', '降低模型或上下文规模后重试。'];
-
       } else if (error) {
-
         summary = '连接测试失败';
         level = 'warn';
         statusMessage = error.message || '连接测试失败。';
         steps = ['检查服务是否启动、地址是否正确、模型名称是否存在。', native ? '根据错误摘要检查桌面服务和接口状态后重试。' : '如果浏览器控制台出现 CORS、Origin 或 Failed to fetch，按跨域问题处理。'];
-
       } else {
-
         steps = ['填写接口地址和模型名称后点击“测试连接”。', native ? '桌面通过原生网络连接服务，请确认地址、模型和 API Key 正确。' : '如果使用 GitHub Pages 访问本地服务，通常还需要本地服务允许跨域访问。'];
-
       }
 
       return { time: new Date().toLocaleString('zh-CN', { hour12: false }), mode, provider, providerLabel, endpoint, host: aiEndpointHostV375(endpoint), origin, local, status: status || '', statusLabel: status ? `HTTP ${status}` : '无 HTTP 状态', summary, statusMessage, level, detail: rawDetail || '无额外错误详情', steps };
-
     }
 
     function renderAiDiagnosticV375() {
-
       const panel = $('#ai-diagnostics-v375');
       if (!panel) {
         return;
@@ -440,11 +381,9 @@
       const body = $('#ai-diagnostics-body-v375');
 
       if (body) {
-
         const rows = [['接口地址', diag.endpoint || '未填写'], ['当前页面', diag.origin], ['服务类型', diag.providerLabel], ['主机', diag.host || '未识别'], ['HTTP 状态', diag.statusLabel], ['判断结果', diag.summary], ['错误摘要', diag.detail]];
 
-        body.innerHTML = `<div class="ai-diagnostics-grid-v375">${rows.map(([k, v])=>`<div><span>${esc(k)}</span><b title="${esc(v)}">${esc(v)}</b></div>`).join('')}</div><div class="notice ${diag.level === 'ok' ? 'ok' : 'warn'} ai-diagnostics-advice-v375"><b>${esc(diag.statusMessage)}</b><ol>${(diag.steps || []).map((x)=>`<li>${esc(x)}</li>`).join('')}</ol></div>`;
-
+        body.innerHTML = `<div class="ai-diagnostics-grid-v375">${rows.map(([k, v]) => `<div><span>${esc(k)}</span><b title="${esc(v)}">${esc(v)}</b></div>`).join('')}</div><div class="notice ${diag.level === 'ok' ? 'ok' : 'warn'} ai-diagnostics-advice-v375"><b>${esc(diag.statusMessage)}</b><ol>${(diag.steps || []).map((x) => `<li>${esc(x)}</li>`).join('')}</ol></div>`;
       }
 
       const toggle = $('#ai-toggle-diagnostics-v375');
@@ -456,7 +395,6 @@
       if (copyCors) {
         copyCors.classList.toggle('ai-hidden-v99', !aiOllamaCorsCommandV375(diag));
       }
-
     }
 
     function setAiDiagnosticV375(diag, show) {
@@ -473,17 +411,14 @@
     }
 
     function copyAiDiagnosticV375() {
-
       const diag = aiLastDiagnosticV375 || buildAiDiagnosticV375(null, ensureAiImportStateV99(), 'idle');
 
-      const text = ['Shiroha Quiz AI 连接诊断', `时间：${diag.time}`, `服务类型：${diag.providerLabel}`, `接口地址：${diag.endpoint || '未填写'}`, `当前页面：${diag.origin}`, `HTTP 状态：${diag.statusLabel}`, `判断结果：${diag.summary}`, `错误摘要：${diag.detail}`, '建议：', ...(diag.steps || []).map((x, i)=>`${i + 1}. ${x}`)].join('\n');
+      const text = ['Shiroha Quiz AI 连接诊断', `时间：${diag.time}`, `服务类型：${diag.providerLabel}`, `接口地址：${diag.endpoint || '未填写'}`, `当前页面：${diag.origin}`, `HTTP 状态：${diag.statusLabel}`, `判断结果：${diag.summary}`, `错误摘要：${diag.detail}`, '建议：', ...(diag.steps || []).map((x, i) => `${i + 1}. ${x}`)].join('\n');
 
       copyTextV23(text, '已复制 AI 连接诊断。');
-
     }
 
     function copyAiOllamaCorsCommandV375() {
-
       const diag = aiLastDiagnosticV375 || buildAiDiagnosticV375(null, ensureAiImportStateV99(), 'idle');
 
       const command = aiOllamaCorsCommandV375(diag);
@@ -493,11 +428,9 @@
       }
 
       copyTextV23(command, '已复制 Ollama 跨域命令。');
-
     }
 
     function updateAiConnectionPillV99(stateValue, configuredOverride) {
-
       if (stateValue) {
         aiConnectionStateV99 = stateValue;
       }
@@ -518,23 +451,18 @@
       if (status === 'ok') {
         pill.textContent = '连接正常';
         pill.classList.add('is-ok');
-      }
-      else if (status === 'error') {
+      } else if (status === 'error') {
         pill.textContent = '连接失败';
         pill.classList.add('is-error');
-      }
-      else if (configured) {
+      } else if (configured) {
         pill.textContent = '已配置';
         pill.classList.add('is-ready');
-      }
-      else {
+      } else {
         pill.textContent = '未配置';
       }
-
     }
 
     function renderAiSettingsV99() {
-
       const config = ensureAiImportStateV99();
 
       const provider = $('#ai-provider-v99');
@@ -575,7 +503,6 @@
       renderAiDiagnosticV375();
 
       ShirohaPlatform.harness?.render();
-
     }
     function setState(connection, diagnostic) {
       aiConnectionStateV99 = connection;

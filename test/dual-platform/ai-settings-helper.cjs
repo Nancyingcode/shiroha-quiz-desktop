@@ -14,7 +14,7 @@ function installAiSettings(context) {
       copy: (...args) => context.copyTextV23?.(...args), toast: (...args) => context.toast?.(...args) },
   });
   for (const [name, value] of Object.entries(settings)) {
-    if (!(name in context)) {context[name] = value;}
+    if (!(name in context)) { context[name] = value; }
   }
   return settings;
 }

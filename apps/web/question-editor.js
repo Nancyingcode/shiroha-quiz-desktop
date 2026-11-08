@@ -17,7 +17,7 @@
       favorites: renderFavoritesPageV596, records: renderRecords } = view;
     const { transaction: runMutation, save: saveSilent } = storage;
     // 编辑弹窗与多空输入只属于当前页面；打开新题或关闭弹窗时丢弃旧编辑会话。
-    let practiceEditSessionV120 = null, editBlankGroupsV58914 = [], editMultiBlankEnabledV58914 = false;
+    let practiceEditSessionV120 = null; let editBlankGroupsV58914 = []; let editMultiBlankEnabledV58914 = false;
     function renderImportReportPanel(arr) {
       const el = $('#import-report-panel');
       if (!el) {
@@ -34,11 +34,11 @@
       const expTotal = Number(expected.total || 0);
       const diff = expTotal ? arr.length - expTotal : 0;
       const diffClass = !expTotal ? '' : ' ' + (Math.abs(diff) <= Math.max(2, Math.ceil(expTotal * 0.05)) ? 'ok' : 'warn');
-      const statusList = (arr || []).map((q)=>importIssueStatus(q, d.profile || {}));
-      const hardCount = statusList.filter((x)=>importStatusSeverity(x) === 'error').length;
-      const riskCount = statusList.filter((x)=>importStatusSeverity(x) === 'warn').length;
-      const repairedSegments = (d.candidates || []).flatMap((c)=>c.segments || []);
-      const candidates = (d.candidates || []).map((c)=>`<tr><td>${esc(c.name)}</td><td>${esc(c.questions)}</td><td>${esc(c.score)}</td><td>${esc((c.warnings || []).length)}</td><td>${esc((c.segments || []).length)}</td></tr>`).join('');
+      const statusList = (arr || []).map((q) => importIssueStatus(q, d.profile || {}));
+      const hardCount = statusList.filter((x) => importStatusSeverity(x) === 'error').length;
+      const riskCount = statusList.filter((x) => importStatusSeverity(x) === 'warn').length;
+      const repairedSegments = (d.candidates || []).flatMap((c) => c.segments || []);
+      const candidates = (d.candidates || []).map((c) => `<tr><td>${esc(c.name)}</td><td>${esc(c.questions)}</td><td>${esc(c.score)}</td><td>${esc((c.warnings || []).length)}</td><td>${esc((c.segments || []).length)}</td></tr>`).join('');
       const profile = d.profile || {};
       const profileBits = [];
       if (profile.hasVolumeHeading) {
@@ -60,7 +60,7 @@
         profileBits.push(`共用材料${profile.sharedStemAppliedGroups}组/${profile.sharedStemAppliedChildren || 0}题`);
       }
       const typeExpected = expected.types || {};
-      const expLine = Object.entries({ single: '单选', multiple: '多选', judge: '判断', blank: '填空', short: '简答' }).map(([k, n])=>typeExpected[k] ? `${n}${typeExpected[k]}题` : null).filter(Boolean).join('、');
+      const expLine = Object.entries({ single: '单选', multiple: '多选', judge: '判断', blank: '填空', short: '简答' }).map(([k, n]) => (typeExpected[k] ? `${n}${typeExpected[k]}题` : null)).filter(Boolean).join('、');
       el.classList.remove('hidden');
       el.innerHTML = `<div class="report-grid">
     <div><span>采用策略</span><b>${esc(d.strategy || '未记录')}</b><small>模式：${esc(d.mode || '自动推荐')}</small></div>
@@ -81,9 +81,9 @@
       return 'error';
     }
     function renderImportPreview(arr) {
-      importDraft.selected = new Set([...importDraft.selected].filter((i)=>i >= 0 && i < (arr || []).length));
+      importDraft.selected = new Set([...importDraft.selected].filter((i) => i >= 0 && i < (arr || []).length));
       const warnings = [...importDraft.warnings];
-      const rows = (arr || []).map((q, i)=>{
+      const rows = (arr || []).map((q, i) => {
         const status = importIssueStatus(q, importDraft.diagnostics?.profile || {});
         if (status !== '正常') {
           warnings.push(`第${i + 1}题：${status}`);
@@ -92,19 +92,17 @@
       });
       let shown = [...rows];
       if (importDraft.filter === 'problem') {
-        shown = shown.filter((r)=>r.status !== '正常');
-      }
-      else if (importDraft.filter === 'normal') {
-        shown = shown.filter((r)=>r.status === '正常');
-      }
-      else if (importDraft.filter === 'priority') {
-        shown.sort((a, b)=>{
-          const aw = a.status === '正常' ? 1 : 0, bw = b.status === '正常' ? 1 : 0;
+        shown = shown.filter((r) => r.status !== '正常');
+      } else if (importDraft.filter === 'normal') {
+        shown = shown.filter((r) => r.status === '正常');
+      } else if (importDraft.filter === 'priority') {
+        shown.sort((a, b) => {
+          const aw = a.status === '正常' ? 1 : 0; const bw = b.status === '正常' ? 1 : 0;
           return aw - bw || a.i - b.i;
         });
       }
-      const shownIdx = shown.map((r)=>r.i);
-      $('#import-preview tbody').innerHTML = shown.map(({ q, i, status })=>{
+      const shownIdx = shown.map((r) => r.i);
+      $('#import-preview tbody').innerHTML = shown.map(({ q, i, status }) => {
         const severity = importStatusSeverity(status);
         const styles = { ok: ['status-ok', ''], error: ['status-error', 'error-row'], warn: ['status-warn', 'issue-row'] };
         const [cls, rowCls] = styles[severity];
@@ -138,36 +136,34 @@
       }
       const all = $('#import-select-all-visible');
       if (all) {
-        const selectedVisible = shownIdx.filter((i)=>importDraft.selected.has(i)).length;
+        const selectedVisible = shownIdx.filter((i) => importDraft.selected.has(i)).length;
         all.checked = shownIdx.length > 0 && selectedVisible === shownIdx.length;
         all.indeterminate = selectedVisible > 0 && selectedVisible < shownIdx.length;
-        all.onchange = ()=>{
+        all.onchange = () => {
           if (all.checked) {
-            shownIdx.forEach((i)=>importDraft.selected.add(i));
-          }
-          else {
-            shownIdx.forEach((i)=>importDraft.selected.delete(i));
+            shownIdx.forEach((i) => importDraft.selected.add(i));
+          } else {
+            shownIdx.forEach((i) => importDraft.selected.delete(i));
           }
           renderImportPreview(importDraft.questions);
         };
       }
-      $$('[data-select-import]').forEach((cb)=>cb.onchange = ()=>{
+      $$('[data-select-import]').forEach((cb) => cb.onchange = () => {
         const i = Number(cb.dataset.selectImport);
         if (cb.checked) {
           importDraft.selected.add(i);
-        }
-        else {
+        } else {
           importDraft.selected.delete(i);
         }
         renderImportPreview(importDraft.questions);
       });
-      $$('[data-edit-import]').forEach((btn)=>btn.onclick = ()=>openEditQuestion(Number(btn.dataset.editImport)));
-      $$('[data-delete-import]').forEach((btn)=>btn.onclick = async ()=>{
+      $$('[data-edit-import]').forEach((btn) => btn.onclick = () => openEditQuestion(Number(btn.dataset.editImport)));
+      $$('[data-delete-import]').forEach((btn) => btn.onclick = async () => {
         const i = Number(btn.dataset.deleteImport);
         if (await globalThis.ShirohaDialogs.confirm('删除这道识别结果？')) {
           removeAiSuggestionsForQuestionV991(importDraft.questions[i], i);
           importDraft.questions.splice(i, 1);
-          importDraft.selected = new Set([...importDraft.selected].map((x)=>x > i ? x - 1 : x).filter((x)=>x !== i));
+          importDraft.selected = new Set([...importDraft.selected].map((x) => (x > i ? x - 1 : x)).filter((x) => x !== i));
           renderImportPreview(importDraft.questions);
         }
       });
@@ -175,7 +171,7 @@
       syncAiPreviewToolsV991();
     }
     async function batchDeleteImportSelected() {
-      const ids = [...importDraft.selected].filter((i)=>i >= 0 && i < importDraft.questions.length).sort((a, b)=>b - a);
+      const ids = [...importDraft.selected].filter((i) => i >= 0 && i < importDraft.questions.length).sort((a, b) => b - a);
       if (!ids.length) {
         toast('请先勾选要删除的题目。', 'warn');
         return;
@@ -183,7 +179,7 @@
       if (!await globalThis.ShirohaDialogs.confirm(`确定批量删除选中的 ${ids.length} 道识别结果？`)) {
         return;
       }
-      ids.forEach((i)=>{
+      ids.forEach((i) => {
         removeAiSuggestionsForQuestionV991(importDraft.questions[i], i);
         importDraft.questions.splice(i, 1);
       });
@@ -196,11 +192,11 @@
       if (!rows.length) {
         return cloneBlankAnswersV58914(editBlankGroupsV58914);
       }
-      return rows.map((row)=>{
-        const values = [...row.querySelectorAll('[data-blank-answer-v58914]')].sort((a, b)=>Number(a.dataset.blankAnswerV58914) - Number(b.dataset.blankAnswerV58914)).map((input)=>String(input.value || '').trim());
+      return rows.map((row) => {
+        const values = [...row.querySelectorAll('[data-blank-answer-v58914]')].sort((a, b) => Number(a.dataset.blankAnswerV58914) - Number(b.dataset.blankAnswerV58914)).map((input) => String(input.value || '').trim());
         const main = values[0] || '';
         const seen = new Set(main ? [main] : []);
-        const alternatives = values.slice(1).filter((value)=>value && !seen.has(value) && seen.add(value));
+        const alternatives = values.slice(1).filter((value) => value && !seen.has(value) && seen.add(value));
         return [main, ...alternatives];
       });
     }
@@ -228,15 +224,15 @@
       if (!editBlankGroupsV58914.length) {
         editBlankGroupsV58914 = [['']];
       }
-      box.innerHTML = editBlankGroupsV58914.map((group, index)=>{
+      box.innerHTML = editBlankGroupsV58914.map((group, index) => {
         const values = [group[0] || '', group[1] || '', group[2] || ''];
         return `<div class="multi-blank-edit-group-v58914" data-blank-group-v58914="${index}"><div class="multi-blank-edit-head-v58914"><b>第${index + 1}空</b><div class="row-actions"><button class="ghost mini-btn" type="button" data-blank-move-v58914="up" ${index === 0 ? 'disabled' : ''}>上移</button><button class="ghost mini-btn" type="button" data-blank-move-v58914="down" ${index === editBlankGroupsV58914.length - 1 ? 'disabled' : ''}>下移</button><button class="ghost danger mini-btn" type="button" data-blank-delete-v58914 ${editBlankGroupsV58914.length === 1 ? 'disabled' : ''}>删除</button></div></div><div class="multi-blank-edit-fields-v58914"><label>主答案<input data-blank-answer-v58914="0" value="${esc(values[0])}" placeholder="必填" /></label><label>备选答案1<input data-blank-answer-v58914="1" value="${esc(values[1])}" placeholder="可空" /></label><label>备选答案2<input data-blank-answer-v58914="2" value="${esc(values[2])}" placeholder="可空" /></label></div></div>`;
       }).join('');
-      $$('#edit-blank-groups-v58914 [data-blank-answer-v58914]').forEach((input)=>input.oninput = ()=>{
+      $$('#edit-blank-groups-v58914 [data-blank-answer-v58914]').forEach((input) => input.oninput = () => {
         editBlankGroupsV58914 = collectEditBlankGroupsV58914();
         updateEditBlankCountTipV58914();
       });
-      $$('#edit-blank-groups-v58914 [data-blank-move-v58914]').forEach((button)=>button.onclick = ()=>{
+      $$('#edit-blank-groups-v58914 [data-blank-move-v58914]').forEach((button) => button.onclick = () => {
         editBlankGroupsV58914 = collectEditBlankGroupsV58914();
         const row = button.closest('[data-blank-group-v58914]');
         const index = Number(row?.dataset.blankGroupV58914);
@@ -247,7 +243,7 @@
         [editBlankGroupsV58914[index], editBlankGroupsV58914[target]] = [editBlankGroupsV58914[target], editBlankGroupsV58914[index]];
         renderEditBlankGroupsV58914();
       });
-      $$('#edit-blank-groups-v58914 [data-blank-delete-v58914]').forEach((button)=>button.onclick = ()=>{
+      $$('#edit-blank-groups-v58914 [data-blank-delete-v58914]').forEach((button) => button.onclick = () => {
         editBlankGroupsV58914 = collectEditBlankGroupsV58914();
         const index = Number(button.closest('[data-blank-group-v58914]')?.dataset.blankGroupV58914);
         if (editBlankGroupsV58914.length <= 1) {
@@ -287,7 +283,7 @@
       const desired = shortType ? 'textarea' : original;
       if (field.tagName.toLowerCase() !== desired) {
         const next = document.createElement(desired);
-        [...field.attributes].forEach((attr)=>{
+        [...field.attributes].forEach((attr) => {
           if (attr.name !== 'type') {
             next.setAttribute(attr.name, attr.value);
           }
@@ -299,15 +295,13 @@
         next.dataset.v5910OriginalTag = original;
         field.replaceWith(next);
         field = next;
-      }
-      else {
+      } else {
         field.dataset.v5910OriginalTag = original;
       }
       field.classList.toggle('edit-answer-multiline-v5910', shortType);
       if (shortType) {
         field.setAttribute('rows', '8');
-      }
-      else {
+      } else {
         field.removeAttribute('rows');
       }
       return field;
@@ -315,7 +309,7 @@
     function bindMultiBlankEditorV58914() {
       const type = $('#edit-type');
       if (type) {
-        type.onchange = ()=>{
+        type.onchange = () => {
           if (type.value !== 'blank') {
             editMultiBlankEnabledV58914 = false;
           }
@@ -330,7 +324,7 @@
       }
       const add = $('#edit-add-blank-btn-v58914');
       if (add) {
-        add.onclick = ()=>{
+        add.onclick = () => {
           editBlankGroupsV58914 = collectEditBlankGroupsV58914();
           editBlankGroupsV58914.push(['']);
           renderEditBlankGroupsV58914();
@@ -338,10 +332,10 @@
       }
       const enable = $('#edit-enable-multi-blank-btn-v58914');
       if (enable) {
-        enable.onclick = ()=>{
+        enable.onclick = () => {
           const count = Math.max(1, explicitBlankCountV58914($('#edit-question')?.value || ''));
           const old = String($('#edit-answer')?.value || '').trim();
-          editBlankGroupsV58914 = Array.from({ length: count }, (_, i)=>i === 0 && count === 1 && old ? [old] : ['']);
+          editBlankGroupsV58914 = Array.from({ length: count }, (_, i) => (i === 0 && count === 1 && old ? [old] : ['']));
           editMultiBlankEnabledV58914 = true;
           syncEditBlankUiV58914();
           $('#edit-status').textContent = '已启用逐空答案，请为每个题空填写主答案。';
@@ -350,7 +344,7 @@
       }
       const disable = $('#edit-disable-multi-blank-btn-v58914');
       if (disable) {
-        disable.onclick = async ()=>{
+        disable.onclick = async () => {
           editBlankGroupsV58914 = collectEditBlankGroupsV58914();
           if (!await globalThis.ShirohaDialogs.confirm('退出多空模式？各空主答案会用中文分号合并到普通答案框。')) {
             return;
@@ -380,7 +374,7 @@
       $('#edit-score').value = q.score || '';
       editMultiBlankEnabledV58914 = isMultiBlankQuestionV58914(q);
       editBlankGroupsV58914 = editMultiBlankEnabledV58914 ? cloneBlankAnswersV58914(q.blankAnswers) : [];
-      $('#edit-options').value = (q.options || []).map((o)=>`${o.key}. ${o.text}`).join('\n');
+      $('#edit-options').value = (q.options || []).map((o) => `${o.key}. ${o.text}`).join('\n');
       $('#edit-status').textContent = statusText;
       $('#edit-status').className = 'notice';
       syncEditBlankUiV58914();
@@ -408,15 +402,14 @@
       const raw = { ...baseQuestion, type, question: trimMultilineBoundaryV5910($('#edit-question').value), options, answer: isTextType(type) ? splitTextAnswer($('#edit-answer').value) : splitAnswer($('#edit-answer').value), analysis: trimMultilineBoundaryV5910($('#edit-analysis').value), category: $('#edit-category').value.trim(), score: $('#edit-score').value };
       if (type === 'blank' && editMultiBlankEnabledV58914) {
         const groups = collectEditBlankGroupsV58914();
-        const missing = groups.findIndex((group)=>!String(group[0] || '').trim());
+        const missing = groups.findIndex((group) => !String(group[0] || '').trim());
         if (missing >= 0) {
           return { error: `第${missing + 1}空缺少主答案，暂未保存。` };
         }
         raw.blankAnswers = groups;
         raw.answer = [primaryBlankAnswerV58914(groups)];
         editBlankGroupsV58914 = cloneBlankAnswersV58914(groups);
-      }
-      else {
+      } else {
         delete raw.blankAnswers;
       }
       return { raw };
@@ -457,7 +450,7 @@
       if (await globalThis.ShirohaDialogs.confirm('删除这道题？')) {
         removeAiSuggestionsForQuestionV991(importDraft.questions[i], i);
         importDraft.questions.splice(i, 1);
-        importDraft.selected = new Set([...importDraft.selected].map((x)=>x > i ? x - 1 : x).filter((x)=>x !== i));
+        importDraft.selected = new Set([...importDraft.selected].map((x) => (x > i ? x - 1 : x)).filter((x) => x !== i));
         closeEditModal();
         renderImportPreview(importDraft.questions);
       }
@@ -465,13 +458,13 @@
     function findPracticeQuestionLocationV120(item) {
       const q = practiceQuestionV8916(item);
       const bankId = practiceItemBankIdV8916(item);
-      const bank = (state.banks || []).find((b)=>b.id === bankId);
+      const bank = (state.banks || []).find((b) => b.id === bankId);
       if (!q || !bank) {
         return { q, bankId, bank: null, index: -1 };
       }
-      let index = (bank.questions || []).findIndex((x)=>x === q);
+      let index = (bank.questions || []).findIndex((x) => x === q);
       if (index < 0 && q.id) {
-        index = (bank.questions || []).findIndex((x)=>x && x.id === q.id);
+        index = (bank.questions || []).findIndex((x) => x && x.id === q.id);
       }
       return { q, bankId, bank, index };
     }
@@ -496,12 +489,12 @@
       $('#edit-modal').setAttribute('aria-hidden', 'false');
     }
     async function savePracticeEditQuestionV120() {
-      return runMutation(async()=>{
+      return runMutation(async () => {
         const session = practiceEditSessionV120;
         if (!session) {
           return;
         }
-        const bank = (state.banks || []).find((b)=>b.id === session.bankId);
+        const bank = (state.banks || []).find((b) => b.id === session.bankId);
         if (!bank) {
           $('#edit-status').textContent = '来源题库不存在，无法保存。';
           $('#edit-status').className = 'notice warn';
@@ -510,7 +503,7 @@
         let index = session.questionIndex;
         let oldQuestion = bank.questions && bank.questions[index];
         if (!oldQuestion || oldQuestion.id !== session.questionId) {
-          index = (bank.questions || []).findIndex((q)=>q && q.id === session.questionId);
+          index = (bank.questions || []).findIndex((q) => q && q.id === session.questionId);
           oldQuestion = index >= 0 ? bank.questions[index] : null;
         }
         if (!oldQuestion) {
@@ -527,7 +520,7 @@
         const next = cleanImportedQuestion(normalizeQuestion(read.raw, index));
         bank.questions[index] = next;
         bank.updatedAt = now();
-        (practiceSession.current.items || []).forEach((item)=>{
+        (practiceSession.current.items || []).forEach((item) => {
           if (item && item.bankId === bank.id && (item.question === oldQuestion || practiceItemKeyV8916(item) === session.sessionKey)) {
             item.question = next;
           }

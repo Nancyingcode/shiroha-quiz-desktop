@@ -48,24 +48,24 @@ test('unchanged outputs retain timestamps, including generated assets', async (t
   await prepareWeb(f.web, f.desktop);
   const before = await snapshot(f.dist);
   const old = new Date('2001-01-01T00:00:00Z');
-  for (const name of Object.keys(before)) {await utimes(path.join(f.dist, name), old, old);}
+  for (const name of Object.keys(before)) { await utimes(path.join(f.dist, name), old, old); }
   await prepareWeb(f.web, f.desktop);
   assert.deepEqual(await snapshot(f.dist), before);
-  for (const name of Object.keys(before)) {assert.equal((await stat(path.join(f.dist, name))).mtimeMs, old.getTime(), name);}
+  for (const name of Object.keys(before)) { assert.equal((await stat(path.join(f.dist, name))).mtimeMs, old.getTime(), name); }
 });
 
 test('equal-size source changes with preserved timestamps update only affected outputs', async (t) => {
   const f = await fixture(t);
   await prepareWeb(f.web, f.desktop);
   const old = new Date('2001-01-01T00:00:00Z');
-  for (const name of ['app.js', 'index.html', 'desktop.css']) {await utimes(path.join(f.dist, name), old, old);}
+  for (const name of ['app.js', 'index.html', 'desktop.css']) { await utimes(path.join(f.dist, name), old, old); }
   const input = path.join(f.web, 'app.js');
   const metadata = await stat(input);
   await writeFile(input, 'changed');
   await utimes(input, metadata.atime, metadata.mtime);
   await prepareWeb(f.web, f.desktop);
   assert.equal(await readFile(path.join(f.dist, 'app.js'), 'utf8'), 'changed');
-  for (const name of ['index.html', 'desktop.css']) {assert.equal((await stat(path.join(f.dist, name))).mtimeMs, old.getTime());}
+  for (const name of ['index.html', 'desktop.css']) { assert.equal((await stat(path.join(f.dist, name))).mtimeMs, old.getTime()); }
   await writeFile(path.join(f.desktop, 'frontend/desktop.css'), 'body { color: red; }');
   await prepareWeb(f.web, f.desktop);
   assert.equal(await readFile(path.join(f.dist, 'desktop.css'), 'utf8'), 'body { color: red; }');

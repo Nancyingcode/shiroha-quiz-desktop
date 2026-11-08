@@ -3,7 +3,6 @@
 
   function create({ normalizeType, normalizeQuestion, makeId, trimMultilineBoundaryV5910, splitAnswer }) {
     function aiRefactorRawQuestionsV384(data) {
-
       let raw = Array.isArray(data) ? data : (data?.questions ?? data?.items ?? data?.data ?? data?.题目 ?? []);
 
       if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
@@ -11,11 +10,9 @@
       }
 
       return Array.isArray(raw) ? raw : [];
-
     }
 
     function validateAiRefactorStructuredV384(data) {
-
       const raw = aiRefactorRawQuestionsV384(data);
       const issues = [];
 
@@ -25,8 +22,7 @@
 
       const questions = [];
 
-      raw.forEach((item, index)=>{
-
+      raw.forEach((item, index) => {
         const label = `第${index + 1}题`;
 
         if (!item || typeof item !== 'object' || Array.isArray(item)) {
@@ -59,7 +55,6 @@
         let invalid = false;
 
         for (const option of (rawOptions || [])) {
-
           if (!option || typeof option !== 'object' || Array.isArray(option)) {
             issues.push(`${label}存在非对象选项`);
             invalid = true;
@@ -72,18 +67,15 @@
           if (!/^[A-G]$/.test(key)) {
             issues.push(`${label}存在非法选项键：${key || '空'}`);
             invalid = true;
-          }
-          else if (!text) {
+          } else if (!text) {
             issues.push(`${label}选项${key}内容为空`);
             invalid = true;
-          }
-          else if (seen.has(key)) {
+          } else if (seen.has(key)) {
             issues.push(`${label}选项${key}重复`);
             invalid = true;
           } else {
             seen.add(key);
           }
-
         }
 
         if (invalid) {
@@ -103,8 +95,8 @@
         }
 
         if ((type === 'single' || type === 'multiple') && normalized.options.length) {
-          const keys = new Set(normalized.options.map((o)=>o.key));
-          const unknown = normalized.answer.filter((a)=>!keys.has(a));
+          const keys = new Set(normalized.options.map((o) => o.key));
+          const unknown = normalized.answer.filter((a) => !keys.has(a));
           if (unknown.length) {
             issues.push(`${label}答案超出已有选项：${unknown.join(',')}`);
             return;
@@ -117,15 +109,12 @@
         }
 
         questions.push(normalized);
-
       });
 
       return { usable: questions.length === raw.length && raw.length > 0, issues: [...new Set(issues)], questions };
-
     }
 
     function parseAiRefactorPayloadV384(content) {
-
       let data = extractBalancedJsonV99(content);
       if (typeof data === 'string') {
         data = extractBalancedJsonV99(data);
@@ -143,35 +132,30 @@
       let mode = raw.length ? 'direct_questions' : 'clean_text';
       if (directMode) {
         mode = 'direct_questions';
-      }
-      else if (cleanMode) {
+      } else if (cleanMode) {
         mode = 'clean_text';
       }
       const cleanedText = String(data.cleanedText ?? data.clean_text ?? data.text ?? '').trim();
       const cleanedAnswerText = String(data.cleanedAnswerText ?? data.cleaned_answer_text ?? '').trim();
 
-      const notes = [...(Array.isArray(data.notes) ? data.notes : []), ...(Array.isArray(data.warnings) ? data.warnings : [])].map((x)=>String(x || '').trim()).filter(Boolean);
+      const notes = [...(Array.isArray(data.notes) ? data.notes : []), ...(Array.isArray(data.warnings) ? data.warnings : [])].map((x) => String(x || '').trim()).filter(Boolean);
 
       const structured = validateAiRefactorStructuredV384(data);
 
       return { mode, cleanedText, cleanedAnswerText, questions: structured.questions, structuredUsable: mode === 'direct_questions' && structured.usable, structuredIssues: structured.issues, notes, data };
-
     }
 
     function aiResponseContentV99(payload) {
-
       const content = payload?.choices?.[0]?.message?.content ?? payload?.choices?.[0]?.text ?? payload?.output_text ?? payload?.response ?? payload?.text;
 
       if (Array.isArray(content)) {
-        return content.map((x)=>typeof x === 'string' ? x : (x?.text || x?.content || '')).join('');
+        return content.map((x) => (typeof x === 'string' ? x : (x?.text || x?.content || ''))).join('');
       }
 
       return String(content ?? '');
-
     }
 
     function extractBalancedJsonV99(text) {
-
       const s = String(text || '').replace(/^\uFEFF/, '').trim();
 
       try {
@@ -180,7 +164,6 @@
         // 模型可能在 JSON 前后附带说明，继续查找平衡的对象或数组。
       }
       for (let start = 0;start < s.length;start++) {
-
         if (s[start] !== '{' && s[start] !== '[') {
           continue;
         }
@@ -190,7 +173,6 @@
         let escaped = false;
 
         for (let i = start;i < s.length;i++) {
-
           const ch = s[i];
 
           if (quoted) {
@@ -211,9 +193,7 @@
 
           if (ch === '{' || ch === '[') {
             stack.push(ch);
-          }
-          else if (ch === '}' || ch === ']') {
-
+          } else if (ch === '}' || ch === ']') {
             const open = stack.pop();
             if (!open || (open === '{' && ch !== '}') || (open === '[' && ch !== ']')) {
               break;
@@ -228,41 +208,32 @@
               }
             }
           }
-
         }
-
       }
 
       throw new Error('AI 已返回内容，但无法提取合法 JSON。');
-
     }
 
     function canonicalizeAiOptionsV99(value) {
-
       if (Array.isArray(value)) {
-        return value.map((item)=>{
+        return value.map((item) => {
           if (typeof item === 'string') {
-
             const m = item.match(/^\s*([A-Ga-g])\s*[、.．:：]\s*(.+)$/s);
             return m ? { key: m[1].toUpperCase(), text: m[2] } : item;
-
           }
 
           return item;
-
         });
       }
 
       if (value && typeof value === 'object') {
-        return Object.entries(value).map(([key, text])=>({ key: String(key).toUpperCase(), text: typeof text === 'object' ? (text?.text ?? text?.content ?? JSON.stringify(text)) : String(text ?? '') }));
+        return Object.entries(value).map(([key, text]) => ({ key: String(key).toUpperCase(), text: typeof text === 'object' ? (text?.text ?? text?.content ?? JSON.stringify(text)) : String(text ?? '') }));
       }
 
       return [];
-
     }
 
     function canonicalizeAiQuestionV99(raw, index) {
-
       const q = raw && typeof raw === 'object' ? raw : {};
 
       const answer = q.answer ?? q.correctAnswer ?? q.answerKeys ?? q['答案'] ?? q['正确答案'] ?? [];
@@ -279,7 +250,6 @@
         category: q.category ?? q.topic ?? q.group ?? q.section ?? q['分类'] ?? q['章节'] ?? q['分区'] ?? '',
         source: q.source ?? q['来源'] ?? 'ai-assisted-import-v99', reviewStatus: 'pending', warnings: Array.isArray(q.warnings) ? q.warnings : [],
       };
-
     }
 
     function aiResultArrayV991(content) {
@@ -297,14 +267,14 @@
     function findBatchQuestionV991(raw, batchItems) {
       const id = String(raw?.id ?? raw?.questionId ?? '');
       if (id) {
-        const found = batchItems.find((x)=>x.id === id);
+        const found = batchItems.find((x) => x.id === id);
         if (found) {
           return found;
         }
       }
       const value = Number(raw?.index ?? raw?.number ?? 0);
       const absolute = value - 1;
-      const exact = batchItems.find((x)=>x.index === absolute);
+      const exact = batchItems.find((x) => x.index === absolute);
       if (exact) {
         return exact;
       }
@@ -316,13 +286,12 @@
     }
 
     function normalizeAiReviewResultV991(raw, batchItems) {
-
       const target = findBatchQuestionV991(raw, batchItems);
       if (!target) {
         return null;
       }
       const original = target.question;
-      const has = (key)=>Object.prototype.hasOwnProperty.call(raw, key);
+      const has = (key) => Object.prototype.hasOwnProperty.call(raw, key);
       const changes = {};
 
       if (has('suggestedType') && String(raw.suggestedType || '').trim()) {
@@ -344,7 +313,7 @@
       }
 
       if (has('suggestedAnswer')) {
-        const answer = Array.isArray(raw.suggestedAnswer) ? raw.suggestedAnswer.map((x)=>String(x || '').trim()).filter(Boolean) : splitAnswer(raw.suggestedAnswer);
+        const answer = Array.isArray(raw.suggestedAnswer) ? raw.suggestedAnswer.map((x) => String(x || '').trim()).filter(Boolean) : splitAnswer(raw.suggestedAnswer);
         if (answer.length) {
           changes.answer = answer;
         }
@@ -354,9 +323,8 @@
         changes.analysis = trimMultilineBoundaryV5910(raw.suggestedAnalysis);
       }
 
-      const meaningful = Object.keys(changes).some((key)=>JSON.stringify(changes[key]) !== JSON.stringify(original[key]));
-      return { questionId: target.id, index: target.index, risk: ['low', 'confirm', 'cannot'].includes(String(raw.risk)) ? String(raw.risk) : 'confirm', issues: Array.isArray(raw.issues) ? raw.issues.map((x)=>String(x || '').trim()).filter(Boolean) : [], note: String(raw.note || raw.reason || '').trim(), canApply: raw.canApply !== false && meaningful, changes };
-
+      const meaningful = Object.keys(changes).some((key) => JSON.stringify(changes[key]) !== JSON.stringify(original[key]));
+      return { questionId: target.id, index: target.index, risk: ['low', 'confirm', 'cannot'].includes(String(raw.risk)) ? String(raw.risk) : 'confirm', issues: Array.isArray(raw.issues) ? raw.issues.map((x) => String(x || '').trim()).filter(Boolean) : [], note: String(raw.note || raw.reason || '').trim(), canApply: raw.canApply !== false && meaningful, changes };
     }
 
     function normalizeAiAnalysisResultV991(raw, batchItems) {
@@ -372,7 +340,6 @@
     }
 
     function parseAiSingleFollowUpV381(content) {
-
       if (String(content || '').length > 100000) {
         throw new Error('AI 返回内容过长，请减少上下文后重试。');
       }
@@ -403,17 +370,13 @@
       const knownConfidence = ['HIGH', 'MEDIUM', 'LOW'].includes(confidence);
 
       return { reply, revisedAnalysis, confidence: knownConfidence ? confidence : 'LOW', needsReview: needsManualAiReview(data, knownConfidence, confidence), warning: String(data.warning || '').trim() };
-
     }
 
     function mergeAiSingleWarningV381(...values) {
-
-      return [...new Set(values.map((value)=>String(value || '').trim()).filter(Boolean))].join(' ');
-
+      return [...new Set(values.map((value) => String(value || '').trim()).filter(Boolean))].join(' ');
     }
 
     function parseAiSingleAnalysisV613(content) {
-
       if (String(content || '').length > 100000) {
         throw new Error('AI 返回内容过长，请减少上下文后重试。');
       }
@@ -438,7 +401,6 @@
       const knownConfidence = ['HIGH', 'MEDIUM', 'LOW'].includes(confidence);
 
       return { suggestedAnswer: String(data?.suggestedAnswer ?? data?.answer ?? '').trim(), matchesLocalAnswer: typeof data?.matchesLocalAnswer === 'boolean' ? data.matchesLocalAnswer : null, analysis: trimMultilineBoundaryV5910(analysis), confidence: knownConfidence ? confidence : 'LOW', needsReview: needsManualAiReview(data, knownConfidence, confidence) || data.matchesLocalAnswer === false, warning: String(data?.warning || '').trim() };
-
     }
 
     function aiHttpErrorMessage(status, detail) {

@@ -16,14 +16,13 @@
         const id = operationId || `${prefix}-${++sequence}`;
         pending++;
         const next = tail.then(async () => {
-          if (blocked) {throw new Error('前一次保存失败，请先重试。');}
-          try { await storage.write(frozen, id, storage.revision()); }
-          catch (error) { blocked = true; throw error; }
+          if (blocked) { throw new Error('前一次保存失败，请先重试。'); }
+          try { await storage.write(frozen, id, storage.revision()); } catch (error) { blocked = true; throw error; }
         }).finally(() => { pending--; });
         tail = next.catch(() => {});
         return next;
       },
-      resume() { if (pending) {throw new Error('保存仍在进行。');} blocked = false; },
+      resume() { if (pending) { throw new Error('保存仍在进行。'); } blocked = false; },
       status() {
         const idleState = blocked ? 'failed' : 'saved';
         return { state: pending ? 'pending' : idleState, revision: storage.revision() };

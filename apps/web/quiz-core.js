@@ -14,7 +14,7 @@
 
   function listPageNumbers(page, pages, compact = false) {
     const radius = compact ? 1 : 2;
-    const windowSize = radius * 2 + 1;
+    const windowSize = (radius * 2) + 1;
     if (pages <= windowSize + 2) {
       return Array.from({ length: pages }, (_, index) => index + 1);
     }

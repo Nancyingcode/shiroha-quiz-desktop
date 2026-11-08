@@ -51,7 +51,7 @@ test('单选、多选、判断严格匹配，多选顺序不影响结果但漏�
     [single, ['A'], true], [single, ['B'], false],
     [multiple, ['C', 'A'], true], [multiple, ['A'], false], [multiple, ['A', 'B', 'C'], false],
     [judge, ['A'], true], [judge, ['B'], false],
-  ]) {assert.equal(api.sameAnswerForQuestion(question, chosen, question.answer), correct);}
+  ]) { assert.equal(api.sameAnswerForQuestion(question, chosen, question.answer), correct); }
 });
 
 test('多空答案按位置接受别名，空白、漏空、交换顺序不判正确', () => {
@@ -60,7 +60,7 @@ test('多空答案按位置接受别名，空白、漏空、交换顺序不判�
   for (const [chosen, correct] of [
     [['北京市', '京'], true], [[' 北京。 ', '京'], true],
     [['北京', ''], false], [['北京'], false], [['京', '北京'], false],
-  ]) {assert.equal(api.sameAnswerForQuestion(question, chosen, question.answer), correct);}
+  ]) { assert.equal(api.sameAnswerForQuestion(question, chosen, question.answer), correct); }
 });
 
 test('自选题号保留去重排序、区间边界和原有错误文案', () => {
@@ -118,7 +118,7 @@ test('多空判定保留位置、空组和标点比较规则，且不更改输�
     [[' a。 ', '京'], true], [['甲,乙', ' 京 '], true],
     [['甲乙', '京'], false], [['京', 'a'], false],
     [['a'], false], [['a', '京', '多余'], false], [['a', ''], false],
-  ]) {assert.equal(api.sameAnswerForQuestion(question, chosen, []), correct);}
+  ]) { assert.equal(api.sameAnswerForQuestion(question, chosen, []), correct); }
   assert.equal(api.sameAnswerForQuestion({ type: 'blank', blankAnswers: [['甲'], []] }, ['甲', ''], []), false);
   assert.deepEqual(question, before);
 });

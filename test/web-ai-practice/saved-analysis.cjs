@@ -36,7 +36,7 @@ const cases = [
       await openSaved(h, 'PERSISTED_PRACTICE_ANALYSIS');
       assert.equal(h.mock.calls.length, 1);
       await h.page.locator('#p-exit').click();
-      if (await h.page.locator('#back-practice-setup').isVisible()) {await h.page.locator('#back-practice-setup').click();}
+      if (await h.page.locator('#back-practice-setup').isVisible()) { await h.page.locator('#back-practice-setup').click(); }
       await h.page.locator('.nav[data-view="favorites"]').click();
       await h.page.locator('#favorites-list-v596 [data-preview-question="safe-single-1"]').click();
       assert.match(await h.page.locator('#bank-question-detail').innerText(), /PERSISTED_PRACTICE_ANALYSIS/);

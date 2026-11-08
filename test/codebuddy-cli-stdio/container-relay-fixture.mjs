@@ -10,8 +10,8 @@ const scenario = process.argv[2];
 const directory = path.resolve(process.argv[3]);
 assert.ok(['stop', 'eof', 'tool'].includes(scenario));
 let upstreamCount = 0;
-const chunk = (delta, finish_reason = null) => `data: ${JSON.stringify({
-  id: 'container-fixture', choices: [{ index: 0, delta, finish_reason }],
+const chunk = (delta, finishReason = null) => `data: ${JSON.stringify({
+  id: 'container-fixture', choices: [{ index: 0, delta, finish_reason: finishReason }],
 })}\n\n`;
 const server = createServer(async (request, response) => {
   let bytes = 0;
@@ -43,7 +43,7 @@ await writeFile(path.join(directory, 'relay-ready.json'), JSON.stringify({
 // The parent records token isolation and owns process cleanup; snapshots contain only synthetic evidence.
 let writing = false;
 const timer = setInterval(async () => {
-  if (writing) {return;}
+  if (writing) { return; }
   writing = true;
   try {
     await writeFile(path.join(directory, 'relay-proof.json'), JSON.stringify({ scenario, upstreamCount, ...relay.evidence() }));

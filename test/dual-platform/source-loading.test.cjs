@@ -11,15 +11,21 @@ const root = path.resolve(__dirname, '../..');
 function equivalentLayout(source, style) {
   const semicolon = style === 'multiline-asi' ? '' : ';';
   return source
-    .replace(/^([ \t]*)const (KEY)\s*=\s*(['"])([^'"\r\n]+)\3;?/gm,
-      (_match, indent, name, _quote, value) => `${indent}const ${name} = "${value}"${semicolon}`)
-    .replace(/^([ \t]*)(async )?function ([\w$]+)\(/gm,
-      (_match, indent, asyncKeyword = '', name) => `${indent}${asyncKeyword}function ${name} (\n`)
+    .replace(
+      /^([ \t]*)const (KEY)\s*=\s*(['"])([^'"\r\n]+)\3;?/gm,
+      (_match, indent, name, _quote, value) => `${indent}const ${name} = "${value}"${semicolon}`,
+    )
+    .replace(
+      /^([ \t]*)(async )?function ([\w$]+)\(/gm,
+      (_match, indent, asyncKeyword, name) => `${indent}${asyncKeyword ?? ''}function ${name} (\n`,
+    )
     .replace(/^\(function\(\)\s*\{/m, '( function () {')
     .replace(/^([ \t]*)startApplication\(\);/m, (_match, indent) => `${indent}startApplication (\n${indent})${semicolon}`)
     .replace(/^\}\)\(\);/m, `} ) ( )${semicolon}`)
-    .replace(/^([ \t]*)if \(globalThis\.ShirohaDesktopHost\) \{globalThis\.ShirohaDesktopHost\.canClose = async\(\)=>\{/m,
-      '$1if (globalThis.ShirohaDesktopHost)\n$1{ globalThis.ShirohaDesktopHost.canClose = async () => {')
+    .replace(
+      /^([ \t]*)if \(globalThis\.ShirohaDesktopHost\) \{globalThis\.ShirohaDesktopHost\.canClose = async\(\)=>\{/m,
+      '$1if (globalThis.ShirohaDesktopHost)\n$1{ globalThis.ShirohaDesktopHost.canClose = async () => {',
+    )
     .replace(/^([ \t]*function aiTasksBusyV99 \(\n\) \{)(.*)(\})$/m, '$1\n$2\n$3');
 }
 

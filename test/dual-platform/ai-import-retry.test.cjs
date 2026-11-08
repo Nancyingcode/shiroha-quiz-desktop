@@ -153,7 +153,7 @@ for (const cancelled of [true, false]) {
     const { context, pending, status, notices } = cancellationFixture();
     const task = context.startAiImportV99();
     const error = new Error('测试失败');
-    if (cancelled) {error.name = 'AbortError';}
+    if (cancelled) { error.name = 'AbortError'; }
     pending[0].reject(error);
     await task;
     assert.equal(context.importDraft.questions[0].question, '原草稿');
@@ -195,13 +195,13 @@ for (const kind of ['import', 'preview']) {
     });
     const start = kind === 'import' ? () => context.startAiImportV99() : () => context.startAiPreviewTaskV991();
     const cancel = kind === 'import' ? () => context.cancelAiImportRequestV99(true) : () => context.cancelAiPreviewRequestV991(true);
-    const current = () => kind === 'import' ? context.aiImportRequestV99 : context.aiPreviewRequestV991;
+    const current = () => (kind === 'import' ? context.aiImportRequestV99 : context.aiPreviewRequestV991);
     const oldTask = start();
     [...timers][0]();
     cancel();
     const newTask = start();
     const owner = current();
-    const controller = pending[1].controller;
+    const { controller } = pending[1];
     const statusBeforeOld = status.slice();
     pending[0].resolve({ content: '旧超时结果' });
     await oldTask;
@@ -220,7 +220,7 @@ for (const kind of ['import', 'preview']) {
 test('文本兜底在取消后迟到，即使新整理已完成也不能恢复旧快照', async () => {
   const { context, pending, status } = cancellationFixture({
     parseAiRefactorPayloadV384: (content) => {
-      if (content === '无效结构') {throw new Error('结构无效');}
+      if (content === '无效结构') { throw new Error('结构无效'); }
       return { mode: 'direct_questions', structuredUsable: true,
         questions: [{ id: content, question: content }], structuredIssues: [], notes: [] };
     },
@@ -266,8 +266,7 @@ for (const kind of ['import', 'preview']) {
   test(`${kind} 显示已请求取消，迟到成功不会冒充取消已完成`, async () => {
     const { context, pending, status } = cancellationFixture();
     const task = kind === 'import' ? context.startAiImportV99() : context.startAiPreviewTaskV991();
-    if (kind === 'import') {context.cancelAiImportRequestV99(false);}
-    else {context.cancelAiPreviewRequestV991(false);}
+    if (kind === 'import') { context.cancelAiImportRequestV99(false); } else { context.cancelAiPreviewRequestV991(false); }
     assert.match(status.at(-1), /已请求取消/);
     const statusAfterCancel = status.slice();
     pending[0].resolve({ content: '迟到结果' });
@@ -284,7 +283,7 @@ for (const kind of ['import', 'preview']) {
       const { context, pending, status, notices } = cancellationFixture();
       const start = kind === 'import' ? () => context.startAiImportV99() : () => context.startAiPreviewTaskV991();
       const cancel = kind === 'import' ? () => context.cancelAiImportRequestV99(true) : () => context.cancelAiPreviewRequestV991(true);
-      const current = () => kind === 'import' ? context.aiImportRequestV99 : context.aiPreviewRequestV991;
+      const current = () => (kind === 'import' ? context.aiImportRequestV99 : context.aiPreviewRequestV991);
       const first = start();
       assert.equal(pending.length, 1);
       cancel();
@@ -292,11 +291,10 @@ for (const kind of ['import', 'preview']) {
       const second = start();
       assert.equal(pending.length, 2, '取消后应允许新任务接管');
       const owner = current();
-      const controller = pending[1].controller;
+      const { controller } = pending[1];
       const statusesBefore = status.slice();
       const noticesBefore = notices.slice();
-      if (oldOutcome === 'response') {pending[0].resolve({ content: '旧结果' });}
-      else {pending[0].reject(new Error('旧请求失败'));}
+      if (oldOutcome === 'response') { pending[0].resolve({ content: '旧结果' }); } else { pending[0].reject(new Error('旧请求失败')); }
       await first;
       assert.equal(current(), owner);
       assert.equal(current().running, true);
@@ -308,8 +306,7 @@ for (const kind of ['import', 'preview']) {
       pending[1].resolve({ content: '新结果' });
       await second;
       assert.equal(current().running, false);
-      if (kind === 'import') {assert.equal(context.importDraft.questions[0].question, '新结果', status.join(' / '));}
-      else {assert.equal(context.getAnalysis('original').analysis, '新结果');}
+      if (kind === 'import') { assert.equal(context.importDraft.questions[0].question, '新结果', status.join(' / ')); } else { assert.equal(context.getAnalysis('original').analysis, '新结果'); }
     });
   }
 }

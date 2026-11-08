@@ -16,8 +16,8 @@
     const { transaction: runMutation, save: saveSilent, renderAll } = actions;
     function favoriteRowsV596() {
       const ids = new Set(getFavoriteIdsV27());
-      const map = new Map(activeBank().questions.map((q)=>[q.id, q]));
-      return [...ids].map((id)=>map.get(id)).filter(Boolean);
+      const map = new Map(activeBank().questions.map((q) => [q.id, q]));
+      return [...ids].map((id) => map.get(id)).filter(Boolean);
     }
     function renderFavoritePanelV27() {
       renderFavoritesPageV596();
@@ -66,39 +66,39 @@
       if (clearBtn) {
         clearBtn.disabled = !allRows.length;
       }
-      body.innerHTML = rows.length ? rows.map((q)=>{
-        const number = bank.questions.indexOf(q) + 1, preview = bankQuestionCopyText(q);
+      body.innerHTML = rows.length ? rows.map((q) => {
+        const number = bank.questions.indexOf(q) + 1; const preview = bankQuestionCopyText(q);
         return `<tr class="favorite-question-row"><td class="favorite-question-number">${number}</td><td>${label(q.type)}</td><td>${esc(short(preview.text, 80))}${preview.text.length > 80 ? ` <button class="ghost mini-btn" type="button" data-preview-full="${esc(q.id)}" aria-label="查看第 ${number} 道收藏题全文">查看全文</button>` : ''}${preview.hasImages ? ' <span class="muted">含图片</span>' : ''}</td><td>${esc((q.answer || q.answerKeys || []).join('') || '未提供')}</td><td>${esc(q.category || q.topic || '未分类')}</td><td>${esc(q.score || '默认')}</td><td><div class="favorite-question-actions"><button class="ghost mini-btn" type="button" data-preview-question="${esc(q.id)}" aria-expanded="false" aria-controls="bank-question-detail" aria-label="查看第 ${number} 道收藏题详情">查看详情</button><button class="ghost mini-btn" data-practice-one-fav-v596="${esc(q.id)}" type="button">练习本题</button><button class="ghost danger mini-btn" data-unfav-v27="${esc(q.id)}" type="button">取消收藏</button></div></td></tr>`;
       }).join('') : '<tr><td colspan="7" class="empty">当前题库暂无收藏题。刷题时点击“收藏题目”，这里会集中显示。</td></tr>';
-      box.querySelectorAll('[data-preview-question]').forEach((button)=>button.onclick = ()=>openBankQuestionDetail(bank, rows.find((q)=>q.id === button.dataset.previewQuestion), button, false));
-      box.querySelectorAll('[data-preview-full]').forEach((button)=>button.onclick = ()=>openBankQuestionDetail(bank, rows.find((q)=>q.id === button.dataset.previewFull), button, true));
-      box.querySelectorAll('[data-unfav-v27]').forEach((btn)=>btn.onclick = async()=>{
+      box.querySelectorAll('[data-preview-question]').forEach((button) => button.onclick = () => openBankQuestionDetail(bank, rows.find((q) => q.id === button.dataset.previewQuestion), button, false));
+      box.querySelectorAll('[data-preview-full]').forEach((button) => button.onclick = () => openBankQuestionDetail(bank, rows.find((q) => q.id === button.dataset.previewFull), button, true));
+      box.querySelectorAll('[data-unfav-v27]').forEach((btn) => btn.onclick = async () => {
         if (await toggleFavoriteV27(btn.dataset.unfavV27)) {
           renderAll();
         }
       });
-      box.querySelectorAll('[data-practice-one-fav-v596]').forEach((btn)=>btn.onclick = ()=>startSingleFavoritePracticeV596(btn.dataset.practiceOneFavV596));
+      box.querySelectorAll('[data-practice-one-fav-v596]').forEach((btn) => btn.onclick = () => startSingleFavoritePracticeV596(btn.dataset.practiceOneFavV596));
     }
     async function startSingleFavoritePracticeV596(id) {
-      if (!await loadNativeItems(practiceSessionItemsForBanksV8916([{ ...activeBank(), questions: activeBank().questions.filter((q)=>q.id === id) }]))) {
+      if (!await loadNativeItems(practiceSessionItemsForBanksV8916([{ ...activeBank(), questions: activeBank().questions.filter((q) => q.id === id) }]))) {
         return;
       }
-      const q = activeBank().questions.find((x)=>x.id === id);
+      const q = activeBank().questions.find((x) => x.id === id);
       if (!q) {
         toast('未找到这道收藏题。', 'warn');
         return;
       }
       resetAiSinglePracticeV613();
-      $$('.nav').forEach((b)=>b.classList.remove('active'));
+      $$('.nav').forEach((b) => b.classList.remove('active'));
       document.querySelector('[data-view="practice"]').classList.add('active');
-      $$('.view').forEach((v)=>v.classList.remove('active'));
+      $$('.view').forEach((v) => v.classList.remove('active'));
       $('#practice').classList.add('active');
       $('#page-title').textContent = '刷题练习';
       $('#practice-source').value = 'favorite';
       $('#practice-type').value = 'all';
       $('#practice-order').value = 'sequence';
       openQuickPracticeSetup();
-      const index = practiceBaseItemsV58916('favorite', 'all').findIndex((item)=>practiceQuestionV8916(item).id === id);
+      const index = practiceBaseItemsV58916('favorite', 'all').findIndex((item) => practiceQuestionV8916(item).id === id);
       if (index < 0) {
         toast('这道题已不在收藏中，请重新选择。', 'warn');
         return;
@@ -116,60 +116,52 @@
       let entries = getWrongEntries(bid);
       const filter = $('#wrong-status-filter')?.value || 'active';
       if (filter === 'active') {
-        entries = entries.filter((e)=>e.status !== '已掌握');
-      }
-      else if (filter !== 'all') {
-        entries = entries.filter((e)=>e.status === filter);
+        entries = entries.filter((e) => e.status !== '已掌握');
+      } else if (filter !== 'all') {
+        entries = entries.filter((e) => e.status === filter);
       }
       const sort = $('#wrong-sort-mode')?.value || 'lastWrong';
       if (sort === 'wrongCount') {
-        entries.sort((a, b)=>b.wrongCount - a.wrongCount);
+        entries.sort((a, b) => b.wrongCount - a.wrongCount);
+      } else if (sort === 'status') {
+        entries.sort((a, b) => String(a.status).localeCompare(String(b.status), 'zh-CN'));
+      } else {
+        entries.sort((a, b) => String(b.lastWrongAt || '').localeCompare(String(a.lastWrongAt || '')));
       }
-      else if (sort === 'status') {
-        entries.sort((a, b)=>String(a.status).localeCompare(String(b.status), 'zh-CN'));
-      }
-      else {
-        entries.sort((a, b)=>String(b.lastWrongAt || '').localeCompare(String(a.lastWrongAt || '')));
-      }
-      const map = new Map(activeBank().questions.map((q)=>[q.id, q]));
-      const rows = nativePage(entries.map((e)=>({ e, q: map.get(e.id) })).filter((x)=>x.q), 'wrong:' + bid + ':' + filter + ':' + sort, document.getElementById('wrongbook-list'), renderWrongBook);
-      if (!await loadNativeItems(practiceSessionItemsForBanksV8916([{ ...activeBank(), questions: rows.map((row)=>row.q) }]))) {
+      const map = new Map(activeBank().questions.map((q) => [q.id, q]));
+      const rows = nativePage(entries.map((e) => ({ e, q: map.get(e.id) })).filter((x) => x.q), 'wrong:' + bid + ':' + filter + ':' + sort, document.getElementById('wrongbook-list'), renderWrongBook);
+      if (!await loadNativeItems(practiceSessionItemsForBanksV8916([{ ...activeBank(), questions: rows.map((row) => row.q) }]))) {
         return;
       }
       if (renderVersion !== nativeRenderVersions.get('wrongbook') || !nativeViewVisible('wrongbook') || activeBank().id !== bid) {
         return;
       }
-      $('#wrongbook-list').innerHTML = rows.length ? rows.map(({ e, q })=>`<div class="wrong-item"><div class="section-head"><div><b>${label(q.type)}</b><p class="muted">${isTextType(q.type) ? '答案：' + esc(q.answer.join('')) + '｜' : ''}状态：${esc(e.status)}｜错误 ${e.wrongCount} 次｜做对 ${e.rightCount} 次${e.lastWrongAt ? '｜最近错：' + fmt(e.lastWrongAt) : ''}</p></div><div class="row-actions"><button class="ghost mini-btn" data-toggle-master-wrong="${esc(q.id)}">${e.status === '已掌握' ? '取消掌握' : '标记已掌握'}</button><button class="ghost mini-btn" data-fav-wrong="${esc(q.id)}">${isFavoriteV27(q.id) ? '取消收藏' : '收藏'}</button><button class="ghost danger mini-btn" data-remove-wrong="${esc(q.id)}">移出</button></div></div><div class="question-title">${renderQuestionBodyV83(q)}</div>${renderReviewOptions(q, e.lastAnswer)}${renderReviewAnswerSummary(q, e.lastAnswer)}${renderReviewAnalysis({ bankId: bid, question: q }, e.lastAnswer, 'wrongbook')}</div>`).join('') : '<p class="muted">当前条件下暂无错题。</p>';
-      $$('[data-remove-wrong]').forEach((b)=>b.onclick = async ()=>{
-        return runMutation(async()=>{
-          if (await globalThis.ShirohaDialogs.confirm('确定将这道题移出错题本？')) {
-            removeWrong(b.dataset.removeWrong);
-            await saveSilent();
-            renderAll();
+      $('#wrongbook-list').innerHTML = rows.length ? rows.map(({ e, q }) => `<div class="wrong-item"><div class="section-head"><div><b>${label(q.type)}</b><p class="muted">${isTextType(q.type) ? '答案：' + esc(q.answer.join('')) + '｜' : ''}状态：${esc(e.status)}｜错误 ${e.wrongCount} 次｜做对 ${e.rightCount} 次${e.lastWrongAt ? '｜最近错：' + fmt(e.lastWrongAt) : ''}</p></div><div class="row-actions"><button class="ghost mini-btn" data-toggle-master-wrong="${esc(q.id)}">${e.status === '已掌握' ? '取消掌握' : '标记已掌握'}</button><button class="ghost mini-btn" data-fav-wrong="${esc(q.id)}">${isFavoriteV27(q.id) ? '取消收藏' : '收藏'}</button><button class="ghost danger mini-btn" data-remove-wrong="${esc(q.id)}">移出</button></div></div><div class="question-title">${renderQuestionBodyV83(q)}</div>${renderReviewOptions(q, e.lastAnswer)}${renderReviewAnswerSummary(q, e.lastAnswer)}${renderReviewAnalysis({ bankId: bid, question: q }, e.lastAnswer, 'wrongbook')}</div>`).join('') : '<p class="muted">当前条件下暂无错题。</p>';
+      $$('[data-remove-wrong]').forEach((b) => b.onclick = async () => runMutation(async () => {
+        if (await globalThis.ShirohaDialogs.confirm('确定将这道题移出错题本？')) {
+          removeWrong(b.dataset.removeWrong);
+          await saveSilent();
+          renderAll();
+        }
+      }));
+      $$('[data-toggle-master-wrong]').forEach((b) => b.onclick = async () => runMutation(async () => {
+        const arr = getWrongEntries();
+        const e = arr.find((x) => x.id === b.dataset.toggleMasterWrong);
+        if (e) {
+          if (e.status === '已掌握') {
+            e.status = '复习中';
+            e.rightCount = Math.min(e.rightCount || 0, 1);
+          } else {
+            e.status = '已掌握';
+            e.lastCorrectAt = now();
+            e.rightCount = Math.max(e.rightCount || 0, 2);
           }
-        });
-      });
-      $$('[data-toggle-master-wrong]').forEach((b)=>b.onclick = async ()=>{
-        return runMutation(async()=>{
-          const arr = getWrongEntries();
-          const e = arr.find((x)=>x.id === b.dataset.toggleMasterWrong);
-          if (e) {
-            if (e.status === '已掌握') {
-              e.status = '复习中';
-              e.rightCount = Math.min(e.rightCount || 0, 1);
-            }
-            else {
-              e.status = '已掌握';
-              e.lastCorrectAt = now();
-              e.rightCount = Math.max(e.rightCount || 0, 2);
-            }
-            setWrongEntries(arr);
-            await saveSilent();
-            renderAll();
-          }
-        });
-      });
-      $$('[data-fav-wrong]').forEach((b)=>b.onclick = async()=>{
+          setWrongEntries(arr);
+          await saveSilent();
+          renderAll();
+        }
+      }));
+      $$('[data-fav-wrong]').forEach((b) => b.onclick = async () => {
         if (await toggleFavoriteV27(b.dataset.favWrong)) {
           renderAll();
         }

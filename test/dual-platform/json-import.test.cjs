@@ -17,7 +17,7 @@ function setup(data, { mode = 'auto', accepted = true } = {}) {
     '#import-text': input, '#import-strategy': { value: 'auto' },
     '#import-mode': { value: mode }, '#confirm-import-btn': { disabled: true },
   };
-  const confirmations = [], imports = [], notices = [], previews = [];
+  const confirmations = []; const imports = []; const notices = []; const previews = [];
   const context = vm.createContext({
     $: (selector) => elements[selector],
     cancelAiPreviewRequestV991() {}, resetAiSuggestionsV991() {}, closeAiPreviewPanelV991() {},
@@ -53,7 +53,7 @@ for (const mode of ['auto', 'json']) {
     const [normalized, importMode] = run.imports[0];
     assert.equal(importMode, 'merge');
     assert.deepEqual(plain(normalized.banks.map((bank) => [bank.id, bank.name, bank.groupName])), payload.banks.map((bank) => [bank.id, bank.name, bank.groupName]));
-    for (const key of ['wrongBook', 'favorites', 'records']) {assert.deepEqual(plain(normalized[key]), payload[key]);}
+    for (const key of ['wrongBook', 'favorites', 'records']) { assert.deepEqual(plain(normalized[key]), payload[key]); }
     assert.deepEqual(run.previews, [[]]);
   });
 }

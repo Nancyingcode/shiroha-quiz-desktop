@@ -8,7 +8,7 @@ test('错题复盘保留全部选项并区分正确、错选和未选项', () =>
   const { api } = loadWeb();
   const q = { type: 'multiple', options: ['A', 'B', 'C', 'D'].map((key) => ({ key, text: `选项${key}` })), answer: ['A', 'C'] };
   const html = api.renderReviewOptions(q, ['A', 'D']);
-  for (const key of ['A', 'B', 'C', 'D']) {assert.ok(html.includes(`选项${key}`));}
+  for (const key of ['A', 'B', 'C', 'D']) { assert.ok(html.includes(`选项${key}`)); }
   assert.match(html, /正确答案 · 当时选择/);
   assert.match(html, /✕ 当时选择/);
   assert.match(html, /未选择/);
@@ -33,7 +33,7 @@ test('练习结束后的错题一览显示快照中的全部选项', () => {
   const { api } = loadWeb();
   const q = api.normalizeQuestion({ id: 'review', type: 'single', question: '测试题', options: ['A', 'B', 'C', 'D'].map((key) => ({ key, text: `完整选项${key}` })), answer: ['B'] });
   const html = api.renderPracticeWrongOverview({ details: [{ nativeQuestion: q, chosen: ['D'], answer: ['B'], correct: false }] });
-  for (const key of ['A', 'B', 'C', 'D']) {assert.ok(html.includes(`完整选项${key}`));}
+  for (const key of ['A', 'B', 'C', 'D']) { assert.ok(html.includes(`完整选项${key}`)); }
 });
 
 test('错题一览的缺失、空字符串及空白解析均显示空态和主动 AI 入口', () => {

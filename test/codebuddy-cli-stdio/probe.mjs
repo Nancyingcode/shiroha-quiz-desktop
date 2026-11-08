@@ -54,8 +54,11 @@ function argumentsFor(inputFormat = 'text') {
 async function listeningPorts(pid) {
   const powershell = path.join(process.env.SystemRoot, 'System32/WindowsPowerShell/v1.0/powershell.exe');
   const command = `$ErrorActionPreference='Stop'; @(Get-NetTCPConnection -State Listen | Where-Object OwningProcess -eq ${pid} | Select-Object LocalAddress,LocalPort) | ConvertTo-Json -Compress`;
-  const { stdout } = await promisify(execFile)(powershell,
-    ['-NoProfile', '-NonInteractive', '-Command', command], { windowsHide: true, timeout: 12_000 });
+  const { stdout } = await promisify(execFile)(
+    powershell,
+    ['-NoProfile', '-NonInteractive', '-Command', command],
+    { windowsHide: true, timeout: 12_000 },
+  );
   return stdout.trim() ? [JSON.parse(stdout)].flat() : [];
 }
 
@@ -64,10 +67,9 @@ async function scanMarkers(directory, markers) {
   for (const entry of await readdir(directory, { withFileTypes: true })) {
     const full = path.join(directory, entry.name);
     assert.equal(entry.isSymbolicLink(), false, 'Refuse traversal outside isolated files');
-    if (entry.isDirectory()) {matches.push(...await scanMarkers(full, markers));}
-    else if (entry.isFile()) {
+    if (entry.isDirectory()) { matches.push(...await scanMarkers(full, markers)); } else if (entry.isFile()) {
       const bytes = await readFile(full);
-      if (markers.some((marker) => bytes.includes(Buffer.from(marker)))) {matches.push(full);}
+      if (markers.some((marker) => bytes.includes(Buffer.from(marker)))) { matches.push(full); }
     }
   }
   return matches;
@@ -112,10 +114,9 @@ async function runCase(executable, runRoot, scenario, guarded = false) {
   })}\n`);
   const consumeControlLine = (line) => {
     let event;
-    try { event = JSON.parse(line); }
-    catch { events.push({ invalid: 'non-JSON control output' }); return; }
+    try { event = JSON.parse(line); } catch { events.push({ invalid: 'non-JSON control output' }); return; }
     if (event.type === 'control_response') {
-      const response = event.response;
+      const { response } = event;
       // Authentication replies may contain tokens, so raw control responses never enter evidence.
       const summary = { request_id: response?.request_id, subtype: response?.subtype,
         fields: Object.keys(response?.response ?? {}),
@@ -124,11 +125,11 @@ async function runCase(executable, runRoot, scenario, guarded = false) {
       controlResponses.push(summary);
       events.push({ type: 'control_response', response: summary });
       if (response?.subtype !== 'success') { stop('control-error'); return; }
-      if (response.request_id === 'probe-initialize') {sendControl('get_auth_methods');}
-      else if (response.request_id === 'probe-get_auth_methods') {sendControl('logout');}
-      else if (response.request_id === 'probe-logout') {child.stdin.write(`${JSON.stringify({
-        type: 'user', session_id: '', message: { role: 'user', content: prompt }, parent_tool_use_id: null,
-      })}\n`);}
+      if (response.request_id === 'probe-initialize') { sendControl('get_auth_methods'); } else if (response.request_id === 'probe-get_auth_methods') { sendControl('logout'); } else if (response.request_id === 'probe-logout') {
+        child.stdin.write(`${JSON.stringify({
+          type: 'user', session_id: '', message: { role: 'user', content: prompt }, parent_tool_use_id: null,
+        })}\n`);
+      }
       return;
     }
     if (event.type === 'control_request') {
@@ -137,7 +138,7 @@ async function runCase(executable, runRoot, scenario, guarded = false) {
       return;
     }
     events.push(event);
-    if (event.session_id) {sessionId = event.session_id;}
+    if (event.session_id) { sessionId = event.session_id; }
     if (event.type === 'result') {
       child.stdin.end();
       responseTimer = setTimeout(() => stop('stdin-close-fallback'), 2_000);
@@ -146,10 +147,13 @@ async function runCase(executable, runRoot, scenario, guarded = false) {
 
   // Only this invocation owns this PID. Never search for or stop other CodeBuddy processes.
   const stop = (reason) => {
-    if (processClosed || cleanupPromise || !child?.pid) {return;}
+    if (processClosed || cleanupPromise || !child?.pid) { return; }
     stopReason = reason;
-    cleanupPromise = promisify(execFile)(path.join(process.env.SystemRoot, 'System32/taskkill.exe'),
-      ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true, timeout: 5_000 })
+    cleanupPromise = promisify(execFile)(
+      path.join(process.env.SystemRoot, 'System32/taskkill.exe'),
+      ['/PID', String(child.pid), '/T', '/F'],
+      { windowsHide: true, timeout: 5_000 },
+    )
       .catch((error) => {
         if (!processClosed) {
           serverErrors.push(`Process cleanup failed: ${error.code}`);
@@ -236,13 +240,13 @@ async function runCase(executable, runRoot, scenario, guarded = false) {
   let relay;
   try {
     const endpoint = `http://127.0.0.1:${server.address().port}`;
-    if (guarded) {relay = await createGuardedRelay(endpoint, scenario === 'auth-token' ? FAKE_AUTH_TOKEN : FAKE_KEY);}
+    if (guarded) { relay = await createGuardedRelay(endpoint, scenario === 'auth-token' ? FAKE_AUTH_TOKEN : FAKE_KEY); }
     const env = environment(dirs, relay?.endpoint ?? endpoint);
     if (scenario === 'auth-token') {
       delete env.CODEBUDDY_API_KEY;
       env.CODEBUDDY_AUTH_TOKEN = FAKE_AUTH_TOKEN;
     }
-    if (relay) {env.CODEBUDDY_CUSTOM_HEADERS = `x-shiroha-run: ${relay.headers['x-shiroha-run']}`;}
+    if (relay) { env.CODEBUDDY_CUSTOM_HEADERS = `x-shiroha-run: ${relay.headers['x-shiroha-run']}`; }
     if (scenario === 'password') {
       env.CODEBUDDY_GATEWAY_AUTH = 'password';
       env.CODEBUDDY_GATEWAY_PASSWORD = 'synthetic-gateway-password-never-real';
@@ -270,20 +274,17 @@ async function runCase(executable, runRoot, scenario, guarded = false) {
           const end = controlBuffer.indexOf('\n');
           const line = controlBuffer.slice(0, end).trim();
           controlBuffer = controlBuffer.slice(end + 1);
-          if (line) {consumeControlLine(line);}
+          if (line) { consumeControlLine(line); }
         }
-      }
-      else if (stream === 'stdout') {stdout += chunk;}
-      else {stderr += chunk;}
+      } else if (stream === 'stdout') { stdout += chunk; } else { stderr += chunk; }
     };
     child.stdout.on('data', (chunk) => collect('stdout', chunk));
     child.stderr.on('data', (chunk) => collect('stderr', chunk));
     child.stdin.on('error', () => {});
-    if (usesControlProtocol) {sendControl('initialize');}
-    else {child.stdin.end(prompt);}
+    if (usesControlProtocol) { sendControl('initialize'); } else { child.stdin.end(prompt); }
     exit = await closed;
     await cleanupPromise;
-    if (!connectionClosed) {await new Promise((resolve) => setTimeout(resolve, 100));}
+    if (!connectionClosed) { await new Promise((resolve) => setTimeout(resolve, 100)); }
     connectionClosedBeforeCleanup = connectionClosed;
   } finally {
     clearTimeout(timer);
@@ -295,18 +296,16 @@ async function runCase(executable, runRoot, scenario, guarded = false) {
     await new Promise((resolve) => server.close(resolve));
   }
   for (const line of stdout.split(/\r?\n/).filter((line) => line.trim())) {
-    try { events.push(JSON.parse(line)); }
-    catch { events.push({ invalid: line }); }
+    try { events.push(JSON.parse(line)); } catch { events.push({ invalid: line }); }
   }
   const results = events.filter((event) => event.type === 'result');
   const assistants = events.filter((event) => event.type === 'assistant');
   const partials = events.filter((event) => event.type === 'stream_event');
   const markers = [marker, FAKE_KEY, FAKE_AUTH_TOKEN, RESPONSE_TEXT, 'TOOL_MUST_NOT_RUN'];
-  if (relay) {markers.push(relay.headers['x-shiroha-run']);}
+  if (relay) { markers.push(relay.headers['x-shiroha-run']); }
   const markerFiles = await scanMarkers(isolated, markers);
   let toolFileExists = false;
-  try { await access(path.join(dirs.work, 'tool-sentinel.txt')); toolFileExists = true; }
-  catch (error) { if (error.code !== 'ENOENT') {throw error;} }
+  try { await access(path.join(dirs.work, 'tool-sentinel.txt')); toolFileExists = true; } catch (error) { if (error.code !== 'ENOENT') { throw error; } }
   const modelCalls = calls.filter((call) => call.method === 'POST' && call.url === '/chat/completions');
   const observation = {
     scenario, exit, stopReason: stopReason ?? null, ports, localRoutes,
@@ -320,8 +319,11 @@ async function runCase(executable, runRoot, scenario, guarded = false) {
     partialStops: partials.map((event) => event.event?.delta?.stop_reason).filter((value) => value !== undefined),
     eventTypes: [...new Set(events.map((event) => event.type ?? 'invalid'))],
     markerFiles: markerFiles.map((file) => path.relative(isolated, file)), serverErrors,
-    ...(relay ? { guard: { ...relay.evidence(), candidate: validateCandidate(events, relay.evidence(),
-      Boolean(stopReason) || exit.code !== 0) } } : {}),
+    ...(relay ? { guard: { ...relay.evidence(), candidate: validateCandidate(
+      events,
+      relay.evidence(),
+      Boolean(stopReason) || exit.code !== 0,
+    ) } } : {}),
   };
   await writeFile(path.join(runRoot, `${scenario}.json`), JSON.stringify({ observation, events, stderr, calls }, null, 2));
   console.log(JSON.stringify(observation));
@@ -337,7 +339,7 @@ async function main() {
   assert.equal(createHash('sha256').update(await readFile(executable)).digest('hex'), EXPECTED_HASH);
   const guarded = process.argv.includes('--guarded');
   const requested = process.argv[3] === '--guarded' ? undefined : process.argv[3];
-  if (requested) {assert.ok(CASES.includes(requested) || requested === 'auth-token', 'Unknown scenario');}
+  if (requested) { assert.ok(CASES.includes(requested) || requested === 'auth-token', 'Unknown scenario'); }
   const runRoot = path.join(ROOT, '.reports/codebuddy-cli-stdio', `run-${guarded ? 'guarded-' : ''}${Date.now()}`);
   await mkdir(runRoot, { recursive: true });
   const observations = [];

@@ -45,26 +45,26 @@
 
   /** @param {unknown} value @param {Set<object>} ancestors @param {number} depth @returns {ErrorCode | null} */
   function inspectJson(value, ancestors = new Set(), depth = 0) {
-    if (depth > MAX_JSON_DEPTH) {return 'invalid_input';}
-    if (value === null || typeof value === 'string' || typeof value === 'boolean') {return null;}
-    if (typeof value === 'number') {return Number.isFinite(value) ? null : 'invalid_input';}
-    if (typeof value !== 'object' || ancestors.has(value)) {return 'invalid_input';}
+    if (depth > MAX_JSON_DEPTH) { return 'invalid_input'; }
+    if (value === null || typeof value === 'string' || typeof value === 'boolean') { return null; }
+    if (typeof value === 'number') { return Number.isFinite(value) ? null : 'invalid_input'; }
+    if (typeof value !== 'object' || ancestors.has(value)) { return 'invalid_input'; }
     const array = Array.isArray(value);
     const prototype = Object.getPrototypeOf(value);
-    if (!array && prototype !== null && Object.getPrototypeOf(prototype) !== null) {return 'invalid_input';}
-    if (Reflect.ownKeys(value).some((key) => typeof key !== 'string')) {return 'invalid_input';}
+    if (!array && prototype !== null && Object.getPrototypeOf(prototype) !== null) { return 'invalid_input'; }
+    if (Reflect.ownKeys(value).some((key) => typeof key !== 'string')) { return 'invalid_input'; }
     const descriptors = Object.getOwnPropertyDescriptors(value);
-    if (array && Object.keys(value).length !== value.length) {return 'invalid_input';}
+    if (array && Object.keys(value).length !== value.length) { return 'invalid_input'; }
     ancestors.add(value);
     // 先检查描述符，避免校验/冻结执行 getter，或把隐藏字段和稀疏数组静默丢掉。
     for (const [key, descriptor] of Object.entries(descriptors)) {
-      if (array && key === 'length') {continue;}
-      if (!descriptor.enumerable || !Object.hasOwn(descriptor, 'value')) {return 'invalid_input';}
-      if (array && (!/^(?:0|[1-9]\d*)$/.test(key) || Number(key) >= value.length)) {return 'invalid_input';}
-      if (SECRET_KEYS.has(key.replace(/[^a-z0-9]/gi, '').toLowerCase())) {return 'sensitive_data';}
-      if (key === '__proto__' || key === 'constructor' || key === 'prototype') {return 'invalid_input';}
+      if (array && key === 'length') { continue; }
+      if (!descriptor.enumerable || !Object.hasOwn(descriptor, 'value')) { return 'invalid_input'; }
+      if (array && (!/^(?:0|[1-9]\d*)$/.test(key) || Number(key) >= value.length)) { return 'invalid_input'; }
+      if (SECRET_KEYS.has(key.replace(/[^a-z0-9]/gi, '').toLowerCase())) { return 'sensitive_data'; }
+      if (key === '__proto__' || key === 'constructor' || key === 'prototype') { return 'invalid_input'; }
       const error = inspectJson(descriptor.value, ancestors, depth + 1);
-      if (error) {return error;}
+      if (error) { return error; }
     }
     ancestors.delete(value);
     return null;
@@ -78,10 +78,10 @@
 
   /** @param {unknown} value */
   function bank(value) {
-    if (!object(value) || !id(value.id) || typeof value.name !== 'string' || !Array.isArray(value.questions)) {return false;}
+    if (!object(value) || !id(value.id) || typeof value.name !== 'string' || !Array.isArray(value.questions)) { return false; }
     const ids = new Set();
     return value.questions.every((item) => {
-      if (!question(item) || ids.has(item.id)) {return false;}
+      if (!question(item) || ids.has(item.id)) { return false; }
       ids.add(item.id);
       return true;
     });
@@ -89,10 +89,10 @@
 
   /** @param {unknown} value */
   function banks(value) {
-    if (!Array.isArray(value)) {return false;}
+    if (!Array.isArray(value)) { return false; }
     const ids = new Set();
     return value.every((item) => {
-      if (!bank(item) || ids.has(item.id)) {return false;}
+      if (!bank(item) || ids.has(item.id)) { return false; }
       ids.add(item.id);
       return true;
     });
@@ -108,7 +108,7 @@
 
   /** @param {unknown} value */
   function change(value) {
-    if (!object(value)) {return false;}
+    if (!object(value)) { return false; }
     switch (value.kind) {
       case 'put_bank': return onlyKeys(value, ['kind', 'bank']) && bank(value.bank);
       case 'delete_bank': return onlyKeys(value, ['kind', 'bankId']) && id(value.bankId);
@@ -127,55 +127,55 @@
 
   /** @param {Record<string, unknown>} request @param {CommitContext} context @returns {CheckResult} */
   function identity(request, context) {
-    if (request.contractVersion !== CONTRACT_VERSION) {return fail('unsupported_version');}
-    if (!id(request.operationId) || !revision(request.expectedRevision) || !revision(context.currentRevision)) {return fail('invalid_input');}
-    if (context.initialization !== 'ready') {return fail('not_ready');}
+    if (request.contractVersion !== CONTRACT_VERSION) { return fail('unsupported_version'); }
+    if (!id(request.operationId) || !revision(request.expectedRevision) || !revision(context.currentRevision)) { return fail('invalid_input'); }
+    if (context.initialization !== 'ready') { return fail('not_ready'); }
     // 已知操作先查历史结果，不能因修订已推进而误当成一个新的过期写入。
-    if (context.knownOperationIds.includes(request.operationId) || context.pendingOperationIds?.includes(request.operationId)) {return fail('duplicate_operation');}
-    if (request.expectedRevision !== context.currentRevision) {return fail('revision_conflict');}
-    if (context.blockedByOperationId) {return fail('dependency_failed');}
-    if (context.exclusiveOperationId) {return fail('operation_busy');}
+    if (context.knownOperationIds.includes(request.operationId) || context.pendingOperationIds?.includes(request.operationId)) { return fail('duplicate_operation'); }
+    if (request.expectedRevision !== context.currentRevision) { return fail('revision_conflict'); }
+    if (context.blockedByOperationId) { return fail('dependency_failed'); }
+    if (context.exclusiveOperationId) { return fail('operation_busy'); }
     return pass();
   }
 
   /** @param {unknown} request @param {CommitContext} context @returns {CheckResult} */
   function validateCommit(request, context) {
     const jsonError = inspectJson(request);
-    if (jsonError) {return fail(jsonError);}
-    if (!object(request) || !onlyKeys(request, ['contractVersion', 'operationId', 'expectedRevision', 'changes'])) {return fail('invalid_input');}
+    if (jsonError) { return fail(jsonError); }
+    if (!object(request) || !onlyKeys(request, ['contractVersion', 'operationId', 'expectedRevision', 'changes'])) { return fail('invalid_input'); }
     const checked = identity(request, context);
-    if (!checked.ok) {return checked;}
-    if (!Array.isArray(request.changes) || !request.changes.length || !request.changes.every(change)) {return fail('invalid_input');}
-    if (request.changes.length > 1 && request.changes.some((item) => item.kind === 'replace_snapshot')) {return fail('invalid_input');}
+    if (!checked.ok) { return checked; }
+    if (!Array.isArray(request.changes) || !request.changes.length || !request.changes.every(change)) { return fail('invalid_input'); }
+    if (request.changes.length > 1 && request.changes.some((item) => item.kind === 'replace_snapshot')) { return fail('invalid_input'); }
     return pass();
   }
 
   /** @param {unknown} value @returns {unknown} */
   function freezeCopy(value) {
-    if (Array.isArray(value)) {return Object.freeze(value.map(freezeCopy));}
-    if (object(value)) {return Object.freeze(Object.fromEntries(Object.entries(value).map(([key, child]) => [key, freezeCopy(child)])));}
+    if (Array.isArray(value)) { return Object.freeze(value.map(freezeCopy)); }
+    if (object(value)) { return Object.freeze(Object.fromEntries(Object.entries(value).map(([key, child]) => [key, freezeCopy(child)]))); }
     return value;
   }
 
   /** @param {unknown} request @param {CommitContext} context @returns {import('./contracts').Result<import('./contracts').CommitRequest>} */
   function freezeCommit(request, context) {
     const checked = validateCommit(request, context);
-    if (!checked.ok) {return checked;}
+    if (!checked.ok) { return checked; }
     return { ok: true, value: /** @type {import('./contracts').CommitRequest} */ (freezeCopy(request)) };
   }
 
   /** @param {unknown} value @returns {ErrorCode | null} */
   function inspectExport(value) {
-    if (!value || typeof value !== 'object') {return null;}
+    if (!value || typeof value !== 'object') { return null; }
     for (const [key, child] of Object.entries(value)) {
       if (typeof child === 'string') {
         const field = key.toLowerCase();
-        if (field === 'endpoint' && (/^https?:\/\/[^/]*@/i.test(child) || /[?&](?:api_?key|access_?token|password)=/i.test(child))) {return 'sensitive_data';}
-        if (['path', 'localpath', 'absolutepath', 'filepath'].includes(field) && /^(?:[a-z]:[\\/]|[\\/]|file:)/i.test(child)) {return 'invalid_input';}
-        if (['src', 'url', 'dataurl', 'localpath'].includes(field) && /^(?:(?:file|asset|tauri|blob):|https?:\/\/(?:asset|tauri)\.localhost)/i.test(child)) {return 'invalid_input';}
+        if (field === 'endpoint' && (/^https?:\/\/[^/]*@/i.test(child) || /[?&](?:api_?key|access_?token|password)=/i.test(child))) { return 'sensitive_data'; }
+        if (['path', 'localpath', 'absolutepath', 'filepath'].includes(field) && /^(?:[a-z]:[\\/]|[\\/]|file:)/i.test(child)) { return 'invalid_input'; }
+        if (['src', 'url', 'dataurl', 'localpath'].includes(field) && /^(?:(?:file|asset|tauri|blob):|https?:\/\/(?:asset|tauri)\.localhost)/i.test(child)) { return 'invalid_input'; }
       }
       const error = inspectExport(child);
-      if (error) {return error;}
+      if (error) { return error; }
     }
     return null;
   }
@@ -184,54 +184,54 @@
   function exchangeVersions(value) {
     if ((value.crossPlatformSchemaVersion !== undefined && value.crossPlatformSchemaVersion !== STATE_SCHEMA_VERSION)
       || (value.richContentVersion !== undefined && value.richContentVersion !== RICH_CONTENT_VERSION)
-      || (object(value.crossPlatform) && value.crossPlatform.schemaVersion !== STATE_SCHEMA_VERSION)) {return fail('unsupported_version');}
+      || (object(value.crossPlatform) && value.crossPlatform.schemaVersion !== STATE_SCHEMA_VERSION)) { return fail('unsupported_version'); }
     return pass();
   }
 
   /** @param {Record<string, unknown>} value @param {boolean} native */
   function learningData(value, native = false) {
-    if (value.wrongBook !== undefined && !(native ? Array.isArray(value.wrongBook) : object(value.wrongBook))) {return false;}
+    if (value.wrongBook !== undefined && !(native ? Array.isArray(value.wrongBook) : object(value.wrongBook))) { return false; }
     for (const key of ['records', 'studyRecords', 'favoriteQuestions']) {
-      if (value[key] !== undefined && !Array.isArray(value[key])) {return false;}
+      if (value[key] !== undefined && !Array.isArray(value[key])) { return false; }
     }
-    if (value.favorites !== undefined && !object(value.favorites)) {return false;}
+    if (value.favorites !== undefined && !object(value.favorites)) { return false; }
     return true;
   }
 
   /** @param {unknown} value @returns {CheckResult} */
   function validateBackup(value) {
     const jsonError = inspectJson(value);
-    if (jsonError) {return fail(jsonError);}
-    if (!object(value)) {return fail('invalid_input');}
+    if (jsonError) { return fail(jsonError); }
+    if (!object(value)) { return fail('invalid_input'); }
     const native = value.kind === 'shiroha_quiz_full_backup';
     if (value.schemaVersion !== (native ? NATIVE_BACKUP_VERSION : STATE_SCHEMA_VERSION)
-      || ((native || value.kind === 'shiroha_quiz_web_native_backup') && value.version !== NATIVE_BACKUP_VERSION)) {return fail('unsupported_version');}
-    if (value.crossPlatform !== undefined && (!object(value.crossPlatform) || !learningData(value.crossPlatform, true))) {return fail('invalid_input');}
+      || ((native || value.kind === 'shiroha_quiz_web_native_backup') && value.version !== NATIVE_BACKUP_VERSION)) { return fail('unsupported_version'); }
+    if (value.crossPlatform !== undefined && (!object(value.crossPlatform) || !learningData(value.crossPlatform, true))) { return fail('invalid_input'); }
     const versions = exchangeVersions(value);
-    if (!versions.ok) {return versions;}
-    if (!['shiroha_quiz_web_full_backup', 'shiroha_quiz_selected_banks', 'shiroha_quiz_web_native_backup', 'shiroha_quiz_full_backup'].includes(String(value.kind)) || !banks(value.banks)) {return fail('invalid_input');}
-    if (!learningData(value, native) || (value.webState !== undefined && !object(value.webState))) {return fail('invalid_input');}
+    if (!versions.ok) { return versions; }
+    if (!['shiroha_quiz_web_full_backup', 'shiroha_quiz_selected_banks', 'shiroha_quiz_web_native_backup', 'shiroha_quiz_full_backup'].includes(String(value.kind)) || !banks(value.banks)) { return fail('invalid_input'); }
+    if (!learningData(value, native) || (value.webState !== undefined && !object(value.webState))) { return fail('invalid_input'); }
     const webState = object(value.webState) ? value.webState : {};
-    if (!learningData(webState)) {return fail('invalid_input');}
+    if (!learningData(webState)) { return fail('invalid_input'); }
     for (const settings of [value.settings, webState.settings, value.webSettings]) {
-      if (settings !== undefined && (!object(settings) || !Object.keys(settings).every((key) => BACKUP_SETTINGS.has(key)))) {return fail('invalid_input');}
-      if (object(settings) && settings.aiImportV99 !== undefined && (!object(settings.aiImportV99) || !onlyKeys(settings.aiImportV99, ['provider', 'endpoint', 'model', 'timeoutSeconds', 'rememberKey']))) {return fail('invalid_input');}
+      if (settings !== undefined && (!object(settings) || !Object.keys(settings).every((key) => BACKUP_SETTINGS.has(key)))) { return fail('invalid_input'); }
+      if (object(settings) && settings.aiImportV99 !== undefined && (!object(settings.aiImportV99) || !onlyKeys(settings.aiImportV99, ['provider', 'endpoint', 'model', 'timeoutSeconds', 'rememberKey']))) { return fail('invalid_input'); }
     }
     const exportError = inspectExport(value);
-    if (exportError) {return fail(exportError);}
+    if (exportError) { return fail(exportError); }
     return pass();
   }
 
   /** @param {unknown} value @returns {CheckResult} */
   function validateBankExport(value) {
     const jsonError = inspectJson(value);
-    if (jsonError) {return fail(jsonError);}
-    if (!object(value)) {return fail('invalid_input');}
-    if (value.schemaVersion !== undefined && value.schemaVersion !== STATE_SCHEMA_VERSION) {return fail('unsupported_version');}
+    if (jsonError) { return fail(jsonError); }
+    if (!object(value)) { return fail('invalid_input'); }
+    if (value.schemaVersion !== undefined && value.schemaVersion !== STATE_SCHEMA_VERSION) { return fail('unsupported_version'); }
     const versions = exchangeVersions(value);
-    if (!versions.ok) {return versions;}
-    if (value.kind !== undefined || ['wrongBook', 'favorites', 'records', 'settings', 'webState', 'crossPlatform'].some((key) => key in value)) {return fail('invalid_input');}
-    if (!(value.exportType === 'question_banks' ? value.schemaVersion === STATE_SCHEMA_VERSION && banks(value.banks) : bank(value))) {return fail('invalid_input');}
+    if (!versions.ok) { return versions; }
+    if (value.kind !== undefined || ['wrongBook', 'favorites', 'records', 'settings', 'webState', 'crossPlatform'].some((key) => key in value)) { return fail('invalid_input'); }
+    if (!(value.exportType === 'question_banks' ? value.schemaVersion === STATE_SCHEMA_VERSION && banks(value.banks) : bank(value))) { return fail('invalid_input'); }
     const exportError = inspectExport(value);
     return exportError ? fail(exportError) : pass();
   }
@@ -239,25 +239,25 @@
   /** @param {unknown} request @param {CommitContext} context @returns {CheckResult} */
   function validateExclusive(request, context) {
     const jsonError = inspectJson(request);
-    if (jsonError) {return fail(jsonError);}
-    if (!object(request)) {return fail('invalid_input');}
+    if (jsonError) { return fail(jsonError); }
+    if (!object(request)) { return fail('invalid_input'); }
     const checked = identity(request, context);
-    if (!checked.ok) {return checked;}
-    if (context.pendingOperationIds?.length) {return fail('operation_busy');}
+    if (!checked.ok) { return checked; }
+    if (context.pendingOperationIds?.length) { return fail('operation_busy'); }
     const baseKeys = ['contractVersion', 'operationId', 'expectedRevision', 'kind'];
-    if (request.kind === 'reset') {return onlyKeys(request, baseKeys) ? pass() : fail('invalid_input');}
-    if (request.kind === 'import_banks') {return onlyKeys(request, [...baseKeys, 'banks']) && banks(request.banks) ? pass() : fail('invalid_input');}
-    if (request.kind !== 'restore' || !onlyKeys(request, [...baseKeys, 'mode', 'backup']) || !['merge', 'replace'].includes(String(request.mode))) {return fail('invalid_input');}
+    if (request.kind === 'reset') { return onlyKeys(request, baseKeys) ? pass() : fail('invalid_input'); }
+    if (request.kind === 'import_banks') { return onlyKeys(request, [...baseKeys, 'banks']) && banks(request.banks) ? pass() : fail('invalid_input'); }
+    if (request.kind !== 'restore' || !onlyKeys(request, [...baseKeys, 'mode', 'backup']) || !['merge', 'replace'].includes(String(request.mode))) { return fail('invalid_input'); }
     return validateBackup(request.backup);
   }
 
   /** @param {unknown} value @returns {value is Record<string, unknown>} */
   function task(value) {
-    if (inspectJson(value) || !object(value) || !id(value.taskId)) {return false;}
+    if (inspectJson(value) || !object(value) || !id(value.taskId)) { return false; }
     if (value.state === 'running') {
-      if (!onlyKeys(value, ['taskId', 'state', 'phase', 'completed', 'total'])) {return false;}
-      if (!['working', 'staging', 'validating', 'committing', 'resolving'].includes(String(value.phase))) {return false;}
-      if ([value.completed, value.total].some((count) => count !== undefined && !revision(count))) {return false;}
+      if (!onlyKeys(value, ['taskId', 'state', 'phase', 'completed', 'total'])) { return false; }
+      if (!['working', 'staging', 'validating', 'committing', 'resolving'].includes(String(value.phase))) { return false; }
+      if ([value.completed, value.total].some((count) => count !== undefined && !revision(count))) { return false; }
       return typeof value.completed !== 'number' || typeof value.total !== 'number' || value.completed <= value.total;
     }
     if (value.state === 'failed') {
@@ -270,13 +270,13 @@
 
   /** @param {unknown} current @param {unknown} next @returns {CheckResult} */
   function validateTaskTransition(current, next) {
-    if (!task(current) || !task(next) || current.taskId !== next.taskId) {return fail('invalid_transition');}
-    if (next.state === 'failed' && object(next.error) && next.error.code === 'outcome_unknown') {return fail('invalid_transition');}
-    if (['succeeded', 'failed', 'cancelled'].includes(String(current.state))) {return fail('invalid_transition');}
-    if (current.state === 'queued') {return ['running', 'failed', 'cancelled'].includes(String(next.state)) ? pass() : fail('invalid_transition');}
-    if (next.state === 'queued') {return fail('invalid_transition');}
+    if (!task(current) || !task(next) || current.taskId !== next.taskId) { return fail('invalid_transition'); }
+    if (next.state === 'failed' && object(next.error) && next.error.code === 'outcome_unknown') { return fail('invalid_transition'); }
+    if (['succeeded', 'failed', 'cancelled'].includes(String(current.state))) { return fail('invalid_transition'); }
+    if (current.state === 'queued') { return ['running', 'failed', 'cancelled'].includes(String(next.state)) ? pass() : fail('invalid_transition'); }
+    if (next.state === 'queued') { return fail('invalid_transition'); }
     const commitStarted = current.phase === 'committing' || current.phase === 'resolving';
-    if (commitStarted && (next.state === 'cancelled' || (next.state === 'running' && !['committing', 'resolving'].includes(String(next.phase))))) {return fail('invalid_transition');}
+    if (commitStarted && (next.state === 'cancelled' || (next.state === 'running' && !['committing', 'resolving'].includes(String(next.phase))))) { return fail('invalid_transition'); }
     return pass();
   }
 

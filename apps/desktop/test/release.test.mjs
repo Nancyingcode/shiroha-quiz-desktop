@@ -211,18 +211,18 @@ test('creates only a verified prerelease draft with explicit assets and derefere
   const assets = await verifyRelease(f.root, f.context);
   await createReleaseDraft(f.root, f.context, async (args) => {
     calls.push(args);
-    if (calls.length === 1) {return '[[]]';}
-    if (calls.length === 2) {return JSON.stringify({ object: { type: 'tag', sha: 'c'.repeat(40) } });}
-    if (calls.length === 3) {return JSON.stringify({ object: { type: 'commit', sha: input.commit } });}
-    if (calls.length === 4) {return 'https://github.com/example/quiz/releases/tag/desktop-v0.1.0';}
+    if (calls.length === 1) { return '[[]]'; }
+    if (calls.length === 2) { return JSON.stringify({ object: { type: 'tag', sha: 'c'.repeat(40) } }); }
+    if (calls.length === 3) { return JSON.stringify({ object: { type: 'commit', sha: input.commit } }); }
+    if (calls.length === 4) { return 'https://github.com/example/quiz/releases/tag/desktop-v0.1.0'; }
     return JSON.stringify([[{ tag_name: f.context.tag, draft: true, prerelease: true, assets: await Promise.all(assets.map(async (file) => ({ name: path.basename(file), size: (await readFile(file)).length }))) }]]);
   });
   const create = calls[3];
   assert.deepEqual(create.slice(0, 3), ['release', 'create', f.context.tag]);
-  for (const flag of ['--draft', '--prerelease', '--latest=false', '--verify-tag', '--notes-file']) {assert.ok(create.includes(flag));}
+  for (const flag of ['--draft', '--prerelease', '--latest=false', '--verify-tag', '--notes-file']) { assert.ok(create.includes(flag)); }
   assert.ok(create.includes('example/quiz'));
   assert.ok(!create.includes('--clobber'));
-  for (const file of assets) {assert.ok(create.includes(file));}
+  for (const file of assets) { assert.ok(create.includes(file)); }
   assert.equal(calls.length, 5);
 });
 
@@ -233,8 +233,8 @@ test('upload failure is reported as a possibly incomplete draft without retry or
   const calls = [];
   await assert.rejects(createReleaseDraft(f.root, f.context, async (args) => {
     calls.push(args);
-    if (calls.length === 1) {return '[[]]';}
-    if (calls.length === 2) {return JSON.stringify({ object: { type: 'commit', sha: input.commit } });}
+    if (calls.length === 1) { return '[[]]'; }
+    if (calls.length === 2) { return JSON.stringify({ object: { type: 'commit', sha: input.commit } }); }
     throw new Error('upload interrupted');
   }), /不完整草稿/);
   assert.equal(calls.length, 3);
@@ -249,9 +249,9 @@ test('post-upload verification rejects public or incomplete releases without mod
     await assert.rejects(createReleaseDraft(f.root, f.context, async (args) => {
       calls += 1;
       assert.ok(!args.includes('edit') && !args.includes('delete'));
-      if (calls === 1) {return '[[]]';}
-      if (calls === 2) {return JSON.stringify({ object: { type: 'commit', sha: input.commit } });}
-      if (calls === 3) {return 'created';}
+      if (calls === 1) { return '[[]]'; }
+      if (calls === 2) { return JSON.stringify({ object: { type: 'commit', sha: input.commit } }); }
+      if (calls === 3) { return 'created'; }
       return JSON.stringify([[{ tag_name: f.context.tag, ...record }]]);
     }), /不完整草稿/);
     assert.equal(calls, 4);

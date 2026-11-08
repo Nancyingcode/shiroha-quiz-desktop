@@ -55,6 +55,15 @@ const invalidCases = [
   ['radix', "console.log(parseInt('11'));\n"],
   ['no-restricted-globals', 'console.log(isNaN(0));\n'],
   ['no-restricted-globals', 'console.log(isFinite(1));\n'],
+  ['prefer-object-spread', 'const source = { value: 1 }; console.log(Object.assign({}, source));\n'],
+  ['default-param-last', 'function pick(first = 1, second) { return first + second; }\nconsole.log(pick(1, 2));\n'],
+  ['no-multi-assign', 'let first; let second; first = second = 1; console.log(first, second);\n'],
+  ['one-var', 'const first = 1, second = 2; console.log(first, second);\n'],
+  ['arrow-body-style', 'const next = (value) => { return value + 1; }; console.log(next(1));\n'],
+  ['new-cap', 'function value() {}\nconsole.log(new value());\n'],
+  ['camelcase', 'const bad_name = 1; console.log(bad_name);\n'],
+  ['class-methods-use-this', 'class Example { method() { return 1; } }\nconsole.log(Example);\n'],
+  ['prefer-destructuring', 'const source = { value: 1 }; const value = source.value; console.log(value);\n'],
   ['@stylistic/indent', 'if (true) {\n console.log(1);\n}\n'],
   ['@stylistic/quotes', 'console.log("double");\n'],
   ['@stylistic/semi', "console.log('missing')\n"],
@@ -79,6 +88,18 @@ const invalidCases = [
   ['@stylistic/function-call-spacing', 'console.log (1);\n'],
   ['@stylistic/no-trailing-spaces', 'console.log(1);  \n'],
   ['@stylistic/comma-style', 'console.log([\n  1\n  , 2,\n]);\n'],
+  ['@stylistic/arrow-spacing', 'console.log([1].map((value)=>value));\n'],
+  ['@stylistic/block-spacing', 'if (true) {console.log(1);}\n'],
+  ['@stylistic/space-before-function-paren', 'function value () { return 1; }\nconsole.log(value());\n'],
+  ['@stylistic/function-paren-newline', 'console.log(\n  1, 2);\n'],
+  ['@stylistic/operator-linebreak', 'console.log(1 +\n  2);\n'],
+  ['@stylistic/brace-style', 'if (true) {\n  console.log(1);\n}\nelse {\n  console.log(2);\n}\n'],
+  ['@stylistic/padded-blocks', 'if (true) {\n\n  console.log(1);\n}\n'],
+  ['@stylistic/no-multiple-empty-lines', 'console.log(1);\n\n\nconsole.log(2);\n'],
+  ['@stylistic/nonblock-statement-body-position', 'if (true)\n  console.log(1);\n'],
+  ['@stylistic/quote-props', "console.log({ 'value': 1 });\n"],
+  ['@stylistic/no-confusing-arrow', 'console.log([1].map((value) => value ? 1 : 0));\n'],
+  ['@stylistic/no-mixed-operators', 'console.log(1 + 2 * 3);\n'],
 ];
 
 for (const filePath of probes) {
@@ -128,6 +149,12 @@ test('callbacks with dynamic this and intentional array lengths remain valid', a
     '  console.log(this.offset + value);',
     '}, context);',
     'console.log(sparse.length, Number.isNaN(NaN), Number.isFinite(1));',
+    "const payload = { question_id: 'sample' };",
+    'console.log(payload.question_id);',
+    'const list = [1];',
+    'const first = list[0];',
+    'const renamed = payload.question_id;',
+    'console.log(first, renamed);',
     '(function () {',
     "  console.log('wrapped');",
     '}());',
@@ -283,12 +310,11 @@ async function repositoryFixture(t, environment = process.env) {
   const init = spawnSync('git', ['init'], { cwd: temporary, env: fixtureEnvironment, encoding: 'utf8', windowsHide: true });
   assert.equal(init.status, 0, init.stderr);
   const run = (/** @type {string} */ script, /** @type {string[]} */ args = []) => spawnSync(
-    process.execPath, [path.join(project, 'scripts', script), ...args],
+    process.execPath,
+    [path.join(project, 'scripts', script), ...args],
     { cwd: os.tmpdir(), env: fixtureEnvironment, encoding: 'utf8', windowsHide: true },
   );
-  const git = (/** @type {string[]} */ args) => spawnSync(
-    'git', args, { cwd: temporary, env: fixtureEnvironment, encoding: 'utf8', windowsHide: true },
-  );
+  const git = (/** @type {string[]} */ args) => spawnSync('git', args, { cwd: temporary, env: fixtureEnvironment, encoding: 'utf8', windowsHide: true });
   return { temporary, run, git };
 }
 
