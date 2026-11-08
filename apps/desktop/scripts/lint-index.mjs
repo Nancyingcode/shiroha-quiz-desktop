@@ -14,11 +14,17 @@ const configPaths = [
   '.husky/pre-commit', 'apps/desktop/eslint.config.mjs', 'apps/desktop/eslint.platform.config.mjs',
   'apps/desktop/eslint.rules.mjs', 'apps/desktop/eslint.migration.mjs', 'apps/desktop/package.json',
   'apps/desktop/scripts/lint-incremental.mjs', 'apps/desktop/scripts/lint-index.mjs',
+  'apps/desktop/scripts/lint-runner.mjs',
+  'apps/desktop/test/lint-config.test.mjs', 'apps/desktop/test/lint-cli.test.mjs',
+  'apps/desktop/test/lint-fixture-helpers.mjs', 'apps/desktop/test/lint-worktree.test.mjs',
+  'apps/desktop/test/lint-runner.test.mjs',
 ];
 if (staged.length || changed.some((file) => configPaths.includes(file))) {
   // 暂存内容必须使用相同的配置验证，否则工作区的临时配置可能掩盖提交中的问题。
-  const changedConfig = git(['diff', '--no-ext-diff', '--name-only', '-z', '--', ...configPaths])
-    .split('\0').filter(Boolean);
+  const changedConfig = [
+    ...git(['diff', '--no-ext-diff', '--name-only', '-z', '--', ...configPaths]).split('\0').filter(Boolean),
+    ...git(['ls-files', '--others', '-z', '--', ...configPaths]).split('\0').filter(Boolean),
+  ];
   if (changedConfig.length) {
     throw new Error(`ESLint 配置或暂存检查脚本与索引不一致，请先处理未暂存修改：${changedConfig.join(', ')}`);
   }

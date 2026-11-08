@@ -15,7 +15,7 @@
     "test:documents": "node --test ../../test/dual-platform/document-page.cjs",
     "test:shared": "node --test ../../test/dual-platform/*.test.cjs",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.platform.json",
-    "lint": "npm run lint:eslint && npm run lint:platform && npm run lint:incremental && npm run lint:fixtures && npm run lint:docs",
+    "lint": "node scripts/lint-runner.mjs",
     "lint:eslint": "eslint scripts test *.config.mjs eslint.rules.mjs eslint.migration.mjs --max-warnings 0",
     "lint:platform": "node scripts/lint-platform.mjs",
     "lint:docs": "node scripts/check-docs.mjs",
@@ -31,7 +31,7 @@
     "bench:desktop": "node scripts/benchmark.mjs",
     "lint:incremental": "node scripts/lint-incremental.mjs",
     "lint:index": "node scripts/lint-index.mjs",
-    "lint:fixtures": "node --test test/lint-config.test.mjs",
+    "lint:fixtures": "node --test test/lint-config.test.mjs test/lint-cli.test.mjs test/lint-worktree.test.mjs test/lint-runner.test.mjs",
     "lint:debt": "node scripts/lint-debt.mjs"
   },
   "devDependencies": {

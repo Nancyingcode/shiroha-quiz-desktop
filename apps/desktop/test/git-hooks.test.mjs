@@ -32,10 +32,10 @@ async function fixture(t) {
     GIT_CONFIG_GLOBAL: globalConfig, GIT_CONFIG_NOSYSTEM: '1', HUSKY: '1',
     XDG_CONFIG_HOME: path.join(temporary, 'config'),
   });
-  const git = (/** @type {string[]} */ args, cwd = repository) => spawnSync(
+  const git = (/** @type {string[]} */ args, cwd = repository, /** @type {string | undefined} */ input = undefined) => spawnSync(
     'git',
     args,
-    { cwd, env, encoding: 'utf8', windowsHide: true },
+    { cwd, env, encoding: 'utf8', windowsHide: true, input },
   );
   expectSuccess(git(['init', '--initial-branch=main']));
   expectSuccess(git(['config', 'user.name', 'Hook Fixture']));
@@ -116,6 +116,74 @@ test('pre-commit refuses mismatched staged lint configuration without rewriting 
   assert.equal(f.git(['rev-parse', '--verify', 'HEAD']).status, 128);
   assert.equal(await readFile(config, 'utf8'), `${original}\n`);
   assert.equal(f.git(['status', '--porcelain=v1']).stdout, before);
+});
+
+test('pre-commit refuses a lint runner that differs from its staged version', async (t) => {
+  const f = await fixture(t);
+  const runner = path.join(f.project, 'scripts/lint-runner.mjs');
+  const staged = "console.log('staged runner');\n";
+  const working = "console.log('working runner');\n";
+  await writeFile(runner, staged);
+  expectSuccess(f.git(['add', 'apps/desktop/scripts/lint-runner.mjs']));
+  await writeFile(runner, working);
+  const before = f.git(['status', '--porcelain=v1']).stdout;
+  const result = f.git(['commit', '-m', 'chore: 更新检查入口']);
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stdout + result.stderr, /配置或暂存检查脚本与索引不一致/);
+  assert.equal(f.git(['rev-parse', '--verify', 'HEAD']).status, 128);
+  assert.equal(await readFile(runner, 'utf8'), working);
+  assert.equal(f.git(['show', ':apps/desktop/scripts/lint-runner.mjs']).stdout, staged);
+  assert.equal(f.git(['status', '--porcelain=v1']).stdout, before);
+});
+
+test('pre-commit refuses an untracked lint runner when JavaScript is staged', async (t) => {
+  const f = await fixture(t);
+  const runner = path.join(f.project, 'scripts/lint-runner.mjs');
+  await writeFile(runner, "console.log('untracked runner');\n");
+  const before = f.git(['status', '--porcelain=v1']).stdout;
+  const result = f.git(['commit', '-m', 'chore: 更新检查入口']);
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stdout + result.stderr, /配置或暂存检查脚本与索引不一致/);
+  assert.equal(f.git(['rev-parse', '--verify', 'HEAD']).status, 128);
+  assert.equal(await readFile(runner, 'utf8'), "console.log('untracked runner');\n");
+  assert.equal(f.git(['status', '--porcelain=v1']).stdout, before);
+});
+
+test('pre-commit runs every parallel check and only checks the index after all pass', async (t) => {
+  const f = await fixture(t);
+  await copyFile(path.join(desktop, 'scripts/lint-runner.mjs'), path.join(f.project, 'scripts/lint-runner.mjs'));
+  await writeFile(path.join(f.project, 'scripts/hook-check.mjs'), [
+    "import { existsSync, writeFileSync } from 'node:fs';",
+    "import path from 'node:path';",
+    "const markerDirectory = path.resolve('../../.git');",
+    'const check = process.argv[2];',
+    "writeFileSync(path.join(markerDirectory, `ran-${check}`), 'yes');",
+    "if (check === 'platform' && existsSync(path.join(markerDirectory, 'fail-platform'))) {",
+    '  process.exitCode = 7;',
+    '}',
+    '',
+  ].join('\n'));
+  const pkgPath = path.join(f.project, 'package.json');
+  const pkg = JSON.parse(await readFile(pkgPath, 'utf8'));
+  pkg.scripts.lint = 'node scripts/lint-runner.mjs';
+  for (const name of ['eslint', 'platform', 'incremental', 'fixtures', 'docs', 'index']) {
+    pkg.scripts[`lint:${name}`] = `node scripts/hook-check.mjs ${name}`;
+  }
+  await writeFile(pkgPath, JSON.stringify(pkg));
+  await writeFile(path.join(f.repository, '.git/fail-platform'), 'fail');
+  expectSuccess(f.git(['add', '.']));
+  const before = f.git(['status', '--porcelain=v1']).stdout;
+  const rejected = f.git(['commit', '-m', 'chore: 验证并行检查']);
+  assert.equal(rejected.status, 1, rejected.stdout + rejected.stderr);
+  for (const name of ['eslint', 'platform', 'incremental', 'fixtures', 'docs']) {
+    assert.equal(await readFile(path.join(f.repository, `.git/ran-${name}`), 'utf8'), 'yes');
+  }
+  await assert.rejects(readFile(path.join(f.repository, '.git/ran-index'), 'utf8'), { code: 'ENOENT' });
+  assert.equal(f.git(['status', '--porcelain=v1']).stdout, before);
+  await unlink(path.join(f.repository, '.git/fail-platform'));
+  expectSuccess(f.git(['commit', '--file', '-'], f.repository, 'chore: 验证并行检查\n'));
+  assert.equal(f.git(['log', '-1', '--format=%s']).stdout.trim(), 'chore: 验证并行检查');
+  assert.equal(await readFile(path.join(f.repository, '.git/ran-index'), 'utf8'), 'yes');
 });
 
 test('pre-commit checks a staged file that was subsequently deleted from the worktree', async (t) => {

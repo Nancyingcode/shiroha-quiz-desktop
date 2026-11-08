@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { copyFile, mkdir, mkdtemp, readFile, realpath, rm, symlink, unlink, writeFile } from 'node:fs/promises';
-import os from 'node:os';
+import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { ESLint } from 'eslint';
 import { baseRules, semanticRules, styleRules } from '../eslint.rules.mjs';
+import { repositoryFixture } from './lint-fixture-helpers.mjs';
 
 const desktop = fileURLToPath(new URL('..', import.meta.url));
 const root = path.resolve(desktop, '../..');
@@ -360,135 +360,6 @@ test('new mixed-case paths do not inherit file-specific globals or exclusions', 
   assert.equal(await lint.isPathIgnored(path.join(root, 'apps/web/question-bank.JS')), false);
 });
 
-/** @param {import('node:test').TestContext} t @param {NodeJS.ProcessEnv} [environment] */
-async function repositoryFixture(t, environment = process.env) {
-  const temporary = await mkdtemp(path.join(os.tmpdir(), 'shiroha lint fixture-'));
-  t.after(() => rm(temporary, { recursive: true, force: true }));
-  const project = path.join(temporary, 'apps/desktop');
-  await mkdir(path.join(project, 'scripts'), { recursive: true });
-  await mkdir(path.join(temporary, 'apps/web'), { recursive: true });
-  await mkdir(path.join(temporary, 'test/new-slice'), { recursive: true });
-  await writeFile(path.join(temporary, 'apps/web/app.js'), "console.log('valid');\n");
-  for (const name of ['eslint.rules.mjs', 'eslint.migration.mjs', 'eslint.platform.config.mjs']) {
-    await copyFile(path.join(desktop, name), path.join(project, name));
-  }
-  for (const name of ['lint-incremental.mjs', 'lint-debt.mjs']) {
-    await copyFile(path.join(desktop, 'scripts', name), path.join(project, 'scripts', name));
-  }
-  await symlink(path.join(desktop, 'node_modules'), path.join(project, 'node_modules'), 'junction');
-  const localVariables = spawnSync('git', ['rev-parse', '--local-env-vars'], {
-    cwd: temporary, env: environment, encoding: 'utf8', windowsHide: true,
-  });
-  assert.equal(localVariables.status, 0, localVariables.stderr);
-  const names = new Set(localVariables.stdout.split(/\r?\n/).filter(Boolean).map((key) => key.toUpperCase()));
-  const fixtureEnvironment = { ...environment };
-  // Hook 继承的仓库定位变量不能影响临时仓库，避免意外操作调用者的仓库。
-  for (const key of Object.keys(fixtureEnvironment)) {
-    if (names.has(key.toUpperCase()) || /^GIT_CONFIG_(?:KEY|VALUE)_\d+$/i.test(key)) {
-      delete fixtureEnvironment[key];
-    }
-  }
-  const init = spawnSync('git', ['init'], { cwd: temporary, env: fixtureEnvironment, encoding: 'utf8', windowsHide: true });
-  assert.equal(init.status, 0, init.stderr);
-  const run = (/** @type {string} */ script, /** @type {string[]} */ args = []) => spawnSync(
-    process.execPath,
-    [path.join(project, 'scripts', script), ...args],
-    { cwd: os.tmpdir(), env: fixtureEnvironment, encoding: 'utf8', windowsHide: true },
-  );
-  const git = (/** @type {string[]} */ args) => spawnSync('git', args, { cwd: temporary, env: fixtureEnvironment, encoding: 'utf8', windowsHide: true });
-  return { temporary, run, git };
-}
-
-test('fixture repositories ignore Git hook repository variables', async (t) => {
-  const tempRoot = await realpath(os.tmpdir());
-  const decoy = await mkdtemp(path.join(tempRoot, 'shiroha-hook-decoy-'));
-  t.after(async () => {
-    const actual = await realpath(decoy);
-    assert.equal(path.dirname(actual).toLowerCase(), tempRoot.toLowerCase());
-    assert(path.basename(actual).startsWith('shiroha-hook-decoy-'));
-    await rm(actual, { recursive: true, force: true });
-  });
-  const cleanEnvironment = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_')));
-  const init = spawnSync('git', ['init'], { cwd: decoy, env: cleanEnvironment, encoding: 'utf8', windowsHide: true });
-  assert.equal(init.status, 0, init.stderr);
-  const hookEnvironment = { ...cleanEnvironment, GIT_DIR: path.join(decoy, '.git'), GIT_WORK_TREE: decoy };
-  const fixture = await repositoryFixture(t, hookEnvironment);
-  const probe = path.join(fixture.temporary, 'test/new-slice/probe.cjs');
-  await writeFile(probe, 'console.log("invalid");\n');
-  const result = fixture.run('lint-incremental.mjs');
-  assert.equal(result.status, 1, result.stderr + result.stdout);
-  assert.match(result.stdout, /@stylistic\/quotes/);
-  const bare = spawnSync('git', ['config', '--local', '--get', 'core.bare'], {
-    cwd: decoy, env: cleanEnvironment, encoding: 'utf8', windowsHide: true,
-  });
-  assert.equal(bare.stdout.trim(), 'false');
-});
-
-test('incremental CLI finds untracked code outside the old scopes and reads complete files without rewriting', async (t) => {
-  const f = await repositoryFixture(t);
-  const probe = path.join(f.temporary, 'test/new-slice/probe.cjs');
-  const invalid = 'console.log(1);\nconsole.log("new violation");\n';
-  await writeFile(probe, invalid);
-  const rejected = f.run('lint-incremental.mjs');
-  assert.ifError(rejected.error);
-  assert.equal(rejected.status, 1, rejected.stderr + rejected.stdout);
-  assert.match(rejected.stdout, /@stylistic\/quotes/);
-  assert.equal(await readFile(probe, 'utf8'), invalid);
-  await writeFile(probe, "console.log('valid');\n");
-  const valid = f.run('lint-incremental.mjs');
-  assert.equal(valid.status, 0, valid.stderr + valid.stdout);
-  assert.match(valid.stdout, /Checked 7 complete/);
-});
-
-test('incremental CLI skips deleted tracked files while checking the remaining worktree', async (t) => {
-  const f = await repositoryFixture(t);
-  const deleted = path.join(f.temporary, 'apps/web/removed.js');
-  await writeFile(deleted, "console.log('tracked');\n");
-  const added = f.git(['add', 'apps/web/removed.js']);
-  assert.equal(added.status, 0, added.stderr);
-  await unlink(deleted);
-  const clean = f.run('lint-incremental.mjs');
-  assert.equal(clean.status, 0, clean.stderr + clean.stdout);
-  const renamed = path.join(f.temporary, 'apps/web/renamed.js');
-  await writeFile(renamed, 'var value = 1; console.log(value);\n');
-  const rejected = f.run('lint-incremental.mjs');
-  assert.equal(rejected.status, 1, rejected.stderr + rejected.stdout);
-  assert(rejected.stdout.includes(renamed));
-  assert.match(rejected.stdout, /no-var/);
-});
-
-test('incremental CLI checks mixed-case JavaScript extensions in each runtime', async (t) => {
-  const f = await repositoryFixture(t);
-  const commonJsValid = "const path = require('node:path');\nmodule.exports = path.sep;\n";
-  const cases = [
-    ['apps/web/new.JS', 'console.log(window.location.href);\n'],
-    ['apps/web/question-bank.JS', 'console.log(window.location.href);\n'],
-    ['apps/desktop/scripts/new.MjS', "import path from 'node:path';\nconsole.log(path.sep, process.pid);\n"],
-    ['test/new-slice/new.CjS', commonJsValid],
-  ];
-  for (const [file] of cases) {
-    await writeFile(path.join(f.temporary, file), 'var value = 1; console.log(value);\n');
-  }
-  const rejected = f.run('lint-incremental.mjs');
-  assert.equal(rejected.status, 1, rejected.stderr + rejected.stdout);
-  for (const [file, valid] of cases) {
-    assert(rejected.stdout.includes(path.join(f.temporary, file)), file);
-    await writeFile(path.join(f.temporary, file), valid);
-  }
-  const clean = f.run('lint-incremental.mjs');
-  assert.equal(clean.status, 0, clean.stderr + clean.stdout);
-  const commonJs = path.join(f.temporary, 'test/new-slice/new.CjS');
-  await writeFile(commonJs, 'function change(value) { value = 2; return value; }\n');
-  const debt = f.run('lint-debt.mjs', ['--file', 'test/new-slice/new.CjS']);
-  assert.equal(debt.status, 0, debt.stderr);
-  assert.equal(JSON.parse(debt.stdout).files[0].counts['no-param-reassign'], 1);
-  await writeFile(commonJs, commonJsValid);
-  await writeFile(path.join(f.temporary, 'apps/web/new.JS'), 'console.log(process.pid);\n');
-  const wrongRuntime = f.run('lint-incremental.mjs');
-  assert.equal(wrongRuntime.status, 1, wrongRuntime.stderr + wrongRuntime.stdout);
-  assert.match(wrongRuntime.stdout, /no-undef/);
-});
-
 test('app.js enforces the full target rules and incremental CLI does not rewrite it', async (t) => {
   const f = await repositoryFixture(t);
   const app = path.join(f.temporary, 'apps/web/app.js');
@@ -506,74 +377,6 @@ test('app.js enforces the full target rules and incremental CLI does not rewrite
   await writeFile(app, "console.log('valid');\n");
   const accepted = f.run('lint-incremental.mjs');
   assert.equal(accepted.status, 0, accepted.stderr + accepted.stdout);
-});
-
-test('incremental CLI rejects violations in formerly excluded handwritten scripts', async (t) => {
-  const f = await repositoryFixture(t);
-  const files = [
-    'test/codebuddy-cli-stdio/container-relay-fixture.mjs',
-    'test/codebuddy-cli-stdio/guard.mjs',
-    'test/codebuddy-cli-stdio/guard.test.mjs',
-    'test/codebuddy-cli-stdio/probe.mjs',
-    'test/codebuddy-cli-stdio/verify-guarded.mjs',
-    'test/codebuddy-cli-stdio/verify.mjs',
-    'test/web-ai-practice/cases.cjs',
-    'test/web-ai-practice/dialogs.cjs',
-    'test/web-ai-practice/fixtures.cjs',
-    'test/web-ai-practice/harness.cjs',
-    'test/web-ai-practice/runner.cjs',
-    'test/web-ai-practice/saved-analysis.cjs',
-    'test/web-ai-practice/submit-modes.cjs',
-    'test/web-ai-practice/wrong-analysis.cjs',
-    'test/web-webdav/request.test.cjs',
-  ];
-  const invalid = 'var value = 1; console.log(value);\n';
-  for (const file of files) {
-    const target = path.join(f.temporary, file);
-    await mkdir(path.dirname(target), { recursive: true });
-    await writeFile(target, invalid);
-  }
-  const rejected = f.run('lint-incremental.mjs');
-  assert.equal(rejected.status, 1, rejected.stderr + rejected.stdout);
-  for (const file of files) {
-    const target = path.join(f.temporary, file);
-    assert(rejected.stdout.includes(target), file);
-    assert.equal(await readFile(target, 'utf8'), invalid);
-  }
-});
-
-test('debt CLI reports rule locations but rejects missing files and syntax failures', async (t) => {
-  const f = await repositoryFixture(t);
-  const probe = path.join(f.temporary, 'apps/web/app.js');
-  const debt = 'function update(value) { value = 2; return value; }\n';
-  await writeFile(probe, debt);
-  const reported = f.run('lint-debt.mjs', ['--file', 'apps/web/app.js']);
-  assert.equal(reported.status, 0, reported.stderr);
-  const report = JSON.parse(reported.stdout);
-  assert.equal(report.files[0].counts['no-param-reassign'], 1);
-  assert.equal(report.files[0].diagnostics[0].line, 1);
-  assert.equal(await readFile(probe, 'utf8'), debt);
-  await writeFile(probe, 'function (');
-  const syntax = f.run('lint-debt.mjs', ['--file', 'apps/web/app.js']);
-  assert.equal(syntax.status, 1);
-  assert.match(syntax.stderr, /Parsing error/);
-  const missing = f.run('lint-debt.mjs', ['--file', 'apps/web/missing.js']);
-  assert.equal(missing.status, 1);
-  assert.match(missing.stderr, /No files matching/);
-});
-
-test('debt CLI reports an empty list when all historical rules have graduated', async (t) => {
-  const f = await repositoryFixture(t);
-  const migration = path.join(f.temporary, 'apps/desktop/eslint.migration.mjs');
-  await writeFile(migration, [
-    'export const styleDebt = {};',
-    'export const semanticDebt = {};',
-    'export const legacyStyleFiles = [];',
-    '',
-  ].join('\n'));
-  const reported = f.run('lint-debt.mjs');
-  assert.equal(reported.status, 0, reported.stderr);
-  assert.deepEqual(JSON.parse(reported.stdout).files, []);
 });
 
 test('plain .js Node files follow their package runtime without leaking globals into browser scripts', async () => {
