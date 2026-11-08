@@ -6,6 +6,7 @@ const { chromium } = require('../../apps/desktop/node_modules/playwright-core');
 const { startServer, WEB_ROOT } = require('../web-ai-practice/harness.cjs');
 const { webState, androidBackup, PNG_BASE64, IMAGE } = require('./fixtures/dataset.cjs');
 const { loadWeb, plain } = require('./web-source.cjs');
+const { createWebSource } = require('./source-tools.cjs');
 const { pathToFileURL } = require('node:url');
 const path = require('node:path');
 const KEY = 'shiroha_quiz_state_v28_4_c1';
@@ -15,7 +16,7 @@ test.before(async () => {
   browser = await chromium.launch({ headless: true, ...(process.env.SHIROHA_BROWSER_EXECUTABLE ? { executablePath: process.env.SHIROHA_BROWSER_EXECUTABLE } : { channel: 'msedge' }) });
 });
 test.after(async () => { await browser?.close(); await server?.close(); });
-async function pageFor(t, raw, injection = '') {
+async function pageFor(t, raw, injection = '', appTransform = null) {
   const context = await browser.newContext(); t.after(() => context.close());
   await context.addInitScript(({ raw, key }) => { if (!globalThis.sessionStorage.getItem('__stage_b_seed')){if (raw !== null) globalThis.localStorage.setItem(key, raw);globalThis.sessionStorage.setItem('__stage_b_seed','1')} }, { raw, key: KEY });
   await context.route('**/*', async route => {
@@ -23,6 +24,9 @@ async function pageFor(t, raw, injection = '') {
     if (url.origin !== new URL(server.url).origin) return route.abort();
     if (url.pathname === '/platform/index.js' && injection) {
       const response = await route.fetch(); return route.fulfill({ response, body: await response.text() + '\n' + injection });
+    }
+    if (url.pathname === '/app.js' && appTransform) {
+      const response = await route.fetch(); return route.fulfill({ response, body: appTransform(await response.text()) });
     }
     return route.continue();
   });
@@ -97,6 +101,200 @@ test('设置页以含图片备份展示 ZIP，实际下载仍使用旧兼容载�
   assert.equal(payload.version, 3);
   assert.equal(payload.banks.length, 2);
   assert(entries.some(entry => entry.name.startsWith('assets/')));
+  assert.equal(await saved(page), before);
+});
+
+for (const mode of ['merge', 'overwrite']) {
+  test(`WebDAV mock 上传、校验与${mode}失败重试保全数据`, async t => {
+    const page = await pageFor(t, JSON.stringify(webState()));
+    await page.locator('body[data-storage-state="ready"]').waitFor();
+    await page.evaluate(() => {
+      const files = new Map();
+      const requests = [];
+      globalThis.__davMock = { files, requests };
+      globalThis.ShirohaPlatform.network.webdav = async (config, password, relativePath, options = {}) => {
+        requests.push({ relativePath, method: options.method, password });
+        if (options.method === 'PUT') {
+          const bytes = typeof options.body === 'string' ? new TextEncoder().encode(options.body) : options.body;
+          files.set(relativePath, new Uint8Array(bytes));
+          return { status: 201 };
+        }
+        if (options.method === 'MKCOL') return { status: 201 };
+        if (options.method === 'PROPFIND') {
+          const rows = [...files.keys()].filter(name => /shiroha-web-backup-.*\.json$/.test(name));
+          return { status: 207, text: async () => `<multistatus xmlns="DAV:">${rows.map(name => `<response><href>/${name}</href><getcontentlength>${files.get(name).length}</getcontentlength></response>`).join('')}</multistatus>` };
+        }
+        const bytes = files.get(relativePath);
+        if (!bytes) return { status: 404, text: async () => '' };
+        return { status: 200, text: async () => new TextDecoder().decode(bytes), arrayBuffer: async () => bytes.slice().buffer };
+      };
+    });
+    await page.locator('.nav[data-view="settings"]').click();
+    await page.locator('#webdav-endpoint-v378').fill('https://dav.example.invalid/root');
+    await page.locator('#webdav-remote-dir-v378').fill('ShirohaQuiz/Web');
+    await page.locator('#webdav-username-v378').fill('fixture');
+    await page.locator('#webdav-password-v378').fill('fake-password');
+    const before = JSON.parse(await saved(page));
+    await page.locator('#webdav-upload-v378').click();
+    await page.locator('#webdav-status-v378').filter({ hasText: '上传成功' }).waitFor();
+    const remote = page.locator('#webdav-list-v378 [data-webdav-restore-v378]');
+    assert.equal(await remote.count(), 1);
+    if (mode === 'merge') {
+      await page.evaluate(() => {
+        const name = [...globalThis.__davMock.files.keys()].find(value => /shiroha-web-backup-.*\.json$/.test(value));
+        const original = globalThis.__davMock.files.get(name);
+        globalThis.__restoreDavBytes = () => globalThis.__davMock.files.set(name, original);
+        const corrupt = original.slice();
+        corrupt[corrupt.length - 1] ^= 1;
+        globalThis.__davMock.files.set(name, corrupt);
+      });
+      await remote.click();
+      await page.locator('#webdav-status-v378').filter({ hasText: 'SHA-256' }).waitFor();
+      assert.equal(await page.locator('#webdav-restore-modal-v378').isHidden(), true);
+      assert.deepEqual(JSON.parse(await saved(page)), before);
+      await page.evaluate(() => globalThis.__restoreDavBytes());
+      await remote.waitFor({ state: 'visible' });
+    }
+    await remote.click();
+    await page.locator('#webdav-restore-modal-v378').waitFor({ state: 'visible' });
+    await page.locator('#webdav-restore-cancel-v378').click();
+    await page.locator('#webdav-restore-modal-v378').waitFor({ state: 'hidden' });
+    assert.deepEqual(JSON.parse(await saved(page)), before);
+    await remote.click();
+    await page.locator('#webdav-restore-modal-v378').waitFor({ state: 'visible' });
+    await page.locator('#webdav-restore-mode-v378').selectOption(mode);
+    await page.evaluate(() => {
+      const write = globalThis.ShirohaPlatform.storage.write;
+      globalThis.__resumeDavWrite = () => { globalThis.ShirohaPlatform.storage.write = write; };
+      globalThis.ShirohaPlatform.storage.write = async () => { throw new Error('Synthetic WebDAV restore failure'); };
+    });
+    await page.locator('#webdav-restore-confirm-v378').click();
+    await page.locator('#platform-status.failed').waitFor();
+    assert.deepEqual(JSON.parse(await saved(page)), before);
+    assert.equal(await page.locator('#webdav-restore-modal-v378').isVisible(), true);
+    await page.evaluate(() => globalThis.__resumeDavWrite());
+    await page.locator('#webdav-restore-confirm-v378').click();
+    await page.locator('#webdav-status-v378').filter({ hasText: '恢复完成' }).waitFor();
+    const after = JSON.parse(await saved(page));
+    if (mode === 'merge') {
+      assert.equal(after.banks.length, before.banks.length * 2);
+      assert.equal(after.records.length, before.records.length * 2);
+      assert.notEqual(after.records.at(-1).bankId, before.records[0].bankId);
+    } else {
+      assert.equal(after.banks.length, before.banks.length);
+      assert.deepEqual(after.banks.map(bank => bank.id), before.banks.map(bank => bank.id));
+      assert.equal(after.records[0].id, before.records[0].id);
+    }
+    const requests = await page.evaluate(() => globalThis.__davMock.requests);
+    assert.equal(requests.filter(request => request.method === 'PUT' && /shiroha-web-backup-/.test(request.relativePath)).length, 1);
+    assert(requests.some(request => request.method === 'GET' && /shiroha-web-backup-/.test(request.relativePath)));
+  });
+}
+
+test('WebDAV 取消网络任务后释放忙碌状态并保留当前数据', async t => {
+  const injection = `
+    globalThis.__davCancelCount = 0;
+    globalThis.ShirohaPlatform.network.webdav = () => new Promise((resolve, reject) => {
+      globalThis.__davAbort = () => reject(Object.assign(new Error('测试取消'), { code: 'cancelled' }));
+    });
+    globalThis.ShirohaPlatform.network.cancelAll = async () => {
+      globalThis.__davCancelCount++;
+      globalThis.__davAbort?.();
+    };
+  `;
+  const page = await pageFor(t, JSON.stringify(webState()), injection);
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  const before = await saved(page);
+  await page.locator('.nav[data-view="settings"]').click();
+  await page.locator('#webdav-endpoint-v378').fill('https://dav.example.invalid');
+  await page.locator('#webdav-test-v378').click();
+  await page.waitForFunction(() => typeof globalThis.__davAbort === 'function');
+  const stop = page.locator('#webdav-stop-native');
+  assert.equal(await stop.isEnabled(), true);
+  assert.equal(await page.locator('#webdav-test-v378').isDisabled(), true);
+  await stop.click();
+  await page.waitForFunction(() => !globalThis.document.getElementById('webdav-test-v378').disabled);
+  assert.equal(await page.evaluate(() => globalThis.__davCancelCount), 1);
+  assert.equal(await stop.isDisabled(), true);
+  assert.equal(await saved(page), before);
+});
+
+test('恢复后重复初始化不会重复挂载 WebDAV 面板或绑定处理器', async t => {
+  const transform = source => createWebSource(source).replaceStartup('globalThis.__repeatAppStart = startApplication;\nstartApplication();');
+  const page = await pageFor(t, JSON.stringify(webState()), '', transform);
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  const result = await page.evaluate(async () => {
+    const button = globalThis.document.getElementById('webdav-test-v378');
+    const previousHandler = button.onclick;
+    const targets = new Map([
+      [globalThis, 'window'],
+      [globalThis.document, 'document'],
+      [globalThis.document.getElementById('import-text'), 'import-text'],
+      [globalThis.document.getElementById('import-bank-name'), 'import-bank-name'],
+      [globalThis.document.getElementById('edit-question'), 'edit-question'],
+    ]);
+    const rebound = [];
+    const add = globalThis.EventTarget.prototype.addEventListener;
+    globalThis.EventTarget.prototype.addEventListener = function (type, ...args) {
+      if (targets.has(this)) rebound.push(`${targets.get(this)}:${type}`);
+      return add.call(this, type, ...args);
+    };
+    try {
+      await globalThis.__repeatAppStart();
+    } finally {
+      globalThis.EventTarget.prototype.addEventListener = add;
+    }
+    return {
+      panels: globalThis.document.querySelectorAll('#webdav-panel-v378').length,
+      modals: globalThis.document.querySelectorAll('#webdav-restore-modal-v378').length,
+      sameButton: globalThis.document.getElementById('webdav-test-v378') === button,
+      sameHandler: button.onclick === previousHandler,
+      rebound,
+    };
+  });
+  assert.deepEqual(result, { panels: 1, modals: 1, sameButton: true, sameHandler: true, rebound: [] });
+});
+
+for (const mode of ['merge', 'overwrite']) {
+  test(`本地备份${mode}写入失败保留原数据并可重试`, async t => {
+    const page = await pageFor(t, JSON.stringify(webState()));
+    await page.locator('body[data-storage-state="ready"]').waitFor();
+    const before = JSON.parse(await saved(page));
+    const backup = importBackupFixture();
+    await page.evaluate(() => {
+      const write = globalThis.ShirohaPlatform.storage.write;
+      globalThis.__resumeLocalBackupWrite = () => { globalThis.ShirohaPlatform.storage.write = write; };
+      globalThis.ShirohaPlatform.storage.write = async () => { throw new Error('Synthetic local backup failure'); };
+    });
+    await page.locator('.nav[data-view="settings"]').click();
+    await page.locator('#settings-backup-mode-v23').selectOption(mode);
+    await page.locator('#settings-import-backup-v23').click();
+    await page.locator('#backup-json-file-v23').setInputFiles({ name: 'fixture.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(backup)) });
+    await page.locator('#platform-status.failed').waitFor();
+    assert.deepEqual(JSON.parse(await saved(page)), before);
+    assert.equal(await page.locator('#backup-json-file-v23').evaluate(element => element.files.length), 1);
+    await page.evaluate(() => globalThis.__resumeLocalBackupWrite());
+    await page.locator('#platform-status').getByRole('button', { name: '重试', exact: true }).click();
+    await page.waitForFunction(() => globalThis.document.getElementById('import-summary').textContent.includes('导入完成'));
+    const after = JSON.parse(await saved(page));
+    assert.equal(after.banks.length, mode === 'merge' ? before.banks.length + backup.banks.length : backup.banks.length);
+    assert.equal(after.records.length, mode === 'merge' ? before.records.length + backup.records.length : backup.records.length);
+  });
+}
+
+test('需要原生检查点时缺少备份图片不会开始替换', async t => {
+  const page = await pageFor(t, JSON.stringify(webState()));
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  const before = await saved(page);
+  await page.evaluate(() => {
+    globalThis.ShirohaPlatform.storage.checkpoint = async () => { throw new Error('缺失图片时不应进入检查点'); };
+  });
+  await page.locator('.nav[data-view="settings"]').click();
+  await page.locator('#settings-backup-mode-v23').selectOption('overwrite');
+  await page.locator('#backup-json-file-v23').setInputFiles({
+    name: 'legacy-missing-image.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(androidBackup())),
+  });
+  await page.waitForFunction(() => globalThis.document.getElementById('import-summary').textContent.includes('备份缺少图片'));
   assert.equal(await saved(page), before);
 });
 
@@ -282,6 +480,57 @@ for (const mode of ['single', 'total']) test(`训练计时：${mode} 暂停保�
   assert(await page.locator('#p-pause').evaluate(node => node === globalThis.document.activeElement));
   await page.locator('#p-pause').click(); await page.keyboard.press('Escape');
   assert.equal(await page.locator('#practice-pause-dialog').count(), 0);
+});
+
+test('练习：重置后忽略迟到的题目读取', async t => {
+  const initial = webState();
+  initial.records = [];
+  const page = await pageFor(t, JSON.stringify(initial));
+  page.setDefaultTimeout(5000);
+  await page.locator('.nav[data-view="practice"]').click();
+  await page.evaluate(() => {
+    globalThis.ShirohaPlatform.storage.ensureQuestions = () => new Promise(resolve => {
+      globalThis.__finishOldPracticeRead = resolve;
+    });
+  });
+  await page.locator('#start-practice-btn').click();
+  await page.waitForFunction(() => typeof globalThis.__finishOldPracticeRead === 'function');
+  await page.locator('#reset-practice-btn').click();
+  await page.evaluate(() => globalThis.__finishOldPracticeRead());
+  await page.waitForTimeout(100);
+  assert.match(await page.locator('#practice-card').innerText(), /选择条件后点击“开始练习”/);
+  assert.equal(await page.locator('#practice-card .question-title').count(), 0);
+});
+
+test('练习：旧题量确认迟到时不能重置已开始的新一轮', async t => {
+  const initial = webState();
+  initial.records = [];
+  const question = initial.banks[0].questions[0];
+  initial.banks = [initial.banks[0]];
+  initial.banks[0].questions = Array.from({ length: 201 }, (_, index) => ({
+    ...question, id: `practice-confirm-${index}`, question: `确认轮次 ${index + 1}`, answer: ['A'],
+  }));
+  const page = await pageFor(t, JSON.stringify(initial));
+  page.setDefaultTimeout(5000);
+  await page.locator('.nav[data-view="practice"]').click();
+  await page.locator('#practice-limit').selectOption('all');
+  await page.evaluate(() => {
+    let calls = 0;
+    globalThis.ShirohaDialogs.confirm = () => {
+      calls++;
+      if (calls === 1) return new Promise(resolve => { globalThis.__resolveOldPracticeConfirm = resolve; });
+      return Promise.resolve(true);
+    };
+  });
+  await page.locator('#start-practice-btn').click();
+  await page.waitForFunction(() => typeof globalThis.__resolveOldPracticeConfirm === 'function');
+  await page.locator('#start-practice-btn').click();
+  await page.locator('#practice-card .question-title').waitFor();
+  await page.evaluate(() => globalThis.__resolveOldPracticeConfirm(false));
+  await page.waitForTimeout(100);
+  await page.locator('#p-next').click();
+  assert.match(await page.locator('#practice-card .question-title').innerText(), /确认轮次 2/);
+  assert.equal(await page.locator('#practice-progress').innerText(), '2 / 201');
 });
 
 test('训练复盘：提前结束保留全部快照，选错与未答可筛选，重开后仍能复盘', async t => {
@@ -1472,6 +1721,44 @@ test('容量不足不清空编辑内容，重试成功后再离开编辑态', as
   await page.locator('body[data-storage-state="ready"]').waitFor();
   assert.equal(JSON.parse(await saved(page)).banks[0].name,'保存失败时保留名称');
 });
+test('考试：旧倒计时回调不能交新一轮的试卷', async t => {
+  const initial = webState();
+  initial.records = [];
+  const page = await pageFor(t, JSON.stringify(initial));
+  page.setDefaultTimeout(5000);
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.locator('.nav[data-view="exam"]').click();
+  await page.locator('#exam-minutes').fill('1');
+  await page.evaluate(() => {
+    const start = Date.now();
+    let current = start;
+    const setTimer = globalThis.setInterval;
+    const clearTimer = globalThis.clearInterval;
+    globalThis.__examTicks = [];
+    Date.now = () => current;
+    globalThis.setInterval = (callback, delay, ...args) => {
+      if (delay !== 1000) return setTimer(callback, delay, ...args);
+      globalThis.__examTicks.push(callback);
+      return 1000000 + globalThis.__examTicks.length;
+    };
+    globalThis.clearInterval = id => {
+      if (id < 1000000) clearTimer(id);
+    };
+    globalThis.__expireExams = () => { current = start + 61000; };
+  });
+  await page.locator('#start-exam-btn').click();
+  await page.waitForFunction(() => globalThis.__examTicks.length === 1);
+  await page.locator('#start-exam-btn').evaluate(button => button.click());
+  await page.waitForFunction(() => globalThis.__examTicks.length === 2);
+  await page.evaluate(() => { globalThis.__expireExams(); globalThis.__examTicks[0](); });
+  await page.waitForTimeout(100);
+  assert.equal(JSON.parse(await saved(page)).records.length, 0);
+  assert.equal(await page.locator('#exam-submit-focus').isDisabled(), false);
+  await page.evaluate(() => globalThis.__examTicks[1]());
+  await page.waitForFunction(key => JSON.parse(globalThis.localStorage.getItem(key)).records.length === 1, KEY);
+  assert.equal(JSON.parse(await saved(page)).records[0].autoSubmitted, true);
+});
+
 test('考试提交失败保全记录，重试与重复点击只新增一次',async t=>{
   const initial=webState();const page=await pageFor(t,JSON.stringify(initial));
   await page.locator('body[data-storage-state="ready"]').waitFor();
@@ -1487,7 +1774,23 @@ test('考试提交失败保全记录，重试与重复点击只新增一次',asy
   assert.equal(JSON.parse(await saved(page)).records.length,initial.records.length+1);
   assert.equal(await page.locator('#submit-exam-btn').isDisabled(),true);
 });
-test('file URL 的静态 ZIP 入口可启动且不依赖可选 PDF/OCR',async t=>{
+test('Web 和 file 入口均可解压 DEFLATE 条目', async t => {
+  const context = await browser.newContext();
+  t.after(() => context.close());
+  const page = await context.newPage();
+  const archive = 'UEsDBBQAAAAIAI9MaF0mOfTLCwAAAAkAAAALAAAAYmFja3VwLmpzb24zNDI2MTUzt7AEAFBLAQIUABQAAAAIAI9MaF0mOfTLCwAAAAkAAAALAAAAAAAAAAAAAAAAAAAAAABiYWNrdXAuanNvblBLBQYAAAAAAQABADkAAAA0AAAAAAA=';
+  for (const url of [server.url, pathToFileURL(path.join(WEB_ROOT, 'index.html')).href]) {
+    await page.goto(url);
+    await page.locator('body[data-storage-state="ready"]').waitFor();
+    const result = await page.evaluate(async (base64) => {
+      const bytes = Uint8Array.from(globalThis.atob(base64), (char) => char.charCodeAt(0));
+      const [entry] = globalThis.ShirohaZip.parseZipEntries(bytes.buffer);
+      return { method: entry.method, text: await globalThis.ShirohaZip.unzipEntry(bytes.buffer, entry) };
+    }, archive);
+    assert.deepEqual(result, { method: 8, text: '123456789' });
+  }
+});
+test('file URL 支持 ZIP 与文本导入且不依赖可选 PDF/OCR',async t=>{
   const context=await browser.newContext();t.after(()=>context.close());
   const page=await context.newPage();
   const scriptErrors = [];
@@ -1499,17 +1802,36 @@ test('file URL 的静态 ZIP 入口可启动且不依赖可选 PDF/OCR',async t=
     (nodes) => nodes.map((node) => node.getAttribute('src')),
   );
   const appIndex = scripts.indexOf('./app.js');
-  for (const name of ['./quiz-core.js', './text-answers.js', './backup-core.js']) {
+  for (const name of ['./quiz-core.js', './text-answers.js', './text-parser.js', './backup-core.js', './zip.js', './backup-archive.js', './backup-data.js', './webdav-panel.js', './docx-import.js', './pdf-import.js', './ocr-import.js', './table-import.js', './import-preview.js', './ai-results.js', './ai-import-sessions.js', './ai-question-sessions.js', './ai-settings.js', './ai-transport.js', './ai-prompts.js', './question-view.js', './bank-page.js', './saved-questions-page.js', './training-review-page.js', './bank-editor.js', './study-sessions.js', './exam-page.js', './practice-selection.js', './practice-page.js', './ai-import-panel.js', './ai-question-panels.js', './question-editor.js']) {
     assert(scripts.indexOf(name) >= 0 && scripts.indexOf(name) < appIndex);
   }
   assert.deepEqual(
     await page.evaluate(() => [
       typeof globalThis.ShirohaQuizCore,
       typeof globalThis.ShirohaTextAnswers,
+      typeof globalThis.ShirohaTextParser,
       typeof globalThis.ShirohaBackupCore,
+      typeof globalThis.ShirohaZip,
     ]),
-    ['object', 'object', 'object'],
+    ['object', 'object', 'object', 'object', 'object'],
   );
+  assert.deepEqual(scriptErrors, []);
+  await page.locator('.nav[data-view="import"]').click();
+  await page.locator('#import-mode').selectOption('normal');
+  await page.locator('#import-strategy').selectOption('compact');
+  await page.locator('#import-save-mode-v59').selectOption('new');
+  await page.locator('#import-text').fill('1. 本地文本测试？ A. 甲 B. 乙\n答案：B\n2. 下一题？\nA. 左\nB. 右\n答案：A');
+  await page.locator('#parse-import-btn').click();
+  await page.locator('#import-summary').filter({ hasText: '最终识别：2题' }).waitFor();
+  assert.equal(await page.locator('#import-preview tbody tr').count(), 2);
+  await page.locator('#import-bank-name').fill('本地文本解析测试');
+  await page.locator('#confirm-import-btn').click();
+  await page.locator('#active-bank-select option').filter({ hasText: '本地文本解析测试' }).waitFor({ state: 'attached' });
+  await page.reload();
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  const bank = JSON.parse(await saved(page)).banks.find((item) => item.name === '本地文本解析测试');
+  assert.deepEqual(bank.questions.map((question) => question.answer), [['B'], ['A']]);
+  assert.deepEqual(bank.questions.map((question) => question.options.map((option) => option.text)), [['甲', '乙'], ['左', '右']]);
   assert.deepEqual(scriptErrors, []);
   await page.locator('#save-all-btn').click();
   await page.locator('body[data-storage-state="ready"]').waitFor();
@@ -1652,4 +1974,49 @@ test('题库详情：段落、表格和代码复制保留原意', async t => {
   assert.ok(layout.width<=layout.viewport+1);
   const buttonBounds=await page.locator('[data-copy-question]').boundingBox();
   assert.ok(buttonBounds.x>=0&&buttonBounds.x+buttonBounds.width<=480);
+});
+
+test('AI 导入与批量建议在页面核对后才写入题库', async t => {
+  const page = await pageFor(t, JSON.stringify(webState()));
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.evaluate(() => {
+    globalThis.__aiTasks = [];
+    globalThis.ShirohaPlatform.network.ai = async (_config, payload) => {
+      const input = JSON.parse(payload.messages[1].content);
+      globalThis.__aiTasks.push(input.task || 'batch_analysis');
+      const content = input.task === 'refactor_questions'
+        ? { mode: 'direct_questions', questions: [{ type: 'single', question: '模拟整理题目', options: [{ key: 'A', text: '甲' }, { key: 'B', text: '乙' }], answer: ['A'] }] }
+        : { results: [{ id: input.questions[0].id, analysis: '模拟解析草稿', needsReview: false }] };
+      return { ok: true, status: 200, text: async () => JSON.stringify({ choices: [{ message: { content: JSON.stringify(content) } }] }) };
+    };
+  });
+  await page.locator('.nav[data-view="ai-settings"]').click();
+  await page.locator('#ai-provider-v99').selectOption('custom');
+  await page.locator('#ai-endpoint-v99').fill('https://mock-ai.invalid/v1/chat/completions');
+  await page.locator('#ai-model-v99').fill('fixture');
+  await page.locator('#ai-save-settings-v99').click();
+  await page.locator('#ai-settings-status-v99').filter({ hasText: '设置已保存' }).waitFor();
+  const before = await saved(page);
+  await page.locator('.nav[data-view="import"]').click();
+  await page.locator('#import-mode').selectOption('normal');
+  await page.locator('#import-text').fill('自建题目原文');
+  await page.locator('#ai-organize-import-btn-v99').click();
+  await page.locator('#ai-import-start-btn-v99').click();
+  await page.locator('#ai-import-status-v99').filter({ hasText: '整理完成' }).waitFor();
+  assert.equal(await saved(page), before);
+  await page.locator('#ai-analysis-import-btn-v991').click();
+  await page.locator('#ai-preview-start-btn-v991').click();
+  await page.locator('#ai-preview-status-v991').filter({ hasText: '生成 1 条建议' }).waitFor();
+  assert.equal(await saved(page), before);
+  await page.locator('[data-ai-analysis-apply-v991]').click();
+  assert.equal(await saved(page), before);
+  await page.locator('#import-save-mode-v59').selectOption('new');
+  await page.locator('#import-bank-name').fill('AI 测试题库');
+  await page.locator('#confirm-import-btn').click();
+  await page.waitForFunction(key => JSON.parse(globalThis.localStorage.getItem(key)).banks.some(bank => bank.name === 'AI 测试题库'), KEY);
+  const after = JSON.parse(await saved(page));
+  const bank = after.banks.find(item => item.name === 'AI 测试题库');
+  assert.equal(bank.questions[0].question, '模拟整理题目');
+  assert.equal(bank.questions[0].analysis, '答案：A。模拟解析草稿');
+  assert.deepEqual(await page.evaluate(() => globalThis.__aiTasks), ['refactor_questions', 'batch_analysis']);
 });

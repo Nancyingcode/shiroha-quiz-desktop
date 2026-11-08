@@ -373,7 +373,14 @@
     /** @param {'ai'|'webdav'} service @param {ServiceConfig} config @param {string} secret @param {boolean} remember */
     async set(service, config, secret, remember) {
       networkGeneration++;
-      const input = secret === MARKER ? { kind: 'keep' } : secret ? { kind: 'replace', value: secret } : { kind: 'clear' };
+      let input;
+      if (secret === MARKER) {
+        input = { kind: 'keep' };
+      } else if (secret) {
+        input = { kind: 'replace', value: secret };
+      } else {
+        input = { kind: 'clear' };
+      }
       const result = await credential({ kind: 'stage', config: nativeConfig(service, config), input, remember });
       const undo = async () => { await credential({ kind: 'rollback', id: result.id }); staged.delete(undo); };
       staged.set(undo, { id: result.id, service, config });

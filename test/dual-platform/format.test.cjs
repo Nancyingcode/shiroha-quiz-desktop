@@ -159,6 +159,135 @@ test('Android version 3 自建 ZIP 输入保留图片、多空、收藏、错题
   assert.deepEqual(roundtrip.studyRecords[0].questionResults[0].userBlankAnswers, ['北京市', '京']);
 });
 
+for (const format of ['json', 'zip']) {
+  test(`旧 Android ${format} 经 Web JSON 与含图 ZIP 完整往返`, async () => {
+    const source = androidBackup();
+    const firstApi = loadWeb().api;
+    let blob;
+    if (format === 'json') {
+      source.banks[0].questions[0].images[0].dataUrl = IMAGE;
+      blob = new Blob([JSON.stringify(source)], { type: 'application/json' });
+    } else {
+      blob = firstApi.zipStoreFiles([
+        { name: 'backup.json', text: JSON.stringify(source) },
+        { name: 'assets/pixel.png', data: new Uint8Array(Buffer.from(PNG_BASE64, 'base64')) },
+      ]);
+    }
+    const firstRead = await firstApi.readBackupFileV24({ name: `android.${format}`, arrayBuffer: () => blob.arrayBuffer() });
+    const firstPayload = JSON.parse(firstRead.text);
+    firstApi.applyBackupAssetsV24(firstPayload, firstRead.assets);
+    const initial = plain(firstApi.normalizeBackupPayloadV23(firstPayload, `android.${format}`));
+    const webApi = loadWeb({ state: initial }).api;
+    const webPayload = plain(webApi.buildBackupPayloadV23(webApi.snapshot().banks, 'all_data', true));
+    assert.equal(webPayload.kind, 'shiroha_quiz_web_full_backup');
+    const fromWebJson = plain(webApi.normalizeBackupPayloadV23(JSON.parse(JSON.stringify(webPayload)), 'web.json'));
+    assert.deepEqual(fromWebJson.records, initial.records);
+    assert.deepEqual(fromWebJson.favorites, initial.favorites);
+    assert.deepEqual(fromWebJson.wrongBook, initial.wrongBook);
+    const nativeApi = loadWeb({ state: fromWebJson }).api;
+    const exported = nativeApi.buildNativeCompatibleBackupZipV611();
+    const secondRead = await nativeApi.readBackupFileV24({ name: 'roundtrip.zip', arrayBuffer: () => exported.blob.arrayBuffer() });
+    const secondPayload = JSON.parse(secondRead.text);
+    assert.equal(secondPayload.kind, 'shiroha_quiz_web_native_backup');
+    assert.equal(secondPayload.version, 3);
+    nativeApi.applyBackupAssetsV24(secondPayload, secondRead.assets);
+    assert.equal(nativeApi.countUnresolvedBackupImagesV24(secondPayload), 0);
+    const final = plain(nativeApi.normalizeBackupPayloadV23(secondPayload, 'roundtrip.zip'));
+    assert.equal(final.banks[0].id, 'native-bank');
+    assert.equal(final.banks[0].questions[0].id, 'native-blank');
+    assert.equal(final.banks[0].questions[0].images[0].dataUrl, IMAGE);
+    assert.deepEqual(final.banks[0].questions[0].blankAnswers, [['北京', '北京市'], ['京']]);
+    assert.deepEqual(final.favorites, { 'native-bank': ['native-blank'] });
+    assert.equal(final.crossPlatformMeta.favoriteQuestions['native-bank']['native-blank'].favoritedAt, MILLIS);
+    assert.equal(final.wrongBook['native-bank'][0].wrongCount, 2);
+    assert.equal(final.wrongBook['native-bank'][0].lastWrongAt, TIME);
+    assert.equal(final.records[0].id, 'native-record');
+    assert.equal(final.records[0].details[0].score, 4);
+    assert.deepEqual(final.records[0].details[0].userBlankAnswers, ['北京市', '京']);
+  });
+}
+
+test('原生记录导入保留多空回退、空数组和零分的既有优先级', () => {
+  const cases = [
+    { blankAnswers: [['甲'], ['乙']], userAnswer: ['甲', '乙'], expected: ['甲', '乙'] },
+    { blankAnswers: [['甲'], ['乙']], userAnswer: ['甲', '乙'], userBlankAnswers: [], expected: ['甲', '乙'] },
+    { blankAnswers: [['甲'], ['乙']], userAnswer: ['甲', '乙'], userBlankAnswers: ['', '乙'], expected: ['', '乙'] },
+    { blankAnswers: [], userAnswer: ['原答案'], userBlankAnswers: [], expected: [], chosen: ['原答案'] },
+  ];
+  for (const sample of cases) {
+    const input = androidBackup();
+    const result = input.studyRecords[0].questionResults[0];
+    result.question.blankAnswers = sample.blankAnswers;
+    result.userAnswer = sample.userAnswer;
+    if (Object.hasOwn(sample, 'userBlankAnswers')) result.userBlankAnswers = sample.userBlankAnswers;
+    else delete result.userBlankAnswers;
+    result.earnedScore = 0;
+    result.maxScore = 0;
+    result.autoScored = false;
+    const detail = plain(loadWeb().api.normalizeBackupPayloadV23(input, 'native.json')).records[0].details[0];
+    assert.deepEqual(detail.chosen, sample.chosen || sample.expected);
+    assert.deepEqual(detail.userBlankAnswers || [], sample.expected);
+    assert.equal(detail.score, 0);
+    assert.equal(detail.fullScore, 0);
+    assert.equal(detail.nativeEarnedScore, 0);
+    assert.equal(detail.nativeMaxScore, 0);
+    assert.equal(detail.autoScored, false);
+  }
+  const input = androidBackup();
+  const result = input.studyRecords[0].questionResults[0];
+  delete result.earnedScore;
+  delete result.maxScore;
+  result.correct = true;
+  const detail = plain(loadWeb().api.normalizeBackupPayloadV23(input, 'native.json')).records[0].details[0];
+  assert.equal(detail.score, 1);
+  assert.equal(detail.fullScore, 1);
+  assert.equal(detail.nativeEarnedScore, null);
+  assert.equal(detail.nativeMaxScore, null);
+});
+
+test('Web 记录导出保留显式原生空值、零分和多空作答回退', () => {
+  const input = webState();
+  input.records[0].details = [
+    { ...input.records[0].details[0], userBlankAnswers: [], userAnswer: ['', '乙'], score: 7, fullScore: 8, nativeEarnedScore: 0, nativeMaxScore: null, autoScored: false },
+    { ...input.records[0].details[0], userBlankAnswers: ['甲', ''], userAnswer: ['另一答案'], score: 0, fullScore: 0 },
+  ];
+  input.records[0].nativeEarnedScore = null;
+  input.records[0].score = 9;
+  input.records[0].nativeTotalScore = 0;
+  const { api } = loadWeb({ state: input });
+  const record = plain(api.buildNativeInteropStateV24(api.snapshot().banks)).studyRecords[0];
+  assert.equal(record.earnedScore, null);
+  assert.equal(record.totalScore, 0);
+  assert.deepEqual(record.questionResults[0].userBlankAnswers, ['', '乙']);
+  assert.equal(record.questionResults[0].earnedScore, 0);
+  assert.equal(record.questionResults[0].maxScore, null);
+  assert.equal(record.questionResults[0].autoScored, false);
+  assert.deepEqual(record.questionResults[1].userBlankAnswers, ['甲', '']);
+  assert.equal(record.questionResults[1].earnedScore, 0);
+  assert.equal(record.questionResults[1].maxScore, 0);
+});
+
+test('合并同 ID 同名题库时记录和复盘各处引用同一新题库', () => {
+  const input = webState();
+  input.records[0].review = { version: 1, items: [{ sourceBankId: 'bank-a', sourceBankName: input.banks[0].name }] };
+  const { api } = loadWeb({ state: input, deterministicIds: true });
+  const normalized = plain(api.normalizeBackupPayloadV23(api.buildBackupPayloadV23(api.snapshot().banks, 'all_data', true), 'full.json'));
+  api.mergeBackupBanksV23(normalized);
+  const merged = plain(api.snapshot());
+  const importedBank = merged.banks[2];
+  const importedRecord = merged.records.at(-1);
+  assert.notEqual(importedBank.id, 'bank-a');
+  assert.match(importedBank.name, /导入/);
+  assert.equal(importedRecord.bankId, importedBank.id);
+  assert.equal(importedRecord.bankName, importedBank.name);
+  assert.equal(importedRecord.details[0].sourceBankId, importedBank.id);
+  assert.equal(importedRecord.details[0].sourceBankName, importedBank.name);
+  assert.equal(importedRecord.review.items[0].sourceBankId, importedBank.id);
+  assert.equal(importedRecord.review.items[0].sourceBankName, importedBank.name);
+  assert.deepEqual(merged.favorites[importedBank.id], input.favorites['bank-a']);
+  assert.deepEqual(merged.wrongBook[importedBank.id], input.wrongBook['bank-a']);
+});
+
 test('缺失图片被检测并保持路径，不能被误当作已恢复图片', () => {
   const { api } = loadWeb();
   const payload = androidBackup();

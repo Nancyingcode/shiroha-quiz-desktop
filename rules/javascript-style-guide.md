@@ -46,10 +46,10 @@
 - `apps/web/app.js` 由现有 IIFE 持有业务状态，按解析/判分、备份、练习、AI 等业务切片处理；完整文件的正确性检查与格式迁移分别推进，不用全面禁用规则隐藏问题。
 - `apps/web/question-bank.js` 是内置题库数据载体，保留题库内容及本地文件兜底。`apps/web/libs/`、生成的 `apps/desktop/dist/`、构建产物和历史 fixture 不参与风格批量重写。
 - 手写测试工具可以逐批纳入；原始样例、题库文本和预期数据按数据契约维护，不能用格式化结果替换行为断言。
-- `npm run lint:incremental` 在现有门禁之外发现 Git 跟踪和未忽略的新手写 `.js/.mjs/.cjs`，新路径默认执行完整目标规则；当前正式检查 79 个整文件，全部保留既有正确性规则，其中 29 个达到全部新增目标规则，35 个执行全部新增语义规则，38 个执行全部 Stylistic 规则，三个数量有重叠。
+- `npm run lint:incremental` 在现有门禁之外发现 Git 跟踪和未忽略的新手写 `.js/.mjs/.cjs`，新路径默认执行完整目标规则。P5 交付时的历史快照为 79 个整文件，其中 29 个达到全部新增目标规则，35 个执行全部新增语义规则，38 个执行全部 Stylistic 规则，三个数量有重叠。[本次 app.js 拆分计划](../docs/superpowers/plans/2026-11-08-web-app-js-split.md)记录新增模块按现有完整增量门禁检查；最新覆盖数量以该命令输出为准。
 - 语义规则为 `eqeqeq`（仅允许有意 `== null`）、`no-nested-ternary`、`no-param-reassign`（允许属性修改）、`no-duplicate-imports`、`no-eval`、`no-new-func`、`guard-for-in` 和 `curly`。格式规则为 `indent`、`quotes`、`semi`、`comma-dangle`、`arrow-parens`、`space-infix-ops`、`space-before-blocks`、`keyword-spacing`、`comma-spacing`、`key-spacing`、`object-curly-spacing`、`array-bracket-spacing`、`space-in-parens`、`eol-last`，均使用 `@stylistic/` 前缀。100 字符仍是人工换行参考，不机械限制长字符串、正则或 JSDoc。
 - [迁移清单](../apps/desktop/eslint.migration.mjs) 固定列出 41 个带特定格式暂缓规则的文件、44 个带有特定语义债务的文件，以及尚未正式检查的 app.js 和 15 个既有测试文件。只有实际未清零的语义规则暂缓，其余规则仍阻断；文件迁移后删除对应例外。新文件不自动加入债务，已清零范围不能退回。暂缓规则仍需人工审查同类新增问题，不声称全面拦截历史文件中的新违规；没有可相互抵扣的总告警上限。
-- P5 完成四类高风险状态审查及局部提炼，没有新增规则豁免或扩大正式门禁；当前债务实测和未覆盖竞态见[实施计划第 11 节](../docs/superpowers/plans/2026-11-05-airbnb-javascript-refactor.md)。
+- P5 完成四类高风险状态审查及局部提炼，没有新增规则豁免或扩大正式门禁；P5 时的债务实测和当时未覆盖竞态见[实施计划第 11 节](../docs/superpowers/plans/2026-11-05-airbnb-javascript-refactor.md)。
 - `npm run lint:debt` 输出逐文件/规则数量及行列消息，包含暂缓格式文件，app.js 只做语义诊断。报告已有债务不阻断；解析、配置、缺失文件或执行失败非零退出。正式门禁和报告都不写业务文件。`npm run lint:fixtures` 用真实 ESLint 验证违规拒绝、例外接受和失败传播，隔离样例不进入业务资源。
 - 浏览器源码按 classic script 解析；`frontend/bridge.js` 是 esbuild 输入，单独按 ESM 解析，产物仍为既有 IIFE。Node `.mjs`、`.cjs` 及 `.js` 按实际包边界分类，全局变量只读；Playwright 序列化回调所需浏览器名称只在明确列出的 8 个既有宿主工具文件开放。没有放宽生产 CSP 或提供新的求值能力。
 - import-x 本阶段没有引入；核心规则覆盖重复导入，扩展名与具名导出保留。缺失模块、循环和未使用模块分析没有专门 lint 覆盖，仍需实际执行/构建和审查，不启用 ESLint 10 下无效的 `no-unused-modules`。

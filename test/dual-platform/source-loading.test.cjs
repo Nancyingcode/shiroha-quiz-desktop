@@ -166,7 +166,7 @@ test('关闭钩子支持格式化后的条件块，拒绝缺失或重复定位',
 test('共享脚本在同一沙箱按显式次序加载，不允许越界路径', () => {
   const context = vm.createContext({});
   const loaded = [];
-  const names = ['ShirohaPlatformValidation', 'ShirohaBrowser', 'ShirohaTraining', 'ShirohaQuizCore', 'ShirohaTextAnswers', 'ShirohaBackupCore'];
+  const names = ['ShirohaPlatformValidation', 'ShirohaBrowser', 'ShirohaTraining', 'ShirohaQuizCore', 'ShirohaTextAnswers', 'ShirohaTextParser', 'ShirohaBackupCore', 'ShirohaZip', 'ShirohaBackupArchive', 'ShirohaBackupData', 'ShirohaWebdavPanel', 'ShirohaDocx', 'ShirohaPdf', 'ShirohaOcrImport', 'ShirohaTableImport', 'ShirohaImportPreview', 'ShirohaAiResults', 'ShirohaAiImportSessions', 'ShirohaAiQuestionSessions', 'ShirohaAiSettings', 'ShirohaAiTransport', 'ShirohaAiPrompts', 'ShirohaQuestionView', 'ShirohaBankPage', 'ShirohaSavedQuestionsPage', 'ShirohaTrainingReviewPage', 'ShirohaBankEditor', 'ShirohaStudySessions', 'ShirohaExamPage', 'ShirohaPracticeSelection', 'ShirohaPracticePage', 'ShirohaAiImportPanel', 'ShirohaAiQuestionPanels', 'ShirohaQuestionEditor'];
   for (const name of names) {
     Object.defineProperty(context, name, {
       configurable: true,
@@ -176,15 +176,82 @@ test('共享脚本在同一沙箱按显式次序加载，不允许越界路径',
       },
     });
   }
-  runWebScripts(context, ['platform/validation.js', 'platform/browser.js', 'training.js', 'quiz-core.js', 'text-answers.js', 'backup-core.js']);
+  runWebScripts(context, ['platform/validation.js', 'platform/browser.js', 'training.js', 'quiz-core.js', 'text-answers.js', 'text-parser.js', 'backup-core.js', 'zip.js', 'backup-archive.js', 'backup-data.js', 'webdav-panel.js', 'docx-import.js', 'pdf-import.js', 'ocr-import.js', 'table-import.js', 'import-preview.js', 'ai-results.js', 'ai-import-sessions.js', 'ai-question-sessions.js', 'ai-settings.js', 'ai-transport.js', 'ai-prompts.js', 'question-view.js', 'bank-page.js', 'saved-questions-page.js', 'training-review-page.js', 'bank-editor.js', 'study-sessions.js', 'exam-page.js', 'practice-selection.js', 'practice-page.js', 'ai-import-panel.js', 'ai-question-panels.js', 'question-editor.js']);
   assert.deepEqual(loaded, names);
   assert.equal(typeof context.ShirohaPlatformValidation, 'object');
   assert.equal(typeof context.ShirohaBrowser, 'object');
   assert.equal(typeof context.ShirohaTraining, 'object');
+  assert.equal(typeof context.ShirohaTraining.parsePracticeNumberRangeV58916, 'function');
+  assert.equal(typeof context.ShirohaTraining.formatExactPracticeNumbersV58916, 'function');
   assert.equal(typeof context.ShirohaQuizCore, 'object');
+  assert.equal(typeof context.ShirohaQuizCore.normalizeBlankAnswersV58914, 'function');
+  assert.equal(typeof context.ShirohaQuizCore.sameAnswerForQuestion, 'function');
   assert.equal(typeof context.ShirohaTextAnswers, 'object');
+  assert.equal(typeof context.ShirohaTextParser.create, 'function');
   assert.equal(typeof context.ShirohaBackupCore, 'object');
+  assert.equal(typeof context.ShirohaBackupArchive.create, 'function');
+  assert.equal(typeof context.ShirohaBackupData.create, 'function');
+  assert.equal(typeof context.ShirohaWebdavPanel.create, 'function');
+  assert.equal(typeof context.ShirohaZip, 'object');
+  assert.equal(typeof context.ShirohaZip.parseZipEntries, 'function');
+  assert.equal(typeof context.ShirohaZip.zipStoreFiles, 'function');
+  assert.equal(typeof context.ShirohaDocx.create, 'function');
+  assert.equal(typeof context.ShirohaPdf.create, 'function');
+  assert.equal(typeof context.ShirohaOcrImport.create, 'function');
+  assert.equal(typeof context.ShirohaImportPreview.create, 'function');
+  assert.equal(typeof context.ShirohaAiResults.create, 'function');
+  assert.equal(typeof context.ShirohaAiImportSessions.create, 'function');
+  assert.equal(typeof context.ShirohaAiQuestionSessions.createPractice, 'function');
+  assert.equal(typeof context.ShirohaAiQuestionSessions.createReview, 'function');
+  assert.equal(typeof context.ShirohaAiSettings.create, 'function');
+  assert.equal(typeof context.ShirohaAiTransport.create, 'function');
+  assert.equal(typeof context.ShirohaAiPrompts.create, 'function');
+  assert.equal(typeof context.ShirohaQuestionView.create, 'function');
+  assert.equal(typeof context.ShirohaBankPage.create, 'function');
+  assert.equal(typeof context.ShirohaSavedQuestionsPage.create, 'function');
+  assert.equal(typeof context.ShirohaTrainingReviewPage.create, 'function');
+  assert.equal(typeof context.ShirohaBankEditor.create, 'function');
+  assert.equal(typeof context.ShirohaStudySessions.createPractice, 'function');
+  assert.equal(typeof context.ShirohaStudySessions.createExam, 'function');
+  assert.equal(typeof context.ShirohaExamPage.create, 'function');
+  assert.equal(typeof context.ShirohaPracticeSelection.create, 'function');
+  assert.equal(typeof context.ShirohaPracticePage.create, 'function');
+  assert.equal(typeof context.ShirohaAiImportPanel.create, 'function');
+  assert.equal(typeof context.ShirohaAiQuestionPanels.create, 'function');
+  assert.equal(typeof context.ShirohaQuestionEditor.create, 'function');
+  assert.equal(typeof context.ShirohaTableImport.create, 'function');
   assert.equal(context.process, undefined);
   assert.equal(context.require, undefined);
   assert.throws(() => runWebScripts(context, ['../desktop/frontend/adapter.js']), /apps\/web/);
+});
+
+test('页面工厂装配不访问 DOM，事件绑定留给页面初始化', () => {
+  const context = vm.createContext({});
+  Object.defineProperty(context, 'document', {
+    get() { throw new Error('页面工厂在装配时访问了 DOM'); },
+  });
+  runWebScripts(context, [
+    'question-view.js', 'bank-page.js', 'saved-questions-page.js', 'training-review-page.js',
+    'bank-editor.js', 'study-sessions.js', 'exam-page.js', 'practice-selection.js',
+    'practice-page.js', 'ai-import-panel.js', 'ai-question-panels.js', 'question-editor.js',
+  ]);
+  const empty = {};
+  const practice = context.ShirohaStudySessions.createPractice();
+  const exam = context.ShirohaStudySessions.createExam();
+  const factories = [
+    () => context.ShirohaQuestionView.create({}),
+    () => context.ShirohaBankPage.create({ scope: empty, paging: empty, rendering: empty, selection: empty, actions: empty, content: empty }),
+    () => context.ShirohaSavedQuestionsPage.create({ paging: empty, bank: empty, favorites: empty, wrong: empty, review: empty, practice: empty, actions: empty }),
+    () => context.ShirohaTrainingReviewPage.create({ paging: empty, content: empty, review: empty, navigation: empty, practice: empty }),
+    () => context.ShirohaBankEditor.create({ scope: empty, data: empty, preview: empty, navigation: empty, actions: empty }),
+    () => context.ShirohaExamPage.create({ session: exam, question: empty, practice: empty, view: empty, storage: empty }),
+    () => context.ShirohaPracticeSelection.create({ session: practice, scope: empty, questions: empty, progress: empty }),
+    () => context.ShirohaPracticePage.create({ session: practice, selection: empty, scope: empty, question: empty, review: empty, favorites: empty, ai: empty, shell: empty, storage: empty }),
+    () => context.ShirohaAiImportPanel.create({ settings: empty, requests: empty, editor: empty, preview: empty, limits: empty }),
+    () => context.ShirohaAiQuestionPanels.create({ session: practice, question: empty, settings: empty, actions: empty }),
+    () => context.ShirohaQuestionEditor.create({ parser: empty, suggestions: empty, editor: empty, practice: empty, view: empty, storage: empty }),
+  ];
+  for (const create of factories) {
+    assert.equal(typeof create(), 'object');
+  }
 });

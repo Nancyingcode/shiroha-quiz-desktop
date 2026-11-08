@@ -854,12 +854,13 @@ impl Harness {
                     state.notice.clear();
                 }
                 Err(error) => {
-                    state.runtime_state = if error.code == "cancelled" {
+                    let was_cancelled = error.code == "cancelled";
+                    state.runtime_state = if was_cancelled {
                         RuntimeState::Cancelled
                     } else {
                         RuntimeState::Failed
                     };
-                    state.notice = if error.code == "cancelled" {
+                    state.notice = if was_cancelled {
                         "Codex 组件准备已取消，请主动重试。".into()
                     } else {
                         failure(error.code).message.into()
@@ -1375,12 +1376,13 @@ impl Inner {
             }
             Err(error) => {
                 self.codebuddy_runtime.verified = false;
-                self.codebuddy_runtime.state = if error.code == "cancelled" {
+                let was_cancelled = error.code == "cancelled";
+                self.codebuddy_runtime.state = if was_cancelled {
                     RuntimeState::Cancelled
                 } else {
                     RuntimeState::Failed
                 };
-                self.codebuddy_runtime.notice = if error.code == "cancelled" {
+                self.codebuddy_runtime.notice = if was_cancelled {
                     "CodeBuddy 组件准备已取消，请主动重试。".into()
                 } else {
                     failure(error.code).message.into()
@@ -2357,6 +2359,71 @@ mod tests {
             .unwrap()
             .component_tasks
             .is_empty());
+    }
+
+    #[test]
+    fn preparation_failure_and_cancellation_update_matching_state_and_notice() {
+        let f = Fixture::new();
+        for adapter in ["codex", "codebuddy"] {
+            for code in ["cancelled", "harness_unavailable"] {
+                let operation = f
+                    .service
+                    .with(|state| {
+                        let mut config = state.config.clone();
+                        config.adapter = adapter.into();
+                        let operation = Operation {
+                            id: uuid::Uuid::new_v4().to_string(),
+                            config,
+                            root: state.root.clone(),
+                            cancel: Arc::new(AtomicBool::new(false)),
+                            codebuddy_login: state.codebuddy_login.clone(),
+                        };
+                        state.preparations.push(ComponentTask {
+                            operation: operation.clone(),
+                            phase: PreparationPhase::Checking,
+                            received: 0,
+                            total: 0,
+                        });
+                        Ok(operation)
+                    })
+                    .unwrap();
+                f.service
+                    .finish_preparation(&operation, Err(failure(code)))
+                    .unwrap();
+                f.service
+                    .with(|state| {
+                        let (actual, notice) = if adapter == "codex" {
+                            (&state.runtime_state, &state.notice)
+                        } else {
+                            (
+                                &state.codebuddy_runtime.state,
+                                &state.codebuddy_runtime.notice,
+                            )
+                        };
+                        let expected = if code == "cancelled" {
+                            RuntimeState::Cancelled
+                        } else {
+                            RuntimeState::Failed
+                        };
+                        assert_eq!(*actual, expected, "{adapter}: {code}");
+                        let expected_notice = if code == "cancelled" {
+                            format!(
+                                "{} 组件准备已取消，请主动重试。",
+                                if adapter == "codex" {
+                                    "Codex"
+                                } else {
+                                    "CodeBuddy"
+                                }
+                            )
+                        } else {
+                            failure(code).message.into()
+                        };
+                        assert_eq!(*notice, expected_notice, "{adapter}: {code}");
+                        Ok(())
+                    })
+                    .unwrap();
+            }
+        }
     }
 
     #[test]

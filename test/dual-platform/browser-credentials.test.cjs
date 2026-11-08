@@ -35,3 +35,32 @@ test('重置删除失败补偿主数据和凭据',()=>{
   const remove=h.local.removeItem;h.local.removeItem=k=>{if(k==='shiroha_quiz_state_v28_4_c1')throw new Error('denied');return remove(k)};
   assert.throws(()=>h.api.reset(),/denied/);assert.equal(h.local.getItem('shiroha_quiz_state_v28_4_c1'),'original-data');assert.equal(h.session.getItem('shiroha_ai_key_session_v99'),'fake-key');
 });
+
+test('AI 和 WebDAV 占位符只保留同一绑定的凭据，按记住设置切换存储或清除',()=>{
+  for (const service of ['ai','webdav']) {
+    const h=harness();
+    const localKey=service==='ai'?'shiroha_ai_key_local_v99':'shiroha_webdav_password_local_v378';
+    const sessionKey=service==='ai'?'shiroha_ai_key_session_v99':'shiroha_webdav_password_session_v378';
+    const original={endpoint:'https://mock.invalid/service',username:'user',rememberKey:false,rememberPassword:false};
+    const remembered={...original,rememberKey:true,rememberPassword:true};
+    h.api.initialize(config);
+    h.api.set(service,original,'synthetic-secret',false);
+    const marker=h.api.status(service,original);
+    assert(marker,service);
+    assert.throws(()=>h.api.set(service,{...remembered,endpoint:'https://other.invalid'},marker,true),/重新输入凭据/);
+    assert.throws(()=>h.api.set(service,{...remembered,username:'other'},marker,true),/重新输入凭据/);
+    assert.equal(h.session.getItem(sessionKey),'synthetic-secret');
+    assert.equal(h.local.getItem(localKey),null);
+    h.api.set(service,remembered,marker,true);
+    assert.equal(h.local.getItem(localKey),'synthetic-secret');
+    assert.equal(h.session.getItem(sessionKey),null);
+    h.api.set(service,original,h.api.status(service,remembered),false);
+    assert.equal(h.local.getItem(localKey),null);
+    assert.equal(h.session.getItem(sessionKey),'synthetic-secret');
+    h.api.set(service,original,'',false);
+    assert.equal(h.api.status(service,original),'');
+    assert.equal(h.local.getItem(localKey),null);
+    assert.equal(h.session.getItem(sessionKey),null);
+    assert.throws(()=>h.api.set(service,original,marker,false),/重新输入凭据/);
+  }
+});

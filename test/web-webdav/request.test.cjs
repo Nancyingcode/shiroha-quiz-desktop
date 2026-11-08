@@ -5,11 +5,9 @@ const { readFileSync } = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const test = require('node:test');
-const { loadWebSource } = require('../dual-platform/source-tools.cjs');
+const { runWebScripts } = require('../dual-platform/source-tools.cjs');
 
 // Execute the real transport and diagnostic functions with a fake fetch, without app startup.
-const source = loadWebSource();
-
 function harness(protocol, fetch) {
   const timers = new Set();
   const context = vm.createContext({
@@ -19,8 +17,8 @@ function harness(protocol, fetch) {
     clearTimeout(timer) { timers.delete(timer); },
   });
   vm.runInContext(readFileSync(path.resolve(__dirname, '../../apps/web/platform/browser-network.js'), 'utf8'), context);
-  context.ShirohaPlatform = { network: context.ShirohaBrowserNetwork };
-  vm.runInContext(source.between('webdavBasicAuthV378', 'setWebdavDiagnosticV378'), context);
+  runWebScripts(context, ['webdav-panel.js']);
+  Object.assign(context, context.ShirohaWebdavPanel.create({ platform: { network: context.ShirohaBrowserNetwork } }));
   return { context, timers };
 }
 

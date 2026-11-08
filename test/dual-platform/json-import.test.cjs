@@ -1,5 +1,5 @@
 'use strict';
-const { loadWebSource } = require('./source-tools.cjs');
+const { loadWebSource, runWebScripts } = require('./source-tools.cjs');
 
 const assert = require('node:assert/strict');
 const test = require('node:test');
@@ -21,8 +21,6 @@ function setup(data, { mode = 'auto', accepted = true } = {}) {
   const context = vm.createContext({
     $: selector => elements[selector],
     cancelAiPreviewRequestV991() {}, resetAiSuggestionsV991() {}, closeAiPreviewPanelV991() {},
-    tableImportResultV49: null, importCache: original, importWarnings: [], importReport: '',
-    importDiagnostics: null, importSelected: new Set(), importSourceMetaV376: { name: 'fixture.json' },
     normalizeQuestion: api.normalizeQuestion, normalizeBackupPayloadV23: api.normalizeBackupPayloadV23,
     countUnresolvedBackupImagesV24: api.countUnresolvedBackupImagesV24,
     ShirohaPlatform: { storage: {} },
@@ -34,6 +32,10 @@ function setup(data, { mode = 'auto', accepted = true } = {}) {
     largeImportRiskMessageV376: () => '', summarizeImportResultV376: () => '识别完成',
     showNotice: (...args) => notices.push(args), toast: (...args) => notices.push(args),
   });
+  runWebScripts(context, ['import-preview.js']);
+  context.importDraft = context.ShirohaImportPreview.create({ readers: {}, ocr: {} });
+  context.importDraft.questions = original;
+  context.importDraft.sourceMeta = { name: 'fixture.json' };
   vm.runInContext(source.between('tryParseAutoJsonImportV58922', 'loadDualSample'), context);
   return { context, input, original, confirmations, imports, notices, previews, elements };
 }
@@ -62,7 +64,7 @@ test('取消备份合并不写入，也不替换之前的识别预览和原始�
   await run.context.parseImport();
   assert.equal(run.confirmations.length, 1);
   assert.deepEqual(run.imports, []);
-  assert.equal(run.context.importCache, run.original);
+  assert.equal(run.context.importDraft.questions, run.original);
   assert.equal(run.input.value, text);
   assert.deepEqual(run.previews, []);
 });

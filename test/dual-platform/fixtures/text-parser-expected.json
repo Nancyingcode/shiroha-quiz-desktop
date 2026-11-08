@@ -1,0 +1,3574 @@
+{
+  "cases": [
+    {
+      "name": "重复题号",
+      "strategy": "auto",
+      "questions": [
+        {
+          "id": "structured_0_test-4",
+          "type": "single",
+          "number": 1,
+          "volume": "",
+          "group": "单选题",
+          "question": "一加一等于多少？",
+          "options": [
+            {
+              "key": "A",
+              "text": "二"
+            },
+            {
+              "key": "B",
+              "text": "三"
+            }
+          ],
+          "answer": [],
+          "analysis": "",
+          "category": "单选题",
+          "images": [],
+          "subject": "",
+          "grade": "",
+          "difficulty": "",
+          "knowledgePoints": [],
+          "tags": [],
+          "source": "",
+          "sourceFileId": "",
+          "version": 1,
+          "reviewStatus": "approved",
+          "aiConfidence": null,
+          "warnings": [],
+          "normalized": "一加一等于多少"
+        },
+        {
+          "id": "structured_1_test-5",
+          "type": "multiple",
+          "number": 1,
+          "volume": "",
+          "group": "多选题",
+          "question": "下列哪些是偶数？",
+          "options": [
+            {
+              "key": "A",
+              "text": "二"
+            },
+            {
+              "key": "B",
+              "text": "三"
+            },
+            {
+              "key": "C",
+              "text": "四"
+            }
+          ],
+          "answer": [],
+          "analysis": "",
+          "category": "多选题",
+          "images": [],
+          "subject": "",
+          "grade": "",
+          "difficulty": "",
+          "knowledgePoints": [],
+          "tags": [],
+          "source": "",
+          "sourceFileId": "",
+          "version": 1,
+          "reviewStatus": "approved",
+          "aiConfidence": null,
+          "warnings": [],
+          "normalized": "下列哪些是偶数"
+        },
+        {
+          "id": "structured_2_test-6",
+          "type": "judge",
+          "number": 1,
+          "volume": "",
+          "group": "判断题",
+          "question": "一加一等于二。（ ）",
+          "options": [
+            {
+              "key": "A",
+              "text": "正确"
+            },
+            {
+              "key": "B",
+              "text": "错误"
+            }
+          ],
+          "answer": [],
+          "analysis": "",
+          "category": "判断题",
+          "images": [],
+          "subject": "",
+          "grade": "",
+          "difficulty": "",
+          "knowledgePoints": [],
+          "tags": [],
+          "source": "",
+          "sourceFileId": "",
+          "version": 1,
+          "reviewStatus": "approved",
+          "aiConfidence": null,
+          "warnings": [],
+          "normalized": "一加一等于二"
+        }
+      ],
+      "metadata": [
+        {
+          "source": {
+            "sourceStart": 6,
+            "sourceEnd": 27,
+            "sourceBlockStart": 0,
+            "sourceBlockEnd": 0,
+            "blockIndex": 0,
+            "originalNumber": 1,
+            "sourceQuestionNumbers": [
+              1
+            ],
+            "explicitNumber": true,
+            "group": "单选题",
+            "volume": "",
+            "chapter": "",
+            "pairIndex": 0
+          },
+          "recruitmentOptions": null
+        },
+        {
+          "source": {
+            "sourceStart": 34,
+            "sourceEnd": 60,
+            "sourceBlockStart": 1,
+            "sourceBlockEnd": 1,
+            "blockIndex": 1,
+            "originalNumber": 1,
+            "sourceQuestionNumbers": [
+              1
+            ],
+            "explicitNumber": true,
+            "group": "多选题",
+            "volume": "",
+            "chapter": "",
+            "pairIndex": 1
+          },
+          "recruitmentOptions": null
+        },
+        {
+          "source": {
+            "sourceStart": 67,
+            "sourceEnd": 80,
+            "sourceBlockStart": 2,
+            "sourceBlockEnd": 2,
+            "blockIndex": 2,
+            "originalNumber": 1,
+            "sourceQuestionNumbers": [
+              1
+            ],
+            "explicitNumber": true,
+            "group": "判断题",
+            "volume": "",
+            "chapter": "",
+            "pairIndex": 2
+          },
+          "recruitmentOptions": null
+        }
+      ],
+      "report": "解析模式：自动推荐；采用策略：标准试卷段落解析。格式画像：检测到题型分区、题号存在重复。候选结果：标准试卷段落解析3题/质量-9；标准逐行解析3题/质量-9。最终识别：3题（单选1、多选1、判断1、填空0、简答0）。",
+      "warnings": [],
+      "diagnostics": {
+        "mode": "自动推荐",
+        "strategy": "标准试卷段落解析",
+        "profile": {
+          "lineCount": 11,
+          "hasVolumeHeading": false,
+          "hasTypeSections": true,
+          "repeatedQuestionNumbers": true,
+          "inlineOptionLikely": false,
+          "inlineAnswerLikely": false,
+          "hasAnswerAnalysisSection": false,
+          "expectedByHeadings": 0,
+          "expectedByType": {
+            "single": 0,
+            "multiple": 0,
+            "judge": 0,
+            "blank": 0,
+            "short": 0
+          },
+          "sharedStemDetectedGroups": 0,
+          "sharedStemAppliedGroups": 0,
+          "sharedStemAppliedChildren": 0
+        },
+        "candidates": [
+          {
+            "name": "标准试卷段落解析",
+            "questions": 3,
+            "score": -9,
+            "warnings": [
+              "第1题：缺少答案",
+              "第2题：缺少答案",
+              "第3题：缺少答案"
+            ],
+            "segments": []
+          },
+          {
+            "name": "标准逐行解析",
+            "questions": 3,
+            "score": -9,
+            "warnings": [
+              "第1题：缺少答案",
+              "第2题：缺少答案",
+              "第3题：缺少答案"
+            ],
+            "segments": []
+          }
+        ],
+        "expected": {
+          "total": 0,
+          "types": {
+            "single": 0,
+            "multiple": 0,
+            "judge": 0,
+            "blank": 0,
+            "short": 0
+          }
+        },
+        "stats": {
+          "single": 1,
+          "multiple": 1,
+          "multi": 0,
+          "judge": 1,
+          "blank": 0,
+          "short": 0
+        },
+        "warnings": [
+          "第1题：缺少答案",
+          "第2题：缺少答案",
+          "第3题：缺少答案"
+        ],
+        "sharedStem": {
+          "detectedGroups": 0,
+          "appliedGroups": 0,
+          "appliedChildren": 0,
+          "changedQuestions": 0
+        }
+      }
+    },
+    {
+      "name": "重复题号",
+      "strategy": "standard",
+      "questions": [
+        {
+          "id": "structured_0_test-24",
+          "type": "single",
+          "number": 1,
+          "volume": "",
+          "group": "单选题",
+          "question": "一加一等于多少？",
+          "options": [
+            {
+              "key": "A",
+              "text": "二"
+            },
+            {
+              "key": "B",
+              "text": "三"
+            }
+          ],
+          "answer": [],
+          "analysis": "",
+          "category": "单选题",
+          "images": [],
+          "subject": "",
+          "grade": "",
+          "difficulty": "",
+          "knowledgePoints": [],
+          "tags": [],
+          "source": "",
+          "sourceFileId": "",
+          "version": 1,
+          "reviewStatus": "approved",
+          "aiConfidence": null,
+          "warnings": [],
+          "normalized": "一加一等于多少"
+        },
+        {
+          "id": "structured_1_test-25",
+          "type": "multiple",
+          "number": 1,
+          "volume": "",
+          "group": "多选题",
+          "question": "下列哪些是偶数？",
+          "options": [
+            {
+              "key": "A",
+              "text": "二"
+            },
+            {
+              "key": "B",
+              "text": "三"
+            },
+            {
+              "key": "C",
+              "text": "四"
+            }
+          ],
+          "answer": [],
+          "analysis": "",
+          "category": "多选题",
+          "images": [],
+          "subject": "",
+          "grade": "",
+          "difficulty": "",
+          "knowledgePoints": [],
+          "tags": [],
+          "source": "",
+          "sourceFileId": "",
+          "version": 1,
+          "reviewStatus": "approved",
+          "aiConfidence": null,
+          "warnings": [],
+          "normalized": "下列哪些是偶数"
+        },
+        {
+          "id": "structured_2_test-26",
+          "type": "judge",
+          "number": 1,
+          "volume": "",
+          "group": "判断题",
+          "question": "一加一等于二。（ ）",
+          "options": [
+            {
+              "key": "A",
+              "text": "正确"
+            },
+            {
+              "key": "B",
+              "text": "错误"
+            }
+          ],
+          "answer": [],
+          "analysis": "",
+          "category": "判断题",
+          "images": [],
+          "subject": "",
+          "grade": "",
+          "difficulty": "",
+          "knowledgePoints": [],
+          "tags": [],
+          "source": "",
+          "sourceFileId": "",
+          "version": 1,
+          "reviewStatus": "approved",
+          "aiConfidence": null,
+          "warnings": [],
+          "normalized": "一加一等于二"
+        }
+      ],
+      "metadata": [
+        {
+          "source": {
+            "sourceStart": 6,
+            "sourceEnd": 27,
+            "sourceBlockStart": 0,
+            "sourceBlockEnd": 0,
+            "blockIndex": 0,
+            "originalNumber": 1,
+            "sourceQuestionNumbers": [
+              1
+            ],
+            "explicitNumber": true,
+            "group": "单选题",
+            "volume": "",
+            "chapter": "",
+            "pairIndex": 0
+          },
+          "recruitmentOptions": null
+        },
+        {
+          "source": {
+            "sourceStart": 34,
+            "sourceEnd": 60,
+            "sourceBlockStart": 1,
+            "sourceBlockEnd": 1,
+            "blockIndex": 1,
+            "originalNumber": 1,
+            "sourceQuestionNumbers": [
+              1
+            ],
+            "explicitNumber": true,
+            "group": "多选题",
+            "volume": "",
+            "chapter": "",
+            "pairIndex": 1
+          },
+          "recruitmentOptions": null
+        },
+        {
+          "source": {
+            "sourceStart": 67,
+            "sourceEnd": 80,
+            "sourceBlockStart": 2,
+            "sourceBlockEnd": 2,
+            "blockIndex": 2,
+            "originalNumber": 1,
+            "sourceQuestionNumbers": [
+              1
+            ],
+            "explicitNumber": true,
+            "group": "判断题",
+            "volume": "",
+            "chapter": "",
+            "pairIndex": 2
+          },
+          "recruitmentOptions": null
+        }
+      ],
+      "report": "解析模式：标准逐行解析；采用策略：标准试卷段落解析。格式画像：检测到题型分区、题号存在重复。候选结果：标准试卷段落解析3题/质量-9；标准逐行解析3题/质量-9。最终识别：3题（单选1、多选1、判断1、填空0、简答0）。",
+      "warnings": [],
+      "diagnostics": {
+        "mode": "标准逐行解析",
+        "strategy": "标准试卷段落解析",
+        "profile": {
+          "lineCount": 11,
+          "hasVolumeHeading": false,
+          "hasTypeSections": true,
+          "repeatedQuestionNumbers": true,
+          "inlineOptionLikely": false,
+          "inlineAnswerLikely": false,
+          "hasAnswerAnalysisSection": false,
+          "expectedByHeadings": 0,
+          "expectedByType": {
+            "single": 0,
+            "multiple": 0,
+            "judge": 0,
+            "blank": 0,
+            "short": 0
+          },
+          "sharedStemDetectedGroups": 0,
+          "sharedStemAppliedGroups": 0,
+          "sharedStemAppliedChildren": 0
+        },
+        "candidates": [
+          {
+            "name": "标准试卷段落解析",
+            "questions": 3,
+            "score": -9,
+            "warnings": [
+              "第1题：缺少答案",
+              "第2题：缺少答案",
+              "第3题：缺少答案"
+            ],
+            "segments": []
+          },
+          {
+            "name": "标准逐行解析",
+            "questions": 3,
+            "score": -9,
+            "warnings": [
+              "第1题：缺少答案",
+              "第2题：缺少答案",
+              "第3题：缺少答案"
+            ],
+            "segments": []
+          }
+        ],
+        "expected": {
+          "total": 0,
+          "types": {
+            "single": 0,
+            "multiple": 0,
+            "judge": 0,
+            "blank": 0,
+            "short": 0
+          }
+        },
+        "stats": {
+          "single": 1,
+          "multiple": 1,
+          "multi": 0,
+          "judge": 1,
+          "blank": 0,
+          "short": 0
+        },
+        "warnings": [
+          "第1题：缺少答案",
+          "第2题：缺少答案",
+          "第3题：缺少答案"
+        ],
+        "sharedStem": {
+          "detectedGroups": 0,
+          "appliedGroups": 0,
+          "appliedChildren": 0,
+          "changedQuestions": 0
+        }
+      }
+    },
+    {
+      "name": "重复题号",
+      "strategy": "volume",
+      "questions": [
+        {
+          "id": "imp_0_test-33",
+          "type": "single",
+          "number": "1",
+          "volume": "",
+          "group": "单选题",
+          "question": "一加一等于多少？",
+          "options": [
+            {
+              "key": "A",
+              "text": "二"
+            },
+            {
+              "key": "B",
+              "text": "三"
+            }
+          ],
+          "answer": [],
+          "analysis": "",
+          "category": "单选题",
+          "images": [],
+          "subject": "",
+          "grade": "",
+          "difficulty": "",
+          "knowledgePoints": [],
+          "tags": [],
+          "source": "",
+          "sourceFileId": "",
+          "version": 1,
+          "reviewStatus": "approved",
+          "aiConfidence": null,
+          "warnings": [],
+          "normalized": "一加一等于多少"
+        },
+        {
+          "id": "imp_1_test-34",
+          "type": "multiple",
+          "number": "1",
+          "volume": "",
+          "group": "多选题",
+          "question": "下列哪些是偶数？",
+          "options": [
+            {
+              "key": "A",
+              "text": "二"
+            },
+            {
+              "key": "B",
+              "text": "三"
+            },
+            {
+              "key": "C",
+              "text": "四"
+            }
+          ],
+          "answer": [],
+          "analysis": "",
+          "category": "多选题",
+          "images": [],
+          "subject": "",
+          "grade": "",
+          "difficulty": "",
+          "knowledgePoints": [],
+          "tags": [],
+          "source": "",
+          "sourceFileId": "",
+          "version": 1,
+          "reviewStatus": "approved",
+          "aiConfidence": null,
+          "warnings": [],
+          "normalized": "下列哪些是偶数"
+        },
+        {
+          "id": "imp_2_test-35",
+          "type": "judge",
+          "number": "1",
+          "volume": "",
+          "group": "判断题",
+          "question": "一加一等于二。（ ）",
+          "options": [
+            {
+              "key": "A",
+              "text": "正确"
+            },
+            {
+              "key": "B",
+              "text": "错误"
+            }
+          ],
+          "answer": [],
+          "analysis": "",
+          "category": "判断题",
+          "images": [],
+          "subject": "",
+          "grade": "",
+          "difficulty": "",
+          "knowledgePoints": [],
+          "tags": [],
+          "source": "",
+          "sourceFileId": "",
+          "version": 1,
+          "reviewStatus": "approved",
+          "aiConfidence": null,
+          "warnings": [],
+          "normalized": "一加一等于二"
+        }
+      ],
+      "metadata": [
+        {
+          "source": null,
+          "recruitmentOptions": null
+        },
+        {
+          "source": null,
+          "recruitmentOptions": null
+        },
+        {
+          "source": null,
+          "recruitmentOptions": null
+        }
+      ],
+      "report": "解析模式：分卷分区三层解析；采用策略：分卷分区三层解析。格式画像：检测到题型分区、题号存在重复。候选结果：分卷分区三层解析3题/质量-9。最终识别：3题（单选1、多选1、判断1、填空0、简答0）。",
+      "warnings": [],
+      "diagnostics": {
+        "mode": "分卷分区三层解析",
+        "strategy": "分卷分区三层解析",
+        "profile": {
+          "lineCount": 11,
+          "hasVolumeHeading": false,
+          "hasTypeSections": true,
+          "repeatedQuestionNumbers": true,
+          "inlineOptionLikely": false,
+          "inlineAnswerLikely": false,
+          "hasAnswerAnalysisSection": false,
+          "expectedByHeadings": 0,
+          "expectedByType": {
+            "single": 0,
+            "multiple": 0,
+            "judge": 0,
+            "blank": 0,
+            "short": 0
+          },
+          "sharedStemDetectedGroups": 0,
+          "sharedStemAppliedGroups": 0,
+          "sharedStemAppliedChildren": 0
+        },
+        "candidates": [
+          {
+            "name": "分卷分区三层解析",
+            "questions": 3,
+            "score": -9,
+            "warnings": [
+              "第1题：缺少答案",
+              "第2题：缺少答案",
+              "第3题：缺少答案"
+            ],
+            "segments": []
+          }
+        ],
+        "expected": {
+          "total": 0,
+          "types": {
+            "single": 0,
+            "multiple": 0,
+            "judge": 0,
+            "blank": 0,
+            "short": 0
+          }
+        },
+        "stats": {
+          "single": 1,
+          "multiple": 1,
+          "multi": 0,
+          "judge": 1,
+          "blank": 0,
+          "short": 0
+        },
+        "warnings": [
+          "第1题：缺少答案",
+          "第2题：缺少答案",
+          "第3题：缺少答案"
+        ],
+        "sharedStem": {
+          "detectedGroups": 0,
+          "appliedGroups": 0,
+          "appliedChildren": 0,
+          "changedQuestions": 0
+        }
+      }
+    },
+    {
+      "name": "重复题号",
+      "strategy": "compact",
+      "questions": [
+        {
+          "id": "imp_0_test-39",
+          "type": "single",
+          "number": "1",
+          "volume": "",
+          "group": "单选题",
+          "question": "一加一等于多少？",
+          "options": [
+            {
+              "key": "A",
+              "text": "二"
+            },
+            {
+              "key": "B",
+              "text": "三"
+            }
+          ],
+          "answer": [],
+          "analysis": "",
+          "category": "单选题",
+          "images": [],
+          "subject": "",
+          "grade": "",
+          "difficulty": "",
+          "knowledgePoints": [],
+          "tags": [],
+          "source": "",
+          "sourceFileId": "",
+          "version": 1,
+          "reviewStatus": "approved",
+          "aiConfidence": null,
+          "warnings": [],
+          "normalized": "一加一等于多少"
+        },
+        {
+          "id": "imp_1_test-40",
+          "type": "multiple",
+          "number": "1",
+          "volume": "",
+          "group": "多选题",
+          "question": "下列哪些是偶数？",
+          "options": [
+            {
+              "key": "A",
+              "text": "二"
+            },
+            {
+              "key": "B",
+              "text": "三"
+            },
+            {
+              "key": "C",
+              "text": "四"
+            }
+          ],
+          "answer": [],
+          "analysis": "",
+          "category": "多选题",
+          "images": [],
+          "subject": "",
+          "grade": "",
+          "difficulty": "",
+          "knowledgePoints": [],
+          "tags": [],
+          "source": "",
+          "sourceFileId": "",
+          "version": 1,
+          "reviewStatus": "approved",
+          "aiConfidence": null,
+          "warnings": [],
+          "normalized": "下列哪些是偶数"
+        },
+        {
+          "id": "imp_2_test-41",
+          "type": "judge",
+          "number": "1",
+          "volume": "",
+          "group": "判断题",
+          "question": "一加一等于二。（ ）",
+          "options": [
+            {
+              "key": "A",
+              "text": "正确"
+            },
+            {
+              "key": "B",
+              "text": "错误"
+            }
+          ],
+          "answer": [],
+          "analysis": "",
+          "category": "判断题",
+          "images": [],
+          "subject": "",
+          "grade": "",
+          "difficulty": "",
+          "knowledgePoints": [],
+          "tags": [],
+          "source": "",
+          "sourceFileId": "",
+          "version": 1,
+          "reviewStatus": "approved",
+          "aiConfidence": null,
+          "warnings": [],
+          "normalized": "一加一等于二"
+        }
+      ],
+      "metadata": [
+        {
+          "source": {
+            "sourceStart": 6,
+            "sourceEnd": 27,
+            "sourceBlockStart": 0,
+            "sourceBlockEnd": 0,
+            "blockIndex": 0,
+            "originalNumber": 1,
+            "sourceQuestionNumbers": [
+              1
+            ],
+            "explicitNumber": true,
+            "group": "单选题",
+            "volume": "",
+            "chapter": ""
+          },
+          "recruitmentOptions": null
+        },
+        {
+          "source": {
+            "sourceStart": 34,
+            "sourceEnd": 60,
+            "sourceBlockStart": 1,
+            "sourceBlockEnd": 1,
+            "blockIndex": 1,
+            "originalNumber": 1,
+            "sourceQuestionNumbers": [
+              1
+            ],
+            "explicitNumber": true,
+            "group": "多选题",
+            "volume": "",
+            "chapter": ""
+          },
+          "recruitmentOptions": null
+        },
+        {
+          "source": {
+            "sourceStart": 67,
+            "sourceEnd": 80,
+            "sourceBlockStart": 2,
+            "sourceBlockEnd": 2,
+            "blockIndex": 2,
+            "originalNumber": 1,
+            "sourceQuestionNumbers": [
+              1
+            ],
+            "explicitNumber": true,
+            "group": "判断题",
+            "volume": "",
+            "chapter": ""
+          },
+          "recruitmentOptions": null
+        }
+      ],
+      "report": "解析模式：紧凑格式解析；采用策略：紧凑题干选项解析。格式画像：检测到题型分区、题号存在重复。候选结果：紧凑题干选项解析3题/质量-9。最终识别：3题（单选1、多选1、判断1、填空0、简答0）。",
+      "warnings": [],
+      "diagnostics": {
+        "mode": "紧凑格式解析",
+        "strategy": "紧凑题干选项解析",
+        "profile": {
+          "lineCount": 11,
+          "hasVolumeHeading": false,
+          "hasTypeSections": true,
+          "repeatedQuestionNumbers": true,
+          "inlineOptionLikely": false,
+          "inlineAnswerLikely": false,
+          "hasAnswerAnalysisSection": false,
+          "expectedByHeadings": 0,
+          "expectedByType": {
+            "single": 0,
+            "multiple": 0,
+            "judge": 0,
+            "blank": 0,
+            "short": 0
+          },
+          "sharedStemDetectedGroups": 0,
+          "sharedStemAppliedGroups": 0,
+          "sharedStemAppliedChildren": 0
+        },
+        "candidates": [
+          {
+            "name": "紧凑题干选项解析",
+            "questions": 3,
+            "score": -9,
+            "warnings": [
+              "第1题：缺少答案",
+              "第2题：缺少答案",
+              "第3题：缺少答案"
+            ],
+            "segments": []
+          }
+        ],
+        "expected": {
+          "total": 0,
+          "types": {
+            "single": 0,
+            "multiple": 0,
+            "judge": 0,
+            "blank": 0,
+            "short": 0
+          }
+        },
+        "stats": {
+          "single": 1,
+          "multiple": 1,
+          "multi": 0,
+          "judge": 1,
+          "blank": 0,
+          "short": 0
+        },
+        "warnings": [
+          "第1题：缺少答案",
+          "第2题：缺少答案",
+          "第3题：缺少答案"
+        ],
+        "sharedStem": {
+          "detectedGroups": 0,
+          "appliedGroups": 0,
+          "appliedChildren": 0,
+          "changedQuestions": 0
+        }
+      }
+    },
+    {
+      "name": "共用材料",
+      "strategy": "auto",
+      "questions": [
+        {
+          "id": "structured_0_test-45",
+          "type": "single",
+          "number": 1,
+          "volume": "",
+          "group": "",
+          "question": "。 某学校种植了十棵树，其中六棵为松树，四棵为柏树。 学校种植了多少棵树？",
+          "options": [
+            {
+              "key": "A",
+              "text": "十棵"
+            },
+            {
+              "key": "B",
+              "text": "六棵"
+            }
+          ],
+          "answer": [
+            "A"
+          ],
+          "analysis": "答案：A",
+          "category": "",
+          "images": [],
+          "subject": "",
+          "grade": "",
+          "difficulty": "",
+          "knowledgePoints": [],
+          "tags": [],
+          "source": "",
+          "sourceFileId": "",
+          "version": 1,
+          "reviewStatus": "approved",
+          "aiConfidence": null,
+          "warnings": [],
+          "normalized": "某学校种植了十棵树其中六棵为松树四棵为柏树学校种植了多少棵树"
+        },
+        {
+          "id": "structured_1_test-46",
+          "type": "single",
+          "number": 2,
+          "volume": "",
+          "group": "",
+          "question": "。 某学校种植了十棵树，其中六棵为松树，四棵为柏树。 松树有多少棵？",
+          "options": [
+            {
+              "key": "A",
+              "text": "四棵"
+            },
+            {
+              "key": "B",
+              "text": "六棵"
+            }
+          ],
+          "answer": [
+            "B"
+          ],
+          "analysis": "答案：B",
+          "category": "",
+          "images": [],
+          "subject": "",
+          "grade": "",
+          "difficulty": "",
+          "knowledgePoints": [],
+          "tags": [],
+          "source": "",
+          "sourceFileId": "",
+          "version": 1,
+          "reviewStatus": "approved",
+          "aiConfidence": null,
+          "warnings": [],
+          "normalized": "某学校种植了十棵树其中六棵为松树四棵为柏树松树有多少棵"
+        }
+      ],
+      "metadata": [
+        {
+          "source": {
+            "sourceStart": 40,
+            "sourceEnd": 70,
+            "sourceBlockStart": 1,
+            "sourceBlockEnd": 1,
+            "blockIndex": 1,
+            "originalNumber": 1,
+            "sourceQuestionNumbers": [
+              1
+            ],
+            "explicitNumber": true,
+            "group": "",
+            "volume": "",
+            "chapter": "",
+            "pairIndex": 0
+          },
+          "recruitmentOptions": null
+        },
+        {
+          "source": {
+            "sourceStart": 71,
+            "sourceEnd": 98,
+            "sourceBlockStart": 2,
+            "sourceBlockEnd": 2,
+            "blockIndex": 2,
+            "originalNumber": 2,
+            "sourceQuestionNumbers": [
+              2
+            ],
+            "explicitNumber": true,
+            "group": "",
+            "volume": "",
+            "chapter": "",
+            "pairIndex": 1
+          },
+          "recruitmentOptions": null
+        }
+      ],
+      "report": "解析模式：自动推荐；采用策略：标准主线 + 共用材料展开。格式画像：共用材料展开1组/2题。候选结果：标准试卷段落解析2题/质量-40；标准逐行解析2题/质量-40；标准主线 + 共用材料展开2题/质量-16（局部修复1处）。最终识别：2题（单选2、多选0、判断0、填空0、简答0）。",
+      "warnings": [],
+      "diagnostics": {
+        "mode": "自动推荐",
+        "strategy": "标准主线 + 共用材料展开",
+        "profile": {
+          "lineCount": 10,
+          "hasVolumeHeading": false,
+          "hasTypeSections": false,
+          "repeatedQuestionNumbers": false,
+          "inlineOptionLikely": false,
+          "inlineAnswerLikely": false,
+          "hasAnswerAnalysisSection": false,
+          "expectedByHeadings": 0,
+          "expectedByType": {
+            "single": 0,
+            "multiple": 0,
+            "judge": 0,
+            "blank": 0,
+            "short": 0
+          },
+          "sharedStemDetectedGroups": 1,
+          "sharedStemAppliedGroups": 1,
+          "sharedStemAppliedChildren": 2
+        },
+        "candidates": [
+          {
+            "name": "标准试卷段落解析",
+            "questions": 2,
+            "score": -40,
+            "warnings": [],
+            "segments": []
+          },
+          {
+            "name": "标准逐行解析",
+            "questions": 2,
+            "score": -40,
+            "warnings": [],
+            "segments": []
+          },
+          {
+            "name": "标准主线 + 共用材料展开",
+            "questions": 2,
+            "score": -16,
+            "warnings": [],
+            "segments": [
+              "共用材料：已展开到 2 道小题"
+            ]
+          }
+        ],
+        "expected": {
+          "total": 0,
+          "types": {
+            "single": 0,
+            "multiple": 0,
+            "judge": 0,
+            "blank": 0,
+            "short": 0
+          }
+        },
+        "stats": {
+          "single": 2,
+          "multiple": 0,
+          "multi": 0,
+          "judge": 0,
+          "blank": 0,
+          "short": 0
+        },
+        "warnings": [],
+        "sharedStem": {
+          "detectedGroups": 1,
+          "appliedGroups": 1,
+          "appliedChildren": 2,
+          "changedQuestions": 2
+        }
+      }
+    },
+    {
+      "name": "共用材料",
+      "strategy": "standard",
+      "questions": [
+        {
+          "id": "structured_0_test-64",
+          "type": "single",
+          "number": 1,
+          "volume": "",
+          "group": "",
+          "question": "。 某学校种植了十棵树，其中六棵为松树，四棵为柏树。 学校种植了多少棵树？",
+          "options": [
+            {
+              "key": "A",
+              "text": "十棵"
+            },
+            {
+              "key": "B",
+              "text": "六棵"
+            }
+          ],
+          "answer": [
+            "A"
+          ],
+          "analysis": "答案：A",
+          "category": "",
+          "images": [],
+          "subject": "",
+          "grade": "",
+          "difficulty": "",
+          "knowledgePoints": [],
+          "tags": [],
+          "source": "",
+          "sourceFileId": "",
+          "version": 1,
+          "reviewStatus": "approved",
+          "aiConfidence": null,
+          "warnings": [],
+          "normalized": "某学校种植了十棵树其中六棵为松树四棵为柏树学校种植了多少棵树"
+        },
+        {
+          "id": "structured_1_test-65",
+          "type": "single",
+          "number": 2,
+          "volume": "",
+          "group": "",
+          "question": "。 某学校种植了十棵树，其中六棵为松树，四棵为柏树。 松树有多少棵？",
+          "options": [
+            {
+              "key": "A",
+              "text": "四棵"
+            },
+            {
+              "key": "B",
+              "text": "六棵"
+            }
+          ],
+          "answer": [
+            "B"
+          ],
+          "analysis": "答案：B",
+          "category": "",
+          "images": [],
+          "subject": "",
+          "grade": "",
+          "difficulty": "",
+          "knowledgePoints": [],
+          "tags": [],
+          "source": "",
+          "sourceFileId": "",
+          "version": 1,
+          "reviewStatus": "approved",
+          "aiConfidence": null,
+          "warnings": [],
+          "normalized": "某学校种植了十棵树其中六棵为松树四棵为柏树松树有多少棵"
+        }
+      ],
+      "metadata": [
+        {
+          "source": {
+            "sourceStart": 40,
+            "sourceEnd": 70,
+            "sourceBlockStart": 1,
+            "sourceBlockEnd": 1,
+            "blockIndex": 1,
+            "originalNumber": 1,
+            "sourceQuestionNumbers": [
+              1
+            ],
+            "explicitNumber": true,
+            "group": "",
+            "volume": "",
+            "chapter": "",
+            "pairIndex": 0
+          },
+          "recruitmentOptions": null
+        },
+        {
+          "source": {
+            "sourceStart": 71,
+            "sourceEnd": 98,
+            "sourceBlockStart": 2,
+            "sourceBlockEnd": 2,
+            "blockIndex": 2,
+            "originalNumber": 2,
+            "sourceQuestionNumbers": [
+              2
+            ],
+            "explicitNumber": true,
+            "group": "",
+            "volume": "",
+            "chapter": "",
+            "pairIndex": 1
+          },
+          "recruitmentOptions": null
+        }
+      ],
+      "report": "解析模式：标准逐行解析；采用策略：标准主线 + 共用材料展开。格式画像：共用材料展开1组/2题。候选结果：标准试卷段落解析2题/质量-40；标准逐行解析2题/质量-40；标准主线 + 共用材料展开2题/质量-16（局部修复1处）。最终识别：2题（单选2、多选0、判断0、填空0、简答0）。",
+      "warnings": [],
+      "diagnostics": {
+        "mode": "标准逐行解析",
+        "strategy": "标准主线 + 共用材料展开",
+        "profile": {
+          "lineCount": 10,
+          "hasVolumeHeading": false,
+          "hasTypeSections": false,
+          "repeatedQuestionNumbers": false,
+          "inlineOptionLikely": false,
+          "inlineAnswerLikely": false,
+          "hasAnswerAnalysisSection": false,
+          "expectedByHeadings": 0,
+          "expectedByType": {
+            "single": 0,
+            "multiple": 0,
+            "judge": 0,
+            "blank": 0,
+            "short": 0
+          },
+          "sharedStemDetectedGroups": 1,
+          "sharedStemAppliedGroups": 1,
+          "sharedStemAppliedChildren": 2
+        },
+        "candidates": [
+          {
+            "name": "标准试卷段落解析",
+            "questions": 2,
+            "score": -40,
+            "warnings": [],
+            "segments": []
+          },
+          {
+            "name": "标准逐行解析",
+            "questions": 2,
+            "score": -40,
+            "warnings": [],
+            "segments": []
+          },
+          {
+            "name": "标准主线 + 共用材料展开",
+            "questions": 2,
+            "score": -16,
+            "warnings": [],
+            "segments": [
+              "共用材料：已展开到 2 道小题"
+            ]
+          }
+        ],
+        "expected": {
+          "total": 0,
+          "types": {
+            "single": 0,
+            "multiple": 0,
+            "judge": 0,
+            "blank": 0,
+            "short": 0
+          }
+        },
+        "stats": {
+          "single": 2,
+          "multiple": 0,
+          "multi": 0,
+          "judge": 0,
+          "blank": 0,
+          "short": 0
+        },
+        "warnings": [],
+        "sharedStem": {
+          "detectedGroups": 1,
+          "appliedGroups": 1,
+          "appliedChildren": 2,
+          "changedQuestions": 2
+        }
+      }
+    },
+    {
+      "name": "共用材料",
+      "strategy": "volume",
+      "questions": [
+        {
+          "id": "imp_1_test-73",
+          "type": "single",
+          "number": "1",
+          "volume": "",
+          "group": "",
+          "question": "。 某学校种植了十棵树，其中六棵为松树，四棵为柏树。 学校种植了多少棵树？",
+          "options": [
+            {
+              "key": "A",
+              "text": "十棵"
+            },
+            {
+              "key": "B",
+              "text": "六棵"
+            }
+          ],
+          "answer": [
+            "A"
+          ],
+          "analysis": "答案：A",
+          "category": "",
+          "images": [],
+          "subject": "",
+          "grade": "",
+          "difficulty": "",
+          "knowledgePoints": [],
+          "tags": [],
+          "source": "",
+          "sourceFileId": "",
+          "version": 1,
+          "reviewStatus": "approved",
+          "aiConfidence": null,
+          "warnings": [],
+          "normalized": "某学校种植了十棵树其中六棵为松树四棵为柏树学校种植了多少棵树"
+        },
+        {
+          "id": "imp_2_test-74",
+          "type": "single",
+          "number": "2",
+          "volume": "",
+          "group": "",
+          "question": "。 某学校种植了十棵树，其中六棵为松树，四棵为柏树。 松树有多少棵？",
+          "options": [
+            {
+              "key": "A",
+              "text": "四棵"
+            },
+            {
+              "key": "B",
+              "text": "六棵"
+            }
+          ],
+          "answer": [
+            "B"
+          ],
+          "analysis": "答案：B",
+          "category": "",
+          "images": [],
+          "subject": "",
+          "grade": "",
+          "difficulty": "",
+          "knowledgePoints": [],
+          "tags": [],
+          "source": "",
+          "sourceFileId": "",
+          "version": 1,
+          "reviewStatus": "approved",
+          "aiConfidence": null,
+          "warnings": [],
+          "normalized": "某学校种植了十棵树其中六棵为松树四棵为柏树松树有多少棵"
+        }
+      ],
+      "metadata": [
+        {
+          "source": null,
+          "recruitmentOptions": null
+        },
+        {
+          "source": null,
+          "recruitmentOptions": null
+        }
+      ],
+      "report": "解析模式：分卷分区三层解析；采用策略：标准主线 + 共用材料展开。格式画像：共用材料展开1组/2题。候选结果：分卷分区三层解析2题/质量-40；标准主线 + 共用材料展开2题/质量-16（局部修复1处）。最终识别：2题（单选2、多选0、判断0、填空0、简答0）。",
+      "warnings": [],
+      "diagnostics": {
+        "mode": "分卷分区三层解析",
+        "strategy": "标准主线 + 共用材料展开",
+        "profile": {
+          "lineCount": 10,
+          "hasVolumeHeading": false,
+          "hasTypeSections": false,
+          "repeatedQuestionNumbers": false,
+          "inlineOptionLikely": false,
+          "inlineAnswerLikely": false,
+          "hasAnswerAnalysisSection": false,
+          "expectedByHeadings": 0,
+          "expectedByType": {
+            "single": 0,
+            "multiple": 0,
+            "judge": 0,
+            "blank": 0,
+            "short": 0
+          },
+          "sharedStemDetectedGroups": 1,
+          "sharedStemAppliedGroups": 1,
+          "sharedStemAppliedChildren": 2
+        },
+        "candidates": [
+          {
+            "name": "分卷分区三层解析",
+            "questions": 2,
+            "score": -40,
+            "warnings": [],
+            "segments": []
+          },
+          {
+            "name": "标准主线 + 共用材料展开",
+            "questions": 2,
+            "score": -16,
+            "warnings": [],
+            "segments": [
+              "共用材料：已展开到 2 道小题"
+            ]
+          }
+        ],
+        "expected": {
+          "total": 0,
+          "types": {
+            "single": 0,
+            "multiple": 0,
+            "judge": 0,
+            "blank": 0,
+            "short": 0
+          }
+        },
+        "stats": {
+          "single": 2,
+          "multiple": 0,
+          "multi": 0,
+          "judge": 0,
+          "blank": 0,
+          "short": 0
+        },
+        "warnings": [],
+        "sharedStem": {
+          "detectedGroups": 1,
+          "appliedGroups": 1,
+          "appliedChildren": 2,
+          "changedQuestions": 2
+        }
+      }
+    },
+    {
+      "name": "共用材料",
+      "strategy": "compact",
+      "questions": [
+        {
+          "id": "imp_1_test-79",
+          "type": "single",
+          "number": "1",
+          "volume": "",
+          "group": "",
+          "question": "。 某学校种植了十棵树，其中六棵为松树，四棵为柏树。 学校种植了多少棵树？",
+          "options": [
+            {
+              "key": "A",
+              "text": "十棵"
+            },
+            {
+              "key": "B",
+              "text": "六棵"
+            }
+          ],
+          "answer": [
+            "A"
+          ],
+          "analysis": "答案：A",
+          "category": "",
+          "images": [],
+          "subject": "",
+          "grade": "",
+          "difficulty": "",
+          "knowledgePoints": [],
+          "tags": [],
+          "source": "",
+          "sourceFileId": "",
+          "version": 1,
+          "reviewStatus": "approved",
+          "aiConfidence": null,
+          "warnings": [],
+          "normalized": "某学校种植了十棵树其中六棵为松树四棵为柏树学校种植了多少棵树"
+        },
+        {
+          "id": "imp_2_test-80",
+          "type": "single",
+          "number": "2",
+          "volume": "",
+          "group": "",
+          "question": "。 某学校种植了十棵树，其中六棵为松树，四棵为柏树。 松树有多少棵？",
+          "options": [
+            {
+              "key": "A",
+              "text": "四棵"
+            },
+            {
+              "key": "B",
+              "text": "六棵"
+            }
+          ],
+          "answer": [
+            "B"
+          ],
+          "analysis": "答案：B",
+          "category": "",
+          "images": [],
+          "subject": "",
+          "grade": "",
+          "difficulty": "",
+          "knowledgePoints": [],
+          "tags": [],
+          "source": "",
+          "sourceFileId": "",
+          "version": 1,
+          "reviewStatus": "approved",
+          "aiConfidence": null,
+          "warnings": [],
+          "normalized": "某学校种植了十棵树其中六棵为松树四棵为柏树松树有多少棵"
+        }
+      ],
+      "metadata": [
+        {
+          "source": {
+            "sourceStart": 40,
+            "sourceEnd": 70,
+            "sourceBlockStart": 1,
+            "sourceBlockEnd": 1,
+            "blockIndex": 1,
+            "originalNumber": 1,
+            "sourceQuestionNumbers": [
+              1
+            ],
+            "explicitNumber": true,
+            "group": "",
+            "volume": "",
+            "chapter": ""
+          },
+          "recruitmentOptions": null
+        },
+        {
+          "source": {
+            "sourceStart": 71,
+            "sourceEnd": 98,
+            "sourceBlockStart": 2,
+            "sourceBlockEnd": 2,
+            "blockIndex": 2,
+            "originalNumber": 2,
+            "sourceQuestionNumbers": [
+              2
+            ],
+            "explicitNumber": true,
+            "group": "",
+            "volume": "",
+            "chapter": ""
+          },
+          "recruitmentOptions": null
+        }
+      ],
+      "report": "解析模式：紧凑格式解析；采用策略：标准主线 + 共用材料展开。格式画像：共用材料展开1组/2题。候选结果：紧凑题干选项解析2题/质量-40；标准主线 + 共用材料展开2题/质量-16（局部修复1处）。最终识别：2题（单选2、多选0、判断0、填空0、简答0）。",
+      "warnings": [],
+      "diagnostics": {
+        "mode": "紧凑格式解析",
+        "strategy": "标准主线 + 共用材料展开",
+        "profile": {
+          "lineCount": 10,
+          "hasVolumeHeading": false,
+          "hasTypeSections": false,
+          "repeatedQuestionNumbers": false,
+          "inlineOptionLikely": false,
+          "inlineAnswerLikely": false,
+          "hasAnswerAnalysisSection": false,
+          "expectedByHeadings": 0,
+          "expectedByType": {
+            "single": 0,
+            "multiple": 0,
+            "judge": 0,
+            "blank": 0,
+            "short": 0
+          },
+          "sharedStemDetectedGroups": 1,
+          "sharedStemAppliedGroups": 1,
+          "sharedStemAppliedChildren": 2
+        },
+        "candidates": [
+          {
+            "name": "紧凑题干选项解析",
+            "questions": 2,
+            "score": -40,
+            "warnings": [],
+            "segments": []
+          },
+          {
+            "name": "标准主线 + 共用材料展开",
+            "questions": 2,
+            "score": -16,
+            "warnings": [],
+            "segments": [
+              "共用材料：已展开到 2 道小题"
+            ]
+          }
+        ],
+        "expected": {
+          "total": 0,
+          "types": {
+            "single": 0,
+            "multiple": 0,
+            "judge": 0,
+            "blank": 0,
+            "short": 0
+          }
+        },
+        "stats": {
+          "single": 2,
+          "multiple": 0,
+          "multi": 0,
+          "judge": 0,
+          "blank": 0,
+          "short": 0
+        },
+        "warnings": [],
+        "sharedStem": {
+          "detectedGroups": 1,
+          "appliedGroups": 1,
+          "appliedChildren": 2,
+          "changedQuestions": 2
+        }
+      }
+    },
+    {
+      "name": "全角与粘连选项",
+      "strategy": "auto",
+      "questions": [
+        {
+          "id": "structured_0_test-83",
+          "type": "single",
+          "number": 1,
+          "volume": "",
+          "group": "单选题",
+          "question": "哪一项正确？A．甲B．乙C．丙",
+          "options": [],
+          "answer": [
+            "B"
+          ],
+          "analysis": "答案：B",
+          "category": "单选题",
+          "images": [],
+          "subject": "",
+          "grade": "",
+          "difficulty": "",
+          "knowledgePoints": [],
+          "tags": [],
+          "source": "",
+          "sourceFileId": "",
+          "version": 1,
+          "reviewStatus": "approved",
+          "aiConfidence": null,
+          "warnings": [],
+          "normalized": "哪一项正确a．甲b．乙c．丙"
+        },
+        {
+          "id": "structured_1_test-84",
+          "type": "single",
+          "number": 2,
+          "volume": "",
+          "group": "单选题",
+          "question": "下一题？",
+          "options": [
+            {
+              "key": "A",
+              "text": "左"
+            },
+            {
+              "key": "B",
+              "text": "右"
+            }
+          ],
+          "answer": [
+            "A"
+          ],
+          "analysis": "答案：A",
+          "category": "单选题",
+          "images": [],
+          "subject": "",
+          "grade": "",
+          "difficulty": "",
+          "knowledgePoints": [],
+          "tags": [],
+          "source": "",
+          "sourceFileId": "",
+          "version": 1,
+          "reviewStatus": "approved",
+          "aiConfidence": null,
+          "warnings": [],
+          "normalized": "下一题"
+        }
+      ],
+      "metadata": [
+        {
+          "source": {
+            "sourceStart": 6,
+            "sourceEnd": 28,
+            "sourceBlockStart": 0,
+            "sourceBlockEnd": 0,
+            "blockIndex": 0,
+            "originalNumber": 1,
+            "sourceQuestionNumbers": [
+              1
+            ],
+            "explicitNumber": true,
+            "group": "单选题",
+            "volume": "",
+            "chapter": "",
+            "pairIndex": 0
+          },
+          "recruitmentOptions": null
+        },
+        {
+          "source": {
+            "sourceStart": 29,
+            "sourceEnd": 50,
+            "sourceBlockStart": 1,
+            "sourceBlockEnd": 1,
+            "blockIndex": 1,
+            "originalNumber": 2,
+            "sourceQuestionNumbers": [
+              2
+            ],
+            "explicitNumber": true,
+            "group": "单选题",
+            "volume": "",
+            "chapter": "",
+            "pairIndex": 1
+          },
+          "recruitmentOptions": null
+        }
+      ],
+      "report": "解析模式：自动推荐；采用策略：标准试卷段落解析。格式画像：检测到题型分区、存在同一行选项。候选结果：标准试卷段落解析2题/质量-35；标准逐行解析2题/质量-35。最终识别：2题（单选2、多选0、判断0、填空0、简答0）。",
+      "warnings": [],
+      "diagnostics": {
+        "mode": "自动推荐",
+        "strategy": "标准试卷段落解析",
+        "profile": {
+          "lineCount": 6,
+          "hasVolumeHeading": false,
+          "hasTypeSections": true,
+          "repeatedQuestionNumbers": false,
+          "inlineOptionLikely": true,
+          "inlineAnswerLikely": false,
+          "hasAnswerAnalysisSection": false,
+          "expectedByHeadings": 0,
+          "expectedByType": {
+            "single": 0,
+            "multiple": 0,
+            "judge": 0,
+            "blank": 0,
+            "short": 0
+          },
+          "sharedStemDetectedGroups": 0,
+          "sharedStemAppliedGroups": 0,
+          "sharedStemAppliedChildren": 0
+        },
+        "candidates": [
+          {
+            "name": "标准试卷段落解析",
+            "questions": 2,
+            "score": -35,
+            "warnings": [
+              "第1题：选择题缺少选项"
+            ],
+            "segments": []
+          },
+          {
+            "name": "标准逐行解析",
+            "questions": 2,
+            "score": -35,
+            "warnings": [
+              "第1题：选择题缺少选项"
+            ],
+            "segments": []
+          }
+        ],
+        "expected": {
+          "total": 0,
+          "types": {
+            "single": 0,
+            "multiple": 0,
+            "judge": 0,
+            "blank": 0,
+            "short": 0
+          }
+        },
+        "stats": {
+          "single": 2,
+          "multiple": 0,
+          "multi": 0,
+          "judge": 0,
+          "blank": 0,
+          "short": 0
+        },
+        "warnings": [
+          "第1题：选择题缺少选项"
+        ],
+        "sharedStem": {
+          "detectedGroups": 0,
+          "appliedGroups": 0,
+          "appliedChildren": 0,
+          "changedQuestions": 0
+        }
+      }
+    },
+    {
+      "name": "全角与粘连选项",
+      "strategy": "standard",
+      "questions": [
+        {
+          "id": "structured_0_test-99",
+          "type": "single",
+          "number": 1,
+          "volume": "",
+          "group": "单选题",
+          "question": "哪一项正确？A．甲B．乙C．丙",
+          "options": [],
+          "answer": [
+            "B"
+          ],
+          "analysis": "答案：B",
+          "category": "单选题",
+          "images": [],
+          "subject": "",
+          "grade": "",
+          "difficulty": "",
+          "knowledgePoints": [],
+          "tags": [],
+          "source": "",
+          "sourceFileId": "",
+          "version": 1,
+          "reviewStatus": "approved",
+          "aiConfidence": null,
+          "warnings": [],
+          "normalized": "哪一项正确a．甲b．乙c．丙"
+        },
+        {
+          "id": "structured_1_test-100",
+          "type": "single",
+          "number": 2,
+          "volume": "",
+          "group": "单选题",
+          "question": "下一题？",
+          "options": [
+            {
+              "key": "A",
+              "text": "左"
+            },
+            {
+              "key": "B",
+              "text": "右"
+            }
+          ],
+          "answer": [
+            "A"
+          ],
+          "analysis": "答案：A",
+          "category": "单选题",
+          "images": [],
+          "subject": "",
+          "grade": "",
+          "difficulty": "",
+          "knowledgePoints": [],
+          "tags": [],
+          "source": "",
+          "sourceFileId": "",
+          "version": 1,
+          "reviewStatus": "approved",
+          "aiConfidence": null,
+          "warnings": [],
+          "normalized": "下一题"
+        }
+      ],
+      "metadata": [
+        {
+          "source": {
+            "sourceStart": 6,
+            "sourceEnd": 28,
+            "sourceBlockStart": 0,
+            "sourceBlockEnd": 0,
+            "blockIndex": 0,
+            "originalNumber": 1,
+            "sourceQuestionNumbers": [
+              1
+            ],
+            "explicitNumber": true,
+            "group": "单选题",
+            "volume": "",
+            "chapter": "",
+            "pairIndex": 0
+          },
+          "recruitmentOptions": null
+        },
+        {
+          "source": {
+            "sourceStart": 29,
+            "sourceEnd": 50,
+            "sourceBlockStart": 1,
+            "sourceBlockEnd": 1,
+            "blockIndex": 1,
+            "originalNumber": 2,
+            "sourceQuestionNumbers": [
+              2
+            ],
+            "explicitNumber": true,
+            "group": "单选题",
+            "volume": "",
+            "chapter": "",
+            "pairIndex": 1
+          },
+          "recruitmentOptions": null
+        }
+      ],
+      "report": "解析模式：标准逐行解析；采用策略：标准试卷段落解析。格式画像：检测到题型分区、存在同一行选项。候选结果：标准试卷段落解析2题/质量-35；标准逐行解析2题/质量-35。最终识别：2题（单选2、多选0、判断0、填空0、简答0）。",
+      "warnings": [],
+      "diagnostics": {
+        "mode": "标准逐行解析",
+        "strategy": "标准试卷段落解析",
+        "profile": {
+          "lineCount": 6,
+          "hasVolumeHeading": false,
+          "hasTypeSections": true,
+          "repeatedQuestionNumbers": false,
+          "inlineOptionLikely": true,
+          "inlineAnswerLikely": false,
+          "hasAnswerAnalysisSection": false,
+          "expectedByHeadings": 0,
+          "expectedByType": {
+            "single": 0,
+            "multiple": 0,
+            "judge": 0,
+            "blank": 0,
+            "short": 0
+          },
+          "sharedStemDetectedGroups": 0,
+          "sharedStemAppliedGroups": 0,
+          "sharedStemAppliedChildren": 0
+        },
+        "candidates": [
+          {
+            "name": "标准试卷段落解析",
+            "questions": 2,
+            "score": -35,
+            "warnings": [
+              "第1题：选择题缺少选项"
+            ],
+            "segments": []
+          },
+          {
+            "name": "标准逐行解析",
+            "questions": 2,
+            "score": -35,
+            "warnings": [
+              "第1题：选择题缺少选项"
+            ],
+            "segments": []
+          }
+        ],
+        "expected": {
+          "total": 0,
+          "types": {
+            "single": 0,
+            "multiple": 0,
+            "judge": 0,
+            "blank": 0,
+            "short": 0
+          }
+        },
+        "stats": {
+          "single": 2,
+          "multiple": 0,
+          "multi": 0,
+          "judge": 0,
+          "blank": 0,
+          "short": 0
+        },
+        "warnings": [
+          "第1题：选择题缺少选项"
+        ],
+        "sharedStem": {
+          "detectedGroups": 0,
+          "appliedGroups": 0,
+          "appliedChildren": 0,
+          "changedQuestions": 0
+        }
+      }
+    },
+    {
+      "name": "全角与粘连选项",
+      "strategy": "volume",
+      "questions": [
+        {
+          "id": "imp_0_test-105",
+          "type": "single",
+          "number": "1",
+          "volume": "",
+          "group": "单选题",
+          "question": "哪一项正确？A．甲B．乙C．丙",
+          "options": [],
+          "answer": [
+            "B"
+          ],
+          "analysis": "答案：B",
+          "category": "单选题",
+          "images": [],
+          "subject": "",
+          "grade": "",
+          "difficulty": "",
+          "knowledgePoints": [],
+          "tags": [],
+          "source": "",
+          "sourceFileId": "",
+          "version": 1,
+          "reviewStatus": "approved",
+          "aiConfidence": null,
+          "warnings": [],
+          "normalized": "哪一项正确a．甲b．乙c．丙"
+        },
+        {
+          "id": "imp_1_test-106",
+          "type": "single",
+          "number": "2",
+          "volume": "",
+          "group": "单选题",
+          "question": "下一题？",
+          "options": [
+            {
+              "key": "A",
+              "text": "左"
+            },
+            {
+              "key": "B",
+              "text": "右"
+            }
+          ],
+          "answer": [
+            "A"
+          ],
+          "analysis": "答案：A",
+          "category": "单选题",
+          "images": [],
+          "subject": "",
+          "grade": "",
+          "difficulty": "",
+          "knowledgePoints": [],
+          "tags": [],
+          "source": "",
+          "sourceFileId": "",
+          "version": 1,
+          "reviewStatus": "approved",
+          "aiConfidence": null,
+          "warnings": [],
+          "normalized": "下一题"
+        }
+      ],
+      "metadata": [
+        {
+          "source": null,
+          "recruitmentOptions": null
+        },
+        {
+          "source": null,
+          "recruitmentOptions": null
+        }
+      ],
+      "report": "解析模式：分卷分区三层解析；采用策略：分卷分区三层解析。格式画像：检测到题型分区、存在同一行选项。候选结果：分卷分区三层解析2题/质量-35。最终识别：2题（单选2、多选0、判断0、填空0、简答0）。",
+      "warnings": [],
+      "diagnostics": {
+        "mode": "分卷分区三层解析",
+        "strategy": "分卷分区三层解析",
+        "profile": {
+          "lineCount": 6,
+          "hasVolumeHeading": false,
+          "hasTypeSections": true,
+          "repeatedQuestionNumbers": false,
+          "inlineOptionLikely": true,
+          "inlineAnswerLikely": false,
+          "hasAnswerAnalysisSection": false,
+          "expectedByHeadings": 0,
+          "expectedByType": {
+            "single": 0,
+            "multiple": 0,
+            "judge": 0,
+            "blank": 0,
+            "short": 0
+          },
+          "sharedStemDetectedGroups": 0,
+          "sharedStemAppliedGroups": 0,
+          "sharedStemAppliedChildren": 0
+        },
+        "candidates": [
+          {
+            "name": "分卷分区三层解析",
+            "questions": 2,
+            "score": -35,
+            "warnings": [
+              "第1题：选择题缺少选项"
+            ],
+            "segments": []
+          }
+        ],
+        "expected": {
+          "total": 0,
+          "types": {
+            "single": 0,
+            "multiple": 0,
+            "judge": 0,
+            "blank": 0,
+            "short": 0
+          }
+        },
+        "stats": {
+          "single": 2,
+          "multiple": 0,
+          "multi": 0,
+          "judge": 0,
+          "blank": 0,
+          "short": 0
+        },
+        "warnings": [
+          "第1题：选择题缺少选项"
+        ],
+        "sharedStem": {
+          "detectedGroups": 0,
+          "appliedGroups": 0,
+          "appliedChildren": 0,
+          "changedQuestions": 0
+        }
+      }
+    },
+    {
+      "name": "全角与粘连选项",
+      "strategy": "compact",
+      "questions": [
+        {
+          "id": "imp_0_test-109",
+          "type": "single",
+          "number": "1",
+          "volume": "",
+          "group": "单选题",
+          "question": "哪一项正确？A．甲B．乙C．丙",
+          "options": [],
+          "answer": [
+            "B"
+          ],
+          "analysis": "答案：B",
+          "category": "单选题",
+          "images": [],
+          "subject": "",
+          "grade": "",
+          "difficulty": "",
+          "knowledgePoints": [],
+          "tags": [],
+          "source": "",
+          "sourceFileId": "",
+          "version": 1,
+          "reviewStatus": "approved",
+          "aiConfidence": null,
+          "warnings": [],
+          "normalized": "哪一项正确a．甲b．乙c．丙"
+        },
+        {
+          "id": "imp_1_test-110",
+          "type": "single",
+          "number": "2",
+          "volume": "",
+          "group": "单选题",
+          "question": "下一题？",
+          "options": [
+            {
+              "key": "A",
+              "text": "左"
+            },
+            {
+              "key": "B",
+              "text": "右"
+            }
+          ],
+          "answer": [
+            "A"
+          ],
+          "analysis": "答案：A",
+          "category": "单选题",
+          "images": [],
+          "subject": "",
+          "grade": "",
+          "difficulty": "",
+          "knowledgePoints": [],
+          "tags": [],
+          "source": "",
+          "sourceFileId": "",
+          "version": 1,
+          "reviewStatus": "approved",
+          "aiConfidence": null,
+          "warnings": [],
+          "normalized": "下一题"
+        }
+      ],
+      "metadata": [
+        {
+          "source": {
+            "sourceStart": 6,
+            "sourceEnd": 28,
+            "sourceBlockStart": 0,
+            "sourceBlockEnd": 0,
+            "blockIndex": 0,
+            "originalNumber": 1,
+            "sourceQuestionNumbers": [
+              1
+            ],
+            "explicitNumber": true,
+            "group": "单选题",
+            "volume": "",
+            "chapter": ""
+          },
+          "recruitmentOptions": null
+        },
+        {
+          "source": {
+            "sourceStart": 29,
+            "sourceEnd": 50,
+            "sourceBlockStart": 1,
+            "sourceBlockEnd": 1,
+            "blockIndex": 1,
+            "originalNumber": 2,
+            "sourceQuestionNumbers": [
+              2
+            ],
+            "explicitNumber": true,
+            "group": "单选题",
+            "volume": "",
+            "chapter": ""
+          },
+          "recruitmentOptions": null
+        }
+      ],
+      "report": "解析模式：紧凑格式解析；采用策略：紧凑题干选项解析。格式画像：检测到题型分区、存在同一行选项。候选结果：紧凑题干选项解析2题/质量-35。最终识别：2题（单选2、多选0、判断0、填空0、简答0）。",
+      "warnings": [],
+      "diagnostics": {
+        "mode": "紧凑格式解析",
+        "strategy": "紧凑题干选项解析",
+        "profile": {
+          "lineCount": 6,
+          "hasVolumeHeading": false,
+          "hasTypeSections": true,
+          "repeatedQuestionNumbers": false,
+          "inlineOptionLikely": true,
+          "inlineAnswerLikely": false,
+          "hasAnswerAnalysisSection": false,
+          "expectedByHeadings": 0,
+          "expectedByType": {
+            "single": 0,
+            "multiple": 0,
+            "judge": 0,
+            "blank": 0,
+            "short": 0
+          },
+          "sharedStemDetectedGroups": 0,
+          "sharedStemAppliedGroups": 0,
+          "sharedStemAppliedChildren": 0
+        },
+        "candidates": [
+          {
+            "name": "紧凑题干选项解析",
+            "questions": 2,
+            "score": -35,
+            "warnings": [
+              "第1题：选择题缺少选项"
+            ],
+            "segments": []
+          }
+        ],
+        "expected": {
+          "total": 0,
+          "types": {
+            "single": 0,
+            "multiple": 0,
+            "judge": 0,
+            "blank": 0,
+            "short": 0
+          }
+        },
+        "stats": {
+          "single": 2,
+          "multiple": 0,
+          "multi": 0,
+          "judge": 0,
+          "blank": 0,
+          "short": 0
+        },
+        "warnings": [
+          "第1题：选择题缺少选项"
+        ],
+        "sharedStem": {
+          "detectedGroups": 0,
+          "appliedGroups": 0,
+          "appliedChildren": 0,
+          "changedQuestions": 0
+        }
+      }
+    },
+    {
+      "name": "分卷及多空",
+      "strategy": "auto",
+      "questions": [
+        {
+          "id": "structured_0_test-113",
+          "type": "blank",
+          "number": 1,
+          "volume": "第一卷",
+          "group": "填空题",
+          "question": "首都是____，简称____。",
+          "options": [],
+          "answer": [
+            "北京；京"
+          ],
+          "analysis": "答案：北京；京",
+          "category": "填空题",
+          "images": [],
+          "subject": "",
+          "grade": "",
+          "difficulty": "",
+          "knowledgePoints": [],
+          "tags": [],
+          "source": "",
+          "sourceFileId": "",
+          "version": 1,
+          "reviewStatus": "approved",
+          "aiConfidence": null,
+          "warnings": [],
+          "normalized": "首都是____简称____"
+        },
+        {
+          "id": "structured_1_test-114",
+          "type": "short",
+          "number": 2,
+          "volume": "第一卷",
+          "group": "简答题",
+          "question": "简述保存步骤。",
+          "options": [],
+          "answer": [
+            "先保存再退出。"
+          ],
+          "analysis": "答案：先保存再退出。",
+          "category": "简答题",
+          "images": [],
+          "subject": "",
+          "grade": "",
+          "difficulty": "",
+          "knowledgePoints": [],
+          "tags": [],
+          "source": "",
+          "sourceFileId": "",
+          "version": 1,
+          "reviewStatus": "approved",
+          "aiConfidence": null,
+          "warnings": [],
+          "normalized": "简述保存步骤"
+        }
+      ],
+      "metadata": [
+        {
+          "source": {
+            "sourceStart": 13,
+            "sourceEnd": 39,
+            "sourceBlockStart": 0,
+            "sourceBlockEnd": 0,
+            "blockIndex": 0,
+            "originalNumber": 1,
+            "sourceQuestionNumbers": [
+              1
+            ],
+            "explicitNumber": true,
+            "group": "填空题",
+            "volume": "第一卷",
+            "chapter": "",
+            "pairIndex": 0
+          },
+          "recruitmentOptions": null
+        },
+        {
+          "source": {
+            "sourceStart": 46,
+            "sourceEnd": 67,
+            "sourceBlockStart": 1,
+            "sourceBlockEnd": 1,
+            "blockIndex": 1,
+            "originalNumber": 2,
+            "sourceQuestionNumbers": [
+              2
+            ],
+            "explicitNumber": true,
+            "group": "简答题",
+            "volume": "第一卷",
+            "chapter": "",
+            "pairIndex": 1
+          },
+          "recruitmentOptions": null
+        }
+      ],
+      "report": "解析模式：自动推荐；采用策略：标准试卷段落解析。格式画像：检测到分卷、检测到题型分区。候选结果：标准试卷段落解析2题/质量20；标准逐行解析2题/质量20。最终识别：2题（单选0、多选0、判断0、填空1、简答1）。",
+      "warnings": [],
+      "diagnostics": {
+        "mode": "自动推荐",
+        "strategy": "标准试卷段落解析",
+        "profile": {
+          "lineCount": 7,
+          "hasVolumeHeading": true,
+          "hasTypeSections": true,
+          "repeatedQuestionNumbers": false,
+          "inlineOptionLikely": false,
+          "inlineAnswerLikely": false,
+          "hasAnswerAnalysisSection": false,
+          "expectedByHeadings": 0,
+          "expectedByType": {
+            "single": 0,
+            "multiple": 0,
+            "judge": 0,
+            "blank": 0,
+            "short": 0
+          },
+          "sharedStemDetectedGroups": 0,
+          "sharedStemAppliedGroups": 0,
+          "sharedStemAppliedChildren": 0
+        },
+        "candidates": [
+          {
+            "name": "标准试卷段落解析",
+            "questions": 2,
+            "score": 20,
+            "warnings": [],
+            "segments": []
+          },
+          {
+            "name": "标准逐行解析",
+            "questions": 2,
+            "score": 20,
+            "warnings": [],
+            "segments": []
+          }
+        ],
+        "expected": {
+          "total": 0,
+          "types": {
+            "single": 0,
+            "multiple": 0,
+            "judge": 0,
+            "blank": 0,
+            "short": 0
+          }
+        },
+        "stats": {
+          "single": 0,
+          "multiple": 0,
+          "multi": 0,
+          "judge": 0,
+          "blank": 1,
+          "short": 1
+        },
+        "warnings": [],
+        "sharedStem": {
+          "detectedGroups": 0,
+          "appliedGroups": 0,
+          "appliedChildren": 0,
+          "changedQuestions": 0
+        }
+      }
+    },
+    {
+      "name": "分卷及多空",
+      "strategy": "standard",
+      "questions": [
+        {
+          "id": "structured_0_test-119",
+          "type": "blank",
+          "number": 1,
+          "volume": "第一卷",
+          "group": "填空题",
+          "question": "首都是____，简称____。",
+          "options": [],
+          "answer": [
+            "北京；京"
+          ],
+          "analysis": "答案：北京；京",
+          "category": "填空题",
+          "images": [],
+          "subject": "",
+          "grade": "",
+          "difficulty": "",
+          "knowledgePoints": [],
+          "tags": [],
+          "source": "",
+          "sourceFileId": "",
+          "version": 1,
+          "reviewStatus": "approved",
+          "aiConfidence": null,
+          "warnings": [],
+          "normalized": "首都是____简称____"
+        },
+        {
+          "id": "structured_1_test-120",
+          "type": "short",
+          "number": 2,
+          "volume": "第一卷",
+          "group": "简答题",
+          "question": "简述保存步骤。",
+          "options": [],
+          "answer": [
+            "先保存再退出。"
+          ],
+          "analysis": "答案：先保存再退出。",
+          "category": "简答题",
+          "images": [],
+          "subject": "",
+          "grade": "",
+          "difficulty": "",
+          "knowledgePoints": [],
+          "tags": [],
+          "source": "",
+          "sourceFileId": "",
+          "version": 1,
+          "reviewStatus": "approved",
+          "aiConfidence": null,
+          "warnings": [],
+          "normalized": "简述保存步骤"
+        }
+      ],
+      "metadata": [
+        {
+          "source": {
+            "sourceStart": 13,
+            "sourceEnd": 39,
+            "sourceBlockStart": 0,
+            "sourceBlockEnd": 0,
+            "blockIndex": 0,
+            "originalNumber": 1,
+            "sourceQuestionNumbers": [
+              1
+            ],
+            "explicitNumber": true,
+            "group": "填空题",
+            "volume": "第一卷",
+            "chapter": "",
+            "pairIndex": 0
+          },
+          "recruitmentOptions": null
+        },
+        {
+          "source": {
+            "sourceStart": 46,
+            "sourceEnd": 67,
+            "sourceBlockStart": 1,
+            "sourceBlockEnd": 1,
+            "blockIndex": 1,
+            "originalNumber": 2,
+            "sourceQuestionNumbers": [
+              2
+            ],
+            "explicitNumber": true,
+            "group": "简答题",
+            "volume": "第一卷",
+            "chapter": "",
+            "pairIndex": 1
+          },
+          "recruitmentOptions": null
+        }
+      ],
+      "report": "解析模式：标准逐行解析；采用策略：标准试卷段落解析。格式画像：检测到分卷、检测到题型分区。候选结果：标准试卷段落解析2题/质量20；标准逐行解析2题/质量20。最终识别：2题（单选0、多选0、判断0、填空1、简答1）。",
+      "warnings": [],
+      "diagnostics": {
+        "mode": "标准逐行解析",
+        "strategy": "标准试卷段落解析",
+        "profile": {
+          "lineCount": 7,
+          "hasVolumeHeading": true,
+          "hasTypeSections": true,
+          "repeatedQuestionNumbers": false,
+          "inlineOptionLikely": false,
+          "inlineAnswerLikely": false,
+          "hasAnswerAnalysisSection": false,
+          "expectedByHeadings": 0,
+          "expectedByType": {
+            "single": 0,
+            "multiple": 0,
+            "judge": 0,
+            "blank": 0,
+            "short": 0
+          },
+          "sharedStemDetectedGroups": 0,
+          "sharedStemAppliedGroups": 0,
+          "sharedStemAppliedChildren": 0
+        },
+        "candidates": [
+          {
+            "name": "标准试卷段落解析",
+            "questions": 2,
+            "score": 20,
+            "warnings": [],
+            "segments": []
+          },
+          {
+            "name": "标准逐行解析",
+            "questions": 2,
+            "score": 20,
+            "warnings": [],
+            "segments": []
+          }
+        ],
+        "expected": {
+          "total": 0,
+          "types": {
+            "single": 0,
+            "multiple": 0,
+            "judge": 0,
+            "blank": 0,
+            "short": 0
+          }
+        },
+        "stats": {
+          "single": 0,
+          "multiple": 0,
+          "multi": 0,
+          "judge": 0,
+          "blank": 1,
+          "short": 1
+        },
+        "warnings": [],
+        "sharedStem": {
+          "detectedGroups": 0,
+          "appliedGroups": 0,
+          "appliedChildren": 0,
+          "changedQuestions": 0
+        }
+      }
+    },
+    {
+      "name": "分卷及多空",
+      "strategy": "volume",
+      "questions": [
+        {
+          "id": "imp_0_test-125",
+          "type": "blank",
+          "number": "1",
+          "volume": "",
+          "group": "填空题",
+          "question": "首都是____，简称____。",
+          "options": [],
+          "answer": [
+            "北京；京"
+          ],
+          "analysis": "答案：北京；京",
+          "category": "填空题",
+          "images": [],
+          "subject": "",
+          "grade": "",
+          "difficulty": "",
+          "knowledgePoints": [],
+          "tags": [],
+          "source": "",
+          "sourceFileId": "",
+          "version": 1,
+          "reviewStatus": "approved",
+          "aiConfidence": null,
+          "warnings": [],
+          "normalized": "首都是____简称____"
+        },
+        {
+          "id": "imp_1_test-126",
+          "type": "short",
+          "number": "2",
+          "volume": "",
+          "group": "简答题",
+          "question": "简述保存步骤。",
+          "options": [],
+          "answer": [
+            "先保存再退出。"
+          ],
+          "analysis": "答案：先保存再退出。",
+          "category": "简答题",
+          "images": [],
+          "subject": "",
+          "grade": "",
+          "difficulty": "",
+          "knowledgePoints": [],
+          "tags": [],
+          "source": "",
+          "sourceFileId": "",
+          "version": 1,
+          "reviewStatus": "approved",
+          "aiConfidence": null,
+          "warnings": [],
+          "normalized": "简述保存步骤"
+        }
+      ],
+      "metadata": [
+        {
+          "source": null,
+          "recruitmentOptions": null
+        },
+        {
+          "source": null,
+          "recruitmentOptions": null
+        }
+      ],
+      "report": "解析模式：分卷分区三层解析；采用策略：分卷分区三层解析。格式画像：检测到分卷、检测到题型分区。候选结果：分卷分区三层解析2题/质量20。最终识别：2题（单选0、多选0、判断0、填空1、简答1）。",
+      "warnings": [],
+      "diagnostics": {
+        "mode": "分卷分区三层解析",
+        "strategy": "分卷分区三层解析",
+        "profile": {
+          "lineCount": 7,
+          "hasVolumeHeading": true,
+          "hasTypeSections": true,
+          "repeatedQuestionNumbers": false,
+          "inlineOptionLikely": false,
+          "inlineAnswerLikely": false,
+          "hasAnswerAnalysisSection": false,
+          "expectedByHeadings": 0,
+          "expectedByType": {
+            "single": 0,
+            "multiple": 0,
+            "judge": 0,
+            "blank": 0,
+            "short": 0
+          },
+          "sharedStemDetectedGroups": 0,
+          "sharedStemAppliedGroups": 0,
+          "sharedStemAppliedChildren": 0
+        },
+        "candidates": [
+          {
+            "name": "分卷分区三层解析",
+            "questions": 2,
+            "score": 20,
+            "warnings": [],
+            "segments": []
+          }
+        ],
+        "expected": {
+          "total": 0,
+          "types": {
+            "single": 0,
+            "multiple": 0,
+            "judge": 0,
+            "blank": 0,
+            "short": 0
+          }
+        },
+        "stats": {
+          "single": 0,
+          "multiple": 0,
+          "multi": 0,
+          "judge": 0,
+          "blank": 1,
+          "short": 1
+        },
+        "warnings": [],
+        "sharedStem": {
+          "detectedGroups": 0,
+          "appliedGroups": 0,
+          "appliedChildren": 0,
+          "changedQuestions": 0
+        }
+      }
+    },
+    {
+      "name": "分卷及多空",
+      "strategy": "compact",
+      "questions": [
+        {
+          "id": "imp_0_test-129",
+          "type": "blank",
+          "number": "1",
+          "volume": "第一卷",
+          "group": "填空题",
+          "question": "首都是____，简称____。",
+          "options": [],
+          "answer": [
+            "北京；京"
+          ],
+          "analysis": "答案：北京；京",
+          "category": "填空题",
+          "images": [],
+          "subject": "",
+          "grade": "",
+          "difficulty": "",
+          "knowledgePoints": [],
+          "tags": [],
+          "source": "",
+          "sourceFileId": "",
+          "version": 1,
+          "reviewStatus": "approved",
+          "aiConfidence": null,
+          "warnings": [],
+          "normalized": "首都是____简称____"
+        },
+        {
+          "id": "imp_1_test-130",
+          "type": "short",
+          "number": "2",
+          "volume": "第一卷",
+          "group": "简答题",
+          "question": "简述保存步骤。",
+          "options": [],
+          "answer": [
+            "先保存再退出。"
+          ],
+          "analysis": "答案：先保存再退出。",
+          "category": "简答题",
+          "images": [],
+          "subject": "",
+          "grade": "",
+          "difficulty": "",
+          "knowledgePoints": [],
+          "tags": [],
+          "source": "",
+          "sourceFileId": "",
+          "version": 1,
+          "reviewStatus": "approved",
+          "aiConfidence": null,
+          "warnings": [],
+          "normalized": "简述保存步骤"
+        }
+      ],
+      "metadata": [
+        {
+          "source": {
+            "sourceStart": 14,
+            "sourceEnd": 40,
+            "sourceBlockStart": 0,
+            "sourceBlockEnd": 0,
+            "blockIndex": 0,
+            "originalNumber": 1,
+            "sourceQuestionNumbers": [
+              1
+            ],
+            "explicitNumber": true,
+            "group": "填空题",
+            "volume": "第一卷",
+            "chapter": ""
+          },
+          "recruitmentOptions": null
+        },
+        {
+          "source": {
+            "sourceStart": 47,
+            "sourceEnd": 68,
+            "sourceBlockStart": 1,
+            "sourceBlockEnd": 1,
+            "blockIndex": 1,
+            "originalNumber": 2,
+            "sourceQuestionNumbers": [
+              2
+            ],
+            "explicitNumber": true,
+            "group": "简答题",
+            "volume": "第一卷",
+            "chapter": ""
+          },
+          "recruitmentOptions": null
+        }
+      ],
+      "report": "解析模式：紧凑格式解析；采用策略：紧凑题干选项解析。格式画像：检测到分卷、检测到题型分区。候选结果：紧凑题干选项解析2题/质量20。最终识别：2题（单选0、多选0、判断0、填空1、简答1）。",
+      "warnings": [],
+      "diagnostics": {
+        "mode": "紧凑格式解析",
+        "strategy": "紧凑题干选项解析",
+        "profile": {
+          "lineCount": 7,
+          "hasVolumeHeading": true,
+          "hasTypeSections": true,
+          "repeatedQuestionNumbers": false,
+          "inlineOptionLikely": false,
+          "inlineAnswerLikely": false,
+          "hasAnswerAnalysisSection": false,
+          "expectedByHeadings": 0,
+          "expectedByType": {
+            "single": 0,
+            "multiple": 0,
+            "judge": 0,
+            "blank": 0,
+            "short": 0
+          },
+          "sharedStemDetectedGroups": 0,
+          "sharedStemAppliedGroups": 0,
+          "sharedStemAppliedChildren": 0
+        },
+        "candidates": [
+          {
+            "name": "紧凑题干选项解析",
+            "questions": 2,
+            "score": 20,
+            "warnings": [],
+            "segments": []
+          }
+        ],
+        "expected": {
+          "total": 0,
+          "types": {
+            "single": 0,
+            "multiple": 0,
+            "judge": 0,
+            "blank": 0,
+            "short": 0
+          }
+        },
+        "stats": {
+          "single": 0,
+          "multiple": 0,
+          "multi": 0,
+          "judge": 0,
+          "blank": 1,
+          "short": 1
+        },
+        "warnings": [],
+        "sharedStem": {
+          "detectedGroups": 0,
+          "appliedGroups": 0,
+          "appliedChildren": 0,
+          "changedQuestions": 0
+        }
+      }
+    },
+    {
+      "name": "Word 图片与答案",
+      "strategy": "auto",
+      "questions": [
+        {
+          "id": "structured_1_test-133",
+          "type": "single",
+          "number": 1,
+          "volume": "",
+          "group": "单选题",
+          "question": "![题图](data:image/png;base64,aGVsbG8=)",
+          "options": [
+            {
+              "key": "A",
+              "text": "甲"
+            },
+            {
+              "key": "B",
+              "text": "乙"
+            }
+          ],
+          "answer": [
+            "B"
+          ],
+          "analysis": "答案：B。根据图判断。",
+          "category": "单选题",
+          "images": [],
+          "subject": "",
+          "grade": "",
+          "difficulty": "",
+          "knowledgePoints": [],
+          "tags": [],
+          "source": "",
+          "sourceFileId": "",
+          "version": 1,
+          "reviewStatus": "approved",
+          "aiConfidence": null,
+          "warnings": [],
+          "normalized": "题图dataimage/pngbase64agvsbg8="
+        }
+      ],
+      "metadata": [
+        {
+          "source": {
+            "sourceStart": 6,
+            "sourceEnd": 61,
+            "sourceBlockStart": 0,
+            "sourceBlockEnd": 0,
+            "blockIndex": 0,
+            "originalNumber": 1,
+            "sourceQuestionNumbers": [
+              1
+            ],
+            "explicitNumber": true,
+            "group": "单选题",
+            "volume": "",
+            "chapter": "",
+            "pairIndex": 0
+          },
+          "recruitmentOptions": null
+        }
+      ],
+      "report": "解析模式：自动推荐；采用策略：标准试卷段落解析。格式画像：检测到题型分区、存在同一行选项。候选结果：标准试卷段落解析1题/质量10；标准逐行解析1题/质量10。最终识别：1题（单选1、多选0、判断0、填空0、简答0）。",
+      "warnings": [],
+      "diagnostics": {
+        "mode": "自动推荐",
+        "strategy": "标准试卷段落解析",
+        "profile": {
+          "lineCount": 7,
+          "hasVolumeHeading": false,
+          "hasTypeSections": true,
+          "repeatedQuestionNumbers": false,
+          "inlineOptionLikely": true,
+          "inlineAnswerLikely": false,
+          "hasAnswerAnalysisSection": false,
+          "expectedByHeadings": 0,
+          "expectedByType": {
+            "single": 0,
+            "multiple": 0,
+            "judge": 0,
+            "blank": 0,
+            "short": 0
+          },
+          "sharedStemDetectedGroups": 0,
+          "sharedStemAppliedGroups": 0,
+          "sharedStemAppliedChildren": 0
+        },
+        "candidates": [
+          {
+            "name": "标准试卷段落解析",
+            "questions": 1,
+            "score": 10,
+            "warnings": [],
+            "segments": []
+          },
+          {
+            "name": "标准逐行解析",
+            "questions": 1,
+            "score": 10,
+            "warnings": [],
+            "segments": []
+          }
+        ],
+        "expected": {
+          "total": 0,
+          "types": {
+            "single": 0,
+            "multiple": 0,
+            "judge": 0,
+            "blank": 0,
+            "short": 0
+          }
+        },
+        "stats": {
+          "single": 1,
+          "multiple": 0,
+          "multi": 0,
+          "judge": 0,
+          "blank": 0,
+          "short": 0
+        },
+        "warnings": [],
+        "sharedStem": {
+          "detectedGroups": 0,
+          "appliedGroups": 0,
+          "appliedChildren": 0,
+          "changedQuestions": 0
+        }
+      }
+    },
+    {
+      "name": "Word 图片与答案",
+      "strategy": "standard",
+      "questions": [
+        {
+          "id": "structured_1_test-137",
+          "type": "single",
+          "number": 1,
+          "volume": "",
+          "group": "单选题",
+          "question": "![题图](data:image/png;base64,aGVsbG8=)",
+          "options": [
+            {
+              "key": "A",
+              "text": "甲"
+            },
+            {
+              "key": "B",
+              "text": "乙"
+            }
+          ],
+          "answer": [
+            "B"
+          ],
+          "analysis": "答案：B。根据图判断。",
+          "category": "单选题",
+          "images": [],
+          "subject": "",
+          "grade": "",
+          "difficulty": "",
+          "knowledgePoints": [],
+          "tags": [],
+          "source": "",
+          "sourceFileId": "",
+          "version": 1,
+          "reviewStatus": "approved",
+          "aiConfidence": null,
+          "warnings": [],
+          "normalized": "题图dataimage/pngbase64agvsbg8="
+        }
+      ],
+      "metadata": [
+        {
+          "source": {
+            "sourceStart": 6,
+            "sourceEnd": 61,
+            "sourceBlockStart": 0,
+            "sourceBlockEnd": 0,
+            "blockIndex": 0,
+            "originalNumber": 1,
+            "sourceQuestionNumbers": [
+              1
+            ],
+            "explicitNumber": true,
+            "group": "单选题",
+            "volume": "",
+            "chapter": "",
+            "pairIndex": 0
+          },
+          "recruitmentOptions": null
+        }
+      ],
+      "report": "解析模式：标准逐行解析；采用策略：标准试卷段落解析。格式画像：检测到题型分区、存在同一行选项。候选结果：标准试卷段落解析1题/质量10；标准逐行解析1题/质量10。最终识别：1题（单选1、多选0、判断0、填空0、简答0）。",
+      "warnings": [],
+      "diagnostics": {
+        "mode": "标准逐行解析",
+        "strategy": "标准试卷段落解析",
+        "profile": {
+          "lineCount": 7,
+          "hasVolumeHeading": false,
+          "hasTypeSections": true,
+          "repeatedQuestionNumbers": false,
+          "inlineOptionLikely": true,
+          "inlineAnswerLikely": false,
+          "hasAnswerAnalysisSection": false,
+          "expectedByHeadings": 0,
+          "expectedByType": {
+            "single": 0,
+            "multiple": 0,
+            "judge": 0,
+            "blank": 0,
+            "short": 0
+          },
+          "sharedStemDetectedGroups": 0,
+          "sharedStemAppliedGroups": 0,
+          "sharedStemAppliedChildren": 0
+        },
+        "candidates": [
+          {
+            "name": "标准试卷段落解析",
+            "questions": 1,
+            "score": 10,
+            "warnings": [],
+            "segments": []
+          },
+          {
+            "name": "标准逐行解析",
+            "questions": 1,
+            "score": 10,
+            "warnings": [],
+            "segments": []
+          }
+        ],
+        "expected": {
+          "total": 0,
+          "types": {
+            "single": 0,
+            "multiple": 0,
+            "judge": 0,
+            "blank": 0,
+            "short": 0
+          }
+        },
+        "stats": {
+          "single": 1,
+          "multiple": 0,
+          "multi": 0,
+          "judge": 0,
+          "blank": 0,
+          "short": 0
+        },
+        "warnings": [],
+        "sharedStem": {
+          "detectedGroups": 0,
+          "appliedGroups": 0,
+          "appliedChildren": 0,
+          "changedQuestions": 0
+        }
+      }
+    },
+    {
+      "name": "Word 图片与答案",
+      "strategy": "volume",
+      "questions": [
+        {
+          "id": "imp_1_test-141",
+          "type": "single",
+          "number": "1",
+          "volume": "",
+          "group": "单选题",
+          "question": "![题图](data:image/png;base64,aGVsbG8=)",
+          "options": [
+            {
+              "key": "A",
+              "text": "甲"
+            },
+            {
+              "key": "B",
+              "text": "乙"
+            }
+          ],
+          "answer": [
+            "B"
+          ],
+          "analysis": "答案：B。根据图判断。",
+          "category": "单选题",
+          "images": [],
+          "subject": "",
+          "grade": "",
+          "difficulty": "",
+          "knowledgePoints": [],
+          "tags": [],
+          "source": "",
+          "sourceFileId": "",
+          "version": 1,
+          "reviewStatus": "approved",
+          "aiConfidence": null,
+          "warnings": [],
+          "normalized": "题图dataimage/pngbase64agvsbg8="
+        }
+      ],
+      "metadata": [
+        {
+          "source": null,
+          "recruitmentOptions": null
+        }
+      ],
+      "report": "解析模式：分卷分区三层解析；采用策略：分卷分区三层解析。格式画像：检测到题型分区、存在同一行选项。候选结果：分卷分区三层解析1题/质量10。最终识别：1题（单选1、多选0、判断0、填空0、简答0）。",
+      "warnings": [],
+      "diagnostics": {
+        "mode": "分卷分区三层解析",
+        "strategy": "分卷分区三层解析",
+        "profile": {
+          "lineCount": 7,
+          "hasVolumeHeading": false,
+          "hasTypeSections": true,
+          "repeatedQuestionNumbers": false,
+          "inlineOptionLikely": true,
+          "inlineAnswerLikely": false,
+          "hasAnswerAnalysisSection": false,
+          "expectedByHeadings": 0,
+          "expectedByType": {
+            "single": 0,
+            "multiple": 0,
+            "judge": 0,
+            "blank": 0,
+            "short": 0
+          },
+          "sharedStemDetectedGroups": 0,
+          "sharedStemAppliedGroups": 0,
+          "sharedStemAppliedChildren": 0
+        },
+        "candidates": [
+          {
+            "name": "分卷分区三层解析",
+            "questions": 1,
+            "score": 10,
+            "warnings": [],
+            "segments": []
+          }
+        ],
+        "expected": {
+          "total": 0,
+          "types": {
+            "single": 0,
+            "multiple": 0,
+            "judge": 0,
+            "blank": 0,
+            "short": 0
+          }
+        },
+        "stats": {
+          "single": 1,
+          "multiple": 0,
+          "multi": 0,
+          "judge": 0,
+          "blank": 0,
+          "short": 0
+        },
+        "warnings": [],
+        "sharedStem": {
+          "detectedGroups": 0,
+          "appliedGroups": 0,
+          "appliedChildren": 0,
+          "changedQuestions": 0
+        }
+      }
+    },
+    {
+      "name": "Word 图片与答案",
+      "strategy": "compact",
+      "questions": [
+        {
+          "id": "imp_0_test-143",
+          "type": "single",
+          "number": "1",
+          "volume": "",
+          "group": "单选题",
+          "question": "根据图选择（ ）",
+          "options": [
+            {
+              "key": "A",
+              "text": "![题图](data:image/png;base64,aGVsbG8=) 甲"
+            },
+            {
+              "key": "B",
+              "text": "乙"
+            }
+          ],
+          "answer": [
+            "B"
+          ],
+          "analysis": "答案：B。根据图判断。",
+          "category": "单选题",
+          "images": [],
+          "subject": "",
+          "grade": "",
+          "difficulty": "",
+          "knowledgePoints": [],
+          "tags": [],
+          "source": "",
+          "sourceFileId": "",
+          "version": 1,
+          "reviewStatus": "approved",
+          "aiConfidence": null,
+          "warnings": [],
+          "normalized": "根据图选择"
+        }
+      ],
+      "metadata": [
+        {
+          "source": {
+            "sourceStart": 6,
+            "sourceEnd": 61,
+            "sourceBlockStart": 0,
+            "sourceBlockEnd": 0,
+            "blockIndex": 0,
+            "originalNumber": 1,
+            "sourceQuestionNumbers": [
+              1
+            ],
+            "explicitNumber": true,
+            "group": "单选题",
+            "volume": "",
+            "chapter": ""
+          },
+          "recruitmentOptions": null
+        }
+      ],
+      "report": "解析模式：紧凑格式解析；采用策略：紧凑题干选项解析。格式画像：检测到题型分区、存在同一行选项。候选结果：紧凑题干选项解析1题/质量10。最终识别：1题（单选1、多选0、判断0、填空0、简答0）。",
+      "warnings": [],
+      "diagnostics": {
+        "mode": "紧凑格式解析",
+        "strategy": "紧凑题干选项解析",
+        "profile": {
+          "lineCount": 7,
+          "hasVolumeHeading": false,
+          "hasTypeSections": true,
+          "repeatedQuestionNumbers": false,
+          "inlineOptionLikely": true,
+          "inlineAnswerLikely": false,
+          "hasAnswerAnalysisSection": false,
+          "expectedByHeadings": 0,
+          "expectedByType": {
+            "single": 0,
+            "multiple": 0,
+            "judge": 0,
+            "blank": 0,
+            "short": 0
+          },
+          "sharedStemDetectedGroups": 0,
+          "sharedStemAppliedGroups": 0,
+          "sharedStemAppliedChildren": 0
+        },
+        "candidates": [
+          {
+            "name": "紧凑题干选项解析",
+            "questions": 1,
+            "score": 10,
+            "warnings": [],
+            "segments": []
+          }
+        ],
+        "expected": {
+          "total": 0,
+          "types": {
+            "single": 0,
+            "multiple": 0,
+            "judge": 0,
+            "blank": 0,
+            "short": 0
+          }
+        },
+        "stats": {
+          "single": 1,
+          "multiple": 0,
+          "multi": 0,
+          "judge": 0,
+          "blank": 0,
+          "short": 0
+        },
+        "warnings": [],
+        "sharedStem": {
+          "detectedGroups": 0,
+          "appliedGroups": 0,
+          "appliedChildren": 0,
+          "changedQuestions": 0
+        }
+      }
+    }
+  ],
+  "repair": {
+    "questions": [
+      {
+        "id": "imp_0_test-1",
+        "type": "single",
+        "number": "1",
+        "volume": "",
+        "group": "单选题",
+        "question": "甲问题？",
+        "options": [
+          {
+            "key": "A",
+            "text": "甲"
+          },
+          {
+            "key": "B",
+            "text": "乙"
+          }
+        ],
+        "answer": [
+          "A"
+        ],
+        "analysis": "答案：A",
+        "category": "单选题",
+        "images": [],
+        "subject": "",
+        "grade": "",
+        "difficulty": "",
+        "knowledgePoints": [],
+        "tags": [],
+        "source": "",
+        "sourceFileId": "",
+        "version": 1,
+        "reviewStatus": "approved",
+        "aiConfidence": null,
+        "warnings": [],
+        "normalized": "甲问题"
+      },
+      {
+        "id": "structured_1_test-8",
+        "type": "single",
+        "number": 2,
+        "volume": "",
+        "group": "单选题",
+        "question": "乙问题？",
+        "options": [
+          {
+            "key": "A",
+            "text": "甲"
+          },
+          {
+            "key": "B",
+            "text": "乙"
+          },
+          {
+            "key": "C",
+            "text": "丙"
+          }
+        ],
+        "answer": [
+          "C"
+        ],
+        "analysis": "答案：C",
+        "category": "单选题",
+        "images": [],
+        "subject": "",
+        "grade": "",
+        "difficulty": "",
+        "knowledgePoints": [],
+        "tags": [],
+        "source": "",
+        "sourceFileId": "",
+        "version": 1,
+        "reviewStatus": "approved",
+        "aiConfidence": null,
+        "warnings": [],
+        "normalized": "乙问题"
+      },
+      {
+        "id": "imp_2_test-3",
+        "type": "single",
+        "number": "3",
+        "volume": "",
+        "group": "单选题",
+        "question": "丙问题？",
+        "options": [
+          {
+            "key": "A",
+            "text": "甲"
+          },
+          {
+            "key": "B",
+            "text": "乙"
+          }
+        ],
+        "answer": [
+          "B"
+        ],
+        "analysis": "答案：B",
+        "category": "单选题",
+        "images": [],
+        "subject": "",
+        "grade": "",
+        "difficulty": "",
+        "knowledgePoints": [],
+        "tags": [],
+        "source": "",
+        "sourceFileId": "",
+        "version": 1,
+        "reviewStatus": "approved",
+        "aiConfidence": null,
+        "warnings": [],
+        "normalized": "丙问题"
+      }
+    ],
+    "repaired": 1,
+    "segments": [
+      "第2-2题：标准试卷段落解析，仅替换异常题，前后题保持锁定"
+    ]
+  }
+}
