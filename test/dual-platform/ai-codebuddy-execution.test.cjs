@@ -207,11 +207,12 @@ test('unsaved Harness mode blocks model drafts until the execution mode is saved
   f.elements['ai-execution-api']={checked:true};f.elements['ai-execution-harness'].checked=false;
   await f.api.initialize();f.api.bind(()=>{},()=>false);
   f.elements['ai-execution-api'].checked=false;f.elements['ai-execution-harness'].checked=true;f.elements['ai-execution-harness'].onchange();
+  assert.equal(f.api.formMode(),'harness');assert.equal(f.api.snapshot().mode,'api');
   assert.equal(f.elements['ai-codebuddy-model'].disabled,true);assert.match(f.elements['ai-codebuddy-model-status'].textContent,/先保存/);
   await assert.rejects(f.api.selectModel('hy3'),/先保存/);
   assert.equal(f.api.snapshot().model,ready.model);assert.equal(f.elements['ai-codebuddy-model-retry'].hidden,true);
   assert.equal(calls.some(call=>call.kind==='select_model'),false);
-  await f.api.saveMode('harness');assert.equal(f.elements['ai-codebuddy-model'].disabled,false);
+  await f.api.saveMode('harness');assert.equal(f.api.snapshot().mode,'harness');assert.equal(f.elements['ai-codebuddy-model'].disabled,false);
   await f.api.selectModel('hy3');assert.equal(f.api.snapshot().model,'hy3');assert.equal(f.api.snapshot().ready,true);
 });
 

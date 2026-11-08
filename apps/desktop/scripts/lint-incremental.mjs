@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ESLint } from 'eslint';
 import { legacyOutsideFiles } from '../eslint.migration.mjs';
+import { createLegacyAppConfig } from '../eslint.rules.mjs';
 
 const root = fileURLToPath(new URL('../../..', import.meta.url));
 const lint = new ESLint({
@@ -25,12 +26,15 @@ if (!files.length) {
   throw new Error('No handwritten JavaScript files found for incremental lint.');
 }
 const results = await lint.lintFiles(files);
+const appLint = new ESLint({ cwd: root, overrideConfigFile: true, overrideConfig: createLegacyAppConfig() });
+results.push(...await appLint.lintFiles(['apps/web/app.js']));
 const formatter = await lint.loadFormatter('stylish');
 const output = await formatter.format(results);
 if (output) {
   console.log(output);
 }
 console.log(`Checked ${files.length} complete handwritten JavaScript files (legacy exceptions are explicit).`);
+console.log('Checked apps/web/app.js with the graduated no-var, prefer-const and no-nested-ternary gate.');
 if (results.some((result) => result.errorCount || result.warningCount)) {
   process.exitCode = 1;
 }

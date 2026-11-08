@@ -3,7 +3,7 @@
 
   function create({ platform, harness, response }) {
     async function requestAiChatV99(config, messages, { controller, maxTokens, testMode, plainText, task } = {}) {
-      if (config.execution?.mode === 'harness') {
+      if (harness.isHarness(config.execution)) {
         if (!platform.harness) {throw new Error('当前平台不支持 Harness，请在桌面端配置。');}
         const unavailable = harness.taskReason(config, task);
         if (unavailable) {throw new Error(unavailable);}

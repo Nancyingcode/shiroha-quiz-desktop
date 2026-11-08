@@ -143,6 +143,7 @@ async function repositoryFixture(t, environment = process.env) {
   await mkdir(path.join(project, 'scripts'), { recursive: true });
   await mkdir(path.join(temporary, 'apps/web'), { recursive: true });
   await mkdir(path.join(temporary, 'test/new-slice'), { recursive: true });
+  await writeFile(path.join(temporary, 'apps/web/app.js'), "console.log('valid');\n");
   for (const name of ['eslint.rules.mjs', 'eslint.migration.mjs', 'eslint.platform.config.mjs']) {
     await copyFile(path.join(desktop, name), path.join(project, name));
   }
@@ -210,6 +211,23 @@ test('incremental CLI finds untracked code outside the old scopes and reads comp
   const valid = f.run('lint-incremental.mjs');
   assert.equal(valid.status, 0, valid.stderr + valid.stdout);
   assert.match(valid.stdout, /Checked 6 complete/);
+});
+
+test('incremental CLI enforces the graduated app.js rules without rewriting source', async (t) => {
+  const f = await repositoryFixture(t);
+  const app = path.join(f.temporary, 'apps/web/app.js');
+  for (const [rule, source] of invalidCases.filter(([rule]) => [
+    'no-var', 'prefer-const', 'no-nested-ternary',
+  ].includes(rule))) {
+    await writeFile(app, source);
+    const rejected = f.run('lint-incremental.mjs');
+    assert.equal(rejected.status, 1, `${rule}: ${rejected.stderr}${rejected.stdout}`);
+    assert.match(rejected.stdout, new RegExp(rule));
+    assert.equal(await readFile(app, 'utf8'), source);
+  }
+  await writeFile(app, "console.log('valid');\n");
+  const accepted = f.run('lint-incremental.mjs');
+  assert.equal(accepted.status, 0, accepted.stderr + accepted.stdout);
 });
 
 test('debt CLI reports rule locations but rejects missing files and syntax failures', async (t) => {

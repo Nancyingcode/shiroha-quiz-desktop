@@ -41,9 +41,13 @@
 
     }
 
+    function isAiHarnessExecutionV99(execution) {
+      return execution?.mode === 'harness';
+    }
+
     function aiHarnessTaskReasonV99(config, task) {
 
-      if (config.execution?.mode !== 'harness') {
+      if (!isAiHarnessExecutionV99(config.execution)) {
         return '';
       }
 
@@ -81,11 +85,10 @@
 
       const execution = ShirohaPlatform.harness?.snapshot();
 
-      if (execution?.mode === 'harness' && execution.adapter === 'codebuddy') {
-        return { provider: 'codebuddy', model: execution.model, timeoutSeconds: 120, execution };
-      }
-
-      if (execution?.mode === 'harness') {
+      if (isAiHarnessExecutionV99(execution)) {
+        if (execution.adapter === 'codebuddy') {
+          return { provider: 'codebuddy', model: execution.model, timeoutSeconds: 120, execution };
+        }
         return { provider: execution.adapter, model: execution.adapter === 'codex' ? (execution.model || '适配器默认模型') : '', timeoutSeconds: execution.timeoutSeconds, execution };
       }
 
@@ -95,7 +98,7 @@
 
     function aiConfiguredV99(config, task = 'connection_test') {
 
-      if (config.execution?.mode !== 'harness') {
+      if (!isAiHarnessExecutionV99(config.execution)) {
         return !!(config.endpoint && config.model);
       }
 
@@ -109,7 +112,7 @@
 
     function aiExecutionLabelV99(config) {
 
-      if (config.execution?.mode !== 'harness') {
+      if (!isAiHarnessExecutionV99(config.execution)) {
         return aiProviderLabelV99(config.provider);
       }
 
@@ -119,7 +122,7 @@
     }
 
     function aiRequestConfigV99(config) {
-      return config.execution?.mode === 'harness' ? config : { ...config, apiKey: readStoredAiKeyV99(config) };
+      return isAiHarnessExecutionV99(config.execution) ? config : { ...config, apiKey: readStoredAiKeyV99(config) };
     }
 
     function normalizeAiEndpointV99(value, provider) {
@@ -583,7 +586,7 @@
       aiLastDiagnosticV375 = null;
       aiDiagnosticsVisibleV375 = false;
     }
-    return { defaultAiConfigV99, normalizeAiConfigV99, aiProviderLabelV99, aiHarnessLabelV99, aiHarnessTaskReasonV99, aiUnavailableReasonV99, aiHarnessPrivacyV99, aiExecutionConfigV99, aiConfiguredV99, aiExecutionLabelV99, aiRequestConfigV99, normalizeAiEndpointV99, isLocalAiEndpointV99, readAiFormV99, setAiSettingsStatusV99, sanitizeAiDiagnosticDetailV375, aiOllamaCorsCommandV375, buildAiDiagnosticV375, renderAiDiagnosticV375, setAiDiagnosticV375, toggleAiDiagnosticV375, copyAiDiagnosticV375, copyAiOllamaCorsCommandV375, updateAiConnectionPillV99, renderAiSettingsV99, setState, reset };
+    return { defaultAiConfigV99, normalizeAiConfigV99, aiProviderLabelV99, isAiHarnessExecutionV99, aiHarnessLabelV99, aiHarnessTaskReasonV99, aiUnavailableReasonV99, aiHarnessPrivacyV99, aiExecutionConfigV99, aiConfiguredV99, aiExecutionLabelV99, aiRequestConfigV99, normalizeAiEndpointV99, isLocalAiEndpointV99, readAiFormV99, setAiSettingsStatusV99, sanitizeAiDiagnosticDetailV375, aiOllamaCorsCommandV375, buildAiDiagnosticV375, renderAiDiagnosticV375, setAiDiagnosticV375, toggleAiDiagnosticV375, copyAiDiagnosticV375, copyAiOllamaCorsCommandV375, updateAiConnectionPillV99, renderAiSettingsV99, setState, reset };
   }
   const AI_PROVIDER_PRESETS_V99_DEFAULT = AI_PROVIDER_PRESETS_V99;
   globalThis.ShirohaAiSettings = Object.freeze({ create, presets: AI_PROVIDER_PRESETS_V99 });

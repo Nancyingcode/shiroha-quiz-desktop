@@ -5,7 +5,7 @@
     const { currentItem: currentPracticeItemV8916, question: practiceQuestionV8916, key: practiceItemKeyV8916,
       answer: getPracticeAnswerStateV26, hasImages: aiSingleHasImagesV613, source: reviewAnalysisSource,
       content: renderQuestionContent } = question;
-    const { config: aiExecutionConfigV99, configured: aiConfiguredV99, request: aiRequestConfigV99,
+    const { config: aiExecutionConfigV99, configured: aiConfiguredV99, request: aiRequestConfigV99, isHarness: isAiHarnessExecutionV99,
       label: aiExecutionLabelV99, privacy: aiHarnessPrivacyV99 } = settings;
     const { practiceSession: aiSingleSessionV613, runPractice: runAiSingleAnalysisV613,
       followUp: runAiSingleFollowUpV613, save: saveAiSingleAnalysisV613, runReview: runReviewAnalysis,
@@ -68,13 +68,14 @@
       }
       box.className = 'practice-ai-panel-v613';
       const { configured, config } = aiSingleConfigV613();
+      const isHarness = isAiHarnessExecutionV99(config.execution);
       const generationDisabled = !configured || busy;
-      const blocks = [`<div class="practice-ai-head-v613"><div><b>AI 单题解析</b><span>${configured || config.execution?.mode === 'harness' ? esc(aiExecutionLabelV99(config)) + (config.model ? ' · ' + esc(config.model) : '') : '尚未配置 AI 服务'}</span></div><span class="pill practice-ai-status-v613${busy ? ' is-busy' : ''}">${panelStatus}</span></div>`];
+      const blocks = [`<div class="practice-ai-head-v613"><div><b>AI 单题解析</b><span>${configured || isHarness ? esc(aiExecutionLabelV99(config)) + (config.model ? ' · ' + esc(config.model) : '') : '尚未配置 AI 服务'}</span></div><span class="pill practice-ai-status-v613${busy ? ' is-busy' : ''}">${panelStatus}</span></div>`];
       blocks.push(`<div class="actions practice-ai-actions-v613"><button class="ghost mini-btn" type="button" data-ai-single-close-v613="1" aria-expanded="true">收起 AI 面板</button>${busy ? '<button class="ghost mini-btn" type="button" data-ai-single-stop-v613="1">停止请求</button>' : ''}</div>`);
       if (aiSingleHasImagesV613(item)) {
         blocks.push('<p class="practice-ai-warn-v613">本次仅发送文字，未发送题目图片；AI 无法读取图表细节，请人工核对。</p>');
       }
-      if (config.execution?.mode === 'harness') {
+      if (isHarness) {
         blocks.push(`<p class="practice-ai-hint-v613">${esc(aiHarnessPrivacyV99(config, '本题文字、参考答案、作答及追问记录'))}</p>`);
       }
       if (result) {

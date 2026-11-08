@@ -192,10 +192,10 @@ const aiSettings = globalThis.ShirohaAiSettings.create({
   presets: AI_PROVIDER_PRESETS_V99, platform: ShirohaPlatform, config: ensureAiImportStateV99, readKey: readStoredAiKeyV99,
   view: { select: $, escape: esc, copy: copyTextV23, toast },
 });
-const { defaultAiConfigV99, normalizeAiConfigV99, aiHarnessLabelV99, aiHarnessTaskReasonV99, aiUnavailableReasonV99, aiHarnessPrivacyV99, aiExecutionConfigV99, aiConfiguredV99, aiExecutionLabelV99, aiRequestConfigV99, isLocalAiEndpointV99, readAiFormV99, setAiSettingsStatusV99, sanitizeAiDiagnosticDetailV375, buildAiDiagnosticV375, renderAiDiagnosticV375, setAiDiagnosticV375, toggleAiDiagnosticV375, copyAiDiagnosticV375, copyAiOllamaCorsCommandV375, updateAiConnectionPillV99, renderAiSettingsV99 } = aiSettings;
+const { defaultAiConfigV99, normalizeAiConfigV99, isAiHarnessExecutionV99, aiHarnessLabelV99, aiHarnessTaskReasonV99, aiUnavailableReasonV99, aiHarnessPrivacyV99, aiExecutionConfigV99, aiConfiguredV99, aiExecutionLabelV99, aiRequestConfigV99, isLocalAiEndpointV99, readAiFormV99, setAiSettingsStatusV99, sanitizeAiDiagnosticDetailV375, buildAiDiagnosticV375, renderAiDiagnosticV375, setAiDiagnosticV375, toggleAiDiagnosticV375, copyAiDiagnosticV375, copyAiOllamaCorsCommandV375, updateAiConnectionPillV99, renderAiSettingsV99 } = aiSettings;
 const { requestAiChatV99, withAiTimeoutV99 } = globalThis.ShirohaAiTransport.create({
   platform: ShirohaPlatform,
-  harness: { taskReason: aiHarnessTaskReasonV99, configured: aiConfiguredV99, unavailableReason: aiUnavailableReasonV99 },
+  harness: { isHarness: isAiHarnessExecutionV99, taskReason: aiHarnessTaskReasonV99, configured: aiConfiguredV99, unavailableReason: aiUnavailableReasonV99 },
   response: { content: aiResponseContentV99, httpErrorMessage: aiHttpErrorMessage },
 });
 const { aiRefactorQuestionSnapshotV384, buildAiMessagesV99, aiQuestionPayloadV991, buildAiReviewMessagesV991, buildAiAnalysisMessagesV991, aiSingleFingerprintV613, aiSingleHasImagesV613, buildAiSingleAnalysisMessagesV613, buildAiSingleFollowUpMessagesV613 } = globalThis.ShirohaAiPrompts.create({
@@ -346,7 +346,7 @@ const {
 });
 const aiImportPanel = globalThis.ShirohaAiImportPanel.create({
   draft: importDraft, sessions: aiImportSessions, platform: ShirohaPlatform, select: $, selectAll: $$, escape: esc, label, toast, showNotice,
-  settings: { presets: AI_PROVIDER_PRESETS_V99, config: aiExecutionConfigV99, configured: aiConfiguredV99,
+  settings: { presets: AI_PROVIDER_PRESETS_V99, config: aiExecutionConfigV99, configured: aiConfiguredV99, isHarness: isAiHarnessExecutionV99,
     unavailable: aiUnavailableReasonV99, executionLabel: aiExecutionLabelV99, privacy: aiHarnessPrivacyV99,
     localEndpoint: isLocalAiEndpointV99, updatePill: updateAiConnectionPillV99, render: renderAiSettingsV99,
     toggleDiagnostic: toggleAiDiagnosticV375, copyDiagnostic: copyAiDiagnosticV375, copyCors: copyAiOllamaCorsCommandV375,
@@ -369,7 +369,7 @@ const { aiSingleAllowedV613, aiSingleConfigV613, renderPracticeAiPanelV613, rend
   session: practiceSession, practiceAi: practiceAiSessions, reviewAi: reviewAiSessions, select: $, selectAll: $$, escape: esc,
   question: { currentItem: currentPracticeItemV8916, question: practiceQuestionV8916, key: practiceItemKeyV8916,
     answer: getPracticeAnswerStateV26, hasImages: aiSingleHasImagesV613, source: reviewAnalysisSource, content: renderQuestionContent },
-  settings: { config: aiExecutionConfigV99, configured: aiConfiguredV99, request: aiRequestConfigV99,
+  settings: { config: aiExecutionConfigV99, configured: aiConfiguredV99, request: aiRequestConfigV99, isHarness: isAiHarnessExecutionV99,
     label: aiExecutionLabelV99, privacy: aiHarnessPrivacyV99 },
   actions: { practiceSession: aiSingleSessionV613, runPractice: runAiSingleAnalysisV613, followUp: runAiSingleFollowUpV613,
     save: saveAiSingleAnalysisV613, runReview: runReviewAnalysis, saveReview: saveReviewAnalysis,
@@ -1030,7 +1030,7 @@ function showNotice(title,msg,type='ok'){
   let box=$('#app-toast');
   if(!box){box=document.createElement('div');box.id='app-toast';box.className='app-toast';document.body.appendChild(box)}
   const item=document.createElement('div');
-  item.className='toast-item '+(type==='ok'?'ok':type==='danger'?'danger':'warn');
+  item.className='toast-item '+(['ok','danger'].includes(type)?type:'warn');
   item.innerHTML=`<div><b>${esc(title||'提示')}</b><p>${esc(msg||'')}</p></div><button type="button" aria-label="关闭">×</button>`;
   item.querySelector('button').onclick=()=>item.remove();
   box.appendChild(item);
@@ -1160,7 +1160,7 @@ function setFindStatusV51(msg,type='warn'){
   const el=$('#import-find-status-v51');
   if(!el)return;
   el.textContent=msg;
-  el.className='notice import-find-status-v51 '+(type==='ok'?'ok':type==='danger'?'danger':'warn');
+  el.className='notice import-find-status-v51 '+(['ok','danger'].includes(type)?type:'warn');
 }
 function getFindConfigV51(){
   return {
@@ -1867,7 +1867,7 @@ function getWrongEntries(bid=activeBank().id){const v=state.wrongBook[bid]||[];i
 function setWrongEntries(entries,bid=activeBank().id){state.wrongBook[bid]=entries}
 function nextWrongReviewIsoV24(level,base=Date.now()){const days=[1,1,3,7,14,30,60][Math.max(0,Math.min(6,Number(level||0)))]||1;return new Date(base+days*86400000).toISOString()}
 function addWrong(id,bid=activeBank().id,chosen=[]){const arr=getWrongEntries(bid);let e=arr.find(x=>x.id===id);if(!e){e={id,wrongCount:0,rightCount:0,reviewRightCount:0,streakCorrectCount:0,lastWrongAt:'',lastCorrectAt:'',lastReviewedAt:'',nextReviewAt:'',reviewLevel:0,lastAnswer:[],source:'web',timestamp:0,status:'未掌握'};arr.push(e)}const ts=Date.now();e.lastAnswer=[...chosen];e.wrongCount++;e.rightCount=0;e.reviewRightCount=0;e.streakCorrectCount=0;e.reviewLevel=0;e.lastWrongAt=new Date(ts).toISOString();e.lastReviewedAt=e.lastWrongAt;e.nextReviewAt=nextWrongReviewIsoV24(0,ts);e.timestamp=ts;e.source='web';e.status='未掌握';setWrongEntries(arr,bid)}
-function markRight(id,bid=activeBank().id){const arr=getWrongEntries(bid);let e=arr.find(x=>x.id===id);if(!e)return;const ts=Date.now();e.rightCount++;e.reviewRightCount=Number(e.reviewRightCount||0)+1;e.streakCorrectCount=Number(e.streakCorrectCount||0)+1;const mastered=e.streakCorrectCount>=2;e.reviewLevel=mastered?Math.max(2,Number(e.reviewLevel||0)+1):Math.max(1,Number(e.reviewLevel||0));e.lastCorrectAt=new Date(ts).toISOString();e.lastReviewedAt=e.lastCorrectAt;e.nextReviewAt=nextWrongReviewIsoV24(e.reviewLevel,ts);e.timestamp=ts;e.status=mastered?'已掌握':'复习中';setWrongEntries(arr,bid)}
+function markRight(id,bid=activeBank().id){const arr=getWrongEntries(bid);const e=arr.find(x=>x.id===id);if(!e)return;const ts=Date.now();e.rightCount++;e.reviewRightCount=Number(e.reviewRightCount||0)+1;e.streakCorrectCount=Number(e.streakCorrectCount||0)+1;const mastered=e.streakCorrectCount>=2;e.reviewLevel=mastered?Math.max(2,Number(e.reviewLevel||0)+1):Math.max(1,Number(e.reviewLevel||0));e.lastCorrectAt=new Date(ts).toISOString();e.lastReviewedAt=e.lastCorrectAt;e.nextReviewAt=nextWrongReviewIsoV24(e.reviewLevel,ts);e.timestamp=ts;e.status=mastered?'已掌握':'复习中';setWrongEntries(arr,bid)}
 function removeWrong(id){const bid=activeBank().id;setWrongEntries(getWrongEntries(bid).filter(x=>x.id!==id),bid)}
 function makeAnswerDetail(item,chosen,ok,score,totalScore){const q=practiceQuestionV8916(item);const values=Array.isArray(chosen)?[...chosen]:[];const detail={questionId:q.id,question:short(q.question,120),type:q.type,category:q.category||'',chosen:values,userAnswer:[...values],answer:[...q.answer],correct:!!ok,score:ok?score:0,fullScore:score,time:now(),sourceBankId:practiceItemBankIdV8916(item),sourceBankName:practiceItemBankNameV8916(item),nativeQuestion:JSON.parse(JSON.stringify(q))};if(isMultiBlankQuestionV58914(q)){detail.blankAnswers=cloneBlankAnswersV58914(q.blankAnswers);detail.userBlankAnswers=[...values]}return detail}
 
@@ -2533,8 +2533,15 @@ function setupSidebarCollapse(){
 function syncFocusRailTopV35(){
   const isPractice=document.body.classList.contains('practice-focus');
   const isExam=document.body.classList.contains('exam-focus');
-  const card=isPractice?$('#practice-card'):(isExam?$('#exam-card'):null);
-  const rail=isPractice?$('#practice-card > .practice-side-v31'):(isExam?$('#exam-card > .exam-side-v31'):null);
+  let card = null;
+  let rail = null;
+  if (isPractice) {
+    card = $('#practice-card');
+    rail = $('#practice-card > .practice-side-v31');
+  } else if (isExam) {
+    card = $('#exam-card');
+    rail = $('#exam-card > .exam-side-v31');
+  }
   if(!card||!rail)return;
   if(window.innerWidth<1280){rail.style.removeProperty('top');rail.style.removeProperty('max-height');return;}
   const top=Math.max(12,Math.round(card.getBoundingClientRect().top));
@@ -2600,6 +2607,7 @@ async function switchViewV45(viewId){
 /* SHIROHA_WEB_V45_BANK_EDITOR_AND_FOCUS_NAV_END */
 
 // 页面拥有单个写入事务；保存期间冻结交互，避免失败回滚覆盖后续编辑。
+// 仅 action 的同步调用链可加入当前事务；action 返回或抛错时立即重置，异步期间仍由 mutationBusy 独占。
 let mutationBusy=false,enteringMutation=false,mutationSaveError=null,applicationReady=false;
 let retryMutation=null;
 function platformStatus(message,failed=false){

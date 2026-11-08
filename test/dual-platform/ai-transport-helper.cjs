@@ -7,7 +7,7 @@ function installAiTransport(context) {
   const results = context.ShirohaAiResults.create({});
   const transport = context.ShirohaAiTransport.create({
     platform: context.ShirohaPlatform,
-    harness: { taskReason: context.aiHarnessTaskReasonV99, configured: context.aiConfiguredV99,
+    harness: { isHarness: context.isAiHarnessExecutionV99, taskReason: context.aiHarnessTaskReasonV99, configured: context.aiConfiguredV99,
       unavailableReason: context.aiUnavailableReasonV99 },
     response: { content: results.aiResponseContentV99, httpErrorMessage: results.aiHttpErrorMessage },
   });

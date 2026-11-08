@@ -62,6 +62,19 @@ export const excludedFiles = [
   'test/fixtures/**',
 ];
 
+/** @returns {import('eslint').Linter.Config[]} */
+export function createLegacyAppConfig() {
+  return [{
+    files: ['apps/web/app.js'],
+    languageOptions: { ecmaVersion: 'latest', sourceType: 'script' },
+    rules: {
+      'no-var': baseRules['no-var'],
+      'prefer-const': baseRules['prefer-const'],
+      'no-nested-ternary': semanticRules['no-nested-ternary'],
+    },
+  }];
+}
+
 // 浏览器回调由 Playwright 序列化后执行；仅这些既有宿主文件允许回调内使用浏览器名称。
 const browserCallbackFiles = [
   'benchmark', 'codebuddy-cli-smoke', 'codebuddy-login-smoke', 'dev-smoke',

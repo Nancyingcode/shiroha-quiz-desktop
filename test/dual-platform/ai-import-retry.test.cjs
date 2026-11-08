@@ -148,6 +148,20 @@ function cancellationFixture(overrides = {}) {
   return { context, pending, status, notices };
 }
 
+for (const cancelled of [true, false]) {
+  test(`导入${cancelled ? '取消' : '失败'}提示与保留草稿一致`, async () => {
+    const { context, pending, status, notices } = cancellationFixture();
+    const task = context.startAiImportV99();
+    const error = new Error('测试失败');
+    if (cancelled) {error.name = 'AbortError';}
+    pending[0].reject(error);
+    await task;
+    assert.equal(context.importDraft.questions[0].question, '原草稿');
+    assert.match(status.at(-1), cancelled ? /已取消/ : /测试失败/);
+    assert.equal(notices.at(-1)[2], cancelled ? 'warn' : 'danger');
+  });
+}
+
 for (const kind of ['import', 'preview']) {
   test(`${kind} 超时后忽略中止的传输成功也必须丢弃结果并释放忙碌状态`, async () => {
     const timers = new Set();

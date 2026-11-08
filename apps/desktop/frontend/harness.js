@@ -505,7 +505,10 @@
       finally { if (epoch === generation) { settingsLoading = false; render(false); } }
     },
     status() {
-      const result = {...current,busy:operationBusy() || active.size > 0 || pendingMutations > 0 || selectingAdapter || selectingModel};
+      const hasActiveWork = active.size > 0 || pendingMutations > 0;
+      const isSelectingRoute = selectingAdapter || selectingModel;
+      const isHarnessBusy = operationBusy() || hasActiveWork || isSelectingRoute;
+      const result = {...current,busy:isHarnessBusy};
       if (settingsLoading || settingsFailure || current.adapter === 'codex' && (codexReading || codexReadFailure)) return {...result,ready:false};
       if (draftAdapter !== undefined) return {...result,mode:'harness',adapter:draftAdapter,ready:false,reason:selectionReason()};
       if (modelSelectionPending()) return {...result,model:draftModel ?? current.model,ready:false,reason:modelSelectionReason()};
@@ -573,6 +576,7 @@
       } finally { signal?.removeEventListener('abort',abort); active.delete(id); finished(); render(false); changed(); }
     },
     async cancelAll() { invalidateSetup(); generation++; clearAuthorizationTimer(); if (!['codex','codebuddy'].includes(current.adapter)) return; const pending = [...active.values()]; await control({kind:'cancel_all'}); await Promise.all(pending); },
+    // 表单执行方式是待保存的选择；业务使用状态快照，未确认的选择保持不可执行。
     formMode() { return input('ai-execution-harness')?.checked ? 'harness' : 'api'; },
     formAdapter() { return selectedAdapter(); },
     selectAdapter,

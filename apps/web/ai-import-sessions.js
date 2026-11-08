@@ -394,10 +394,11 @@
 
         importDraft.restore(previous);
 
-        const message = error?.name === 'AbortError' ? 'AI 整理已取消，现有识别结果未被修改。' : (error.message || 'AI 整理失败，现有识别结果未被修改。');
+        const isCancelled = error?.name === 'AbortError';
+        const message = isCancelled ? 'AI 整理已取消，现有识别结果未被修改。' : (error.message || 'AI 整理失败，现有识别结果未被修改。');
 
         setAiImportStatusV99(message, 'warn');
-        showNotice('AI 整理', message, error?.name === 'AbortError' ? 'warn' : 'danger');
+        showNotice('AI 整理', message, isCancelled ? 'warn' : 'danger');
 
       } finally {
         if (isCurrentImportRequest()) {

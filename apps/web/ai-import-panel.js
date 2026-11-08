@@ -2,7 +2,7 @@
   'use strict';
   function create({ draft: importDraft, sessions: aiImportSessions, platform: ShirohaPlatform,
     select: $, selectAll: $$, escape: esc, label, toast, showNotice, settings, requests, editor, preview, limits }) {
-    const { presets: AI_PROVIDER_PRESETS_V99, config: aiExecutionConfigV99, configured: aiConfiguredV99,
+    const { presets: AI_PROVIDER_PRESETS_V99, config: aiExecutionConfigV99, configured: aiConfiguredV99, isHarness: isAiHarnessExecutionV99,
       unavailable: aiUnavailableReasonV99, executionLabel: aiExecutionLabelV99, privacy: aiHarnessPrivacyV99,
       localEndpoint: isLocalAiEndpointV99, updatePill: updateAiConnectionPillV99, render: renderAiSettingsV99,
       toggleDiagnostic: toggleAiDiagnosticV375, copyDiagnostic: copyAiDiagnosticV375, copyCors: copyAiOllamaCorsCommandV375,
@@ -243,6 +243,7 @@
     function refreshAiImportPanelV99() {
       const config = aiExecutionConfigV99();
       const configured = aiConfiguredV99(config, 'import_organize');
+      const isHarness = isAiHarnessExecutionV99(config.execution);
       const selected = currentAiImportSelectionV992();
       const selectedInput = $('#ai-import-scope-selection-v992');
       const selectedSize = $('#ai-import-selection-size-v992');
@@ -269,7 +270,7 @@
       const start = $('#ai-import-start-btn-v99');
       const settings = $('#ai-import-settings-btn-v99');
       const hint = $('#ai-import-range-hint-v992');
-      const showsProvider = configured || config.execution?.mode === 'harness';
+      const showsProvider = configured || isHarness;
       if (provider) {
         provider.textContent = showsProvider ? aiExecutionLabelV99(config) : '未配置';
       }
@@ -301,7 +302,7 @@
           privacy.textContent = aiUnavailableReasonV99(config, 'import_organize');
           privacy.className = 'notice warn';
         }
-        else if (config.execution?.mode === 'harness') {
+        else if (isHarness) {
           privacy.textContent = aiHarnessPrivacyV99(config, `本次${range.label}及相关核对上下文`) + '只返回待核对结果，不发送本地题库文件或图片。';
           privacy.className = 'notice warn';
         }
@@ -436,6 +437,7 @@
       const config = aiExecutionConfigV99();
       const task = mode === 'analysis' ? 'batch_analysis' : 'batch_review';
       const configured = aiConfiguredV99(config, task);
+      const isHarness = isAiHarnessExecutionV99(config.execution);
       const title = $('#ai-preview-title-v991');
       const badge = $('#ai-preview-badge-v991');
       const desc = $('#ai-preview-description-v991');
@@ -520,7 +522,7 @@
         requestCount.textContent = `${requests} 次`;
       }
       if (service) {
-        service.textContent = configured || config.execution?.mode === 'harness' ? aiExecutionLabelV99(config) : '未配置';
+        service.textContent = configured || isHarness ? aiExecutionLabelV99(config) : '未配置';
       }
       if (model) {
         model.textContent = config.model || '—';
@@ -556,7 +558,7 @@
           status.className = 'notice warn';
         }
         else {
-          status.textContent = `范围内 ${details.baseIndexes.length} 道，实际处理 ${details.indexes.length} 道；按每批 ${batchSize} 道提交，预计请求 ${requests} 次。AI 结果只作为建议。${config.execution?.mode === 'harness' ? ' ' + aiHarnessPrivacyV99(config, '所选题目的文字与参考答案') : ''}`;
+          status.textContent = `范围内 ${details.baseIndexes.length} 道，实际处理 ${details.indexes.length} 道；按每批 ${batchSize} 道提交，预计请求 ${requests} 次。AI 结果只作为建议。${isHarness ? ' ' + aiHarnessPrivacyV99(config, '所选题目的文字与参考答案') : ''}`;
           status.className = 'notice';
         }
       }
