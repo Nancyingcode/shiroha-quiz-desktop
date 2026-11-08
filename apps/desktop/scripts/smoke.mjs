@@ -89,7 +89,8 @@ function running(child) {
 async function stopChild(child) {
   if (!running(child)) {return;}
   // 只关闭本脚本启动的 PID；正常关闭允许 WebView2 刷新本次隔离测试的存储。
-  await execute('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
+  await execute('powershell.exe', [
+    '-NoProfile', '-NonInteractive', '-Command',
     `$p=Get-Process -Id ${child.pid} -ErrorAction SilentlyContinue; if($p){[void]$p.CloseMainWindow()}`,
   ], { windowsHide: true, timeout: CLOSE_TIMEOUT_MS }).catch(() => undefined);
   const end = Date.now() + CLOSE_TIMEOUT_MS;

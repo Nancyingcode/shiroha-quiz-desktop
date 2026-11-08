@@ -39,6 +39,22 @@ const invalidCases = [
   ['no-new-func', 'console.log(new Function("return 1"));\n'],
   ['guard-for-in', 'for (const key in {}) { console.log(key); }\n'],
   ['curly', 'if (true) console.log(1);\n'],
+  ['no-new-object', 'console.log(new Object());\n'],
+  ['object-shorthand', 'const value = 1; console.log({ value: value });\n'],
+  ['no-array-constructor', 'console.log(new Array(1, 2));\n'],
+  ['array-callback-return', 'console.log([1].map((value) => { console.log(value); }));\n'],
+  ['prefer-rest-params', 'function first() { return arguments[0]; }\nconsole.log(first(1));\n'],
+  ['prefer-spread', 'const values = [1, 2]; console.log(Math.max.apply(Math, values));\n'],
+  ['prefer-arrow-callback', 'console.log([1].map(function (value) { return value; }));\n'],
+  ['no-useless-constructor', 'class Value { constructor() {} }\nconsole.log(Value);\n'],
+  ['dot-notation', "console.log(Math['abs'](-1));\n"],
+  ['prefer-exponentiation-operator', 'console.log(Math.pow(2, 3));\n'],
+  ['no-unneeded-ternary', 'console.log(true ? true : false);\n'],
+  ['no-else-return', 'function choose(value) { if (value) { return 1; } else { return 0; } }\nconsole.log(choose(true));\n'],
+  ['no-new-wrappers', "console.log(new String('value'));\n"],
+  ['radix', "console.log(parseInt('11'));\n"],
+  ['no-restricted-globals', 'console.log(isNaN(0));\n'],
+  ['no-restricted-globals', 'console.log(isFinite(1));\n'],
   ['@stylistic/indent', 'if (true) {\n console.log(1);\n}\n'],
   ['@stylistic/quotes', 'console.log("double");\n'],
   ['@stylistic/semi', "console.log('missing')\n"],
@@ -53,6 +69,16 @@ const invalidCases = [
   ['@stylistic/space-in-parens', 'console.log( 1 );\n'],
   ['@stylistic/eol-last', 'console.log(1);'],
   ['@stylistic/space-before-blocks', 'if (true){ console.log(1); }\n'],
+  ['@stylistic/array-bracket-newline', 'console.log([1,\n  2,\n]);\n'],
+  ['@stylistic/template-curly-spacing', 'console.log(`${ 1 }`);\n'],
+  ['@stylistic/wrap-iife', 'const value = function () { return 1; }();\nconsole.log(value);\n'],
+  ['@stylistic/implicit-arrow-linebreak', 'console.log([1].map((value) =>\n  value));\n'],
+  ['@stylistic/generator-star-spacing', 'function *values() { yield 1; }\nconsole.log(values());\n'],
+  ['@stylistic/spaced-comment', '//comment\nconsole.log(1);\n'],
+  ['@stylistic/computed-property-spacing', "console.log(Math[ 'abs' ](-1));\n"],
+  ['@stylistic/function-call-spacing', 'console.log (1);\n'],
+  ['@stylistic/no-trailing-spaces', 'console.log(1);  \n'],
+  ['@stylistic/comma-style', 'console.log([\n  1\n  , 2,\n]);\n'],
 ];
 
 for (const filePath of probes) {
@@ -64,6 +90,17 @@ for (const filePath of probes) {
     }
   });
 }
+
+test('desktop ESLint entry rejects the same target violations', async () => {
+  const lint = new ESLint({
+    cwd: desktop,
+    overrideConfigFile: path.join(desktop, 'eslint.config.mjs'),
+  });
+  for (const [rule, source] of invalidCases) {
+    const [result] = await lint.lintText(source, { filePath: 'scripts/new-probe.mjs' });
+    assert(result.messages.some((message) => message.ruleId === rule), rule);
+  }
+});
 
 test('project exceptions pass all three runtimes with no warnings', async () => {
   const source = [
@@ -80,6 +117,25 @@ test('project exceptions pass all three runtimes with no warnings', async () => 
     const [result] = await linter().lintText(source, { filePath });
     assert.equal(result.errorCount, 0, JSON.stringify(result.messages));
     assert.equal(result.warningCount, 0);
+  }
+});
+
+test('callbacks with dynamic this and intentional array lengths remain valid', async () => {
+  const source = [
+    'const sparse = new Array(3);',
+    'const context = { offset: 2 };',
+    '[1].forEach(function (value) {',
+    '  console.log(this.offset + value);',
+    '}, context);',
+    'console.log(sparse.length, Number.isNaN(NaN), Number.isFinite(1));',
+    '(function () {',
+    "  console.log('wrapped');",
+    '}());',
+    '',
+  ].join('\n');
+  for (const filePath of probes) {
+    const [result] = await linter().lintText(source, { filePath });
+    assert.equal(result.errorCount + result.warningCount, 0, JSON.stringify(result.messages));
   }
 });
 

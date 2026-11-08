@@ -7,7 +7,8 @@
 - 上游：[Airbnb JavaScript Style Guide](https://github.com/airbnb/javascript)。本次核对版本为提交 [8ed19247](https://github.com/airbnb/javascript/blob/8ed19247bef145e3cc41b24a02dd1fe6d9b5e681/README.md)，采用来源链接和中文适配说明，不复制整份上游指南；上游采用 MIT 许可。
 - 本文是项目适配规范。冲突时依次遵循项目安全边界、根规范的流程与行为规则、实际自动化配置、本文及上游参考。发现规范与配置不一致时记录并修正，不静默换用另一套风格。
 - 新增代码和本次实际修改的逻辑按本文编写；历史文件按重构批次迁移，不要求为一个小修复格式化整个文件。
-- P2 自动化采用 `@eslint/js` recommended、`no-var`、`prefer-const`、现有 `no-unused-vars`、显式语义规则和 Stylistic 5.10.0；保持 ESLint 10 和原有类型检查。没有安装 Airbnb 整套配置、import-x、Prettier 或 React/Next 预设。实际强制范围与暂缓规则见第 4 节，不表示全部历史业务已经通过目标规则。
+- P2 自动化采用 `@eslint/js` recommended、`no-var`、`prefer-const`、现有 `no-unused-vars`、显式语义规则和 Stylistic 5.10.0；保持 ESLint 10 和原有类型检查。没有安装 Airbnb 整套配置、import-x、Prettier 或 React/Next 预设。实际强制范围与暂缓规则见第 4 节；门禁通过不代表全部历史业务行为均已验证。
+- 2026-11-08 结合风格审查与上游指南，在现有完整门禁上增补低冲突的语义和 Stylistic 规则；插件和依赖版本不变。下方规则列表以实际配置为准。
 - 自动化引入与历史重构见[设计](../docs/superpowers/specs/2026-11-05-airbnb-javascript-refactor.md)和[已批准实施计划](../docs/superpowers/plans/2026-11-05-airbnb-javascript-refactor.md)。上游更新先核对差异和兼容性，再更新本地规范，不随上游默认分支自动漂移。
 
 ## 2. 日常编写约定
@@ -47,7 +48,9 @@
 - `apps/web/question-bank.js` 是内置题库数据载体，保留题库内容及本地文件兜底。`apps/web/libs/`、生成的 `apps/desktop/dist/`、Tauri 的 `target/` 与 `gen/`、构建产物和历史 fixture 不参与风格批量重写；Tauri 目录中的手写 JavaScript 仍进入门禁。
 - 手写测试工具已纳入增量门禁；原始样例、题库文本和预期数据按数据契约维护，不能用格式化结果替换行为断言。
 - `npm run lint:incremental` 在现有门禁之外发现 Git 跟踪和未忽略的新手写 `.js/.mjs/.cjs`，扩展名大小写均纳入检查，新路径默认执行完整目标规则，不继承其他文件的专属全局变量或排除项。工作树中已删除的索引路径不阻断其他文件的检查；其他文件访问错误仍会失败。P5 交付时的历史快照为 79 个整文件，其中 29 个达到全部新增目标规则，35 个执行全部新增语义规则，38 个执行全部 Stylistic 规则，三个数量有重叠。[本次 app.js 拆分计划](../docs/superpowers/plans/2026-11-08-web-app-js-split.md)记录新增模块按现有完整增量门禁检查；最新覆盖数量以该命令输出为准。
-- 语义规则为 `eqeqeq`（仅允许有意 `== null`）、`no-nested-ternary`、`no-param-reassign`（允许属性修改）、`no-duplicate-imports`、`no-eval`、`no-new-func`、`guard-for-in` 和 `curly`。格式规则为 `indent`、`quotes`、`semi`、`comma-dangle`、`arrow-parens`、`space-infix-ops`、`space-before-blocks`、`keyword-spacing`、`comma-spacing`、`key-spacing`、`object-curly-spacing`、`array-bracket-spacing`、`space-in-parens`、`eol-last`，均使用 `@stylistic/` 前缀。100 字符仍是人工换行参考，不机械限制长字符串、正则或 JSDoc。
+- 除基础规则外，语义门禁包括 `eqeqeq`、`no-nested-ternary`、`no-param-reassign`、`no-duplicate-imports`、`no-eval`、`no-new-func`、`guard-for-in`、`curly`、`no-new-object`、`object-shorthand`、`no-array-constructor`、`array-callback-return`、`prefer-rest-params`、`prefer-spread`、`prefer-arrow-callback`、`no-useless-constructor`、`dot-notation`、`prefer-exponentiation-operator`、`no-unneeded-ternary`、`no-else-return`、`no-new-wrappers`、`radix` 和 `no-restricted-globals`。其中允许有意的 `== null` 和参数对象属性修改；`forEach` 回调不强制返回值，依赖动态 `this` 的回调保留函数写法；限制全局 `isNaN`、`isFinite`。
+- 格式门禁使用 `@stylistic/` 前缀，包含 `indent`、`quotes`、`semi`、`comma-dangle`、`arrow-parens`、`space-infix-ops`、`space-before-blocks`、`keyword-spacing`、`comma-spacing`、`key-spacing`、`object-curly-spacing`、`array-bracket-spacing`、`space-in-parens`、`eol-last`、`array-bracket-newline`、`template-curly-spacing`、`wrap-iife`、`implicit-arrow-linebreak`、`generator-star-spacing`、`spaced-comment`、`computed-property-spacing`、`function-call-spacing`、`no-trailing-spaces` 和 `comma-style`。数组首尾括号换行要求一致，IIFE 两种括号位置均允许；100 字符仍是人工换行参考，不机械限制长字符串、正则或 JSDoc。
+- 对照审查时的旧配置和覆盖范围已经变化。以提交 `c38a0f7` 的 133 个手写 JavaScript 文件为基线测量，`prefer-template` 命中 278 处，`@stylistic/arrow-spacing` 命中 3860 处，`@stylistic/block-spacing` 命中 6089 处；这些规则暂不强制，后续应按可验收切片迁移。`prefer-object-spread`、`default-param-last` 和 `no-multi-assign` 虽然命中较少，仍涉及现有配置合并、回调或测试状态语义，本次不为启用它们改写业务或测试逻辑。`no-warning-comments` 会禁止有明确后续动作的 TODO，也不纳入门禁。
 - [迁移清单](../apps/desktop/eslint.migration.mjs) 中的历史语义和格式例外已全部清零；手写 JavaScript 文件执行完整目标规则，包括 `app.js` 和此前门禁外的 15 个测试工具。新路径默认完整检查，已清零范围不能退回；覆盖数量随新增或删除文件变化，以增量检查输出为准。
 - P5 完成四类高风险状态审查及局部提炼，没有新增规则豁免或扩大正式门禁；P5 时的债务实测和当时未覆盖竞态见[实施计划第 11 节](../docs/superpowers/plans/2026-11-05-airbnb-javascript-refactor.md)。
 - `npm run lint:debt` 输出历史债务的逐文件/规则数量及行列消息；清单为空时返回空报告，显式指定文件仍可查看语义诊断。解析、配置、缺失文件或执行失败非零退出。正式门禁和报告都不写业务文件。`npm run lint:fixtures` 用真实 ESLint 验证违规拒绝、项目例外与失败传播，隔离样例不进入业务资源。

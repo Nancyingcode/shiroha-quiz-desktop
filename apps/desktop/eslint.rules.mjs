@@ -20,6 +20,21 @@ export const semanticRules = {
   'no-new-func': 'error',
   'guard-for-in': 'error',
   curly: ['error', 'all'],
+  'no-new-object': 'error',
+  'object-shorthand': ['error', 'always'],
+  'no-array-constructor': 'error',
+  'array-callback-return': ['error', { checkForEach: false }],
+  'prefer-rest-params': 'error',
+  'prefer-spread': 'error',
+  'prefer-arrow-callback': 'error',
+  'no-useless-constructor': 'error',
+  'dot-notation': 'error',
+  'prefer-exponentiation-operator': 'error',
+  'no-unneeded-ternary': 'error',
+  'no-else-return': 'error',
+  'no-new-wrappers': 'error',
+  radix: 'error',
+  'no-restricted-globals': ['error', 'isNaN', 'isFinite'],
 };
 
 /** @type {import('eslint').Linter.RulesRecord} */
@@ -38,6 +53,16 @@ export const styleRules = {
   '@stylistic/array-bracket-spacing': ['error', 'never'],
   '@stylistic/space-in-parens': ['error', 'never'],
   '@stylistic/eol-last': ['error', 'always'],
+  '@stylistic/array-bracket-newline': ['error', 'consistent'],
+  '@stylistic/template-curly-spacing': ['error', 'never'],
+  '@stylistic/wrap-iife': ['error', 'any'],
+  '@stylistic/implicit-arrow-linebreak': ['error', 'beside'],
+  '@stylistic/generator-star-spacing': ['error', { before: false, after: true }],
+  '@stylistic/spaced-comment': ['error', 'always'],
+  '@stylistic/computed-property-spacing': ['error', 'never'],
+  '@stylistic/function-call-spacing': ['error', 'never'],
+  '@stylistic/no-trailing-spaces': 'error',
+  '@stylistic/comma-style': ['error', 'last'],
 };
 
 /** @type {import('eslint').Linter.Globals} */
