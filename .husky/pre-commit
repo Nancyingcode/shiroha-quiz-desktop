@@ -1,1 +1,1 @@
-npm --prefix apps/desktop run lint
+npm --prefix apps/desktop run lint && npm --prefix apps/desktop run lint:index

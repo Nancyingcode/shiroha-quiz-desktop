@@ -46,11 +46,12 @@
 - `apps/web/app.js` 由现有 IIFE 持有业务状态；该入口已进入完整基础、语义和 Stylistic 门禁。现有业务切片、数据与状态边界保持不变。
 - `apps/web/question-bank.js` 是内置题库数据载体，保留题库内容及本地文件兜底。`apps/web/libs/`、生成的 `apps/desktop/dist/`、Tauri 的 `target/` 与 `gen/`、构建产物和历史 fixture 不参与风格批量重写；Tauri 目录中的手写 JavaScript 仍进入门禁。
 - 手写测试工具已纳入增量门禁；原始样例、题库文本和预期数据按数据契约维护，不能用格式化结果替换行为断言。
-- `npm run lint:incremental` 在现有门禁之外发现 Git 跟踪和未忽略的新手写 `.js/.mjs/.cjs`，新路径默认执行完整目标规则。P5 交付时的历史快照为 79 个整文件，其中 29 个达到全部新增目标规则，35 个执行全部新增语义规则，38 个执行全部 Stylistic 规则，三个数量有重叠。[本次 app.js 拆分计划](../docs/superpowers/plans/2026-11-08-web-app-js-split.md)记录新增模块按现有完整增量门禁检查；最新覆盖数量以该命令输出为准。
+- `npm run lint:incremental` 在现有门禁之外发现 Git 跟踪和未忽略的新手写 `.js/.mjs/.cjs`，扩展名大小写均纳入检查，新路径默认执行完整目标规则，不继承其他文件的专属全局变量或排除项。工作树中已删除的索引路径不阻断其他文件的检查；其他文件访问错误仍会失败。P5 交付时的历史快照为 79 个整文件，其中 29 个达到全部新增目标规则，35 个执行全部新增语义规则，38 个执行全部 Stylistic 规则，三个数量有重叠。[本次 app.js 拆分计划](../docs/superpowers/plans/2026-11-08-web-app-js-split.md)记录新增模块按现有完整增量门禁检查；最新覆盖数量以该命令输出为准。
 - 语义规则为 `eqeqeq`（仅允许有意 `== null`）、`no-nested-ternary`、`no-param-reassign`（允许属性修改）、`no-duplicate-imports`、`no-eval`、`no-new-func`、`guard-for-in` 和 `curly`。格式规则为 `indent`、`quotes`、`semi`、`comma-dangle`、`arrow-parens`、`space-infix-ops`、`space-before-blocks`、`keyword-spacing`、`comma-spacing`、`key-spacing`、`object-curly-spacing`、`array-bracket-spacing`、`space-in-parens`、`eol-last`，均使用 `@stylistic/` 前缀。100 字符仍是人工换行参考，不机械限制长字符串、正则或 JSDoc。
-- [迁移清单](../apps/desktop/eslint.migration.mjs) 中的历史语义和格式例外已全部清零；132 个手写 JavaScript 文件执行完整目标规则，包括 `app.js` 和此前门禁外的 15 个测试工具。新路径默认完整检查，已清零范围不能退回；覆盖数量随新增或删除文件变化，以增量检查输出为准。
+- [迁移清单](../apps/desktop/eslint.migration.mjs) 中的历史语义和格式例外已全部清零；手写 JavaScript 文件执行完整目标规则，包括 `app.js` 和此前门禁外的 15 个测试工具。新路径默认完整检查，已清零范围不能退回；覆盖数量随新增或删除文件变化，以增量检查输出为准。
 - P5 完成四类高风险状态审查及局部提炼，没有新增规则豁免或扩大正式门禁；P5 时的债务实测和当时未覆盖竞态见[实施计划第 11 节](../docs/superpowers/plans/2026-11-05-airbnb-javascript-refactor.md)。
 - `npm run lint:debt` 输出历史债务的逐文件/规则数量及行列消息；清单为空时返回空报告，显式指定文件仍可查看语义诊断。解析、配置、缺失文件或执行失败非零退出。正式门禁和报告都不写业务文件。`npm run lint:fixtures` 用真实 ESLint 验证违规拒绝、项目例外与失败传播，隔离样例不进入业务资源。
+- `pre-commit` 在检查工作树之后，用 `npm run lint:index` 只读检查暂存的手写 JavaScript；相关 lint 配置或钩子与暂存内容不一致时停止提交，要求先处理差异。暂存的 JavaScript 符号链接等非普通文件无法直接检查内容，因此会明确拒绝，不修改工作树或暂存区。
 - 浏览器源码按 classic script 解析；`frontend/bridge.js` 是 esbuild 输入，单独按 ESM 解析，产物仍为既有 IIFE。Node `.mjs`、`.cjs` 及 `.js` 按实际包边界分类，全局变量只读；Playwright 序列化回调所需浏览器名称仅在明确列出的宿主工具和 Web AI 测试文件开放，测试桥接的应用状态名称仅在对应文件开放。没有放宽生产 CSP 或提供新的求值能力。
 - import-x 本阶段没有引入；核心规则覆盖重复导入，扩展名与具名导出保留。缺失模块、循环和未使用模块分析没有专门 lint 覆盖，仍需实际执行/构建和审查，不启用 ESLint 10 下无效的 `no-unused-modules`。
 - 一次只改一个可验收切片。格式调整与逻辑抽取分批审查；不能顺带修改答案、评分、备份格式、持久化键、凭据或权限。

@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { lstat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ESLint } from 'eslint';
@@ -14,12 +15,20 @@ const candidates = execFileSync('git', ['ls-files', '--cached', '--others', '--e
   cwd: root,
   encoding: 'utf8',
   windowsHide: true,
-}).split('\0').filter((file) => /\.(?:js|mjs|cjs)$/.test(file));
+}).split('\0').filter((file) => /\.(?:js|mjs|cjs)$/i.test(file));
 const files = [];
 for (const file of candidates) {
-  if (!await lint.isPathIgnored(path.join(root, file))) {
-    files.push(file);
+  const target = path.join(root, file);
+  if (await lint.isPathIgnored(target)) { continue; }
+  // Git 索引仍包含未暂存的删除路径；其他文件访问错误不能当作删除忽略。
+  try {
+    await lstat(target);
+  } catch (error) {
+    const code = /** @type {NodeJS.ErrnoException} */ (error).code;
+    if (code === 'ENOENT' || code === 'ENOTDIR') { continue; }
+    throw error;
   }
+  files.push(file);
 }
 if (!files.length) {
   throw new Error('No handwritten JavaScript files found for incremental lint.');

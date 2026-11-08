@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { copyFile, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, readFile, rm, symlink, unlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -40,13 +40,14 @@ async function fixture(t) {
   for (const name of ['pre-commit', 'commit-msg']) {
     await copyFile(path.join(root, '.husky', name), path.join(repository, '.husky', name));
   }
-  for (const name of ['eslint.config.mjs', 'eslint.rules.mjs', 'eslint.migration.mjs', 'commitlint.config.mjs']) {
+  for (const name of ['eslint.config.mjs', 'eslint.platform.config.mjs', 'eslint.rules.mjs', 'eslint.migration.mjs', 'commitlint.config.mjs']) {
     await copyFile(path.join(desktop, name), path.join(project, name));
   }
+  await copyFile(path.join(desktop, 'scripts/lint-index.mjs'), path.join(project, 'scripts/lint-index.mjs'));
   const pkg = JSON.parse(await readFile(path.join(desktop, 'package.json'), 'utf8'));
   await writeFile(path.join(project, 'package.json'), JSON.stringify({
     private: true, type: 'module', scripts: {
-      lint: 'eslint scripts --max-warnings 0', commitlint: pkg.scripts.commitlint,
+      lint: 'eslint scripts --max-warnings 0', 'lint:index': pkg.scripts['lint:index'], commitlint: pkg.scripts.commitlint,
     },
   }));
   await writeFile(path.join(repository, '.gitignore'), 'node_modules/\n');
@@ -74,6 +75,86 @@ test('pre-commit rejects invalid JavaScript before the first commit without rewr
   assert.equal(f.git(['rev-parse', '--verify', 'HEAD']).status, 128);
   assert.equal(await readFile(f.probe, 'utf8'), invalid);
   assert.equal(f.git(['show', ':apps/desktop/scripts/probe.mjs']).stdout, staged);
+  assert.equal(f.git(['status', '--porcelain=v1']).stdout, before);
+});
+
+test('pre-commit rejects invalid staged JavaScript even when the worktree is clean', async (t) => {
+  const f = await fixture(t);
+  const invalid = 'var value = process.pid; console.log(value);\n';
+  const fixed = "console.log('fixed only in worktree');\n";
+  const upper = path.join(f.project, 'scripts/upper.MJS');
+  await writeFile(f.probe, invalid);
+  await writeFile(upper, invalid);
+  expectSuccess(f.git(['add', 'apps/desktop/scripts/probe.mjs', 'apps/desktop/scripts/upper.MJS']));
+  await writeFile(f.probe, fixed);
+  await writeFile(upper, fixed);
+  const before = f.git(['status', '--porcelain=v1']).stdout;
+  const result = f.git(['commit', '-m', 'chore: 初始化检查样例']);
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stdout + result.stderr, /no-var/);
+  assert.match(result.stdout + result.stderr, /upper\.MJS/);
+  assert.equal(f.git(['rev-parse', '--verify', 'HEAD']).status, 128);
+  assert.equal(await readFile(f.probe, 'utf8'), fixed);
+  assert.equal(await readFile(upper, 'utf8'), fixed);
+  assert.equal(f.git(['show', ':apps/desktop/scripts/probe.mjs']).stdout, invalid);
+  assert.equal(f.git(['show', ':apps/desktop/scripts/upper.MJS']).stdout, invalid);
+  assert.equal(f.git(['status', '--porcelain=v1']).stdout, before);
+});
+
+test('pre-commit refuses mismatched staged lint configuration without rewriting files', async (t) => {
+  const f = await fixture(t);
+  const config = path.join(f.project, 'eslint.rules.mjs');
+  const original = await readFile(config, 'utf8');
+  await writeFile(config, `${original}\n`);
+  const before = f.git(['status', '--porcelain=v1']).stdout;
+  const result = f.git(['commit', '-m', 'chore: 初始化检查样例']);
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stdout + result.stderr, /配置或暂存检查脚本与索引不一致/);
+  assert.equal(f.git(['rev-parse', '--verify', 'HEAD']).status, 128);
+  assert.equal(await readFile(config, 'utf8'), `${original}\n`);
+  assert.equal(f.git(['status', '--porcelain=v1']).stdout, before);
+});
+
+test('pre-commit checks a staged file that was subsequently deleted from the worktree', async (t) => {
+  const f = await fixture(t);
+  const staged = f.git(['show', ':apps/desktop/scripts/probe.mjs']).stdout;
+  await unlink(f.probe);
+  expectSuccess(f.git(['commit', '-m', 'chore: 初始化检查样例']));
+  assert.equal(f.git(['show', 'HEAD:apps/desktop/scripts/probe.mjs']).stdout, staged);
+  await assert.rejects(readFile(f.probe, 'utf8'), { code: 'ENOENT' });
+  assert.match(f.git(['status', '--porcelain=v1']).stdout, / D apps\/desktop\/scripts\/probe\.mjs/);
+});
+
+test('pre-commit refuses a staged JavaScript symlink without modifying the index', async (t) => {
+  const f = await fixture(t);
+  const blob = f.git(['hash-object', '-w', 'apps/desktop/scripts/probe.mjs']);
+  expectSuccess(blob);
+  const link = 'apps/desktop/scripts/link.js';
+  expectSuccess(f.git(['update-index', '--add', '--cacheinfo', `120000,${blob.stdout.trim()},${link}`]));
+  const before = f.git(['status', '--porcelain=v1']).stdout;
+  const result = f.git(['commit', '-m', 'chore: 初始化检查样例']);
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stdout + result.stderr, /无法检查暂存的非普通 JavaScript 文件/);
+  assert.equal(f.git(['rev-parse', '--verify', 'HEAD']).status, 128);
+  assert.equal(f.git(['status', '--porcelain=v1']).stdout, before);
+});
+
+test('pre-commit checks a staged package configuration even without staged JavaScript', async (t) => {
+  const f = await fixture(t);
+  expectSuccess(f.git(['commit', '-m', 'chore: 初始化检查样例']));
+  const pkg = path.join(f.project, 'package.json');
+  const original = await readFile(pkg, 'utf8');
+  const staged = JSON.parse(original);
+  delete staged.scripts['lint:index'];
+  await writeFile(pkg, JSON.stringify(staged));
+  expectSuccess(f.git(['add', 'apps/desktop/package.json']));
+  await writeFile(pkg, original);
+  const before = f.git(['status', '--porcelain=v1']).stdout;
+  const result = f.git(['commit', '-m', 'chore: 更新检查配置']);
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stdout + result.stderr, /配置或暂存检查脚本与索引不一致/);
+  assert.equal(await readFile(pkg, 'utf8'), original);
+  assert.equal(f.git(['show', ':apps/desktop/package.json']).stdout, JSON.stringify(staged));
   assert.equal(f.git(['status', '--porcelain=v1']).stdout, before);
 });
 

@@ -83,28 +83,32 @@ const webTestCallbackGlobals = {
  * @returns {import('eslint').Linter.Config[]} */
 export function createConfig({ desktop = false, debt = false, semanticOnly = false } = {}) {
   const relative = (/** @type {string} */ file) => desktop ? file.replace(/^apps\/desktop\//, '') : file;
+  const extensionPattern = (/** @type {string} */ file) => relative(file).replace(
+    /\.(mjs|cjs|js)$/i,
+    (suffix) => `.${[...suffix.slice(1)].map((letter) => `[${letter.toLowerCase()}${letter.toUpperCase()}]`).join('')}`,
+  );
   /** @type {import('eslint').Linter.Config[]} */
   const config = [
     { ignores: excludedFiles.map(relative) },
     {
-      files: ['**/*.{js,mjs,cjs}'],
+      files: ['**/*.js', '**/*.mjs', '**/*.cjs'].map(extensionPattern),
       plugins: { '@stylistic': stylistic },
       languageOptions: { ecmaVersion: 'latest' },
       rules: semanticOnly ? semanticRules : { ...baseRules, ...semanticRules, ...styleRules },
     },
     {
-      files: ['**/*.mjs'],
+      files: ['**/*.mjs'].map(extensionPattern),
       languageOptions: { sourceType: 'module', globals: nodeGlobals },
     },
     {
-      files: ['**/*.cjs'],
+      files: ['**/*.cjs'].map(extensionPattern),
       languageOptions: {
         sourceType: 'commonjs',
         globals: { ...nodeGlobals, __dirname: 'readonly', __filename: 'readonly' },
       },
     },
     {
-      files: ['**/*.js'],
+      files: ['**/*.js'].map(extensionPattern),
       ignores: ['apps/web/**', 'apps/desktop/**'].map(relative),
       languageOptions: {
         sourceType: 'commonjs',
@@ -112,12 +116,12 @@ export function createConfig({ desktop = false, debt = false, semanticOnly = fal
       },
     },
     {
-      files: [relative('apps/desktop/**/*.js')],
+      files: [extensionPattern('apps/desktop/**/*.js')],
       ignores: [relative('apps/desktop/frontend/**')],
       languageOptions: { sourceType: 'module', globals: nodeGlobals },
     },
     {
-      files: ['apps/web/**/*.js', 'apps/desktop/frontend/**/*.js'].map(relative),
+      files: ['apps/web/**/*.js', 'apps/desktop/frontend/**/*.js'].map(extensionPattern),
       languageOptions: { sourceType: 'script', globals: browserGlobals },
     },
     {

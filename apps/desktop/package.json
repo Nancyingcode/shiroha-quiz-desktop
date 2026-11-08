@@ -30,6 +30,7 @@
     "test:dev": "node scripts/dev-smoke.mjs",
     "bench:desktop": "node scripts/benchmark.mjs",
     "lint:incremental": "node scripts/lint-incremental.mjs",
+    "lint:index": "node scripts/lint-index.mjs",
     "lint:fixtures": "node --test test/lint-config.test.mjs",
     "lint:debt": "node scripts/lint-debt.mjs"
   },
