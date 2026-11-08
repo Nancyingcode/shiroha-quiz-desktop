@@ -110,8 +110,8 @@
       }
       if (analysisText && answer.length && !isTextType(type) && !/^\s*(?:答案|【\s*答案\s*】|正确答案|参考答案)/.test(analysisText)) {
         const ansLabel = answer.join('');
-        if (ansLabel && !new RegExp('^\\s*(?:【?答案】?\\s*[:：]?\\s*)?' + ansLabel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?:[。．.、，,：:；;]|\\s)').test(analysisText)) {
-          analysisText = '答案：' + ansLabel + '。' + analysisText.replace(/^[。．.、，,：:；;\s]+/, '');
+        if (ansLabel && !new RegExp(`^\\s*(?:【?答案】?\\s*[:：]?\\s*)?${ansLabel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:[。．.、，,：:；;]|\\s)`).test(analysisText)) {
+          analysisText = `答案：${ansLabel}。${analysisText.replace(/^[。．.、，,：:；;\s]+/, '')}`;
         }
       }
       const normalizedQuestion = { id: q.id || makeId('q', i), type, number: q.number || i + 1, volume: q.volume || '', group: q.group || '', question: questionText, options, answer, analysis: analysisText, category: q.category || q.topic || q.group || '', images: structuredImages, score: Number(q.score || 0) || undefined, subject: q.subject || '', grade: q.grade || '', difficulty: q.difficulty || '', knowledgePoints: Array.isArray(q.knowledgePoints) ? q.knowledgePoints : [], tags: Array.isArray(q.tags) ? q.tags : [], source: q.source || '', sourceFileId: q.sourceFileId || '', version: Number(q.version || 1) || 1, reviewStatus: q.reviewStatus || 'approved', aiConfidence: q.aiConfidence == null ? null : Number(q.aiConfidence), warnings: Array.isArray(q.warnings) ? q.warnings : [], normalized: normalizeText(questionText) };
@@ -208,7 +208,7 @@
       const m = s.match(/[（(]\s*(对|错|正确|错误|是|否|√|✓|✔|×|X|x|v|V|T|F|True|False)\s*[）)]\s*[。.!！?？]*\s*$/i);
       if (!m) { return null; }
       const ans = m[1].trim();
-      const question = s.slice(0, m.index).trim().replace(/[。.!！?？]*\s*$/, '') + '（ ）';
+      const question = `${s.slice(0, m.index).trim().replace(/[。.!！?？]*\s*$/, '')}（ ）`;
       return { question, answer: ans };
     }
 
@@ -261,14 +261,14 @@
       const letters = (answer || []).flatMap((a) => splitAnswer(a)).map((a) => String(a || '').toUpperCase()).filter((a) => /^[A-G]$/.test(a));
       const max = letters.reduce((m, a) => Math.max(m, a.charCodeAt(0)), 68);
       const end = String.fromCharCode(Math.max(68, Math.min(71, max)));
-      const arr = [];for (let c = 65;c <= end.charCodeAt(0);c++) { const k = String.fromCharCode(c);arr.push({ key: k, text: k }); }
+      const arr = [];for (let c = 65;c <= end.charCodeAt(0);c += 1) { const k = String.fromCharCode(c);arr.push({ key: k, text: k }); }
       return arr;
     }
     function shouldUseDefaultImageOptions(question, options, answer, type, group = '') {
       if ((options || []).length >= 2) { return false; }
       const letters = (answer || []).flatMap((a) => splitAnswer(a)).map((a) => String(a || '').toUpperCase()).filter((a) => /^[A-G]$/.test(a));
       if (!letters.length) { return false; }
-      const context = String(question || '') + ' ' + String(group || '');
+      const context = `${String(question || '')} ${String(group || '')}`;
       return hasQuestionImageContent(context) || /图形|图表|纸盒|折叠|问号|资料分析|材料分析/.test(context);
     }
     const sourceQuestionNumberRulesV58910 = {
@@ -360,8 +360,8 @@
       if (!ans) { return text; }
       const compact = text.replace(/\s+/g, '');
       const escapedAns = escapeRegExpV51(ans);
-      if (new RegExp('^(?:答案|正确答案|参考答案)?[:：]?' + escapedAns + '(?:[。．.、，,；;：:]|$)', 'i').test(compact)) { return text; }
-      if (new RegExp('^(?:选|选择)' + escapedAns + '(?:项|选项)?(?:[。．.、，,；;：:]|$)', 'i').test(compact)) { return text; }
+      if (new RegExp(`^(?:答案|正确答案|参考答案)?[:：]?${escapedAns}(?:[。．.、，,；;：:]|$)`, 'i').test(compact)) { return text; }
+      if (new RegExp(`^(?:选|选择)${escapedAns}(?:项|选项)?(?:[。．.、，,；;：:]|$)`, 'i').test(compact)) { return text; }
       text = text.replace(/^[。．.、，,；;：:]\s*/, '');
       return text ? `答案：${ans}。${text}` : `答案：${ans}`;
     }
@@ -420,9 +420,9 @@
     }
     function importIssueStatus(q, profile) {
       const hard = validateQuestion(q);
-      if (hard !== '正常') { return isConfirmableImportIssue(hard) ? '异常：' + hard : hard; }
+      if (hard !== '正常') { return isConfirmableImportIssue(hard) ? `异常：${hard}` : hard; }
       const soft = localRepairRiskStatus(q, profile || {});
-      return soft === '正常' ? '正常' : '异常：' + soft;
+      return soft === '正常' ? '正常' : `异常：${soft}`;
     }
 
     function collectSoftRiskWarnings(arr, profile) {
@@ -452,7 +452,7 @@
     }
     function parseLocalRepairCandidates(text) {
       const arr = [];
-      const push = (name, fn) => { try { const qs = fn().map((q, i) => normalizeQuestion(q, i)).filter((q) => q.question);arr.push({ name, questions: qs }); } catch (err) { warnDev('局部解析候选失败：' + name, err); } };
+      const push = (name, fn) => { try { const qs = fn().map((q, i) => normalizeQuestion(q, i)).filter((q) => q.question);arr.push({ name, questions: qs }); } catch (err) { warnDev(`局部解析候选失败：${name}`, err); } };
       push('标准试卷段落解析', () => parseStructuredExamText(text));
       push('局部标准解析', () => parseTextQuestionsBase(text));
       push('局部紧凑解析', () => parseTextQuestionsBase(forceSplitCompactText(text)));
@@ -482,14 +482,14 @@
     function localSequenceAlignedV599(base, pairs) {
       if (!base.length || base.length !== pairs.length) { return false; }
       let textMatched = 0;
-      for (let i = 0;i < base.length;i++) {
+      for (let i = 0;i < base.length;i += 1) {
         const pairQ = pairs[i]?.question;
         if (!pairQ || String(base[i].number) !== String(pairQ.number)) { return false; }
         const a = normalizeText(visibleQuestionTextForRisk(base[i].question || ''));
         const b = normalizeText(visibleQuestionTextForRisk(pairQ.question || ''));
         if (!a || !b) { continue; }
         const aHead = a.slice(0, 24); const bHead = b.slice(0, 24);
-        if (a.includes(bHead) || b.includes(aHead)) { textMatched++; }
+        if (a.includes(bHead) || b.includes(aHead)) { textMatched += 1; }
       }
       return textMatched >= Math.max(1, Math.ceil(base.length * 0.7));
     }
@@ -518,16 +518,16 @@
       if (x === y) { return 4; }
       const shortX = x.slice(0, 32); const shortY = y.slice(0, 32);
       if (x.includes(shortY) || y.includes(shortX)) { return 3; }
-      let same = 0;const limit = Math.min(48, x.length, y.length);for (let i = 0;i < limit && x[i] === y[i];i++) { same++; }
+      let same = 0;const limit = Math.min(48, x.length, y.length);for (let i = 0;i < limit && x[i] === y[i];i += 1) { same += 1; }
       if (same >= 18) { return 2; }
       if (same >= 10) { return 1; }
       return 0;
     }
     function attachDetailedSourceMetaToQuestionsV58910(questions, detailed) {
       const qs = questions || []; const pairs = detailed?.pairs || [];let cursor = 0; let matched = 0;
-      for (let i = 0;i < qs.length;i++) {
+      for (let i = 0;i < qs.length;i += 1) {
         const q = qs[i];let best = -1; let bestScore = -1;
-        for (let j = cursor;j < Math.min(pairs.length, cursor + 12);j++) {
+        for (let j = cursor;j < Math.min(pairs.length, cursor + 12);j += 1) {
           const pq = pairs[j]?.question;if (!pq) { continue; }
           const noSame = String(q.number || '') === String(pq.number || '');
           const strength = questionMatchStrengthV58910(q, pq);
@@ -536,7 +536,7 @@
         }
         if (best < 0) { continue; }
         const pair = pairs[best]; const meta = { ...(pair.sourceMeta || getSourceMetaV58910(pair.question) || sourceMetaForBlockV58910(pair.block, pair.blockIndex)), pairIndex: best };
-        attachSourceMetaV58910(q, meta);cursor = best + 1;matched++;
+        attachSourceMetaV58910(q, meta);cursor = best + 1;matched += 1;
       }
       return { questions: qs, matched, total: qs.length, ratio: qs.length ? matched / qs.length : 0 };
     }
@@ -588,19 +588,19 @@
       let left = 0;
       while (left < out.length) {
         const lm = getSourceMetaV58910(out[left]);
-        if (!lm?.explicitNumber) { left++;continue; }
+        if (!lm?.explicitNumber) { left += 1;continue; }
         let right = left + 1;
-        while (right < out.length && !getSourceMetaV58910(out[right])?.explicitNumber) { right++; }
+        while (right < out.length && !getSourceMetaV58910(out[right])?.explicitNumber) { right += 1; }
         if (right >= out.length) { break; }
         const rm = getSourceMetaV58910(out[right]);
         const ln = Number(lm.originalNumber || out[left].number || 0); const rn = Number(rm.originalNumber || out[right].number || 0);
         const sameSection = sameSourceSectionV58911(lm, rm);
         if (sameSection && right - left > 1 && rn - ln === right - left && rn > ln) {
-          for (let i = left + 1;i < right;i++) {
+          for (let i = left + 1;i < right;i += 1) {
             const inferred = ln + (i - left); const old = out[i]; const meta = getSourceMetaV58910(old) || {};
             const next = normalizeQuestion({ ...old, number: inferred }, i);
             attachSourceMetaV58910(next, { ...meta, originalNumber: null, explicitNumber: false, inferredNumber: inferred });
-            out[i] = next;changed++;
+            out[i] = next;changed += 1;
           }
           segments.push(`题号${ln}-${rn}之间：依据前后真实题号恢复${right - left - 1}道题的编号`);
         }
@@ -629,15 +629,16 @@
         const nums = (meta.sourceQuestionNumbers || []).map(Number).filter(Boolean);
         if (nums.length >= 2) { addWindow(meta.sourceBlockStart, meta.sourceBlockEnd, '单块含多个题号', nums); }
       });
-      for (let i = 0;i < base.length - 1;i++) {
+      for (let i = 0;i < base.length - 1;i += 1) {
         const a = base[i]; const b = base[i + 1]; const ma = getSourceMetaV58910(a); const mb = getSourceMetaV58910(b);if (!ma || !mb) { continue; }
         const na = Number(a.number || 0); const nb = Number(b.number || 0);
         const sameSection = sameSourceSectionV58911(ma, mb);
         if (sameSection && na > 0 && nb - na >= 2 && nb - na <= 8) {
-          const missing = [];for (let n = na + 1;n < nb;n++) { missing.push(n); }
+          const missing = [];for (let n = na + 1;n < nb;n += 1) { missing.push(n); }
           addWindow(ma.sourceBlockStart, Math.max(ma.sourceBlockEnd, mb.sourceBlockStart - 1), '题号缺口', missing.concat([na]));
         }
       }
+      // eslint-disable-next-line no-plusplus -- 来源区间起点可为字符串或 BigInt；限定元数据类型后移除此例外。
       const usedBlocks = new Set();base.forEach((q) => { const m = getSourceMetaV58910(q);if (m) { for (let i = m.sourceBlockStart;i <= m.sourceBlockEnd;i++) { usedBlocks.add(i); } } });
       const sectionNumberKey = (section, n) => [normalizeSectionLabelV58911(section?.volume || ''), normalizeSectionLabelV58911(section?.chapter || ''), normalizeSectionLabelV58911(section?.group || ''), Number(n) || 0].join('|');
       const existingSectionNumbers = new Set();
@@ -710,7 +711,7 @@
       const blocks = detailed.blocks || []; const windows = [];
       const anchors = [];
       base.forEach((q, i) => { const m = getSourceMetaV58910(q);if (m?.explicitNumber && Number(m.originalNumber || 0) > 0) { anchors.push({ index: i, number: Number(m.originalNumber), meta: m }); } });
-      for (let a = 0;a < anchors.length - 1;a++) {
+      for (let a = 0;a < anchors.length - 1;a += 1) {
         const left = anchors[a]; const right = anchors[a + 1];
         if (!sameSourceSectionV58911(left.meta, right.meta) || right.number <= left.number) { continue; }
         const parsedCount = right.index - left.index; const expectedCount = right.number - left.number; const extra = parsedCount - expectedCount;
@@ -724,7 +725,7 @@
       for (const win of windows) {
         if (occupied.some(([a, b]) => !(win.end < a || win.start > b))) { continue; }
         const originalSegment = base.slice(win.start, win.end + 1); const targetNumbers = [];
-        for (let n = win.leftNumber;n < win.rightNumber;n++) { targetNumbers.push(n); }
+        for (let n = win.leftNumber;n < win.rightNumber;n += 1) { targetNumbers.push(n); }
         const rawText = blockTextV58910(blocks, win.blockStart, win.blockEnd);
         const candidates = parseLocalRepairCandidates(rawText);
         try {
@@ -775,7 +776,7 @@
       let r = 0;
       while (r < risky.length) {
         const start = risky[r];let end = start;
-        while (r + 1 < risky.length && risky[r + 1] <= end + 1) { r++;end = risky[r]; }
+        while (r + 1 < risky.length && risky[r + 1] <= end + 1) { r += 1;end = risky[r]; }
         const segStart = Math.max(0, start - 1); const segEnd = Math.min(pairs.length - 1, end + 1);
         const localBlocks = pairs.slice(segStart, segEnd + 1).map((p) => p.block).filter(Boolean);
         const segmentText = localBlocks.map((b) => {
@@ -803,14 +804,14 @@
           repaired += Math.max(1, delta);
           segments.push(`第${start + 1}-${end + 1}题：${best.name}，仅替换异常题，前后题保持锁定`);
         }
-        r++;
+        r += 1;
       }
       if (!replacements.length) { return { questions: base, repaired: 0, segments: [] }; }
       const out = [];
       for (let i = 0;i < base.length;) {
         const rep = replacements.find((x) => x.start === i);
         if (rep) { rep.questions.forEach((q) => out.push(q));i = rep.end + 1;continue; }
-        out.push(base[i]);i++;
+        out.push(base[i]);i += 1;
       }
       return { questions: out.map((q, i) => normalizeQuestion(q, i)), repaired, segments };
     }
@@ -868,10 +869,10 @@
     }
     function hasAnswerAnalysisSignal(text) {
       const lines = normalizeImportText(text).split('\n').map((x) => x.trim()).filter(Boolean);
-      for (let i = 0;i < lines.length;i++) {
+      for (let i = 0;i < lines.length;i += 1) {
         if (isAnswerSectionHeading(lines[i], lines.slice(i + 1, i + 7))) { return true; }
       }
-      for (let i = 0;i < lines.length - 2;i++) {
+      for (let i = 0;i < lines.length - 2;i += 1) {
         const win = lines.slice(i, i + 4);
         if (win.filter(isAnswerAnalysisEntryLine).length >= 2) { return true; }
       }
@@ -912,7 +913,7 @@
         const entry = { number: String(number), volume: volume || '', chapter: chapter || '', group: group || '', answer: valid.map((x) => String(x).toUpperCase()), analysis: String(analysis || '').trim(), raw: String(raw || '') };
         entries.push(entry);currentEntry = entry;currentNumber = String(number);
       };
-      const appendAnalysis = (txt) => { if (currentEntry && txt) { const t = String(txt || '').trim();if (t) { currentEntry.analysis = (currentEntry.analysis ? currentEntry.analysis + '\n' : '') + t; } } };
+      const appendAnalysis = (txt) => { if (currentEntry && txt) { const t = String(txt || '').trim();if (t) { currentEntry.analysis = (currentEntry.analysis ? `${currentEntry.analysis}\n` : '') + t; } } };
       const parseNumberedLine = (line, onlyStrong = false) => {
         let m;
         // 1.【答案】A【解析】... / 1.答案：A ...
@@ -936,7 +937,7 @@
         if (onlyStrong) { return null; }
         return null;
       };
-      for (let i = 0;i < lines.length;i++) {
+      for (let i = 0;i < lines.length;i += 1) {
         const line = lines[i];const next = lines.slice(i + 1, i + 8);
         if (isAnswerSectionHeading(line, next)) { inAnswerSection = true;currentEntry = null;currentNumber = '';if (/解析|答案及解析|答案与解析|试题解析|真题答案/.test(line)) { currentVolume = '';currentChapter = '';currentGroup = ''; } continue; }
         if (isVolumeHeading(line)) { currentVolume = getVolumeLabel(line);currentChapter = '';currentGroup = '';currentEntry = null;currentNumber = '';continue; }
@@ -1020,7 +1021,7 @@
     function stripAnswerAnalysisTextForQuestions(text) {
       const lines = normalizeImportText(text).split('\n').map((x) => x.trim()).filter(Boolean);
       const out = [];let inAnswerSection = false;
-      for (let i = 0;i < lines.length;i++) {
+      for (let i = 0;i < lines.length;i += 1) {
         const line = lines[i];const next = lines.slice(i + 1, i + 7);
         if (isAnswerSectionHeading(line, next)) { inAnswerSection = true;continue; }
         if (inAnswerSection && isGenericQuestionSectionHeading(line, next)) { inAnswerSection = false;out.push(line);continue; }
@@ -1055,22 +1056,23 @@
         const es = eSec(e);
         let idx = -1;
         // 1) 优先在当前位置之后找“题号 + 分区”都匹配的题。
-        for (let i = cursor;i < qs.length;i++) {
+        for (let i = cursor;i < qs.length;i += 1) {
           if (canUse(qs[i], e, true)) { idx = i;break; }
         }
         // 2) 再允许全局同分区未答题匹配。
         if (idx < 0) {
-          for (let i = 0;i < qs.length;i++) {
+          for (let i = 0;i < qs.length;i += 1) {
             if (!qs[i].answer.length && canUse(qs[i], e, true)) { idx = i;break; }
           }
         }
         // 3) 没有分区信息时，才按旧的顺序题号匹配。
         if (idx < 0 && !es) {
-          for (let i = cursor;i < qs.length;i++) { if (canUse(qs[i], e, false)) { idx = i;break; } }
-          if (idx < 0) { for (let i = 0;i < qs.length;i++) { if (!qs[i].answer.length && canUse(qs[i], e, false)) { idx = i;break; } } }
+          for (let i = cursor;i < qs.length;i += 1) { if (canUse(qs[i], e, false)) { idx = i;break; } }
+          if (idx < 0) { for (let i = 0;i < qs.length;i += 1) { if (!qs[i].answer.length && canUse(qs[i], e, false)) { idx = i;break; } } }
         }
         // 4) 有明确分区但项目没有解析出对应分区题目，例如图形题只有图片，跳过，不要污染后续逻辑题。
         if (idx < 0) { continue; }
+        // eslint-disable-next-line prefer-template -- 外部值可能是对象，保留 + 的默认转换；输入类型受约束后移除此例外。
         const mergedImageOptionsV589 = extractInlineImageTokensV589((e.analysis || '') + ' ' + (e.raw || ''));
         if (!(qs[idx].options || []).length && mergedImageOptionsV589.length >= 2 && (e.answer || []).some((a) => /^[A-G1-9]$/.test(String(a || '').trim()))) {
           qs[idx].options = imageTokensToChoiceOptionsV589(mergedImageOptionsV589);
@@ -1079,7 +1081,7 @@
         let mergedAnalysisV589 = e.analysis || qs[idx].analysis || '';
         if (mergedImageOptionsV589.length >= 2) { mergedAnalysisV589 = stripAnswerPrefix(stripInlineImageTokensV589(mergedAnalysisV589)).replace(/^[A-G]{1,7}[。．.、，,；;：:\s]*$/i, '').trim(); }
         qs[idx].analysis = formatAnswerAnalysisForReview(qs[idx].answer, mergedAnalysisV589);
-        cursor = idx + 1;matched++;
+        cursor = idx + 1;matched += 1;
       }
       if (entries.length && !matched) { warnings.push('检测到答案解析区，但未能按题号合并答案。'); }
       return { questions: qs.map((q, i) => normalizeQuestion(q, i)), warnings, matched };
@@ -1094,7 +1096,7 @@
         try {
           const qs = fn().map((q, i) => normalizeQuestion(q, i)).filter((q) => q.question);
           if (qs.length) { qCandidates.push({ name, questions: qs, score: scoreParsedQuestions(qs, {}) }); }
-        } catch (err) { warnDev('题目区候选解析失败：' + name, err); }
+        } catch (err) { warnDev(`题目区候选解析失败：${name}`, err); }
       };
       push('题目区标准试卷段落解析', () => parseStructuredExamText(qText));
       push('题目区标准逐行解析', () => parseTextQuestionsBase(qText));
@@ -1217,11 +1219,11 @@
       if (!hits || hits.length < 2) { return hits || []; }
       const code = (k) => String(k || 'A').toUpperCase().charCodeAt(0);
       const candidates = [];
-      for (let i = 0;i < hits.length;i++) {
+      for (let i = 0;i < hits.length;i += 1) {
         if (String(hits[i].key).toUpperCase() !== 'A') { continue; }
         const seq = [hits[i]];let need = 66;
-        for (let j = i + 1;j < hits.length && need <= 68;j++) {
-          if (code(hits[j].key) === need) { seq.push(hits[j]);need++; }
+        for (let j = i + 1;j < hits.length && need <= 68;j += 1) {
+          if (code(hits[j].key) === need) { seq.push(hits[j]);need += 1; }
         }
         const hasD = seq.some((h) => String(h.key).toUpperCase() === 'D');
         if (seq.length >= 3 || hasD) { candidates.push(seq); }
@@ -1258,18 +1260,18 @@
       const start = hits[0].idx;
       const q = s.slice(0, start).trim();
       const opts = [];
-      for (let i = 0;i < hits.length;i++) {
+      for (let i = 0;i < hits.length;i += 1) {
         const h = hits[i]; const next = i + 1 < hits.length ? hits[i + 1].idx : s.length;
         const text = s.slice(h.end, next).trim().replace(/[;；，,]+$/, '').trim();
         opts.push({ key: h.key, text });
       }
       // OCR/文本提取偶发把 A 误成 B，形成 B/B/C/D；按出现顺序纠正为 A/B/C/D。
       const keys = opts.map((o) => o.key).join('');
-      if (!keys.includes('A') && /^BBCD/.test(keys) && opts.length >= 4) { for (let i = 0;i < 4;i++) { opts[i].key = String.fromCharCode(65 + i); } }
+      if (!keys.includes('A') && /^BBCD/.test(keys) && opts.length >= 4) { for (let i = 0;i < 4;i += 1) { opts[i].key = String.fromCharCode(65 + i); } }
       const de = [];const seen = {};
       for (const o of opts) {
         if (!o.text && /^[A-D]$/.test(o.key)) { o.text = o.key; }
-        if (seen[o.key]) { seen[o.key].text = (seen[o.key].text + ' ' + o.text).trim();continue; }
+        if (seen[o.key]) { seen[o.key].text = (`${seen[o.key].text} ${o.text}`).trim();continue; }
         seen[o.key] = o;de.push(o);
       }
       return { question: q, options: de.filter((o) => o.text) };
@@ -1283,7 +1285,7 @@
     function splitRecruitmentInlineAnalysisV58915(seg) {
       const lines = String(seg || '').split('\n');
       let cut = -1;
-      for (let i = 1;i < lines.length;i++) {
+      for (let i = 1;i < lines.length;i += 1) {
         if (/^(?:分析|解析|答|答案|详解|说明|解题思路|思路(?:一|二|三)?)\s*[:：]/.test(String(lines[i] || '').trim())) { cut = i;break; }
       }
       if (cut < 0) { return { body: String(seg || '').trim(), analysis: '' }; }
@@ -1330,7 +1332,7 @@
         }
         if (!hits.length) { out.push({ ...opt, text: txt });continue; }
         out.push({ ...opt, text: txt.slice(0, hits[0].idx).trim() });
-        for (let i = 0;i < hits.length;i++) {
+        for (let i = 0;i < hits.length;i += 1) {
           const start = hits[i].end;
           const end = i + 1 < hits.length ? hits[i + 1].idx : txt.length;
           const part = txt.slice(start, end).trim();
@@ -1352,7 +1354,7 @@
       }).filter((o) => String(o.text || '').trim());
       if (moved.length) {
         const missing = moved.filter((m) => !String(question || '').includes(m));
-        if (missing.length) { question = String(question || '').trim() + '\n' + missing.join('\n'); }
+        if (missing.length) { question = `${String(question || '').trim()}\n${missing.join('\n')}`; }
       }
       return { question, options: cleaned };
     }
@@ -1374,7 +1376,7 @@
         options = ['A', 'B', 'C', 'D'].map((k) => ({ key: k, text: k }));
       }
       if (options.length < 2 && /\[\[DOCX_IMAGE_\d+\]\]/.test(raw)) { options = ['A', 'B', 'C', 'D'].map((k) => ({ key: k, text: k })); }
-      if (ctx.material) { question = (ctx.material + '\n' + question).trim(); }
+      if (ctx.material) { question = (`${ctx.material}\n${question}`).trim(); }
       question = restore(question).trim();
       const group = ctx.group || '';
       let type = recruitmentGroupToType(group);
@@ -1388,7 +1390,7 @@
       const text = normalizeRecruitmentExamTextForParser(protectAnswerAnalysisForQuestionPart(qText));
       const starts = splitRecruitmentQuestionStarts(text);
       const out = [];let currentGroup = group || '';let currentMaterial = '';
-      for (let i = 0;i < starts.length;i++) {
+      for (let i = 0;i < starts.length;i += 1) {
         const st = starts[i]; const next = i + 1 < starts.length ? starts[i + 1].idx : text.length;
         const gap = text.slice(i ? starts[i - 1].idx : 0, st.idx);
         const gh = gap.split('\n').map(getRecruitmentSectionHeading).filter(Boolean).pop();
@@ -1410,7 +1412,7 @@
       const starts = [];let cursor = 0;const s = String(text || '');
       for (const n of nums) {
         const escaped = String(n).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const re = new RegExp('(^|\\n|[。？！?；;])\\s*(?:[【\\[]\\s*' + escaped + '\\s*[】\\]]|' + escaped + '\\s*[.．、])\\s*', 'g');
+        const re = new RegExp(`(^|\\n|[。？！?；;])\\s*(?:[【\\[]\\s*${escaped}\\s*[】\\]]|${escaped}\\s*[.．、])\\s*`, 'g');
         re.lastIndex = cursor;let m; let hit = null;
         while ((m = re.exec(s))) {
           const idx = m.index + (m[1] ? m[1].length : 0);const after = s.slice(re.lastIndex, re.lastIndex + 50);
@@ -1426,7 +1428,7 @@
       const starts = findExpectedRecruitmentQuestionStarts(text, nums);
       if (!starts.length) { return []; }
       const out = [];let currentGroup = group || '';let currentMaterial = '';
-      for (let i = 0;i < starts.length;i++) {
+      for (let i = 0;i < starts.length;i += 1) {
         const st = starts[i]; const next = i + 1 < starts.length ? starts[i + 1].idx : text.length;
         const gap = text.slice(i ? starts[i - 1].idx : 0, st.idx);
         const gh = gap.split('\n').map(getRecruitmentSectionHeading).filter(Boolean).pop();
@@ -1443,7 +1445,7 @@
       }
       return out.map((q, i) => normalizeQuestion(q, i));
     }
-    function numberRange(a, b) { const arr = [];for (let i = a;i <= b;i++) { arr.push(i); } return arr; }
+    function numberRange(a, b) { const arr = [];for (let i = a;i <= b;i += 1) { arr.push(i); } return arr; }
     function sliceBetweenRecruitmentHeadings(text, headingRe, nextRe) {
       const s = String(text || '');const m = s.match(headingRe);if (!m) { return ''; }
       const start = m.index;const rest = s.slice(start);const n = rest.slice(m[0].length).search(nextRe);
@@ -1535,7 +1537,7 @@
     function repairDocxTablePromptSplitQuestions(questions) {
       const src = (questions || []).map((q) => ({ ...q, options: [...(q.options || [])], answer: [...(q.answer || [])] }));
       const out = [];
-      for (let i = 0;i < src.length;i++) {
+      for (let i = 0;i < src.length;i += 1) {
         const q = src[i];
         const next = src[i + 1];
         const hasDocxTable = /【DOCX表格开始】/.test(String(q.question || ''));
@@ -1549,7 +1551,7 @@
           if (!(merged.answer || []).length && (next.answer || []).length) { merged.answer = [...(next.answer || [])]; }
           if (!merged.analysis && next.analysis) { merged.analysis = next.analysis; }
           out.push(merged);
-          i++;
+          i += 1;
           continue;
         }
         out.push(q);
@@ -1592,14 +1594,14 @@
       for (const key of ['volume', 'chapter']) {
         if (qp[key] && ep[key]) {
           if (qp[key] !== ep[key]) { return -Infinity; }
-          rank += key === 'chapter' ? 180 : 140;explicitMatches++;
+          rank += key === 'chapter' ? 180 : 140;explicitMatches += 1;
         }
       }
       if (qp.group && ep.group) {
-        if (qp.group === ep.group) { rank += 90;explicitMatches++; } else if (qp.groupType && ep.groupType && qp.groupType === ep.groupType) { rank += 55;explicitMatches++; } else { return -Infinity; }
+        if (qp.group === ep.group) { rank += 90;explicitMatches += 1; } else if (qp.groupType && ep.groupType && qp.groupType === ep.groupType) { rank += 55;explicitMatches += 1; } else { return -Infinity; }
       } else if (qp.groupType && ep.groupType) {
         if (qp.groupType !== ep.groupType) { return -Infinity; }
-        rank += 40;explicitMatches++;
+        rank += 40;explicitMatches += 1;
       }
       const qHasSection = !!(qp.volume || qp.chapter || qp.group || qp.groupType);
       const eHasSection = !!(ep.volume || ep.chapter || ep.group || ep.groupType);
@@ -1644,11 +1646,12 @@
         if (ranked.length > 1 && ranked[0].rank === ranked[1].rank) { return q; }
         const hit = ranked[0];
         let options = [...(q.options || [])];
+        // eslint-disable-next-line prefer-template -- 外部值可能是对象，保留 + 的默认转换；输入类型受约束后移除此例外。
         const imageOptions = extractInlineImageTokensV589((hit.entry.analysis || '') + ' ' + (hit.entry.raw || ''));
         if (options.length < 2 && imageOptions.length >= 2) { options = imageTokensToChoiceOptionsV589(imageOptions); }
         const answer = normalizeAnswer(hit.entry.answer || [], options, q.type);
         if (!answerCompatibleWithQuestionV599(q, answer, options)) { return q; }
-        used.add(hit.ei);changed++;
+        used.add(hit.ei);changed += 1;
         const section = [hit.entry.volume, hit.entry.chapter, hit.entry.group].filter(Boolean).join(' / ');
         segments.push(`第${i + 1}题：按${section ? '分区 + ' : ''}原始题号回填答案${options.length > (q.options || []).length ? '与缺失选项' : ''}`);
         let analysis = hit.entry.analysis || q.analysis || '';
@@ -1660,13 +1663,13 @@
     function lockedSequenceAlignedV599(base, candidate) {
       if (!base.length || base.length !== candidate.length) { return false; }
       let textMatched = 0;
-      for (let i = 0;i < base.length;i++) {
+      for (let i = 0;i < base.length;i += 1) {
         if (String(base[i].number) !== String(candidate[i].number)) { return false; }
         const a = normalizeText(stripInlineImageTokensV589(base[i].question || ''));
         const b = normalizeText(stripInlineImageTokensV589(candidate[i].question || ''));
         if (!a || !b) { continue; }
         const ah = a.slice(0, 24); const bh = b.slice(0, 24);
-        if (a.includes(bh) || b.includes(ah)) { textMatched++; }
+        if (a.includes(bh) || b.includes(ah)) { textMatched += 1; }
       }
       return textMatched >= Math.max(1, Math.ceil(base.length * 0.7));
     }
@@ -1699,7 +1702,7 @@
         const afterRisk = localRepairRiskStatus(next, profile);
         const addedImage = !baseImages.length && candidateImages.length;
         if (afterRisk !== '正常' && beforeRisk === '正常' && !addedImage) { return q; }
-        changed++;
+        changed += 1;
         segments.push(`第${i + 1}题：局部补全${addedImage ? '图片' : ''}${options.length > (q.options || []).length ? '选项' : ''}${answer.length > (q.answer || []).length ? '答案' : ''}`);
         return next;
       });
@@ -1767,14 +1770,14 @@
       const pack = protectDocxImageMarkdownForParser(text);const restore = pack.restore || ((x) => x);
       const lines = normalizeImportText(pack.text).split('\n').map((x) => x.trim()).filter(Boolean);
       const groups = [];
-      for (let introIndex = 0;introIndex < lines.length;introIndex++) {
+      for (let introIndex = 0;introIndex < lines.length;introIndex += 1) {
         const intro = sharedStemIntroV377(lines[introIndex]);if (!intro) { continue; }
         let limit = lines.length;
-        for (let j = introIndex + 1;j < lines.length;j++) {
+        for (let j = introIndex + 1;j < lines.length;j += 1) {
           if (sharedStemBoundaryV377(lines[j], lines.slice(j + 1, j + 7))) { limit = j;break; }
         }
         const anchors = [];
-        for (let j = introIndex + 1;j < limit;j++) {
+        for (let j = introIndex + 1;j < limit;j += 1) {
           const child = sharedStemChildLineV377(lines[j]);if (!child) { continue; }
           if (intro.rangeStart && child.number < intro.rangeStart) { continue; }
           if (intro.rangeEnd && child.number > intro.rangeEnd) { break; }
@@ -1785,17 +1788,17 @@
           const startAt = anchors.findIndex((x) => x.number === intro.rangeStart);
           if (startAt >= 0) {
             let expected = intro.rangeStart;
-            for (let j = startAt;j < anchors.length && expected <= intro.rangeEnd;j++) {
+            for (let j = startAt;j < anchors.length && expected <= intro.rangeEnd;j += 1) {
               const item = anchors[j];if (item.number !== expected) { break; }
-              run.push(item);expected++;
+              run.push(item);expected += 1;
             }
           }
           const evidenceCount = run.filter((item, idx) => sharedStemChildEvidenceV377(lines, item.lineIndex, run[idx + 1]?.lineIndex || limit)).length;
           if (evidenceCount < Math.min(2, run.length)) { run = []; }
         } else {
-          for (let start = 0;start < anchors.length && !run.length;start++) {
+          for (let start = 0;start < anchors.length && !run.length;start += 1) {
             const candidate = [anchors[start]];
-            for (let j = start + 1;j < anchors.length;j++) {
+            for (let j = start + 1;j < anchors.length;j += 1) {
               if (anchors[j].number !== candidate[candidate.length - 1].number + 1) { break; }
               candidate.push(anchors[j]);
             }
@@ -1832,19 +1835,19 @@
         const indexes = [];let searchFrom = cursor;
         for (const child of group.children || []) {
           let found = -1;
-          for (let i = searchFrom;i < out.length;i++) { if (sharedStemQuestionMatchesV377(out[i], child)) { found = i;break; } }
+          for (let i = searchFrom;i < out.length;i += 1) { if (sharedStemQuestionMatchesV377(out[i], child)) { found = i;break; } }
           if (found < 0) { indexes.length = 0;break; }
           indexes.push(found);searchFrom = found + 1;
         }
         if (indexes.length < 2) { continue; }
         const material = String(group.material || '').trim();const materialKey = sharedStemComparableTextV377(material);let groupChanged = 0;
-        indexes.forEach((index) => {
+        for (const index of indexes) {
           const q = out[index]; const question = String(q.question || '').trim(); const questionKey = sharedStemComparableTextV377(question);
           const head = materialKey.slice(0, Math.min(36, materialKey.length));
-          if (head.length >= 4 && questionKey.includes(head)) { return; }
-          out[index] = normalizeQuestion({ ...q, question: [material, question].filter(Boolean).join('\n\n') }, index);groupChanged++;changedQuestions++;
-        });
-        appliedGroups++;appliedChildren += indexes.length;cursor = indexes[indexes.length - 1] + 1;
+          if (head.length >= 4 && questionKey.includes(head)) { continue; }
+          out[index] = normalizeQuestion({ ...q, question: [material, question].filter(Boolean).join('\n\n') }, index);groupChanged += 1;changedQuestions += 1;
+        }
+        appliedGroups += 1;appliedChildren += indexes.length;cursor = indexes[indexes.length - 1] + 1;
         segments.push(`${group.label || '共用材料'}：已展开到 ${indexes.length} 道小题${groupChanged < indexes.length ? `（${indexes.length - groupChanged} 道原已包含材料）` : ''}`);
       }
       return { questions: out, appliedGroups, appliedChildren, changedQuestions, segments };
@@ -1864,6 +1867,7 @@
           qs = repairDocxTablePromptSplitQuestions(qs).map(sanitizeQuestionOptionsForDocxBoundariesV583).map((q, i) => normalizeQuestion(q, i)).filter((q) => q.question);
           if (/^标准/.test(name) && standardSourceDetailedV58910) { attachDetailedSourceMetaToQuestionsV58910(qs, standardSourceDetailedV58910); }
           candidates.push({ name, questions: qs, score: scoreParsedQuestions(qs, profile), warnings: collectImportWarnings(qs) });
+        // eslint-disable-next-line prefer-template -- 异常信息可能是对象，保留 + 的默认转换；统一异常类型后移除此例外。
         } catch (e) { candidates.push({ name, questions: [], score: -9999, warnings: ['解析失败：' + e.message] }); }
       };
       const evaluateCandidate = (candidate) => {
@@ -2023,6 +2027,7 @@
             try {
               const qs = parseDocumentWithAnswerSections(original).map((q, i) => normalizeQuestion(q, i)).filter((q) => q.question);
               if (qs.length) { candidates.push({ name: '整卷兜底：题目区 + 答案解析区', questions: qs, score: scoreAnswerSectionCandidate(qs, profile), warnings: collectImportWarnings(qs) }); }
+            // eslint-disable-next-line prefer-template -- 异常信息可能是对象，保留 + 的默认转换；统一异常类型后移除此例外。
             } catch (e) { candidates.push({ name: '整卷兜底：题目区 + 答案解析区', questions: [], score: -9999, warnings: ['解析失败：' + e.message] }); }
           }
           if (imageWholeQuestions.length) { candidates.push({ name: '整卷兜底：图片真题 + 后置答案', questions: imageWholeQuestions, score: scoreRecruitmentImageCandidate(imageWholeQuestions, profile), warnings: collectImportWarnings(imageWholeQuestions) }); }
@@ -2067,9 +2072,9 @@
       if (profile.inlineAnswerLikely) { profileBits.push('存在题尾答案标记'); }
       if (profile.hasAnswerAnalysisSection) { profileBits.push('检测到答案解析区'); }
       if (profile.sharedStemAppliedGroups) { profileBits.push(`共用材料展开${profile.sharedStemAppliedGroups}组/${profile.sharedStemAppliedChildren}题`); }
-      const candidateLine = candidates.map((c) => `${c.name}${c.questions.length}题/质量${c.score}${c.segments?.length ? '（局部修复' + c.segments.length + '处）' : ''}`).join('；');
+      const candidateLine = candidates.map((c) => `${c.name}${c.questions.length}题/质量${c.score}${c.segments?.length ? `（局部修复${c.segments.length}处）` : ''}`).join('；');
       const expected = profile.expectedByHeadings ? `；标题预期约${profile.expectedByHeadings}题，实际${finalQuestions.length}题，差值${finalQuestions.length - profile.expectedByHeadings}` : '';
-      const report = `解析模式：${strategyLabel}；采用策略：${best.name}。${profileBits.length ? '格式画像：' + profileBits.join('、') + '。' : ''}候选结果：${candidateLine}。最终识别：${finalQuestions.length}题（单选${stats.single || 0}、多选${(stats.multiple || 0) + (stats.multi || 0)}、判断${stats.judge || 0}、填空${stats.blank || 0}、简答${stats.short || 0}）${expected}。`;
+      const report = `解析模式：${strategyLabel}；采用策略：${best.name}。${profileBits.length ? `格式画像：${profileBits.join('、')}。` : ''}候选结果：${candidateLine}。最终识别：${finalQuestions.length}题（单选${stats.single || 0}、多选${(stats.multiple || 0) + (stats.multi || 0)}、判断${stats.judge || 0}、填空${stats.blank || 0}、简答${stats.short || 0}）${expected}。`;
       // 诊断构建失败时，页面仍需保留本次报告及上一次成功的诊断。
       publishReport(report);
       const diagnostics = { mode: strategyLabel, strategy: best.name, profile, candidates: candidates.map((c) => ({ name: c.name, questions: c.questions.length, score: c.score, warnings: c.warnings || [], segments: c.segments || [] })), expected: { total: profile.expectedByHeadings || 0, types: profile.expectedByType || {} }, stats, warnings: collectImportWarnings(finalQuestions), sharedStem: { detectedGroups: sharedStemGroupsV377.length, appliedGroups: sharedStemExpansionV377.appliedGroups || 0, appliedChildren: sharedStemExpansionV377.appliedChildren || 0, changedQuestions: sharedStemExpansionV377.changedQuestions || 0 } };
@@ -2167,7 +2172,7 @@
     }
     function countBoundaryOptionPollutionV583(qs) {
       let n = 0;
-      (qs || []).forEach((q) => { (q.options || []).forEach((o) => { const visible = visibleOptionTextForRisk(o?.text || '');if (isLeakedHeadingOptionTextV583(visible) || isDocxTableArtifactOptionV583(o)) { n++; } }); });
+      (qs || []).forEach((q) => { (q.options || []).forEach((o) => { const visible = visibleOptionTextForRisk(o?.text || '');if (isLeakedHeadingOptionTextV583(visible) || isDocxTableArtifactOptionV583(o)) { n += 1; } }); });
       return n;
     }
 
@@ -2179,10 +2184,10 @@
       warnings.forEach((w) => { score -= w.includes('缺少答案') && !sourceLikelyHasAnswers ? 3 : 25; });
       let suspicious = 0;
       arr.forEach((q) => {
-        if ((q.options || []).some((o) => String(o.text || '').length > 220 || /【\s*答案|\b\d{1,3}\s*[、.．:：].+【\s*答案/.test(o.text))) { suspicious++; }
-        if (/【\s*答案|正确答案|参考答案/.test(q.question || '')) { suspicious++; }
-        if ((q.question || '').length > 260) { suspicious++; }
-        if (localRepairRiskStatus(q, profile) !== '正常') { suspicious++; }
+        if ((q.options || []).some((o) => String(o.text || '').length > 220 || /【\s*答案|\b\d{1,3}\s*[、.．:：].+【\s*答案/.test(o.text))) { suspicious += 1; }
+        if (/【\s*答案|正确答案|参考答案/.test(q.question || '')) { suspicious += 1; }
+        if ((q.question || '').length > 260) { suspicious += 1; }
+        if (localRepairRiskStatus(q, profile) !== '正常') { suspicious += 1; }
       });
       score -= suspicious * 30;
       if (profile.expectedByHeadings) { const diff = Math.abs(arr.length - profile.expectedByHeadings);score -= Math.min(300, diff * 12); }
@@ -2203,13 +2208,13 @@
       const lead = normalizeOptionKey(leadMatch[1] || leadMatch[2]);
       const keys = rich.options.map((o) => normalizeOptionKey(o.key));
       if (rich.prefix || keys[0] !== lead) { return true; }
-      for (let i = 0;i < keys.length;i++) {
+      for (let i = 0;i < keys.length;i += 1) {
         if (keys[i] !== String.fromCharCode(lead.charCodeAt(0) + i)) { return true; }
       }
       const next = String.fromCharCode(lead.charCodeAt(0) + 1);
       const body = leadMatch[3] || '';
-      const explicitMarker = new RegExp(next + '\\s*[、.．:：]').test(body);
-      const noSeparatorMarker = new RegExp('(?:^|[\\s;；，,、])' + next + '(?=[\\u4e00-\\u9fa5])').test(body);
+      const explicitMarker = new RegExp(`${next}\\s*[、.．:：]`).test(body);
+      const noSeparatorMarker = new RegExp(`(?:^|[\\s;；，,、])${next}(?=[\\u4e00-\\u9fa5])`).test(body);
       return !explicitMarker && !noSeparatorMarker;
     }
     function isNumberedNarrativeEnumerationV58923(line, group = '') {
@@ -2231,6 +2236,7 @@
       return explicit + noSeparator < 2;
     }
 
+    function shouldAdoptContextualType(currentType, contextualType) { return !currentType && contextualType; }
     function parseStructuredExamText(text) {
       const s = repairDocxLostQuestionNumberLines(normalizeImportText(text));
       const lines = s.split('\n').map((x) => x.trim()).filter(Boolean);
@@ -2270,7 +2276,7 @@
         current = { number, questionLines: [], options: [], answer: [], analysisLines: [], subjectiveAnswerLinesV58917: [], group: currentType, volume: currentVolume, type: mapType(currentType) || '', explicitType: false };
         if (lineAfterNo) { current.questionLines.push(lineAfterNo.trim()); }
       };
-      for (let i = 0;i < lines.length;i++) {
+      for (let i = 0;i < lines.length;i += 1) {
         let line = lines[i];
         const numberedTypedLineV592 = getNumberedTypeQuestionLineV592(line);
         const forcedLineTypeV592 = numberedTypedLineV592?.type || '';
@@ -2305,10 +2311,11 @@
             while ((cm = compactReg.exec(after)) !== null) { pairs.push({ no: Number(cm[1]), ans: cm[2] }); }
             if (pairs.length) {
               flush();
-              pairs.forEach((p, idx) => {
-                if (idx > 0) { flush(); }
+              for (let pairIndex = 0; pairIndex < pairs.length; pairIndex += 1) {
+                const p = pairs[pairIndex];
+                if (pairIndex > 0) { flush(); }
                 current = { number: p.no, questionLines: [], options: [], answer: splitAnswerByType(p.ans, currentType || ''), analysisLines: [], group: currentType, volume: currentVolume, type: mapType(currentType) || '' };
-              });
+              }
             } else {
               current.answer = splitAnswerByType(after, current.type || '');
             }
@@ -2335,9 +2342,10 @@
           const compactReg = /(\d{1,4})\s*[.、．]\s*(?:【答案】\s*)?([A-Ga-g]{1,7})\s*(?:【解析】\s*([^\d]*?))?(?=\s+\d{1,4}\s*[.、．]|\s*$)/g;let cm;const pairs = [];
           while ((cm = compactReg.exec(line)) !== null) { pairs.push({ no: Number(cm[1]), ans: cm[2], analysis: (cm[3] || '').trim() }); }
           if (hasPendingAnalysis()) { collectingAnalysis = false; }
-          pairs.forEach((p, idx) => {
-            if (idx === 0 && current && current.number === p.no && !current.answer.length) { current.answer = splitAnswerByType(p.ans, current.type || '');if (p.analysis) { current.analysisLines.push(p.analysis); } } else { flush();current = { number: p.no, questionLines: [], options: [], answer: splitAnswerByType(p.ans, currentType || ''), analysisLines: p.analysis ? [p.analysis] : [], group: currentType, volume: currentVolume, type: mapType(currentType) || '' }; }
-          });
+          for (let pairIndex = 0; pairIndex < pairs.length; pairIndex += 1) {
+            const p = pairs[pairIndex];
+            if (pairIndex === 0 && current && current.number === p.no && !current.answer.length) { current.answer = splitAnswerByType(p.ans, current.type || '');if (p.analysis) { current.analysisLines.push(p.analysis); } } else { flush();current = { number: p.no, questionLines: [], options: [], answer: splitAnswerByType(p.ans, currentType || ''), analysisLines: p.analysis ? [p.analysis] : [], group: currentType, volume: currentVolume, type: mapType(currentType) || '' }; }
+          }
           if (pairs.length) { continue; }
         }
         const qm = line.match(/^\s*(?:[【[]\s*(\d{1,4})\s*[】\]]|(?:第\s*)?(\d{1,4})\s*(?:题)?[.、．:：]?)\s*(.*)$/);
@@ -2352,11 +2360,10 @@
         }
         if (!current) { continue; }
         const contextualTypeV592 = current.type || inferQuestionTypeFromPromptV592((current.questionLines || []).join(' '), current.group || currentType || '');
-        const shouldAdoptContextualType = () => !current.type && contextualTypeV592;
         const inlineAnswerTag = extractInlineAnswerTag(line, contextualTypeV592);
-        if (inlineAnswerTag.answer.length) { if (shouldAdoptContextualType()) { current.type = contextualTypeV592; }current.answer.push(...inlineAnswerTag.answer);line = inlineAnswerTag.text; }
+        if (inlineAnswerTag.answer.length) { if (shouldAdoptContextualType(current.type, contextualTypeV592)) { current.type = contextualTypeV592; }current.answer.push(...inlineAnswerTag.answer);line = inlineAnswerTag.text; }
         const trailingAnswer = extractTrailingAnswerFromText(line, contextualTypeV592);
-        if (trailingAnswer.answer.length && !isAnswerLine(line)) { if (shouldAdoptContextualType()) { current.type = contextualTypeV592; }current.answer.push(...trailingAnswer.answer);line = trailingAnswer.text; }
+        if (trailingAnswer.answer.length && !isAnswerLine(line)) { if (shouldAdoptContextualType(current.type, contextualTypeV592)) { current.type = contextualTypeV592; }current.answer.push(...trailingAnswer.answer);line = trailingAnswer.text; }
         if (isAnswerLine(line)) {
           const stripped = line.replace(/^(?:【|\[)?\s*(?:正确答案|参考答案|标准答案|答案解析|答案|参考要点|答题要点|Answer|Correct\s*answer)\s*(?:】|\])?\s*[:：]?\s*/i, '').trim();
           const answerTypeV592 = current.type || contextualTypeV592 || '';
@@ -2369,21 +2376,21 @@
         if (preferLeadingStandaloneOptionV58923(line, rich)) { rich = null; }
         if (rich && rich.options.length >= 2) {
           if (rich.prefix) { current.questionLines.push(rich.prefix); }
-          rich.options.forEach((it) => {
+          for (const it of rich.options) {
             const key = normalizeOptionKey(it.key);let txt = (it.text || '').trim();
             if (hasCorrectOptionMark(it, txt)) { current.answer.push(key);txt = removeCorrectMark(txt); }
             if (it.extraAnswer && it.extraAnswer.length) { current.answer.push(...it.extraAnswer); }
             if (txt) { current.options.push({ key, text: txt }); }
-          });
+          }
           continue;
         }
         const inline = narrativeEnumerationV58923 ? [] : splitInlineOptions(line);
         if (inline.length >= 2) {
-          inline.forEach((it) => {
+          for (const it of inline) {
             const key = normalizeOptionKey(it.key);let txt = (it.text || '').trim();
             if (hasCorrectOptionMark(it, txt)) { current.answer.push(key);txt = removeCorrectMark(txt); }
             if (txt) { current.options.push({ key, text: txt }); }
-          });
+          }
           continue;
         }
         const bareEnglishStemWithoutQuestionV5982 = !(current.questionLines || []).length && !(current.options || []).length && isBareEnglishStemStartV5982(line);
@@ -2396,7 +2403,7 @@
         }
         if (collectingAnalysis) { current.analysisLines.push(line);continue; }
         if (current.options.length) {
-          current.options[current.options.length - 1].text = (current.options[current.options.length - 1].text + ' ' + line).trim();
+          current.options[current.options.length - 1].text = (`${current.options[current.options.length - 1].text} ${line}`).trim();
         } else {
           current.questionLines.push(line);
         }
@@ -2484,8 +2491,8 @@
       const hasInlineAB = (s) => /A\s*[、.．:：，,\s].{0,100}B\s*[、.．:：，,\s]/i.test(String(s || ''));
       const hasNearbyOptions = (idx) => {
         let a = false; let b = false; let seen = 0;
-        for (let j = idx + 1;j < lines.length && seen < 8;j++) {
-          const t = String(lines[j] || '').trim();if (!t) { continue; }seen++;
+        for (let j = idx + 1;j < lines.length && seen < 8;j += 1) {
+          const t = String(lines[j] || '').trim();if (!t) { continue; }seen += 1;
           if (isChapterLike(t) || getHeadingType(t) || isVolumeHeading(t)) { break; }
           if (looksLikeChoiceA(t) || /^\s*A[.．、:：]/i.test(t) || hasInlineAB(t)) { a = true; }
           if (looksLikeChoiceB(t) || /^\s*B[.．、:：]/i.test(t) || hasInlineAB(t)) { b = true; }
@@ -2494,8 +2501,8 @@
       };
       const nextStrongNo = (idx) => {
         let seen = 0;
-        for (let j = idx + 1;j < lines.length && seen < 14;j++) {
-          const t = String(lines[j] || '').trim();if (!t) { continue; }seen++;
+        for (let j = idx + 1;j < lines.length && seen < 14;j += 1) {
+          const t = String(lines[j] || '').trim();if (!t) { continue; }seen += 1;
           if (isChapterLike(t) || getHeadingType(t) || isVolumeHeading(t)) { break; }
           const n = strongNoOf(t);if (n) { return n; }
         }
@@ -2508,7 +2515,7 @@
         if (!/[（(][^）)]{0,80}[）)]|[?？。]$|称为|属于|是|指/.test(t)) { return false; }
         return hasNearbyOptions(idx);
       };
-      for (let i = 0;i < lines.length;i++) {
+      for (let i = 0;i < lines.length;i += 1) {
         let raw = lines[i];let t = String(raw || '').trim();
         if (!t) { out.push(raw);continue; }
         if (isChapterLike(t) || getHeadingType(t) || isVolumeHeading(t)) {
@@ -2516,14 +2523,14 @@
         }
         const originalStrong = strongNoOf(t);
         if (pendingFirst > 0 && canBeQuestionWithoutNumber(t, i)) {
-          raw = String(raw).replace(t, '1．' + t);t = String(raw).trim();pendingFirst = 0;
+          raw = String(raw).replace(t, `1．${t}`);t = String(raw).trim();pendingFirst = 0;
         } else if (canBeQuestionWithoutNumber(t, i)) {
           const nextNo = nextStrongNo(i);
           if (lastQuestionNo > 0 && nextNo === lastQuestionNo + 2) {
-            raw = String(raw).replace(t, (lastQuestionNo + 1) + '．' + t);t = String(raw).trim();
+            raw = String(raw).replace(t, `${lastQuestionNo + 1}．${t}`);t = String(raw).trim();
           }
         } else if (pendingFirst > 0 && !isImportNoiseLine(t)) {
-          pendingFirst--;
+          pendingFirst -= 1;
         }
         // DOCX/Word 有时会丢失题号后的标点，如“3下列……”。只在后续邻近存在 A/B 选项时补回，避免误伤普通数字文本。
         const noPunc = t.match(/^(\d{1,3})(?=[^\d\s、.．:：）)\]】])/);
@@ -2549,9 +2556,9 @@
       // 增强：避免把选项值“A. 1.O m / B.1.2 m”里的“1.O”误认为新题号。
       s = s.replace(/([^\n])\s+((?:第\s*)?\d{1,4}\s*(?:题)?[、.．:：]\s*(?!\s*\d)(?!mm|cm|m|MPa|bar|kg|℃|%))/gi, (m, prev, next, offset, full) => {
         const before = full.slice(Math.max(0, offset - 8), offset + 1);
-        if (/[A-Ga-g0]\s*[、.．:：]\s*$/.test(before)) { return prev + ' ' + next; }
-        if (/^\d+\s*[.．]\s*[OoIl]\b/.test(next)) { return prev + ' ' + next; }
-        return prev + '\n' + next;
+        if (/[A-Ga-g0]\s*[、.．:：]\s*$/.test(before)) { return `${prev} ${next}`; }
+        if (/^\d+\s*[.．]\s*[OoIl]\b/.test(next)) { return `${prev} ${next}`; }
+        return `${prev}\n${next}`;
       });
       // 答案标记后面紧跟下一题题号时切开。
       s = s.replace(/([】\])）])\s+(?=(?:第\s*)?\d{1,3}\s*(?:题)?[、.．:：])/g, '$1\n');
@@ -2570,7 +2577,7 @@
       const raw = String(line || '').replace(/[\s\u3000]+/g, ' ').trim();
       const compact = raw.replace(/\s/g, '');
       const m = compact.match(/([一二三四五六七八九十百千万0-9]+)卷$/);
-      if (m) { return '第' + m[1] + '卷'; }
+      if (m) { return `第${m[1]}卷`; }
       return raw;
     }
     function hasInlineAnswerTag(line) {
@@ -2621,7 +2628,7 @@
         if (labeledCount < 2) { return null; }
       }
       const opts = [];
-      for (let i = 0;i < parts.length;i++) {
+      for (let i = 0;i < parts.length;i += 1) {
         const part = parts[i];
         const m = part.match(/^([A-Ga-g])\s*[、.．:：]?\s*(.+)$/);
         if (m) { opts.push({ key: m[1].toUpperCase(), text: m[2].trim() }); } else if (i === 0) { opts.push({ key: 'A', text: part }); } else { opts.push({ key: String.fromCharCode(65 + i), text: part }); }
@@ -2675,7 +2682,7 @@
       const curHasRealQuestion = () => cur.some((l) => !isOptionLine(l) && !isAnswerLine(l) && !isAnalysisLine(l) && !getHeadingType(l));
       const curHasAnsweredStem = () => cur.some((l) => hasInlineAnswerTag(l) || hasEmbeddedAnswerStem(l, curGroup || group));
       const curHasDocxTable = () => cur.some((l) => /^【DOCX表格开始】$/.test(String(l || '').trim())) && !cur.some((l) => isOptionLine(l) || isAnswerLine(l));
-      for (let lineIndex = 0;lineIndex < lines.length;lineIndex++) {
+      for (let lineIndex = 0;lineIndex < lines.length;lineIndex += 1) {
         const raw = lines[lineIndex]; const nextLines = lines.slice(lineIndex + 1, lineIndex + 9);
         if (isVolumeHeading(raw)) { flush();volume = getVolumeLabel(raw);curVolume = volume;chapter = '';curChapter = '';continue; }
         if (isChapterHeadingV58911(raw, nextLines)) { flush();chapter = raw;curChapter = chapter;continue; }
@@ -2746,7 +2753,7 @@
     function getNumberedTypeQuestionLineV592(line) {
       const raw = String(line || '').trim();
       const labels = '单选题|单项选择题|单选|單選題|單選|多选题|多项选择题|多选|多選題|多選|复选题|複選題|复选|複選|判断题|判断|判斷題|是非题|是非題|填空题|填空|填充题|简答题|簡答題|简答|問答題|问答题|名词解释|名詞解釋|论述题|論述題';
-      const re = new RegExp('^\\s*(?:第\\s*)?(\\d{1,4})\\s*(?:题)?[.、．:：]?\\s*(' + labels + ')\\s*[:：]\\s*(\\S[\\s\\S]*)$');
+      const re = new RegExp(`^\\s*(?:第\\s*)?(\\d{1,4})\\s*(?:题)?[.、．:：]?\\s*(${labels})\\s*[:：]\\s*(\\S[\\s\\S]*)$`);
       const m = raw.match(re);
       if (!m) { return null; }
       const type = mapInlineQuestionTypeLabelV592(m[2]);
@@ -2897,7 +2904,7 @@
       const firstText = s.slice(0, hits[0].idx).trim();
       if (!firstText || firstText.length > 120) { return null; }
       const options = [{ key: 'A', text: firstText }];
-      for (let i = 0;i < hits.length;i++) {
+      for (let i = 0;i < hits.length;i += 1) {
         const start = hits[i].idx + hits[i].len;
         const end = i + 1 < hits.length ? hits[i + 1].idx : s.length;
         const txt = s.slice(start, end).trim();
@@ -2918,7 +2925,7 @@
       return !withoutImages && /!\[[^\]]{0,120}\]\(data:image\/|\[\[DOCX_IMAGE_\d+\]\]|\[图片已移除\]|【DOCX图片\d+/i.test(raw);
     }
     function stemLikelyNeedsFigureMaterialV588(text, group = '') {
-      const s = (String(text || '') + ' ' + String(group || '')).replace(/\s+/g, '');
+      const s = (`${String(text || '')} ${String(group || '')}`).replace(/\s+/g, '');
       return /(?:根据|依据|观察|由|结合|如|见).{0,16}(?:下图|下面的图|以下图|上图|图中|图示|散点图|统计图|折线图|柱状图|饼图|曲线图|示意图|图表)|(?:下图|下面的散点图|散点图|统计图|折线图|柱状图|饼图|曲线图|示意图)可以|根据下面的散点图/.test(s);
     }
     function repairStemImageOptionMisplacementV588(question, options, group = '') {
@@ -2971,7 +2978,7 @@
       const clean = (images || []).map((x) => String(x || '').trim()).filter(Boolean);
       const max = Math.min(clean.length, 7);
       const out = [];
-      for (let i = 0;i < max;i++) { out.push({ key: String.fromCharCode(65 + i), text: clean[i] }); }
+      for (let i = 0;i < max;i += 1) { out.push({ key: String.fromCharCode(65 + i), text: clean[i] }); }
       return out;
     }
 
@@ -2979,7 +2986,7 @@
       const opts = Array.isArray(options) ? options : [];
       if (opts.length < minCount) { return false; }
       const startCode = String(start || 'A').toUpperCase().charCodeAt(0);
-      for (let i = 0;i < Math.min(opts.length, 7);i++) {
+      for (let i = 0;i < Math.min(opts.length, 7);i += 1) {
         const key = String((opts[i] && opts[i].key) || '').toUpperCase();
         if (key !== String.fromCharCode(startCode + i)) { return false; }
       }
@@ -2997,14 +3004,14 @@
       });
     }
     function isVisualImageChoiceContextV591(question, group = '') {
-      const s = (String(question || '') + ' ' + String(group || '')).replace(/\s+/g, '');
+      const s = (`${String(question || '')} ${String(group || '')}`).replace(/\s+/g, '');
       if (!s) { return false; }
       if (/(?:图形推理|图形判断|图形规律|图形题|图形|图案|九宫格|问号|空缺|缺失|补入|填入|纸盒|折叠|展开图|立体图|平面图|视觉|拼合|旋转|翻转).{0,24}(?:选出|选择|最合适|最恰当|正确|符合|应填|应该|问号|空缺|缺失)|(?:选出|选择|最合适|最恰当|正确|符合|应填|应该).{0,24}(?:图形|图案|问号|空缺|缺失|纸盒|折叠|展开图|九宫格|规律)/.test(s)) { return true; }
       if (/(?:图形推理|图形判断|图形规律|纸盒折叠|九宫格)/.test(s)) { return true; }
       return false;
     }
     function isChartMaterialContextV591(question, group = '') {
-      const s = (String(question || '') + ' ' + String(group || '')).replace(/\s+/g, '');
+      const s = (`${String(question || '')} ${String(group || '')}`).replace(/\s+/g, '');
       return /(?:散点图|统计图|折线图|柱状图|饼图|曲线图|回归|相关系数|变量|方差分析表|判定系数|置信区间|预测区间|最小二乘法|线性相关|线性回归)/.test(s);
     }
     function allowAnswerImageOptionFallbackV591(question, group, type, answer, images) {
@@ -3072,7 +3079,7 @@
       const lines = (Array.isArray(block) ? block : block.lines || String(block).split('\n')).map((x) => String(x).trim()).filter(Boolean);
       const group = block.group || '';const groupTypeV592 = mapType(group) || '';let type = groupTypeV592;let explicitTypeV592 = false;let answer = [];let analysis = '';let options = [];const qlines = [];let collectingAnalysis = false;let unkeyedMode = false;let pendingOptionKey = '';let seenQuestion = false;let number = idx + 1;const answerImageOptionsV589 = [];let collectingAnswerImageOptionsV589 = false;let collectingSubjectiveAnswerV58917 = false;const subjectiveAnswerLinesV58917 = [];
       const full = lines.join('\n');const inlineType = detectType(full);if (inlineType) { type = inlineType; }
-      for (let li = 0;li < lines.length;li++) {
+      for (let li = 0;li < lines.length;li += 1) {
         let line = lines[li].trim();
         const numberedTypedLineV592 = getNumberedTypeQuestionLineV592(line);
         if (numberedTypedLineV592) { type = numberedTypedLineV592.type;explicitTypeV592 = true;number = numberedTypedLineV592.number;line = `${numberedTypedLineV592.number}. ${numberedTypedLineV592.stem}`; }
@@ -3080,7 +3087,6 @@
         if (numberedTypeHeader) { type = numberedTypeHeader.type;explicitTypeV592 = true;number = numberedTypeHeader.number;collectingAnalysis = false;continue; }
         const t = detectType(line);if (t) { type = t;explicitTypeV592 = true; }
         const contextualTypeV592 = type || inferQuestionTypeFromPromptV592([qlines.join(' '), line].filter(Boolean).join(' '), group);
-        const shouldAdoptContextualType = () => !type && contextualTypeV592;
         if (collectingSubjectiveAnswerV58917) {
           if (isAnalysisLine(line)) { collectingSubjectiveAnswerV58917 = false; } else { subjectiveAnswerLinesV58917.push(line);continue; }
         }
@@ -3088,10 +3094,10 @@
           type = 'short';collectingSubjectiveAnswerV58917 = true;collectingAnalysis = false;continue;
         }
         const inlineAnswerTag = extractInlineAnswerTag(line, contextualTypeV592);
-        if (inlineAnswerTag.answer.length) { if (shouldAdoptContextualType()) { type = contextualTypeV592; }answer.push(...inlineAnswerTag.answer);line = inlineAnswerTag.text; }
+        if (inlineAnswerTag.answer.length) { if (shouldAdoptContextualType(type, contextualTypeV592)) { type = contextualTypeV592; }answer.push(...inlineAnswerTag.answer);line = inlineAnswerTag.text; }
         const lineAnswerExtract = extractTrailingAnswerFromText(line, contextualTypeV592);
         if (lineAnswerExtract.answer.length && !isAnswerLine(line)) {
-          if (shouldAdoptContextualType()) { type = contextualTypeV592; }
+          if (shouldAdoptContextualType(type, contextualTypeV592)) { type = contextualTypeV592; }
           answer.push(...lineAnswerExtract.answer);
           line = lineAnswerExtract.text;
         }
@@ -3208,7 +3214,7 @@
         const implicitAOptions = extractImplicitLeadingAOptions(line);
         if (implicitAOptions && implicitAOptions.length >= 3 && (seenQuestion || qlines.length) && !options.length) {
           collectingAnalysis = false;unkeyedMode = false;pendingOptionKey = '';
-          implicitAOptions.forEach((o) => { if (o.text) { options.push(o); } });
+          for (const option of implicitAOptions) { if (option.text) { options.push(option); } }
           continue;
         }
 
@@ -3238,7 +3244,7 @@
         const semiOptions = splitSemicolonOptionsFromLine(line, answer);
         if (semiOptions && semiOptions.length >= 2 && (seenQuestion || qlines.length)) {
           collectingAnalysis = false;unkeyedMode = false;
-          semiOptions.forEach((o) => { if (o.text) { options.push(o); } });
+          for (const option of semiOptions) { if (option.text) { options.push(option); } }
           continue;
         }
 
@@ -3276,7 +3282,7 @@
           continue;
         }
         if (options.length && !unkeyedMode && !looksLikeNewQuestionLine(line, group) && !isAnswerLine(line) && !isAnalysisLine(line)) {
-          options[options.length - 1].text = (options[options.length - 1].text + ' ' + line).trim();
+          options[options.length - 1].text = (`${options[options.length - 1].text} ${line}`).trim();
         } else if (!getHeadingType(line)) {
           qlines.push(line);seenQuestion = true;
         }
@@ -3326,7 +3332,7 @@
       const re = /([oOxXuUyYvV√✔✓])?\s*[（(]\s*([A-Ga-g1-9])\s*[）)]/g;
       const hits = [];let m;
       while ((m = re.exec(s))) { hits.push({ idx: m.index, len: m[0].length, correct: !!m[1], key: m[2] }); }
-      for (let i = hits.length - 1;i >= 0;i--) {
+      for (let i = hits.length - 1;i >= 0;i -= 1) {
         const h = hits[i];
         const key = String(h.key || '');
         if (/^\d$/.test(key)) {
@@ -3353,7 +3359,7 @@
         }
         const hits = [];
         const base = keyCode(opt.key);
-        for (let i = 1;i < txt.length;i++) {
+        for (let i = 1;i < txt.length;i += 1) {
           const ch = txt[i];
           if (!/^[A-G]$/.test(ch)) { continue; }
           const key = normalizeOptionKey(ch);
@@ -3369,12 +3375,12 @@
           if (followsAlphanumeric(prev)) { continue; }
           if (noSeparatorAfter && prev && !/[\s；;，,、。！？?!]/.test(prev)) { continue; }
           let len = 1;
-          while (i + len < txt.length && /[、.．:：，,；;\s]/.test(txt[i + len])) { len++; }
+          while (i + len < txt.length && /[、.．:：，,；;\s]/.test(txt[i + len])) { len += 1; }
           hits.push({ idx: i, len, key });
         }
         if (!hits.length) { out.push(opt);continue; }
         out.push({ ...opt, text: txt.slice(0, hits[0].idx).trim() });
-        for (let i = 0;i < hits.length;i++) {
+        for (let i = 0;i < hits.length;i += 1) {
           const start = hits[i].idx + hits[i].len;
           const end = i + 1 < hits.length ? hits[i + 1].idx : txt.length;
           const part = txt.slice(start, end).trim();
@@ -3385,7 +3391,7 @@
     }
     function mergeDuplicateOptions(options) {
       const map = new Map();
-      for (const o of options) { if (!map.has(o.key)) { map.set(o.key, { key: o.key, text: o.text }); } else { map.get(o.key).text = (map.get(o.key).text + ' ' + o.text).trim(); } }
+      for (const o of options) { if (!map.has(o.key)) { map.set(o.key, { key: o.key, text: o.text }); } else { map.get(o.key).text = (`${map.get(o.key).text} ${o.text}`).trim(); } }
       return [...map.values()].sort((a, b) => a.key.localeCompare(b.key));
     }
     function mapType(inputS) {
@@ -3411,7 +3417,7 @@
       const end = m[2].toUpperCase().charCodeAt(0);
       if (start > end) { return null; }
       const out = [];
-      for (let c = start;c <= end;c++) { out.push(String.fromCharCode(c)); }
+      for (let c = start;c <= end;c += 1) { out.push(String.fromCharCode(c)); }
       return out;
     }
     function isFullChoiceAnswerTokenV373(value) {
@@ -3687,8 +3693,9 @@
       if (letters.length >= 2) {
         const start = letters.find((h) => String(h.key).toUpperCase() === 'A') || letters[0];
         const seq = [];const need = String(start.key).toUpperCase().charCodeAt(0);let pos = start.idx - 1;
-        for (let code = need;code <= 71;code++) {
-          const hit = letters.find((h) => h.idx > pos && String(h.key).toUpperCase().charCodeAt(0) === code);
+        for (let code = need;code <= 71;code += 1) {
+          const previousPosition = pos;
+          const hit = letters.find((h) => h.idx > previousPosition && String(h.key).toUpperCase().charCodeAt(0) === code);
           if (!hit) { break; }
           seq.push(hit);pos = hit.idx;
         }
@@ -3698,8 +3705,9 @@
       if (nums.length >= 2) {
         const start = nums.find((h) => String(h.key) === '1') || nums[0];
         const seq = [];const need = Number(start.key);let pos = start.idx - 1;
-        for (let n = need;n <= 9;n++) {
-          const hit = nums.find((h) => h.idx > pos && String(h.key) === String(n));
+        for (let n = need;n <= 9;n += 1) {
+          const previousPosition = pos;
+          const hit = nums.find((h) => h.idx > previousPosition && String(h.key) === String(n));
           if (!hit) { break; }
           seq.push(hit);pos = hit.idx;
         }
@@ -3720,11 +3728,11 @@
         }
         if (raw[i] === '$') {
           let j = i + 1;
-          if (raw[j] === '$') { j++; }
+          if (raw[j] === '$') { j += 1; }
           const double = raw[i + 1] === '$';
           let end = -1;
-          for (let k = j;k < raw.length;k++) {
-            if (raw[k] === '\\') { k++;continue; }
+          for (let k = j;k < raw.length;k += 1) {
+            if (raw[k] === '\\') { k += 1;continue; }
             if (raw[k] === '$') {
               if (double) { if (raw[k + 1] === '$') { end = k + 2;break; } } else { end = k + 1;break; }
             }
@@ -3735,7 +3743,7 @@
           const end = raw.indexOf('】', i);
           if (end >= 0) { const seg = raw.slice(i, end + 1);out += ' '.repeat(seg.length);i = end + 1;continue; }
         }
-        out += raw[i];i++;
+        out += raw[i];i += 1;
       }
       return out;
     }

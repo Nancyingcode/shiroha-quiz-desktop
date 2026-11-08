@@ -53,7 +53,7 @@
           if (error instanceof Error && 'code' in error) { throw error; }
           throw storageError(error);
         }
-        raw = encoded; snapshot = structuredClone(next); revision++;
+        raw = encoded; snapshot = structuredClone(next); revision += 1;
         const receipt = { operationId, revision };
         operations.set(operationId, { encoded, receipt });
         return receipt;
@@ -100,7 +100,7 @@
   async function resourceJson(url) {
     try {
       const response = await fetch(url, { cache: 'no-store' });
-      if (!response.ok) { throw new Error('HTTP ' + response.status); }
+      if (!response.ok) { throw new Error(`HTTP ${response.status}`); }
       return await response.json();
     } catch (fetchError) {
       // file URL 的旧浏览器不支持 fetch；静态 ZIP 支持取消前保留 XHR 兼容入口。
@@ -108,7 +108,7 @@
         const xhr = new globalThis.XMLHttpRequest();
         xhr.open('GET', url, true); xhr.overrideMimeType('application/json;charset=utf-8');
         xhr.onload = () => {
-          try { if (xhr.status === 0 || (xhr.status >= 200 && xhr.status < 300)) { resolve(JSON.parse(xhr.responseText)); } else { reject(new Error('XHR ' + xhr.status)); } } catch (error) { reject(error); }
+          try { if (xhr.status === 0 || (xhr.status >= 200 && xhr.status < 300)) { resolve(JSON.parse(xhr.responseText)); } else { reject(new Error(`XHR ${xhr.status}`)); } } catch (error) { reject(error); }
         };
         xhr.onerror = () => reject(fetchError); xhr.send();
       });

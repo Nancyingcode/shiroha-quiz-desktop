@@ -14,7 +14,7 @@
       try {
         const binary = globalThis.atob(match[2].replace(/\s+/g, ''));
         const bytes = new Uint8Array(binary.length);
-        for (let index = 0; index < binary.length; index++) { bytes[index] = binary.charCodeAt(index); }
+        for (let index = 0; index < binary.length; index += 1) { bytes[index] = binary.charCodeAt(index); }
         return { ext, bytes };
       } catch { return null; }
     }
@@ -51,7 +51,7 @@
           question.images.push({ id: safeImageId('native_zip', question.id || 'q', nextOrder),
             localPath: asset.name, sourceName: asset.fileName, order: nextOrder,
             width: null, height: null, sizeBytes: asset.bytes.length });
-          nextOrder++;
+          nextOrder += 1;
         }
         return `\n【${cleanAlt}】\n`;
       }).replace(/\n{3,}/g, '\n\n').trim();

@@ -26,10 +26,10 @@
       const source = String(text || '').replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n');
       const delimiter = detectDelimitedSeparatorV49(source);
       const rows = [];let row = []; let cell = ''; let inQuotes = false;
-      for (let i = 0;i < source.length;i++) {
+      for (let i = 0;i < source.length;i += 1) {
         const ch = source[i];
         if (ch === '"') {
-          if (inQuotes && source[i + 1] === '"') { cell += '"';i++; } else { inQuotes = !inQuotes; }
+          if (inQuotes && source[i + 1] === '"') { cell += '"';i += 1; } else { inQuotes = !inQuotes; }
         } else if (ch === delimiter && !inQuotes) { row.push(normalizeTableCellTextV49(cell));cell = ''; } else if (ch === '\n' && !inQuotes) { row.push(normalizeTableCellTextV49(cell));rows.push(row);row = [];cell = ''; } else { cell += ch; }
       }
       row.push(normalizeTableCellTextV49(cell));
@@ -38,11 +38,11 @@
     }
     function countDelimiterOutsideQuotesV49(line, delimiter) {
       let n = 0; let inQuotes = false;
-      for (let i = 0;i < line.length;i++) {
+      for (let i = 0;i < line.length;i += 1) {
         const ch = line[i];
         if (ch === '"') {
-          if (inQuotes && line[i + 1] === '"') { i++; } else { inQuotes = !inQuotes; }
-        } else if (ch === delimiter && !inQuotes) { n++; }
+          if (inQuotes && line[i + 1] === '"') { i += 1; } else { inQuotes = !inQuotes; }
+        } else if (ch === delimiter && !inQuotes) { n += 1; }
       }
       return n;
     }
@@ -82,7 +82,7 @@
         let target = relMap[rid] || '';
         if (!target) { continue; }
         target = target.replace(/^\//, '');
-        if (!target.startsWith('xl/')) { target = 'xl/' + target.replace(/^\.\//, ''); }
+        if (!target.startsWith('xl/')) { target = `xl/${target.replace(/^\.\//, '')}`; }
         const xml = await get(target);
         if (!xml) { continue; }
         sheets.push({ sheetName: name, rows: parseXlsxSheetRowsV49(xml, sharedStrings) });
@@ -166,7 +166,7 @@
       if (headerIndex < 0) { return { questions: [] }; }
       let map = buildTableHeaderMapV49(rows[headerIndex]);
       const questions = [];
-      for (let r = headerIndex + 1;r < rows.length;r++) {
+      for (let r = headerIndex + 1;r < rows.length;r += 1) {
         const row = rows[r] || [];
         if (!row.some((c) => String(c || '').trim())) { continue; }
         const nextMap = buildTableHeaderMapV49(row);
@@ -179,7 +179,7 @@
     function findTableHeaderRowV49(rows) {
       let best = -1; let bestScore = 0;
       const max = Math.min(rows.length, 12);
-      for (let i = 0;i < max;i++) {
+      for (let i = 0;i < max;i += 1) {
         const map = buildTableHeaderMapV49(rows[i] || []);
         if (map.score > bestScore) { best = i;bestScore = map.score; }
       }
@@ -207,7 +207,7 @@
       const raw = String(cell || '').trim();if (!raw) { return ''; }
       const h = compactHeaderV49(raw);
       const opt = raw.match(/^\s*(?:选项\s*([A-Ga-g])|([A-Ga-g])\s*选项|option\s*([A-Ga-g])|choice\s*([A-Ga-g])|([A-Ga-g]))\s*$/i);
-      if (opt) { return 'opt' + String(opt[1] || opt[2] || opt[3] || opt[4] || opt[5]).toUpperCase(); }
+      if (opt) { return `opt${String(opt[1] || opt[2] || opt[3] || opt[4] || opt[5]).toUpperCase()}`; }
       if (['题型', '类型', 'questiontype', 'type', 'kind'].includes(h)) { return 'type'; }
       if (['题号', '序号', '编号', 'no', 'number', 'num', 'id'].includes(h)) { return 'number'; }
       if (['题干', '题目', '问题', 'question', 'stem', 'title', '题目内容'].includes(h)) { return 'question'; }
@@ -254,7 +254,7 @@
     }
     function stripLeadingOptionLabelV49(text, key = '') {
       const k = String(key || '').toUpperCase();
-      return String(text || '').trim().replace(new RegExp('^\\s*(?:[（(]\\s*' + k + '\\s*[）)]|' + k + '\\s*[、.．:：])\\s*', 'i'), '').trim();
+      return String(text || '').trim().replace(new RegExp(`^\\s*(?:[（(]\\s*${k}\\s*[）)]|${k}\\s*[、.．:：])\\s*`, 'i'), '').trim();
     }
     function parseTableOptionsCellV49(text) {
       const s = String(text || '').trim();if (!s) { return []; }

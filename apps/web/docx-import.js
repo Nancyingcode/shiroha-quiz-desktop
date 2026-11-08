@@ -30,7 +30,7 @@
             } else {
               imageMap[rid] = `【DOCX图片${imageNo}：${entryName.split('/').pop()}，当前浏览器可能无法直接显示】`;
             }
-            imageNo++;
+            imageNo += 1;
           }
         } catch (err) { warnDev('DOCX 图片提取失败，继续按纯文本导入。', err); }
       }
@@ -158,7 +158,7 @@
     function mimeHeaderValueV58922(headers, name) {
       const source = unfoldMimeHeadersV58922(headers);
       const escaped = String(name || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const m = source.match(new RegExp('(?:^|\\r?\\n)' + escaped + '\\s*:\\s*([^\\r\\n]+)', 'i'));
+      const m = source.match(new RegExp(`(?:^|\\r?\\n)${escaped}\\s*:\\s*([^\\r\\n]+)`, 'i'));
       return m ? m[1].trim() : '';
     }
     function mimeCharsetV58922(contentType) {
@@ -172,7 +172,7 @@
       const source = String(text || '').replace(/=\r?\n/g, '');
       const bytes = [];const encoder = new TextEncoder();let literal = '';
       const flush = () => { if (!literal) { return; } const encoded = encoder.encode(literal);for (const b of encoded) { bytes.push(b); }literal = ''; };
-      for (let i = 0;i < source.length;i++) {
+      for (let i = 0;i < source.length;i += 1) {
         if (source[i] === '=' && /^[0-9A-Fa-f]{2}$/.test(source.slice(i + 1, i + 3))) {
           flush();bytes.push(parseInt(source.slice(i + 1, i + 3), 16));i += 2;
         } else { literal += source[i]; }
@@ -186,7 +186,7 @@
       if (encoding.includes('base64')) {
         const clean = String(body || '').replace(/\s+/g, '');
         const bin = globalThis.atob(clean);const bytes = new Uint8Array(bin.length);
-        for (let i = 0;i < bin.length;i++) { bytes[i] = bin.charCodeAt(i); }
+        for (let i = 0;i < bin.length;i += 1) { bytes[i] = bin.charCodeAt(i); }
         return decodeMimeBytesV58922(bytes, charset);
       }
       return String(body || '');
@@ -198,7 +198,7 @@
       const boundaryMatch = contentType.match(/boundary\s*=\s*(?:"([^"]+)"|'([^']+)'|([^;\s]+))/i);
       const boundary = boundaryMatch && (boundaryMatch[1] || boundaryMatch[2] || boundaryMatch[3]);
       if (boundary) {
-        const marker = '--' + boundary;
+        const marker = `--${boundary}`;
         const parts = root.body.split(marker);
         for (let part of parts) {
           part = part.replace(/^\r?\n/, '').replace(/\r?\n--\s*$/, '').trim();
@@ -254,7 +254,7 @@
       if (path.startsWith('/')) { path = path.slice(1); }
       if (path.startsWith('word/')) { return path; }
       if (path.startsWith('../')) { return path.replace(/^\.\.\//, ''); }
-      return 'word/' + path;
+      return `word/${path}`;
     }
     function docxImageMime(name) {
       const ext = String(name || '').split('.').pop().toLowerCase();
@@ -368,9 +368,9 @@
       const padded = rows.map((r) => Array.from({ length: maxCols }, (_, i) => docxMarkdownTableCell(r[i] || '')));
       const lines = ['【DOCX表格开始】'];
       const first = padded[0] || [];
-      lines.push('| ' + first.join(' | ') + ' |');
-      lines.push('| ' + Array.from({ length: maxCols }, () => '---').join(' | ') + ' |');
-      padded.slice(1).forEach((r) => lines.push('| ' + r.join(' | ') + ' |'));
+      lines.push(`| ${first.join(' | ')} |`);
+      lines.push(`| ${Array.from({ length: maxCols }, () => '---').join(' | ')} |`);
+      padded.slice(1).forEach((r) => lines.push(`| ${r.join(' | ')} |`));
       lines.push('【DOCX表格结束】');
       return lines.join('\n');
     }
@@ -399,7 +399,7 @@
       let s = String(xml || '');
       if (!s) { return ''; }
       const replaceStruct = (re, fn) => { s = s.replace(re, fn); };
-      for (let i = 0;i < 4;i++) {
+      for (let i = 0;i < 4;i += 1) {
         replaceStruct(/<m:f\b[\s\S]*?<\/m:f>/g, (m) => {
           const num = docxInnerXmlOfTag(m, 'm:num');
           const den = docxInnerXmlOfTag(m, 'm:den');
@@ -451,7 +451,7 @@
       return m ? decodeXml(m[1]) : '';
     }
     function docxInnerXmlOfTag(xml, tag) {
-      const re = new RegExp('<' + tag + '\\b[^>]*>([\\s\\S]*?)<\\/' + tag + '>', 'i');
+      const re = new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)<\\/${tag}>`, 'i');
       const m = String(xml || '').match(re);
       return m ? m[1] : '';
     }
@@ -476,7 +476,7 @@
     function docxImageRefsToText(token, imageMap = {}) {
       const ids = [];let im;const idRe = /(?:r:embed|r:id|r:link)=["']([^"']+)["']/g;
       while ((im = idRe.exec(String(token || '')))) { ids.push(im[1]); }
-      return [...new Set(ids)].map((id) => (imageMap[id] ? '\n' + imageMap[id] + '\n' : '')).join('');
+      return [...new Set(ids)].map((id) => (imageMap[id] ? `\n${imageMap[id]}\n` : '')).join('');
     }
     function decodeXml(s) { return String(s).replace(/&#x([0-9a-fA-F]+);/g, (_, n) => String.fromCodePoint(parseInt(n, 16))).replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(parseInt(n, 10))).replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&apos;/g, "'"); }
 

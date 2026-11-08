@@ -54,7 +54,7 @@ function fixture(options = {}) {
       addEventListener: (/** @type {string} */ name, /** @type {()=>void} */ callback) => events.set(name, callback),
     },
     navigator: options.clipboard === false ? {} : { clipboard: { async writeText(/** @type {string} */ text) { copied.push(text); } } },
-    setTimeout: (/** @type {()=>void|Promise<void>} */ callback) => { const id = ++timerId; timers.set(id, callback); return id; },
+    setTimeout: (/** @type {()=>void|Promise<void>} */ callback) => { timerId += 1; const id = timerId; timers.set(id, callback); return id; },
     clearTimeout: (/** @type {number} */ id) => timers.delete(id),
     addEventListener: (/** @type {string} */ name, /** @type {()=>void} */ callback) => events.set(name, callback),
   };

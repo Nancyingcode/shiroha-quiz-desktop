@@ -125,7 +125,7 @@ test('account card refresh rechecks Harness after an earlier unreadable status w
 
 test('shared business routes only the three CodeBuddy tasks and never retries through API', async () => {
   const runs = [];let network = 0;
-  const context = vm.createContext({ ShirohaPlatform: { harness: { snapshot: () => ({ ...ready }), execute: async (snapshot, task) => { runs.push({ snapshot, task });return { content: '合成结果' }; } }, network: { ai: () => network++ } }, AI_PROVIDER_PRESETS_V99: {} });
+  const context = vm.createContext({ ShirohaPlatform: { harness: { snapshot: () => ({ ...ready }), execute: async (snapshot, task) => { runs.push({ snapshot, task });return { content: '合成结果' }; } }, network: { ai: () => { const previous = network;network += 1;return previous; } } }, AI_PROVIDER_PRESETS_V99: {} });
   installAiSettings(context);
   installAiTransport(context);
   const config = context.aiExecutionConfigV99();assert.equal(config.model, ready.model);assert.equal(config.timeoutSeconds, 120);
@@ -140,7 +140,7 @@ test('shared business routes only the three CodeBuddy tasks and never retries th
 
 test('CodeBuddy model selection autosaves its revision and blocks old snapshots without calling a model', async () => {
   const saving = deferred();const stale = deferred();const calls = [];let reads = 0;let native = { ...ready };
-  const f = fixture(async (command, { request }) => { calls.push({ command, ...request });if (request.kind === 'select_model') { return saving.promise; } if (request.kind === 'status' && ++reads === 2) { return stale.promise; } return { ...native }; });
+  const f = fixture(async (command, { request }) => { calls.push({ command, ...request });if (request.kind === 'select_model') { return saving.promise; } if (request.kind === 'status' && (reads += 1) === 2) { return stale.promise; } return { ...native }; });
   await f.api.initialize();f.api.bind(() => {}, () => false);const old = f.api.snapshot();
   f.api.codebuddyAccountChanged({ revision: 7, phase: 'signed_in', blocked: false });await tick();
   const pending = f.api.selectModel('hy4-preview');
@@ -252,7 +252,7 @@ for (const outcome of ['success', 'failure']) {
 
 test('shared connection button reaches CodeBuddy test without reading hidden Codex form', async () => {
   const source = loadWebSource();let tested = 0;const notices = [];const button = { disabled: false };
-  const context = vm.createContext({ ShirohaPlatform: { harness: { formMode: () => 'harness', formAdapter: () => 'codebuddy', snapshot: () => ({ ...ready }), test: async () => { tested++; } } }, $: () => button, setAiSettingsStatusV99: (message) => notices.push(message), updateAiConnectionPillV99() {} });
+  const context = vm.createContext({ ShirohaPlatform: { harness: { formMode: () => 'harness', formAdapter: () => 'codebuddy', snapshot: () => ({ ...ready }), test: async () => { tested += 1; } } }, $: () => button, setAiSettingsStatusV99: (message) => notices.push(message), updateAiConnectionPillV99() {} });
   installAiSettings(context);
   vm.runInContext(source.functionSource('testAiConnectionV99'), context);
   await context.testAiConnectionV99();assert.equal(tested, 1);assert.equal(button.disabled, false);assert(notices.some((message) => message.includes('CodeBuddy 测试执行成功')));
@@ -314,4 +314,44 @@ test('single analysis and followup show the fixed native diagnostic while preser
   assert.deepEqual(calls, ['question_analysis', 'question_followup']);assert.deepEqual(notices, [expected, expected]);assert.equal(session.error, expected);
   assert.equal(JSON.stringify({ analysis: session.analysis, initialAnalysis: session.initialAnalysis, messages: session.messages, draft: session.draft }), original);
   assert.equal(session.loading, '');assert.equal(session.controller, null);assert.doesNotMatch(session.error, /private|token/);
+});
+
+test('AI 会话公开的请求号保留文本和 BigInt 的原有自增转换', async () => {
+  const context = vm.createContext({});
+  runWebScripts(context, ['ai-question-sessions.js']);
+  const item = { id: 'question' }; const owner = { items: [item] };
+  const question = { current: () => item, allowed: () => true, key: () => 'key', fingerprint: () => 'same' };
+  const view = { render() {} };
+  const practice = context.ShirohaAiQuestionSessions.createPractice({
+    practice: { current: () => owner }, question, request: { config: () => ({ configured: false, requestConfig: {} }) }, view,
+  });
+  const review = context.ShirohaAiQuestionSessions.createReview({ question, request: {}, view });
+  const stopBeforeRequest = new Error('验证请求序号后停止');
+  const reviewRun = context.ShirohaAiQuestionSessions.createReview({
+    question: { ...question, source: () => { throw stopBeforeRequest; } },
+    request: { config: () => ({ configured: true, requestConfig: {} }) }, view,
+  });
+  const session = practice.getSession('key');
+  for (const [value, next] of [['9', 10], [9n, 10n]]) {
+    session.requestId = value;
+    await practice.runAnalysis();
+    assert.equal(session.requestId, next);
+    session.requestId = value; session.analysis = {}; session.draft = '追问';
+    await practice.runFollowUp();
+    assert.equal(session.requestId, next);
+    session.requestId = value;
+    practice.stop(session);
+    assert.equal(session.requestId, next);
+    const reviewSession = review.getOrCreate('review', item, []);
+    reviewSession.requestId = value;
+    review.stop(reviewSession);
+    assert.equal(reviewSession.requestId, next);
+    reviewSession.requestId = value;
+    review.remove('review');
+    assert.equal(reviewSession.requestId, next);
+    const runSession = reviewRun.getOrCreate('run', item, []);
+    runSession.requestId = value;
+    await assert.rejects(reviewRun.run(runSession), stopBeforeRequest);
+    assert.equal(runSession.requestId, next);
+  }
 });

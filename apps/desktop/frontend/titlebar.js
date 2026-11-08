@@ -30,7 +30,7 @@
   let actionPending = false;
   let resizeTimer = 0;
   const syncMaximized = async () => {
-    const request = ++stateRequest;
+    stateRequest += 1; const request = stateRequest;
     const maximized = await appWindow.isMaximized();
     if (request !== stateRequest) { return; }
     titlebar.dataset.maximized = String(maximized);

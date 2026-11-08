@@ -228,6 +228,7 @@
       return items.map(({ detail, index }) => {
         const snapshot = detail.nativeQuestion || detail; const q = snapshot.id ? snapshot : { ...snapshot, id: detail.questionId || '' }; const chosen = blankUserAnswersFromDetailV58914(detail); const answer = detail.answer || q.answer || [];
         const comparison = isMultiBlankQuestionV58914(q) ? renderMultiBlankComparisonV58914(q.blankAnswers, chosen, true) : `<div class="q-multiline-text"><b>你的答案：</b>${practiceReviewAnswerHtml(q, chosen)}</div><div class="q-multiline-text"><b>${q.type === 'short' ? '参考答案（自评）' : '正确答案'}：</b>${hasAnswerValueV58914(answer) ? practiceReviewAnswerHtml(q, answer) : '题库未提供答案'}</div>`;
+        // eslint-disable-next-line prefer-template -- 历史数据字段可能是对象，保留 + 的默认转换；字段类型受约束后移除此例外。
         return `<article class="exam-q" data-wrong-question-index="${index}"><div class="qmeta"><b>第 ${index + 1} 题</b><span class="pill">${label(q.type)}</span><span>${esc(detail.sourceBankName || record.bankName || '')}</span></div><div class="question-title">${renderQuestionBodyV83(q)}</div>${renderReviewOptions({ ...q, answer }, chosen)}${isTextType(q.type) ? `<div class="feedback bad">${comparison}</div>` : renderReviewAnswerSummary({ ...q, answer }, chosen, '未作答')}${renderReviewAnalysis({ bankId: detail.sourceBankId || record.bankId || '', question: q }, chosen, 'result:' + record.id + ':' + index)}</article>`;
       }).join('');
     }
@@ -240,6 +241,7 @@
       if (!target || !wrong.length) {
         return;
       }
+      // eslint-disable-next-line prefer-template -- 历史数据字段可能是对象，保留 + 的默认转换；字段类型受约束后移除此例外。
       const rows = nativePage(wrong, 'practice-wrong:' + record.id, target, () => renderPracticeWrongPage(record));
       target.innerHTML = renderPracticeWrongRows(record, rows);
       updateReviewAnalysisPanels();
@@ -304,6 +306,7 @@
       });
     }
     async function startPractice(scopeOverrideV8916) {
+      // eslint-disable-next-line no-plusplus -- setter 仍接受字符串和 BigInt；限定类型后才能移除此例外。
       const request = ++practiceSession.request;
       const overrideType = String((scopeOverrideV8916 && scopeOverrideV8916.type) || '').toLowerCase();
       const override = [PRACTICE_SCOPE_BANK_V8916, PRACTICE_SCOPE_GROUP_V8916].includes(overrideType) ? normalizePracticeScopeV8916(scopeOverrideV8916) : null;
@@ -442,7 +445,7 @@
       const session = practiceSession.current;
       const capture = () => {
         setPracticeAnswerStateV26(key, { chosen: collectAnswer('#practice-card', q) });
-        $('#p-total-status').textContent = totalPracticeStatus() + ' · 提交前可修改答案。';
+        $('#p-total-status').textContent = `${totalPracticeStatus()} · 提交前可修改答案。`;
         $('#practice-nav-v26').outerHTML = renderTotalPracticeNav();
         bindPracticeNavV30();
       };
@@ -460,10 +463,12 @@
         }
       };
       $('#p-prev').onclick = () => {
+        // eslint-disable-next-line no-plusplus -- 轮次状态可由调用方替换，保留字符串和 BigInt 的转换；限定字段类型后移除此例外。
         practiceSession.current.idx--;
         renderPracticeQuestion();
       };
       $('#p-next').onclick = () => {
+        // eslint-disable-next-line no-plusplus -- 轮次状态可由调用方替换，保留字符串和 BigInt 的转换；限定字段类型后移除此例外。
         practiceSession.current.idx++;
         renderPracticeQuestion();
       };
@@ -593,6 +598,7 @@
       $('#p-edit-v120').onclick = () => openPracticeEditQuestionV120();
       $('#p-prev').onclick = () => {
         if (practiceSession.current.idx > 0) {
+          // eslint-disable-next-line no-plusplus -- 轮次状态可由调用方替换，保留字符串和 BigInt 的转换；限定字段类型后移除此例外。
           practiceSession.current.idx--;
           renderPracticeQuestion();
         }
@@ -603,6 +609,7 @@
         if (practiceSession.current.idx >= practiceSession.current.items.length - 1) {
           finishPractice();
         } else {
+          // eslint-disable-next-line no-plusplus -- 轮次状态可由调用方替换，保留字符串和 BigInt 的转换；限定字段类型后移除此例外。
           practiceSession.current.idx++;
           renderPracticeQuestion();
         }
@@ -764,9 +771,9 @@
       const wrong = st.answered && st.correct === false && !st.revealed;
       let analysis = '';
       if (wrong) {
-        analysis = renderReviewAnalysis(currentPracticeItemV8916(), st.chosen || [], 'practice:' + practiceSession.current.start);
+        analysis = renderReviewAnalysis(currentPracticeItemV8916(), st.chosen || [], `practice:${practiceSession.current.start}`);
       } else if (q.analysis) {
-        analysis = '<br>解析：' + renderQuestionContent(q.analysis);
+        analysis = `<br>解析：${renderQuestionContent(q.analysis)}`;
       }
       let feedbackClass = 'bad';
       let feedbackTitle = '✕ 这题要再看一遍';
@@ -777,7 +784,7 @@
         feedbackClass = 'ok';
         feedbackTitle = '✓ 回答正确';
       }
-      $('#p-feedback').innerHTML = `<div class="feedback ${feedbackClass}"><b>${feedbackTitle}</b>${isMultiBlankQuestionV58914(q) ? renderMultiBlankComparisonV58914(q.blankAnswers, st.chosen || [], true) : '｜' + feedbackAnswerHtmlV58914(q, st.chosen || [])}${analysis}</div>`;
+      $('#p-feedback').innerHTML = `<div class="feedback ${feedbackClass}"><b>${feedbackTitle}</b>${isMultiBlankQuestionV58914(q) ? renderMultiBlankComparisonV58914(q.blankAnswers, st.chosen || [], true) : `｜${feedbackAnswerHtmlV58914(q, st.chosen || [])}`}${analysis}</div>`;
       const sub = $('#p-submit'); const rev = $('#p-reveal');
       if (sub) {
         sub.disabled = true;
@@ -791,7 +798,7 @@
     function showSubjectiveFeedback(item, chosen, reveal) {
       const q = practiceQuestionV8916(item); const key = practiceItemKeyV8916(item); const user = chosen.join('；') || '未填写';
       setPracticeAnswerStateV26(key, { chosen, revealed: !!reveal });
-      $('#p-feedback').innerHTML = `<div class="feedback warn"><b>你的作答：</b><div class="q-multiline-text">${renderQuestionContent(user)}</div><b>参考答案：</b><div class="q-multiline-text">${renderQuestionContent(q.answer.join('；') || '未提供')}</div>${q.analysis ? '<b>解析：</b><div class="q-multiline-text">' + renderQuestionContent(q.analysis) + '</div>' : ''}<div class="actions"><button class="primary" id="p-self-right">判为正确</button><button class="danger" id="p-self-wrong">判为错误</button></div></div>`;
+      $('#p-feedback').innerHTML = `<div class="feedback warn"><b>你的作答：</b><div class="q-multiline-text">${renderQuestionContent(user)}</div><b>参考答案：</b><div class="q-multiline-text">${renderQuestionContent(q.answer.join('；') || '未提供')}</div>${q.analysis ? `<b>解析：</b><div class="q-multiline-text">${renderQuestionContent(q.analysis)}</div>` : ''}<div class="actions"><button class="primary" id="p-self-right">判为正确</button><button class="danger" id="p-self-wrong">判为错误</button></div></div>`;
       $('#p-submit').disabled = true;
       $('#p-reveal').disabled = true;
       $('#p-self-right').onclick = async () => runMutation(async () => {
@@ -818,11 +825,14 @@
       if (current.answered) {
         return;
       }
+      // eslint-disable-next-line no-plusplus -- 轮次状态可由调用方替换，保留字符串和 BigInt 的转换；限定字段类型后移除此例外。
       practiceSession.current.answered++;
       if (ok) {
+        // eslint-disable-next-line no-plusplus -- 轮次状态可由调用方替换，保留字符串和 BigInt 的转换；限定字段类型后移除此例外。
         practiceSession.current.correct++;
         markRight(q.id, bid);
       } else {
+        // eslint-disable-next-line no-plusplus -- 轮次状态可由调用方替换，保留字符串和 BigInt 的转换；限定字段类型后移除此例外。
         practiceSession.current.wrong++;
         addWrong(q.id, bid, chosen);
       }

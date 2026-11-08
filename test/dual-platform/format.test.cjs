@@ -27,7 +27,7 @@ for (const outcome of ['saved', 'cancelled', 'failed']) {
       return output;
     };
     let bridgeCalls = 0;
-    context.ShirohaAndroid = { saveJsonFile() { bridgeCalls++; throw new Error('旧桥接不得调用'); } };
+    context.ShirohaAndroid = { saveJsonFile() { bridgeCalls += 1; throw new Error('旧桥接不得调用'); } };
     const calls = [];
     const error = new Error(outcome === 'cancelled' ? '已取消保存。' : '合成写入失败');
     context.ShirohaPlatform.download = async (name, blob) => {

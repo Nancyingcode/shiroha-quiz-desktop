@@ -34,6 +34,7 @@
     }
 
     function stop(session) {
+      // eslint-disable-next-line no-plusplus -- 会话可由调用方修改，保留字符串和 BigInt 的转换；限定请求号类型后移除此例外。
       session.requestId++;
       session.controller?.abort();
       session.controller = null;
@@ -54,6 +55,7 @@
       const session = getSession(key);
       if (session.loading) { return; }
       const owner = practice.current();
+      // eslint-disable-next-line no-plusplus -- 会话可由调用方修改，保留字符串和 BigInt 的转换；限定请求号类型后移除此例外。
       const requestId = ++session.requestId;
       const { fingerprint } = session;
       const { configured, requestConfig } = request.config();
@@ -109,6 +111,7 @@
       const text = String(session.draft || '').trim();
       if (session.loading || !session.analysis) { return; }
       const owner = practice.current();
+      // eslint-disable-next-line no-plusplus -- 会话可由调用方修改，保留字符串和 BigInt 的转换；限定请求号类型后移除此例外。
       const requestId = ++session.requestId;
       const { fingerprint } = session;
       if (!text) {
@@ -177,6 +180,7 @@
     function remove(key) {
       const session = sessions.get(key);
       if (!session) { return; }
+      // eslint-disable-next-line no-plusplus -- 会话可由调用方修改，保留字符串和 BigInt 的转换；限定请求号类型后移除此例外。
       session.requestId++;
       session.controller?.abort();
       sessions.delete(key);
@@ -211,6 +215,7 @@
         view.render();
         return;
       }
+      // eslint-disable-next-line no-plusplus -- 会话可由调用方修改，保留字符串和 BigInt 的转换；限定请求号类型后移除此例外。
       const requestId = ++session.requestId;
       const source = question.source(session.item);
       const sourceQuestion = source.bank?.questions[source.index];
@@ -272,6 +277,7 @@
     }
 
     function stop(session) {
+      // eslint-disable-next-line no-plusplus -- 会话可由调用方修改，保留字符串和 BigInt 的转换；限定请求号类型后移除此例外。
       session.requestId++;
       session.controller?.abort();
       session.controller = null;

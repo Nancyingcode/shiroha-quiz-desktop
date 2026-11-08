@@ -66,9 +66,9 @@ test('错题快照缺少解析时补读明确来源题库，保留快照正文�
 });
 
 test('缺少 nativeQuestion 的旧错题按 questionId 补读，未知来源不绑定当前题库', () => {
-  const questions = ['one', 'two'].map((id) => ({ id, type: 'single', question: id, options: [], answer: ['A'], analysis: id + '解析' }));
+  const questions = ['one', 'two'].map((id) => ({ id, type: 'single', question: id, options: [], answer: ['A'], analysis: `${id}解析` }));
   const { api } = loadWeb({ state: { banks: [{ id: 'source', name: '来源', questions }], activeBankId: 'source', settings: { suppressDefaultBank: true } } });
-  const record = { id: 'legacy', bankId: 'source', details: questions.map((q) => ({ questionId: q.id, question: '旧' + q.question, type: q.type, chosen: ['B'], answer: ['A'], correct: false })) };
+  const record = { id: 'legacy', bankId: 'source', details: questions.map((q) => ({ questionId: q.id, question: `旧${q.question}`, type: q.type, chosen: ['B'], answer: ['A'], correct: false })) };
   const html = api.renderPracticeWrongOverview(record);
   assert.match(html, /one解析/);
   assert.match(html, /two解析/);

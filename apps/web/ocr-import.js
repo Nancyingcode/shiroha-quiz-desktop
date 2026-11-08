@@ -15,7 +15,7 @@
       if (panel) { panel.classList.remove('hidden'); }
       const result = $('#ocr-result');if (result) { result.value = ''; }
       setOcrButtonsEnabled(false);
-      setOcrStatus('已选择 PDF：' + (file.name || '未命名') + '。如果文字层提取失败，可点击“尝试 OCR 识别”。', 'warn');
+      setOcrStatus(`已选择 PDF：${file.name || '未命名'}。如果文字层提取失败，可点击“尝试 OCR 识别”。`, 'warn');
     }
     function resetOcrImportState() {
       ocrImportState.cancel?.();
@@ -30,7 +30,7 @@
       let statusClass = 'warn';
       if (type === 'ok') { statusClass = 'ok'; } else if (type === 'danger') { statusClass = 'danger'; }
       el.textContent = msg;
-      el.className = 'notice ' + statusClass;
+      el.className = `notice ${statusClass}`;
     }
     function setOcrButtonsEnabled(hasText) {
       const running = !!ocrImportState.running;
@@ -42,14 +42,14 @@
       const docx = $('#ocr-download-docx-btn');if (docx) { docx.disabled = cannotUseText; }
     }
     async function loadScriptOnce(src, key) {
-      const marker = '__script_' + key;
+      const marker = `__script_${key}`;
       if (window[marker]) { return window[marker]; }
       window[marker] = new Promise((resolve, reject) => {
         const s = document.createElement('script');
         s.src = src;
         s.async = true;
         s.onload = () => resolve(true);
-        s.onerror = () => reject(new Error('脚本加载失败：' + src));
+        s.onerror = () => reject(new Error(`脚本加载失败：${src}`));
         document.head.appendChild(s);
       });
       return window[marker];
@@ -68,7 +68,7 @@
           return { worker, mode: c.name };
         } catch (err) {
           lastErr = err;
-          warnDev('OCR 来源加载失败：' + c.name, err);
+          warnDev(`OCR 来源加载失败：${c.name}`, err);
         }
       }
       throw lastErr || new Error('OCR 扩展加载失败');
@@ -109,12 +109,12 @@
         const pdf = await loadingTask.promise;
         const maxPages = Math.min(pdf.numPages, pageLimit);
         const created = await createOcrWorker(lang, (m) => {
-          if (!cancelled() && m && m.status) { setOcrStatus(`OCR ${m.status}${Number.isFinite(m.progress) ? ' ' + Math.round(m.progress * 100) + '%' : ''}`, 'warn'); }
+          if (!cancelled() && m && m.status) { setOcrStatus(`OCR ${m.status}${Number.isFinite(m.progress) ? ` ${Math.round(m.progress * 100)}%` : ''}`, 'warn'); }
         });
         worker = created.worker;
         if (cancelled()) { return; }
         const pages = [];
-        for (let pageNo = 1;pageNo <= maxPages;pageNo++) {
+        for (let pageNo = 1;pageNo <= maxPages;pageNo += 1) {
           setOcrStatus(`正在识别第 ${pageNo} / ${maxPages} 页（${created.mode}）……`, 'warn');
           canvas = await renderPdfPageToCanvas(pdf, pageNo, 2);
           if (cancelled()) { return; }
@@ -136,7 +136,9 @@
         toast('OCR 识别完成，可核对后继续导入或下载 DOCX。', 'ok', 'OCR 完成');
       } catch (err) {
         if (cancelled()) { return; }
+        // eslint-disable-next-line prefer-template -- 异常信息可能是对象，保留 + 的默认转换；统一异常类型后移除此例外。
         setOcrStatus('OCR 失败：' + err.message, 'danger');
+        // eslint-disable-next-line prefer-template -- 异常信息可能是对象，保留 + 的默认转换；统一异常类型后移除此例外。
         toast('OCR 失败：' + err.message, 'danger', 'OCR 失败');
       } finally {
         if (canvas) { canvas.width = 1;canvas.height = 1; }

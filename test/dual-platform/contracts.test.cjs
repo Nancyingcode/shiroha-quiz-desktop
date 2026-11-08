@@ -228,7 +228,7 @@ test('冻结拒绝会在 JSON 交换中丢失的稀疏数组和隐藏字段', ()
 test('校验拒绝访问器和类实例，不能在冻结时执行 getter', () => {
   let reads = 0;
   const request = commit();
-  Object.defineProperty(request.changes[0], 'bankId', { get() { reads++; return 'bank-1'; }, enumerable: true });
+  Object.defineProperty(request.changes[0], 'bankId', { get() { reads += 1; return 'bank-1'; }, enumerable: true });
   rejects(validation.freezeCommit(request, ready()), 'invalid_input');
   assert.equal(reads, 0);
   class Setting { constructor() { this.value = '不能丢弃原型语义'; } }

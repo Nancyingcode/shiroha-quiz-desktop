@@ -8,7 +8,7 @@ function runtime(initial = null) {
   const values = new Map(initial === null ? [] : [['state', initial]]);
   const storage = { getItem: (k) => values.get(k) ?? null, setItem: (k, v) => values.set(k, v), removeItem: (k) => values.delete(k) };
   const context = vm.createContext({ structuredClone, console, setTimeout, clearTimeout });
-  for (const name of ['validation', 'browser', 'save-queue']) { vm.runInContext(fs.readFileSync(path.join(__dirname, '../../apps/web/platform', name + '.js'), 'utf8'), context); }
+  for (const name of ['validation', 'browser', 'save-queue']) { vm.runInContext(fs.readFileSync(path.join(__dirname, '../../apps/web/platform', `${name}.js`), 'utf8'), context); }
   return { values, storage, create: () => context.ShirohaBrowser.createStorage(storage, 'state'), queue: context.ShirohaSaveQueue.create };
 }
 const snapshot = () => ({ schemaVersion: 1, banks: [], activeBankId: '', records: [], settings: { suppressDefaultBank: true }, wrongBook: {}, favorites: {}, crossPlatformMeta: {} });

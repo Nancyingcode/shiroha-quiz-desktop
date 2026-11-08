@@ -31,7 +31,7 @@ test('确认框居中、取消无副作用、焦点循环恢复且按键不泄�
   assert.ok(Math.abs((box.x + (box.width / 2)) - (viewport.width / 2)) < 2);
   assert.ok(Math.abs((box.y + (box.height / 2)) - (viewport.height / 2)) < 2);
   assert.equal(await page.locator('[data-dialog-cancel]').evaluate((el) => el === globalThis.document.activeElement), true);
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < 6; i += 1) {
     await page.keyboard.press('Tab');
     assert.equal(await page.evaluate(() => globalThis.document.activeElement.closest('#app-dialog') !== null), true);
   }
@@ -73,7 +73,7 @@ test('真实练习退出取消保留作答、确认保存；事务内输入弹�
   await context.addInitScript((data) => globalThis.localStorage.setItem('shiroha_quiz_state_v28_4_c1', JSON.stringify(data)), initial);
   const page = await context.newPage();
   const errors = []; page.on('pageerror', (error) => errors.push(error.message));
-  page.on('dialog', async (dialog) => { errors.push('意外原生框：' + dialog.message()); await dialog.dismiss(); });
+  page.on('dialog', async (dialog) => { errors.push(`意外原生框：${dialog.message()}`); await dialog.dismiss(); });
   await context.route('**/*', (route) => (new URL(route.request().url()).origin === new URL(server.url).origin ? route.continue() : route.abort()));
   await page.goto(server.url);
   await page.locator('body[data-storage-state="ready"]').waitFor();

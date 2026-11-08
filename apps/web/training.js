@@ -32,7 +32,7 @@
           invalid.push(token);
           return;
         }
-        for (let number = start; number <= end; number++) {
+        for (let number = start; number <= end; number += 1) {
           selected.add(number - 1);
         }
         return;
@@ -74,8 +74,8 @@
     const value = Math.max(0, Math.floor(Number(seconds) || 0));
     const hours = Math.floor(value / 3600);
     const minutes = Math.floor(value % 3600 / 60);
-    return (hours ? hours + ':' : '') + String(minutes).padStart(2, '0')
-      + ':' + String(value % 60).padStart(2, '0');
+    return `${(hours ? `${hours}:` : '') + String(minutes).padStart(2, '0')
+    }:${String(value % 60).padStart(2, '0')}`;
   }
   function buildReview(items, details, metadata) {
     const indices = new Map(details.map((detail, index) => [key(detail.sourceBankId, detail.questionId), index]));

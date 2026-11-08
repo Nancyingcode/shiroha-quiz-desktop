@@ -5,15 +5,16 @@
   /** @typedef {{method?:string,trailingSlash?:boolean,timeoutMs?:number,headers?:Record<string,string>,body?:BodyInit,acceptStatuses?:number[],signal?:AbortSignal}} DavOptions */
   /** @param {string} username @param {string} password */
   function basicAuth(username, password) {
+    // eslint-disable-next-line prefer-template -- 凭据可能是对象，保留 + 的默认转换；入口约束凭据类型后移除此例外。
     const bytes = new TextEncoder().encode(username + ':' + password);
-    return 'Basic ' + globalThis.btoa(Array.from(bytes, (byte) => String.fromCharCode(byte)).join(''));
+    return `Basic ${globalThis.btoa(Array.from(bytes, (byte) => String.fromCharCode(byte)).join(''))}`;
   }
   /** @param {DavConfig} config @param {string} relativePath @param {boolean} trailingSlash */
   function url(config, relativePath = '', trailingSlash = false) {
     const parts = relativePath.replace(/\\/g, '/').split('/').filter(Boolean);
     if (parts.some((part) => part === '.' || part === '..')) { throw new Error('WebDAV 路径不安全。'); }
     const encoded = parts.map(encodeURIComponent).join('/');
-    return new URL(encoded + (trailingSlash && encoded ? '/' : ''), config.endpoint.replace(/\/+$/, '') + '/').href;
+    return new URL(encoded + (trailingSlash && encoded ? '/' : ''), `${config.endpoint.replace(/\/+$/, '')}/`).href;
   }
   /** @param {DavConfig} config @param {string} password @param {string} relativePath @param {DavOptions} options */
   async function webdav(config, password, relativePath, options = {}) {
@@ -40,6 +41,7 @@
   /** @param {{endpoint:string,apiKey?:string}} config @param {unknown} payload @param {AbortSignal} [signal] */
   function ai(config, payload, signal) {
     /** @type {Record<string,string>} */ const headers = { 'Content-Type': 'application/json', Accept: 'application/json' };
+    // eslint-disable-next-line prefer-template -- 凭据可能是对象，保留 + 的默认转换；入口约束凭据类型后移除此例外。
     if (config.apiKey) { headers.Authorization = 'Bearer ' + config.apiKey; }
     return fetch(config.endpoint, { method: 'POST', headers, body: JSON.stringify(payload), signal, cache: 'no-store', credentials: 'omit', referrerPolicy: 'no-referrer' });
   }

@@ -59,7 +59,7 @@
   function now() { return new Date().toISOString(); }
   function makeId(prefix = 'id', ...parts) {
     const base = parts.filter((v) => v != null && String(v).trim()).map((v) => String(v).replace(/[^A-Za-z0-9_-]+/g, '_').slice(0, 32)).filter(Boolean).join('_');
-    const random = (globalThis.crypto && globalThis.crypto.randomUUID) ? globalThis.crypto.randomUUID() : Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 10);
+    const random = (globalThis.crypto && globalThis.crypto.randomUUID) ? globalThis.crypto.randomUUID() : `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
     return [prefix, base, random].filter(Boolean).join('_');
   }
   // 本页仅保存已读取正文；索引参与统计和组卷，读取完成后才能进入修改事务。
@@ -389,7 +389,7 @@
     if (entry.key !== key) { entry.key = key;entry.page = 0; }
     const { page, pages, start, end } = listPageRange(rows.length, entry.page, entry.size);
     entry.page = page;
-    const id = target.id + '-pager';let controls = document.getElementById(id);
+    const id = `${target.id}-pager`;let controls = document.getElementById(id);
     if (!controls) {
       controls = document.createElement('nav');controls.id = id;controls.className = 'list-pagination';
       const anchor = target.closest('.table-wrap') || target;anchor.insertAdjacentElement('afterend', controls);
@@ -397,7 +397,7 @@
     const focusKey = controls.contains(document.activeElement) ? document.activeElement.dataset.pageControl : null;
     const view = target.closest('.view');
     const title = target.closest('.card')?.querySelector('h2')?.textContent || target.getAttribute('aria-label') || '列表';
-    controls.setAttribute('aria-label', title + '分页');controls.replaceChildren();
+    controls.setAttribute('aria-label', `${title}分页`);controls.replaceChildren();
     const status = document.createElement('span');status.className = 'list-pagination-status';status.setAttribute('role', 'status');
     status.textContent = rows.length ? `第 ${page + 1} / ${pages} 页 · ${start + 1}–${end} 项，共 ${rows.length} 项` : '共 0 项';controls.appendChild(status);
     if (!rows.length) { return []; }
@@ -411,19 +411,19 @@
     const addButton = (group, text, name, value, disabled, control) => {
       const button = document.createElement('button');button.type = 'button';button.textContent = text;button.className = 'list-page-button';
       button.setAttribute('aria-label', name);button.dataset.pageControl = control;button.disabled = disabled;
-      if (control === 'page:' + page) { button.setAttribute('aria-current', 'page'); }
+      if (control === `page:${page}`) { button.setAttribute('aria-current', 'page'); }
       button.onclick = () => changePage(value);group.appendChild(button);
     };
     // 容器宽度决定显示哪组页码；窄卡片（含桌面侧栏布局）也保留首末页与键盘入口。
     for (const compact of [false, true]) {
-      const group = document.createElement('div');group.className = 'list-page-numbers ' + (compact ? 'is-compact' : 'is-wide');actions.appendChild(group);
+      const group = document.createElement('div');group.className = `list-page-numbers ${compact ? 'is-compact' : 'is-wide'}`;actions.appendChild(group);
       addButton(group, '‹', '上一页', page - 1, page === 0, 'previous');
       for (const n of listPageNumbers(page + 1, pages, compact)) {
-        if (n === 'ellipsis') { const gap = document.createElement('span');gap.className = 'list-page-gap';gap.textContent = '…';gap.setAttribute('aria-hidden', 'true');group.appendChild(gap); } else { addButton(group, String(n), `第 ${n} 页`, n - 1, false, 'page:' + (n - 1)); }
+        if (n === 'ellipsis') { const gap = document.createElement('span');gap.className = 'list-page-gap';gap.textContent = '…';gap.setAttribute('aria-hidden', 'true');group.appendChild(gap); } else { addButton(group, String(n), `第 ${n} 页`, n - 1, false, `page:${n - 1}`); }
       }
       addButton(group, '›', '下一页', page + 1, page === pages - 1, 'next');
     }
-    const select = document.createElement('select');select.className = 'list-page-size';select.setAttribute('aria-label', title + '每页条数');select.dataset.pageControl = 'size';
+    const select = document.createElement('select');select.className = 'list-page-size';select.setAttribute('aria-label', `${title}每页条数`);select.dataset.pageControl = 'size';
     for (const size of LIST_PAGE_SIZES) { const option = document.createElement('option');option.value = String(size);option.textContent = `${size} 条/页`;select.appendChild(option); }
     select.value = String(entry.size);select.onchange = () => changePage(0, Number(select.value));actions.appendChild(select);
     if (focusKey) {
@@ -527,7 +527,7 @@
   function bindNav() {
     $$('.nav').forEach((btn) => btn.onclick = async () => {
       const target = btn.dataset.view;
-      const view = target && $('#' + target);
+      const view = target && $(`#${target}`);
       if (!view || view.classList.contains('active')) { return; }
       if (target !== 'practice' && !await canLeaveTotalPractice(target)) { return; }
       leaveTrainingReview();
@@ -604,6 +604,7 @@
         const undoCredential = await ShirohaPlatform.credentials.set('ai', config, config.apiKey, config.rememberKey);
         try { await saveSilent(ShirohaPlatform.credentials.operationId?.(undoCredential)); } catch (error) { state.settings.aiImportV99 = previousConfig;await undoCredential();throw error; }
         await ShirohaPlatform.credentials.finalize?.(undoCredential);
+        // eslint-disable-next-line prefer-template -- 异常信息可能是对象，保留 + 的默认转换；统一异常类型后移除此例外。
         if (ShirohaPlatform.harness) { try { await ShirohaPlatform.harness.saveMode('api'); } catch (error) { setAiSettingsStatusV99('API 配置已保存，但执行方式切换失败，原执行方式仍生效：' + (error.message || error), 'warn');return; } }
         aiSettings.setState('idle', buildAiDiagnosticV375(null, config, 'idle'));
         const endpoint = $('#ai-endpoint-v99');if (endpoint) { endpoint.value = config.endpoint; }
@@ -627,6 +628,7 @@
       if (!await ShirohaDialogs.confirm('确定清除 AI 接口配置和已保存的 API Key？')) { return; }
       const undoCredential = await ShirohaPlatform.credentials.set('ai', ensureAiImportStateV99(), '', false);
       state.settings.aiImportV99 = defaultAiConfigV99();
+      // eslint-disable-next-line prefer-template -- 异常信息可能是对象，保留 + 的默认转换；统一异常类型后移除此例外。
       try { await saveSilent(ShirohaPlatform.credentials.operationId?.(undoCredential)); } catch (error) { await undoCredential();setAiSettingsStatusV99('清除失败，原配置已保留：' + (error.message || error), 'warn');return; }
       await ShirohaPlatform.credentials.finalize?.(undoCredential);
       aiSettings.reset();renderAiSettingsV99();setAiSettingsStatusV99('AI 配置已清除。');syncAiImportActionV99();showNotice('AI 设置', '配置已清除。', 'ok');
@@ -895,18 +897,18 @@
   }
 
   function stripQuestionImages(s) { return String(s || '').replace(/!\[[^\]]*\]\(data:image\/[^)]+\)/g, '[图片]'); }
-  function short(s, n) { const text = stripQuestionImages(String(s || ''));return text.length > n ? text.slice(0, n) + '…' : text; }
+  function short(s, n) { const text = stripQuestionImages(String(s || ''));return text.length > n ? `${text.slice(0, n)}…` : text; }
   function esc(s) { return String(s ?? '').replace(/[&<>"']/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m])); }
   function toast(msg, type = 'warn', title = '提示') {
     const n = $('#import-summary');
-    if (n) { n.textContent = msg;n.className = 'notice ' + type; }
+    if (n) { n.textContent = msg;n.className = `notice ${type}`; }
     showNotice(title, msg, type);
   }
   function showNotice(title, msg, type = 'ok') {
     let box = $('#app-toast');
     if (!box) { box = document.createElement('div');box.id = 'app-toast';box.className = 'app-toast';document.body.appendChild(box); }
     const item = document.createElement('div');
-    item.className = 'toast-item ' + (['ok', 'danger'].includes(type) ? type : 'warn');
+    item.className = `toast-item ${['ok', 'danger'].includes(type) ? type : 'warn'}`;
     item.innerHTML = `<div><b>${esc(title || '提示')}</b><p>${esc(msg || '')}</p></div><button type="button" aria-label="关闭">×</button>`;
     item.querySelector('button').onclick = () => item.remove();
     box.appendChild(item);
@@ -943,7 +945,7 @@
     const text = String(raw || '');
     if (text.length < 2 || text[0] !== '/') { return null; }
     let escaped = false;
-    for (let i = text.length - 1;i > 0;i--) {
+    for (let i = text.length - 1;i > 0;i -= 1) {
       const ch = text[i];
       if (ch === '/' && !escaped) { return { pattern: text.slice(1, i), flags: text.slice(i + 1) }; }
       escaped = ch === '\\' && !escaped;
@@ -1035,7 +1037,7 @@
     const el = $('#import-find-status-v51');
     if (!el) { return; }
     el.textContent = msg;
-    el.className = 'notice import-find-status-v51 ' + (['ok', 'danger'].includes(type) ? type : 'warn');
+    el.className = `notice import-find-status-v51 ${['ok', 'danger'].includes(type) ? type : 'warn'}`;
   }
   function getFindConfigV51() {
     return {
@@ -1091,7 +1093,7 @@
       const re = buildFindRegExpV51(cfg.pattern, { useRegex: cfg.useRegex, caseSensitive: cfg.caseSensitive, global: true });
       const text = textEl.value || '';
       let count = 0;
-      text.replace(re, () => { count++;return ''; });
+      text.replace(re, () => { count += 1;return ''; });
       if (!count) { setFindStatusV51('没有找到匹配内容。', 'warn');return; }
       textEl.value = text.replace(re, cfg.replacement);
       markImportTextEditedV51(textEl);
@@ -1155,10 +1157,11 @@ D、高速通过积水路段`;
     try {
       const text = currentOcrText();
       if (!text) { setOcrStatus('没有可下载的 OCR 文本。', 'warn');return; }
-      const name = cleanImportBankNameFromFile(ocrSession.getFile()?.name || 'OCR识别结果') + '_OCR.docx';
+      const name = `${cleanImportBankNameFromFile(ocrSession.getFile()?.name || 'OCR识别结果')}_OCR.docx`;
       const blob = createOcrDocxBlob(text, ocrSession.getFile()?.name || 'OCR识别结果');
       await downloadBlob(name, blob);
       setOcrStatus('已生成 DOCX 下载文件。请打开后人工核对 OCR 结果。', 'ok');
+    // eslint-disable-next-line prefer-template -- 异常信息可能是对象，保留 + 的默认转换；统一异常类型后移除此例外。
     } catch (error) { platformStatus('导出失败：' + error.message, true);return false; }
   }
   function tryParseAutoJsonImportV58922(text) {
@@ -1208,6 +1211,7 @@ D、高速通过积水路段`;
       $('#confirm-import-btn').disabled = !importDraft.questions.length;
       const warnings = collectSoftRiskWarnings(importDraft.questions, importDraft.diagnostics?.profile || {});
       if (importDraft.questions.length) { const risk = largeImportRiskMessageV376(importDraft.questions);showNotice('识别完成', summarizeImportResultV376(importDraft.questions, warnings), (warnings.length || risk) ? 'warn' : 'ok'); } else { showNotice('识别失败', '没有识别到有效题目。请检查题号、选项或答案格式，也可以先粘贴纯文本后再试。', 'danger'); }
+    // eslint-disable-next-line prefer-template -- 异常信息可能是对象，保留 + 的默认转换；统一异常类型后移除此例外。
     } catch (e) { toast('识别失败：' + e.message, 'danger', '识别失败'); }
   }
   function loadDualSample() {
@@ -1258,17 +1262,18 @@ D. 高速通过积水路段`;
       const result = resolved.result || mergeQuestionAnswers(questions, answerEntries, mode);
       importDraft.questions = result.questions;
       importDraft.warnings = result.warnings;
-      importDraft.report = '解析策略：双文件导入；题目文件和答案文件分别识别后按自动/所选规则合并。'
-      + (result.strategyName ? ' 实际采用：' + result.strategyName + '。' : '')
-      + (resolved.answerSourceName ? ' 答案文件识别：' + resolved.answerSourceName + '。' : '')
-      + (resolved.answerSourceSummary ? ' 答案候选：' + resolved.answerSourceSummary + '。' : '')
-      + (result.autoSummary ? ' 合并候选：' + result.autoSummary + '。' : '');
+      importDraft.report = `解析策略：双文件导入；题目文件和答案文件分别识别后按自动/所选规则合并。${
+        result.strategyName ? ` 实际采用：${result.strategyName}。` : ''
+      }${resolved.answerSourceName ? ` 答案文件识别：${resolved.answerSourceName}。` : ''
+      }${resolved.answerSourceSummary ? ` 答案候选：${resolved.answerSourceSummary}。` : ''
+      }${result.autoSummary ? ` 合并候选：${result.autoSummary}。` : ''}`;
       importDraft.diagnostics = { ...(importDraft.diagnostics || {}), mode: '双文件导入', matchMode: mode, chosenMatchMode: result.chosenMode || mode, answerCount: answerEntries.length, questionCount: questions.length, stats: countTypes(result.questions || []), mergeWarnings: result.warnings || [], autoSummary: result.autoSummary || '', answerSource: resolved.answerSourceName || '', answerSourceSummary: resolved.answerSourceSummary || '' };
       importDraft.selected.clear();
       renderImportPreview(importDraft.questions);
       $('#confirm-import-btn').disabled = !importDraft.questions.length;
       const warnings = [...new Set(collectSoftRiskWarnings(importDraft.questions, importDraft.diagnostics?.profile || {}).concat(importDraft.warnings || []))];
       if (importDraft.questions.length) { const risk = largeImportRiskMessageV376(importDraft.questions);showNotice('双文件合并完成', `题目文件识别 ${questions.length} 道，答案文件识别 ${answerEntries.length} 条；答案策略：${resolved.answerSourceName || '答案表提取'}；合并后 ${importDraft.questions.length} 道。${warnings.length ? `存在 ${warnings.length} 条提示，请在预览中确认。` : '未发现明显异常。'}${risk ? ` ${risk}` : ''}`, (warnings.length || risk) ? 'warn' : 'ok'); } else { showNotice('双文件合并失败', '没有得到可导入题目，请检查题目文件和答案文件的对应方式。', 'danger'); }
+    // eslint-disable-next-line prefer-template -- 异常信息可能是对象，保留 + 的默认转换；统一异常类型后移除此例外。
     } catch (e) { toast('双文件识别失败：' + e.message, 'danger', '双文件识别失败'); }
   }
   const answerEntryRules = {
@@ -1376,7 +1381,7 @@ D. 高速通过积水路段`;
     // 如果同一题号在单选/多选/判断区重复出现，优先按题目自身题型匹配答案分组，避免判断题误取单选题的 C/D 答案。
       const byNumber = new Map();const dup = new Set();
       answers.forEach((a, idx) => { if (!a.number) { return; } const key = String(a.number);if (!byNumber.has(key)) { byNumber.set(key, []); } else { dup.add(key); }byNumber.get(key).push({ ...a, idx }); });
-      if (dup.size) { warnings.push('答案文件存在重复题号：' + [...dup].slice(0, 10).join('、') + '。已优先按题型分组匹配；如仍有异常，请使用“按题型分组 + 组内题号对应”。'); }
+      if (dup.size) { warnings.push(`答案文件存在重复题号：${[...dup].slice(0, 10).join('、')}。已优先按题型分组匹配；如仍有异常，请使用“按题型分组 + 组内题号对应”。`); }
       qs.forEach((q, i) => {
         const candidates = byNumber.get(String(q.number)) || [];
         const hit = globalThis.ShirohaTextAnswers.findNumberedAnswer(candidates, q, mode, {
@@ -1509,13 +1514,15 @@ D. 高速通过积水路段`;
 
   async function renameActiveBank() { return runMutation(async () => { const b = activeBank();const val = $('#bank-rename-input').value.trim();if (!val) { await ShirohaDialogs.alert('请输入新的题库名称。');return; } const oldGroup = bankGroupNameV58(b);b.name = val;b.groupName = normalizeBankGroupNameV58($('#bank-group-rename-input-v58')?.value || b.groupName);b.updatedAt = now();const scope = practiceScopeV8916();if (scope.type === PRACTICE_SCOPE_GROUP_V8916 && scope.value === oldGroup && state.banks.every((x) => x.id === b.id || bankGroupNameV58(x) !== oldGroup)) { ensurePracticeScopeV8916();toast('原练习分组已无题库，已切换为当前题库。', 'warn'); } const g = $('#bank-group-rename-input-v58');if (g) { g.dataset.lastBankIdV58 = ''; } await saveSilent();renderAll(); }); }
   function duplicateActiveBank() { duplicateBankById(activeBank().id); }
+  // eslint-disable-next-line prefer-template -- 历史数据字段可能是对象，保留 + 的默认转换；字段类型受约束后移除此例外。
   async function duplicateBankById(id) { if (!await loadNativeBanks([id])) { return; } return runMutation(async () => { const b = state.banks.find((x) => x.id === id);if (!b) { return; } const copy = JSON.parse(JSON.stringify(b));copy.id = makeId('bank');copy.name = b.name + ' - 副本';copy.createdAt = now();copy.updatedAt = now();copy.questions = (copy.questions || []).map((q, i) => ({ ...q, id: makeId('q', i), number: i + 1 }));state.banks.push(copy);setPracticeBankScopeV8916(copy.id, true);await saveSilent();renderAll(); }); }
   async function newEmptyBank() { return runMutation(async () => { const name = await ShirohaDialogs.prompt('请输入新题库名称：', '新建空题库');if (!name) { return; } const groupName = normalizeBankGroupNameV58(await ShirohaDialogs.prompt('请输入一级分组名称，可留空：', '') || '');const bank = { id: makeId('bank'), name: name.trim() || '新建空题库', groupName, createdAt: now(), updatedAt: now(), questions: [] };state.banks.push(bank);setPracticeBankScopeV8916(bank.id, true);await saveSilent();renderAll(); }); }
-  async function mergeBankIntoActive() { if (!await loadNativeBanks([activeBank().id, $('#merge-bank-select').value])) { return; } return runMutation(async () => { const sourceId = $('#merge-bank-select').value;const target = activeBank();const src = state.banks.find((b) => b.id === sourceId);if (!src) { await ShirohaDialogs.alert('没有可合并的来源题库。');return; } if (!await ShirohaDialogs.confirm(`将“${src.name}”的 ${src.questions.length} 道题合并到当前题库“${target.name}”？`)) { return; } const before = target.questions.length;const existing = new Set(target.questions.map((q) => normalizeText(q.question)));let added = 0; let skipped = 0;src.questions.forEach((q) => { const k = normalizeText(q.question);if (existing.has(k)) { skipped++;return; }existing.add(k);target.questions.push({ ...JSON.parse(JSON.stringify(q)), id: makeId('q', target.questions.length + 1), number: target.questions.length + 1 });added++; });target.updatedAt = now();await saveSilent();renderAll();await ShirohaDialogs.alert(`合并完成：新增 ${added} 题，跳过重复 ${skipped} 题。合并前 ${before} 题，当前 ${target.questions.length} 题。`); }); }
+  async function mergeBankIntoActive() { if (!await loadNativeBanks([activeBank().id, $('#merge-bank-select').value])) { return; } return runMutation(async () => { const sourceId = $('#merge-bank-select').value;const target = activeBank();const src = state.banks.find((b) => b.id === sourceId);if (!src) { await ShirohaDialogs.alert('没有可合并的来源题库。');return; } if (!await ShirohaDialogs.confirm(`将“${src.name}”的 ${src.questions.length} 道题合并到当前题库“${target.name}”？`)) { return; } const before = target.questions.length;const existing = new Set(target.questions.map((q) => normalizeText(q.question)));let added = 0; let skipped = 0;src.questions.forEach((q) => { const k = normalizeText(q.question);if (existing.has(k)) { skipped += 1;return; }existing.add(k);target.questions.push({ ...JSON.parse(JSON.stringify(q)), id: makeId('q', target.questions.length + 1), number: target.questions.length + 1 });added += 1; });target.updatedAt = now();await saveSilent();renderAll();await ShirohaDialogs.alert(`合并完成：新增 ${added} 题，跳过重复 ${skipped} 题。合并前 ${before} 题，当前 ${target.questions.length} 题。`); }); }
+  // eslint-disable-next-line prefer-template -- 历史数据字段可能是对象，保留 + 的默认转换；字段类型受约束后移除此例外。
   async function exportBankById(id) { try { if (!await loadNativeBanks([id])) { return; } const b = state.banks.find((x) => x.id === id);if (!b) { return; } const text = JSON.stringify(serializeBankForCrossExportV53(b), null, 2);$('#export-output') && ($('#export-output').value = text);await download((b.name || '题库') + '.json', text); } catch (error) { platformStatus('导出失败：' + error.message, true);return false; } }
 
   async function dedupeActiveBank() { if (!await loadNativeBanks([activeBank().id])) { return; } return runMutation(async () => { const b = activeBank();const map = new Map(); const dups = [];b.questions.forEach((q) => { const k = normalizeText(q.question);if (map.has(k)) { dups.push(q); } else { map.set(k, q); } });b.questions = [...map.values()].map((q, i) => ({ ...q, number: i + 1 }));await saveSilent();renderAll();await ShirohaDialogs.alert(`去重完成：删除 ${dups.length} 道重复题，剩余 ${b.questions.length} 道。`); }); }
-  function shuffle(a) { const shuffled = [...a];for (let i = shuffled.length - 1;i > 0;i--) { const j = Math.floor(Math.random() * (i + 1));[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]; } return shuffled; }
+  function shuffle(a) { const shuffled = [...a];for (let i = shuffled.length - 1;i > 0;i -= 1) { const j = Math.floor(Math.random() * (i + 1));[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]; } return shuffled; }
 
   function pickRichTextFieldV57(q, field, fallback = '') {
     const rich = q && q.richContent;
@@ -1608,7 +1615,7 @@ D. 高速通过积水路段`;
   function markdownImageRegexV83() { return /!\[([^\]]{0,120})\]\((data:image\/(?:png|jpeg|jpg|gif|webp|bmp);base64,[^)]+)\)/gi; }
   function dataUriMimeExtV83(dataUri) { const m = String(dataUri || '').match(/^data:image\/([^;]+);base64,/i);const t = ((m && m[1]) || 'webp').toLowerCase();if (t === 'jpeg' || t === 'jpg') { return 'jpg'; } return t.replace(/[^a-z0-9]+/g, '') || 'webp'; }
   function dataUriSizeBytesV83(dataUri) { const b64 = String(dataUri || '').split(',')[1] || '';return Math.max(0, Math.floor(b64.replace(/\s/g, '').length * 3 / 4)); }
-  function safeImageIdV83(prefix, a, b) { return String(prefix || 'img') + '_' + String(a || 'q').replace(/[^A-Za-z0-9_-]+/g, '_').slice(0, 32) + '_' + String(b || 1).replace(/[^A-Za-z0-9_-]+/g, '_'); }
+  function safeImageIdV83(prefix, a, b) { return `${String(prefix || 'img')}_${String(a || 'q').replace(/[^A-Za-z0-9_-]+/g, '_').slice(0, 32)}_${String(b || 1).replace(/[^A-Za-z0-9_-]+/g, '_')}`; }
   function stripUnsafeImageDataUrisV83(text) {
     return String(text || '')
       .replace(/!\[[^\]]{0,120}\]\((data:image\/[^;)\s]+;base64,[^)]+)\)/gi, (m, src) => (questionImageDataUriRegexV83().test(src) ? m : '[图片已移除]'))
@@ -1620,7 +1627,7 @@ D. 高速通过积水路段`;
       if (!img || typeof img !== 'object') { return null; }
       const src = String(img.dataUrl || img.dataUri || img.src || img.localPath || '').trim();
       if (!src) { return null; }
-      const sourceName = String(img.sourceName || img.name || img.alt || ('题目图片' + (i + 1))).trim() || ('题目图片' + (i + 1));
+      const sourceName = String(img.sourceName || img.name || img.alt || (`题目图片${i + 1}`)).trim() || (`题目图片${i + 1}`);
       return { id: String(img.id || safeImageIdV83('img', sourceName, i + 1)), localPath: src, dataUrl: src, sourceName, order: Number(img.order || i + 1) || i + 1, width: img.width ?? null, height: img.height ?? null, sizeBytes: Number(img.sizeBytes || dataUriSizeBytesV83(src)) || 0 };
     }).filter(Boolean);
   }
@@ -1629,7 +1636,7 @@ D. 高速通过积水路段`;
     let text = String(question || '').trim();
     const imgs = normalizeQuestionImagesForWebV83(images).filter((img) => questionImageDataUriRegexV83().test(img.dataUrl || img.localPath || ''));
     const additions = [];
-    imgs.forEach((img, i) => { const src = img.dataUrl || img.localPath;if (!questionTextContainsDataUriV83(text, src)) { const alt = (img.sourceName || ('题目图片' + (i + 1))).replace(/[\]\n\r]/g, '').slice(0, 80) || '题目图片';additions.push(`![${alt}](${src})`); } });
+    imgs.forEach((img, i) => { const src = img.dataUrl || img.localPath;if (!questionTextContainsDataUriV83(text, src)) { const alt = (img.sourceName || (`题目图片${i + 1}`)).replace(/[\]\n\r]/g, '').slice(0, 80) || '题目图片';additions.push(`![${alt}](${src})`); } });
     if (additions.length) { text = [text, ...additions].filter(Boolean).join('\n'); }
     return text;
   }
@@ -1638,16 +1645,18 @@ D. 高速通过积水路段`;
     const question = String((q && q.question) || '');
     const images = [];let order = 1;
     const cleanQuestion = question.replace(markdownImageRegexV83(), (m, alt, src) => {
-      const cleanAlt = String(alt || ('题目图片' + order)).trim() || ('题目图片' + order);
+      const cleanAlt = String(alt || (`题目图片${order}`)).trim() || (`题目图片${order}`);
       const ext = dataUriMimeExtV83(src);
       images.push({ id: safeImageIdV83('web', (q && q.id) || 'q', order), localPath: src, dataUrl: src, sourceName: `${cleanAlt}.${ext}`, order, width: null, height: null, sizeBytes: dataUriSizeBytesV83(src) });
-      order++;
+      order += 1;
       return `\n【${cleanAlt}】\n`;
     }).replace(/\n{3,}/g, '\n\n').trim();
     normalizeQuestionImagesForWebV83(q && q.images).forEach((img) => {
       const src = img.dataUrl || img.localPath || '';
       if (!src || images.some((x) => x.localPath === src || x.dataUrl === src)) { return; }
-      images.push({ ...img, order: img.order || order++ });
+      const exportedImage = { ...img, order: img.order || order };
+      if (!img.order) { order += 1; }
+      images.push(exportedImage);
     });
     return { question: cleanQuestion, images };
   }
@@ -1668,8 +1677,8 @@ D. 高速通过积水路段`;
   function getWrongEntries(bid = activeBank().id) { const v = state.wrongBook[bid] || [];if (!Array.isArray(v)) { return []; } return v.map((x) => (typeof x === 'string' ? { id: x, wrongCount: 1, rightCount: 0, reviewRightCount: 0, streakCorrectCount: 0, lastWrongAt: '', lastCorrectAt: '', lastReviewedAt: '', nextReviewAt: '', reviewLevel: 0, lastAnswer: [], source: 'web', timestamp: 0, status: '未掌握' } : { ...x, id: x.id, wrongCount: Number(x.wrongCount || 0), rightCount: Number(x.rightCount || 0), reviewRightCount: Number(x.reviewRightCount || 0), streakCorrectCount: Number(x.streakCorrectCount || 0), lastWrongAt: x.lastWrongAt || '', lastCorrectAt: x.lastCorrectAt || '', lastReviewedAt: x.lastReviewedAt || '', nextReviewAt: x.nextReviewAt || '', reviewLevel: Number(x.reviewLevel || 0), lastAnswer: Array.isArray(x.lastAnswer) ? x.lastAnswer : [], source: x.source || 'web', timestamp: Number(x.timestamp || 0), status: x.status || '未掌握' })).filter((x) => x.id); }
   function setWrongEntries(entries, bid = activeBank().id) { state.wrongBook[bid] = entries; }
   function nextWrongReviewIsoV24(level, base = Date.now()) { const days = [1, 1, 3, 7, 14, 30, 60][Math.max(0, Math.min(6, Number(level || 0)))] || 1;return new Date(base + (days * 86400000)).toISOString(); }
-  function addWrong(id, bid = activeBank().id, chosen = []) { const arr = getWrongEntries(bid);let e = arr.find((x) => x.id === id);if (!e) { e = { id, wrongCount: 0, rightCount: 0, reviewRightCount: 0, streakCorrectCount: 0, lastWrongAt: '', lastCorrectAt: '', lastReviewedAt: '', nextReviewAt: '', reviewLevel: 0, lastAnswer: [], source: 'web', timestamp: 0, status: '未掌握' };arr.push(e); } const ts = Date.now();e.lastAnswer = [...chosen];e.wrongCount++;e.rightCount = 0;e.reviewRightCount = 0;e.streakCorrectCount = 0;e.reviewLevel = 0;e.lastWrongAt = new Date(ts).toISOString();e.lastReviewedAt = e.lastWrongAt;e.nextReviewAt = nextWrongReviewIsoV24(0, ts);e.timestamp = ts;e.source = 'web';e.status = '未掌握';setWrongEntries(arr, bid); }
-  function markRight(id, bid = activeBank().id) { const arr = getWrongEntries(bid);const e = arr.find((x) => x.id === id);if (!e) { return; } const ts = Date.now();e.rightCount++;e.reviewRightCount = Number(e.reviewRightCount || 0) + 1;e.streakCorrectCount = Number(e.streakCorrectCount || 0) + 1;const mastered = e.streakCorrectCount >= 2;e.reviewLevel = mastered ? Math.max(2, Number(e.reviewLevel || 0) + 1) : Math.max(1, Number(e.reviewLevel || 0));e.lastCorrectAt = new Date(ts).toISOString();e.lastReviewedAt = e.lastCorrectAt;e.nextReviewAt = nextWrongReviewIsoV24(e.reviewLevel, ts);e.timestamp = ts;e.status = mastered ? '已掌握' : '复习中';setWrongEntries(arr, bid); }
+  function addWrong(id, bid = activeBank().id, chosen = []) { const arr = getWrongEntries(bid);let e = arr.find((x) => x.id === id);if (!e) { e = { id, wrongCount: 0, rightCount: 0, reviewRightCount: 0, streakCorrectCount: 0, lastWrongAt: '', lastCorrectAt: '', lastReviewedAt: '', nextReviewAt: '', reviewLevel: 0, lastAnswer: [], source: 'web', timestamp: 0, status: '未掌握' };arr.push(e); } const ts = Date.now();e.lastAnswer = [...chosen];e.wrongCount += 1;e.rightCount = 0;e.reviewRightCount = 0;e.streakCorrectCount = 0;e.reviewLevel = 0;e.lastWrongAt = new Date(ts).toISOString();e.lastReviewedAt = e.lastWrongAt;e.nextReviewAt = nextWrongReviewIsoV24(0, ts);e.timestamp = ts;e.source = 'web';e.status = '未掌握';setWrongEntries(arr, bid); }
+  function markRight(id, bid = activeBank().id) { const arr = getWrongEntries(bid);const e = arr.find((x) => x.id === id);if (!e) { return; } const ts = Date.now();e.rightCount += 1;e.reviewRightCount = Number(e.reviewRightCount || 0) + 1;e.streakCorrectCount = Number(e.streakCorrectCount || 0) + 1;const mastered = e.streakCorrectCount >= 2;e.reviewLevel = mastered ? Math.max(2, Number(e.reviewLevel || 0) + 1) : Math.max(1, Number(e.reviewLevel || 0));e.lastCorrectAt = new Date(ts).toISOString();e.lastReviewedAt = e.lastCorrectAt;e.nextReviewAt = nextWrongReviewIsoV24(e.reviewLevel, ts);e.timestamp = ts;e.status = mastered ? '已掌握' : '复习中';setWrongEntries(arr, bid); }
   function removeWrong(id) { const bid = activeBank().id;setWrongEntries(getWrongEntries(bid).filter((x) => x.id !== id), bid); }
   function makeAnswerDetail(item, chosen, ok, score, _totalScore) { const q = practiceQuestionV8916(item);const values = Array.isArray(chosen) ? [...chosen] : [];const detail = { questionId: q.id, question: short(q.question, 120), type: q.type, category: q.category || '', chosen: values, userAnswer: [...values], answer: [...q.answer], correct: !!ok, score: ok ? score : 0, fullScore: score, time: now(), sourceBankId: practiceItemBankIdV8916(item), sourceBankName: practiceItemBankNameV8916(item), nativeQuestion: JSON.parse(JSON.stringify(q)) };if (isMultiBlankQuestionV58914(q)) { detail.blankAnswers = cloneBlankAnswersV58914(q.blankAnswers);detail.userBlankAnswers = [...values]; } return detail; }
 
@@ -1690,9 +1699,11 @@ D. 高速通过积水路段`;
     return Number($(selector).value) || 0;
   }
 
+  // eslint-disable-next-line prefer-template -- 异常信息可能是对象，保留 + 的默认转换；统一异常类型后移除此例外。
   async function exportRecords() { try { if (ShirohaPlatform.storage.ensureRecords && !await readNative(() => ShirohaPlatform.storage.ensureRecords(state, state.records.map((r) => r.id)))) { return; } const text = JSON.stringify(state.records || [], null, 2);$('#export-output') && ($('#export-output').value = text);await download('学习记录.json', text); } catch (error) { platformStatus('导出失败：' + error.message, true);return false; } }
   function fmt(s) { return new Date(s).toLocaleString('zh-CN', { hour12: false }); }
 
+  // eslint-disable-next-line prefer-template -- 历史数据字段可能是对象，保留 + 的默认转换；字段类型受约束后移除此例外。
   async function exportCurrentBank() { try { if (!await loadNativeBanks([activeBank().id])) { return; } const text = JSON.stringify(serializeBankForCrossExportV53(activeBank()), null, 2);$('#export-output').value = text;await download(activeBank().name + '.json', text); } catch (error) { platformStatus('导出失败：' + error.message, true);return false; } }
   function exportAll() { exportAllBackupV23(); }
 
@@ -1802,7 +1813,7 @@ D. 高速通过积水路段`;
     const summary = $('#export-bank-summary-v23');
     const selected = selectedBanksV23();const qCount = selected.reduce((n, b) => n + (b.questions || []).length, 0);
     const all = $('#export-bank-all-v23');if (all) { all.checked = state.banks.length > 0 && selected.length === state.banks.length;all.indeterminate = selected.length > 0 && selected.length < state.banks.length; }
-    if (summary) { summary.textContent = selected.length ? `已选择 ${selected.length} 个题库，共 ${qCount} 道题。` : '请至少选择一个题库。';summary.className = 'notice ' + (selected.length ? 'ok' : 'warn'); }
+    if (summary) { summary.textContent = selected.length ? `已选择 ${selected.length} 个题库，共 ${qCount} 道题。` : '请至少选择一个题库。';summary.className = `notice ${selected.length ? 'ok' : 'warn'}`; }
     const btn = $('#export-selected-banks-v23');if (btn) { btn.disabled = !selected.length; }
     const del = $('#delete-selected-banks-v32');if (del) { del.disabled = !selected.length; }
   }
@@ -1813,6 +1824,7 @@ D. 高速通过积水路段`;
       const unique = [...new Set((ids || []).filter(Boolean))];
       const targets = state.banks.filter((b) => unique.includes(b.id));
       if (!targets.length) { toast('请先选择要删除的题库。', 'warn');return; }
+      // eslint-disable-next-line prefer-template -- 历史数据字段可能是对象，保留 + 的默认转换；字段类型受约束后移除此例外。
       const preview = targets.slice(0, 4).map((b) => '“' + b.name + '”').join('、') + (targets.length > 4 ? ' 等' : '');
       if (!await ShirohaDialogs.confirm(`确定删除 ${targets.length} 个题库：${preview}？删除后不会影响已导出的备份，但本机数据不可恢复。`)) { return; }
       const delIds = new Set(targets.map((b) => b.id));
@@ -1840,6 +1852,7 @@ D. 高速通过积水路段`;
       const text = JSON.stringify(payload, null, 2);setBackupPreviewV23(text);
       const name = banks.length === 1 ? `shiroha-quiz-bank-${cleanFileNameV23(banks[0].name)}-${todayV23()}.json` : `shiroha-quiz-question-banks-${todayV23()}.json`;
       await download(name, text);toast(`已导出 ${banks.length} 个题库 JSON。题库管理页导出的 JSON 只包含题库内容，不包含错题、收藏、记录和设置。`, 'ok');
+    // eslint-disable-next-line prefer-template -- 异常信息可能是对象，保留 + 的默认转换；统一异常类型后移除此例外。
     } catch (error) { platformStatus('导出失败：' + error.message, true);return false; }
   }
   async function exportAllBackupV23() {
@@ -1848,6 +1861,7 @@ D. 高速通过积水路段`;
       const payload = buildBackupPayloadV23(state.banks || [], 'all_data', true);
       const text = JSON.stringify(payload, null, 2);setBackupPreviewV23(text);
       await download(`shiroha-quiz-all-data-${todayV23()}.json`, text);toast('已生成全部数据备份。手机端若未弹出下载，可复制文本框内容。', 'ok');
+    // eslint-disable-next-line prefer-template -- 异常信息可能是对象，保留 + 的默认转换；统一异常类型后移除此例外。
     } catch (error) { platformStatus('导出失败：' + error.message, true);return false; }
   }
   async function exportNativeCompatibleBackupZipV611() {
@@ -1862,6 +1876,7 @@ D. 高速通过积水路段`;
         warnDev('导出含图片备份 ZIP 失败', err);
         toast('导出含图片备份 ZIP 失败，请先使用完整 JSON 备份。', 'danger');
       }
+    // eslint-disable-next-line prefer-template -- 异常信息可能是对象，保留 + 的默认转换；统一异常类型后移除此例外。
     } catch (error) { platformStatus('导出失败：' + error.message, true);return false; }
   }
   async function copyAllBackupJsonV23() {
@@ -1977,6 +1992,7 @@ D. 高速通过积水路段`;
         if (old >= 0) { state.banks[old] = bank; } else { state.banks.push(bank); }
         state.settings = { ...(state.settings || {}), suppressDefaultBank: false };
         setPracticeBankScopeV8916(bank.id, true);await saveSilent();renderAll();toast(`已加载内置题库：${bank.name}，共 ${bank.questions.length} 题。`, 'ok');
+      // eslint-disable-next-line prefer-template -- 异常信息可能是对象，保留 + 的默认转换；统一异常类型后移除此例外。
       } catch (e) { warnDev('加载内置题库失败', e);toast('加载内置题库失败：' + e.message, 'danger'); }
     });
   }
@@ -2076,6 +2092,7 @@ D. 高速通过积水路段`;
     const title = 'Shiroha Quiz OCR 识别结果';
     const paragraphs = [
       title,
+      // eslint-disable-next-line prefer-template -- 外部值可能是对象，保留 + 的默认转换；输入类型受约束后移除此例外。
       '来源文件：' + (sourceName || '未命名 PDF'),
       '说明：本文件由 OCR 自动识别生成，可能存在错字、漏字和段落错位，请人工核对后再用于题库整理。',
       '',
@@ -2125,6 +2142,7 @@ D. 高速通过积水路段`;
         setBackupPreviewV23(text);
         const data = JSON.parse(text);applyBackupAssetsV24(data, loaded.assets || {});const unresolvedImageCount = countUnresolvedBackupImagesV24(data);const normalized = normalizeBackupPayloadV23(data, file.name);
         await applyBackupImportV23(normalized, backupImportModeV23 || 'merge', unresolvedImageCount);
+      // eslint-disable-next-line prefer-template -- 异常信息可能是对象，保留 + 的默认转换；统一异常类型后移除此例外。
       } catch (err) { toast('导入备份失败：' + err.message, 'danger'); } finally { if (!mutationSaveError) { e.target.value = ''; } }
     }))();
   }
@@ -2237,8 +2255,8 @@ D. 高速通过积水路段`;
     if (!card || !rail) { return; }
     if (window.innerWidth < 1280) { rail.style.removeProperty('top');rail.style.removeProperty('max-height');return; }
     const top = Math.max(12, Math.round(card.getBoundingClientRect().top));
-    rail.style.setProperty('top', top + 'px', 'important');
-    rail.style.setProperty('max-height', 'calc(100vh - ' + (top + 18) + 'px)', 'important');
+    rail.style.setProperty('top', `${top}px`, 'important');
+    rail.style.setProperty('max-height', `calc(100vh - ${top + 18}px)`, 'important');
   }
   let focusRailSyncBoundV35 = false;
   function setupFocusRailSyncV35() {
@@ -2272,7 +2290,7 @@ D. 高速通过积水路段`;
 
   /* SHIROHA_WEB_V45_BANK_EDITOR_AND_FOCUS_NAV_START */
   async function switchViewV45(viewId) {
-    const view = viewId && $('#' + viewId);
+    const view = viewId && $(`#${viewId}`);
     if (!view) { return; }
     if (viewId !== 'practice' && !await canLeaveTotalPractice(viewId)) { return; }
     if (viewId !== 'practice') { exitPracticeFocus(); }
@@ -2299,7 +2317,7 @@ D. 高速通过积水路段`;
   function platformStatus(message, failed = false) {
     let el = document.getElementById('platform-status');
     if (!el) { el = document.createElement('div');el.id = 'platform-status';el.setAttribute('role', 'status');el.setAttribute('aria-live', 'polite');document.body.appendChild(el); }
-    el.textContent = message;el.className = 'platform-status' + (failed ? ' failed' : '');el.hidden = !message;
+    el.textContent = message;el.className = `platform-status${failed ? ' failed' : ''}`;el.hidden = !message;
     if (failed && retryMutation) { const retry = document.createElement('button');retry.textContent = '重试';retry.onclick = () => retryMutation();el.appendChild(retry); }
   }
   function lockApplication(locked) { document.querySelector('.app')?.toggleAttribute('inert', locked);document.body.dataset.storageState = locked ? 'pending' : 'ready';refreshAnswerOptionControls(); }
@@ -2385,11 +2403,12 @@ D. 高速通过积水路段`;
       }
     }
   }
-  for (const type of ['click', 'change', 'input', 'keydown']) { document.addEventListener(type, (event) => { if (mutationBusy && !event.target.closest?.('#platform-status,#desktop-titlebar,#app-dialog')) { event.preventDefault();event.stopImmediatePropagation(); } }, true); }
+  function blockInteractionDuringMutation(event) { if (mutationBusy && !event.target.closest?.('#platform-status,#desktop-titlebar,#app-dialog')) { event.preventDefault();event.stopImmediatePropagation(); } }
+  for (const type of ['click', 'change', 'input', 'keydown']) { document.addEventListener(type, blockInteractionDuringMutation, true); }
   window.addEventListener('beforeunload', (event) => { if (mutationBusy || mutationSaveError || (practiceSession.current.submitMode === 'total' && !practiceSession.current.completed && (practiceSession.current.totalLocked || totalPracticeFilledCount() > 0))) { event.preventDefault();event.returnValue = ''; } });
   // HTML 文件拖放只读取用户交付的 File，不接收本机路径；与选择文件共用解析和确认流程。
-  for (const type of ['dragover', 'drop']) {
-    document.addEventListener(type, (event) => {
+  function createFileDragHandler(type) {
+    return (event) => {
       if (!Array.from(event.dataTransfer?.types || []).includes('Files')) { return; }
       event.preventDefault();
       if (type !== 'drop' || !event.target.closest?.('#import') || mutationBusy) { return; }
@@ -2397,8 +2416,9 @@ D. 高速通过积水路段`;
       if (files.length !== 1) { toast('请每次拖入一个文件。', 'warn');return; }
       if (!/\.(txt|json|csv|xlsx|docx|doc|pdf)$/i.test(files[0].name)) { toast('不支持此文件类型，请选择 TXT、JSON、CSV、XLSX、DOCX 或 PDF。', 'warn');return; }
       void readImportFile({ target: { files } });
-    });
+    };
   }
+  for (const type of ['dragover', 'drop']) { document.addEventListener(type, createFileDragHandler(type)); }
   document.addEventListener('keydown', (event) => {
     if (!(event.ctrlKey || event.metaKey) || event.altKey || event.isComposing || event.repeat) { return; }
     if (event.target.closest?.('input,textarea,select,[contenteditable="true"]')) { return; }

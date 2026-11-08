@@ -861,7 +861,7 @@ async function totalPracticeSmoke(runtime, bankName, origin) {
   const { page } = runtime;
   await page.locator('.nav[data-view="ai-settings"]').click();
   await page.locator('#ai-provider-v99').selectOption('custom');
-  await page.locator('#ai-endpoint-v99').fill(origin + '/practice-analysis');
+  await page.locator('#ai-endpoint-v99').fill(`${origin}/practice-analysis`);
   await page.locator('#ai-model-v99').fill('mock-model');
   await page.locator('#ai-api-key-v99').fill('native-fixture-key');
   await page.locator('#ai-remember-key-v99').uncheck();
@@ -1028,7 +1028,7 @@ async function main() {
   process.once('SIGINT', interrupt); process.once('SIGTERM', interrupt);
   /** @param {string} name @param {() => Promise<unknown>} action */
   const check = async (name, action) => {
-    console.log('正在验证：' + name);
+    console.log(`正在验证：${name}`);
     try { checks.push({ name, ok: true, detail: await deadline(action(), RESOURCE_TIMEOUT_MS) }); } catch (error) { checks.push({ name, ok: false, error: errorText(error) }); }
   };
   try {
@@ -1272,7 +1272,7 @@ async function main() {
       await migratedRestart.page.evaluate(async () => {
         const host = (/** @type {NativeTestWindow} */(window)).ShirohaDesktopHost;if (!host) { throw new Error('bridge'); }
         const current = /** @type {{revision:number}} */ (await host.invoke('local_initialize'));
-        const banks = ['lazy-a', 'lazy-b'].map((id) => ({ id, name: id, groupName: 'C8', questions: Array.from({ length: 65 }, (_, i) => ({ id: 'q' + i, number: i + 1, type: 'single', question: id + ' 正文 ' + i, options: [{ key: 'A', text: '正确' }, { key: 'B', text: '错误' }], answer: ['A'], extension: { preserved: true } })) }));
+        const banks = ['lazy-a', 'lazy-b'].map((id) => ({ id, name: id, groupName: 'C8', questions: Array.from({ length: 65 }, (_, i) => ({ id: `q${i}`, number: i + 1, type: 'single', question: `${id} 正文 ${i}`, options: [{ key: 'A', text: '正确' }, { key: 'B', text: '错误' }], answer: ['A'], extension: { preserved: true } })) }));
         Object.assign(banks[0].questions[0], { category: '较长的分类名称：综合基础知识', score: 12.5 });
         await host.invoke('local_replace', { operationId: 'lazy-fixture', expectedRevision: current.revision, snapshot: { schemaVersion: 1, banks, activeBankId: 'lazy-a', wrongBook: {}, favorites: { 'lazy-a': ['q64', 'q0'] }, records: [{ id: 'old-record', mode: 'practice', name: '历史记录', bankName: '已删除题库', date: '2026-10-23T00:00:00Z', total: 1, answered: 1, correct: 0, wrong: 1, accuracy: 0, duration: 1, details: [{ question: '已删除题目的历史正文', type: 'single', chosen: ['B'], answer: ['A'], correct: false }] }], settings: {}, crossPlatformMeta: {} } });
       });
@@ -1280,7 +1280,7 @@ async function main() {
         const calls = /** @type {string[]} */ ([]);
         Object.defineProperty(window, '__nativeCalls', { value: calls });
         Object.defineProperty(window, 'ShirohaDesktopHost', { configurable: true, set(host) {
-          const original = host.invoke;host.invoke = (/** @type {string} */command, /** @type {{query?:{kind?:string}}} */args) => { calls.push(command + ':' + (args?.query?.kind || ''));return original(command, args); };
+          const original = host.invoke;host.invoke = (/** @type {string} */command, /** @type {{query?:{kind?:string}}} */args) => { calls.push(`${command}:${args?.query?.kind || ''}`);return original(command, args); };
           Object.defineProperty(window, 'ShirohaDesktopHost', { value: host, configurable: true });
         } });
       });

@@ -63,6 +63,7 @@
       }
     }
     async function startExam() {
+      // eslint-disable-next-line no-plusplus -- setter 仍接受字符串和 BigInt；限定类型后才能移除此例外。
       const request = ++examSession.request;
       const count = Number($('#exam-count').value) || 50;
       const scope = practiceScopeV8916();
@@ -241,15 +242,15 @@
           const ok = sameAnswerForQuestion(q, ans, q.answer);
           if (ok) {
             got += sc;
-            correct++;
+            correct += 1;
           }
           addWrongOnExam(item, !ok, ans);
           details.push(makeAnswerDetail(item, ans, ok, sc, sc));
           const k = q.type || 'single';
           byType[k] = byType[k] || { total: 0, correct: 0, score: 0, fullScore: 0 };
-          byType[k].total++;
+          byType[k].total += 1;
           if (ok) {
-            byType[k].correct++;
+            byType[k].correct += 1;
           }
           byType[k].score += ok ? sc : 0;
           byType[k].fullScore += sc;
@@ -300,9 +301,9 @@
         const correct = sameAnswerForQuestion(q, ans, q.answer);
         let analysis = '';
         if (!correct) {
-          analysis = renderReviewAnalysis(item, ans, 'exam:' + rec.id);
+          analysis = renderReviewAnalysis(item, ans, `exam:${rec.id}`);
         } else if (q.analysis) {
-          analysis = '<br>解析：' + renderQuestionContent(q.analysis);
+          analysis = `<br>解析：${renderQuestionContent(q.analysis)}`;
         }
         html += `<div class="exam-q" data-result-qid="${esc(key)}">${questionHtml(examRenderQuestionV113(item), true, i + 1)}<div class="feedback ${correct ? 'ok' : 'bad'}">${feedbackAnswerHtmlV58914(q, ans)}${analysis}</div></div>`;
       });

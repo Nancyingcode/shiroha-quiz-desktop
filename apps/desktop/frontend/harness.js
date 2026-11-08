@@ -118,19 +118,19 @@
     if (codexOperation) { assertCodex(); }
     if (['prepare_runtime', 'cancel'].includes(String(request.kind))) { assertSupported(); }
     const epoch = generation;
-    const sequence = ++requestSequence;
+    requestSequence += 1; const sequence = requestSequence;
     const observation = observationEpoch;
     const accountObservation = accountEpoch;
     const query = request.kind === 'status';
     const observing = query || request.kind === 'inspect';
-    if (!observing) { observationEpoch++; pendingMutations++; }
+    if (!observing) { observationEpoch += 1; pendingMutations += 1; }
     /** @type {HarnessStatus} */ let next;
     /** @type {ReturnType<typeof setTimeout>|undefined} */ let timeout;
     try {
       const pending = invoke('harness_control', request);
       const response = observing ? await Promise.race([pending, new Promise((_, reject) => { timeout = setTimeout(() => reject(new Error('状态读取超时，请重新读取。')), statusTimeoutMs); })]) : await pending;
       next = /** @type {HarnessStatus} */ (response);
-    } finally { clearTimeout(timeout); if (!observing) { pendingMutations--; observationEpoch++; } }
+    } finally { clearTimeout(timeout); if (!observing) { pendingMutations -= 1; observationEpoch += 1; } }
     if (epoch !== generation) { return current; }
     if (query && (observation !== observationEpoch || pendingMutations)) { return current; }
     if (query && current.adapter === 'codebuddy' && accountObservation !== accountEpoch) { return current; }
@@ -162,7 +162,7 @@
     }
   }
   function invalidateSetup() {
-    setupGeneration++;
+    setupGeneration += 1;
     loginInProgress = false;
     preparationCheck?.(cancelled());
     preparationCheck = undefined;
@@ -210,7 +210,7 @@
   /** @param {boolean} [skipQuery] */
   async function refreshStatus(skipQuery = false) {
     const epoch = generation;
-    const sequence = ++codexReadSequence;
+    codexReadSequence += 1; const sequence = codexReadSequence;
     codexReading = codexSelected(); codexReadFailure = ''; codexAccountConfirmed = false; render(false); changed();
     try {
       if (!skipQuery) { await control({ kind: 'status' }); }
@@ -244,8 +244,8 @@
     try { await control({ kind: 'status' }); } catch (error) {
       if (epoch !== generation) { return; }
       // 未确认进程终态时保持阻塞，并使此前所有查询失效，直到用户重新查询或停止。
-      observationEpoch++;
-      current = { ...current, ready: false, busy: true, operationBusy: true, reason: `无法确认 ${providerLabel()} 任务状态，请刷新状态或重试停止。` + failure(error).message };
+      observationEpoch += 1;
+      current = { ...current, ready: false, busy: true, operationBusy: true, reason: `无法确认 ${providerLabel()} 任务状态，请刷新状态或重试停止。${failure(error).message}` };
       protectAuthorization();
     }
   }
@@ -253,17 +253,17 @@
   async function endAuthorization(kind) {
     assertCodex();
     invalidateSetup();
-    generation++;
+    generation += 1;
     clearAuthorizationTimer();
     authorizationBlock = '正在清理订阅授权，当前授权已停用。';
     protectAuthorization(); render(false); changed();
     try {
       if (kind === 'logout') { await api.cancelAll(); }
       await control({ kind });
-      generation++;
+      generation += 1;
     } catch (error) {
       authorizationBlock = '退出登录尚未完成，当前授权已停用，请重试退出登录。';
-      try { await control({ kind: 'status' }); } catch { observationEpoch++; current = { ...current, busy: true, operationBusy: true }; }
+      try { await control({ kind: 'status' }); } catch { observationEpoch += 1; current = { ...current, busy: true, operationBusy: true }; }
       protectAuthorization();
       throw error;
     } finally { render(false); changed(); }
@@ -286,7 +286,7 @@
   /** @param {string} message @param {boolean} [error] */
   function notice(message, error = false) {
     const target = element(current.adapter === 'codebuddy' ? 'ai-codebuddy-execution-status' : 'ai-harness-status');
-    if (target) { target.textContent = message; target.className = 'notice' + (error ? ' warn' : ''); }
+    if (target) { target.textContent = message; target.className = `notice${error ? ' warn' : ''}`; }
     const shownInCodebuddyCard = current.adapter === 'codebuddy' && selectedAdapter() === 'codebuddy';
     if (!codexSelected() && !shownInCodebuddyCard && api.formMode() === 'harness') { const common = element('ai-settings-status-v99'); if (common) { common.textContent = message; } }
   }
@@ -299,11 +299,11 @@
     if (active.size || operationBusy() || pendingMutations || businessBusy()) { throw failure({ code: 'busy', message: '请等待当前任务结束后切换提供方。' }); }
     if (selectingAdapter || selectingModel || loginInProgress || current.credentialStatus === 'authenticating') { throw failure({ code: 'busy', message: '请等待当前任务或订阅设置操作结束后切换提供方。' }); }
     const retrying = !!selectionFailure;
-    const epoch = ++generation;
-    const operation = ++selectionSequence;
+    generation += 1; const epoch = generation;
+    selectionSequence += 1; const operation = selectionSequence;
     invalidateSetup();
     clearAuthorizationTimer();
-    codexReadSequence++; codexReading = false;
+    codexReadSequence += 1; codexReading = false;
     draftAdapter = adapter; selectingAdapter = true; selectionFailure = ''; failedAdapter = '';
     const mode = input('ai-execution-harness'); if (mode) { mode.checked = true; }
     render(false); changed();
@@ -322,7 +322,7 @@
       if (current.adapter !== adapter || current.mode !== 'harness') { throw new Error('提供方选择尚未确认保存，请重试。'); }
       draftAdapter = undefined; selectionFailure = ''; saved = true;
     } catch (error) {
-      if (operation === selectionSequence) { failedAdapter = adapter; draftAdapter = current.adapter; selectionFailure = '提供方选择尚未保存，请重新选择或点击“重试保存选择”。' + failure(error).message; }
+      if (operation === selectionSequence) { failedAdapter = adapter; draftAdapter = current.adapter; selectionFailure = `提供方选择尚未保存，请重新选择或点击“重试保存选择”。${failure(error).message}`; }
       throw error;
     } finally {
       if (operation === selectionSequence) { selectingAdapter = false; observeAuthorization(); render(false); changed(); }
@@ -337,8 +337,8 @@
     assertIdle();
     if (selectingAdapter || selectingModel || loginInProgress || preparation || current.credentialStatus === 'authenticating' || current.runtimeState === 'preparing') { throw failure({ code: 'busy', message: '请等待当前任务或订阅设置操作结束后切换模型。' }); }
     const retrying = !!modelSelectionFailure;
-    const epoch = ++generation;
-    const operation = ++modelSelectionSequence;
+    generation += 1; const epoch = generation;
+    modelSelectionSequence += 1; const operation = modelSelectionSequence;
     draftModel = model; selectingModel = true; modelSelectionFailure = '';
     render(false); changed();
     try {
@@ -350,7 +350,7 @@
       if (current.adapter !== 'codebuddy' || current.model !== model || current.revision <= revision) { throw new Error('模型选择尚未确认保存，请重试。'); }
       draftModel = undefined; modelSelectionFailure = '';
     } catch (error) {
-      if (operation === modelSelectionSequence) { modelSelectionFailure = 'CodeBuddy 模型选择尚未保存，请重新选择或点击“重试保存模型”。' + failure(error).message; }
+      if (operation === modelSelectionSequence) { modelSelectionFailure = `CodeBuddy 模型选择尚未保存，请重新选择或点击“重试保存模型”。${failure(error).message}`; }
       throw error;
     } finally {
       if (operation === modelSelectionSequence) { selectingModel = false; render(false); changed(); }
@@ -384,6 +384,7 @@
       return;
     }
     if (reset) {
+      // eslint-disable-next-line prefer-template -- 外部值可能是对象，保留 + 的默认转换；输入类型受约束后移除此例外。
       const selected = input('ai-execution-' + (draftAdapter === undefined ? current.mode : 'harness'));
       if (selected) { selected.checked = true; }
       const model = input('ai-harness-model'); if (model && current.adapter === 'codex') { model.value = current.model || 'gpt-6.1-sol'; }
@@ -481,13 +482,13 @@
       invalidateSetup();
       // 旧设置操作未收敛时查询会被屏障丢弃；重新读取必须先停用旧执行状态。
       current = { ...current, mode: 'harness', ready: false, reason: '正在重新读取 AI 设置；请等待当前操作结束后刷新状态。' };
-      selectionSequence++; draftAdapter = undefined; selectingAdapter = false; selectionFailure = '';
-      modelSelectionSequence++; draftModel = undefined; selectingModel = false; modelSelectionFailure = '';
+      selectionSequence += 1; draftAdapter = undefined; selectingAdapter = false; selectionFailure = '';
+      modelSelectionSequence += 1; draftModel = undefined; selectingModel = false; modelSelectionFailure = '';
       // 恢复后的重读只更新状态，不把仍可见的设置页当成用户再次进入。
       automaticPreparationAttempts.clear();
       if (generation > 0) { automaticPreparationAttempts.add(current.adapter); }
       settingsLoading = true; settingsFailure = ''; codexAccountConfirmed = false; codexReadFailure = ''; codexReading = false; render(false);
-      const epoch = ++generation;
+      generation += 1; const epoch = generation;
       clearAuthorizationTimer();
       try { await control({ kind: 'status' }); } catch (error) { if (epoch === generation) { settingsFailure = '暂时无法读取 AI 设置，请重新读取。'; current = { ...current, mode: 'harness', ready: false, reason: failure(error).message }; } } finally { if (epoch === generation) { settingsLoading = false; render(false); } }
     },
@@ -508,11 +509,11 @@
       const firstConfirmedAccount = !codebuddyAccount && account.revision === current.accountRevision && account.phase === 'signed_in' && !account.blocked && current.credentialStatus === 'subscription';
       const invalidatesExecution = !sameObservation && !firstConfirmedAccount;
       codebuddyAccount = { ...account };
-      if (invalidatesExecution) { accountEpoch++; }
+      if (invalidatesExecution) { accountEpoch += 1; }
       if (current.adapter !== 'codebuddy' || current.mode !== 'harness') { return; }
       if (invalidatesExecution) {
         current = { ...current, ready: false, reason: 'CodeBuddy 账户已变化，正在确认当前登录状态。' };
-        observationEpoch++; protectAuthorization(); render(false); changed();
+        observationEpoch += 1; protectAuthorization(); render(false); changed();
       }
       if (!account.blocked) { void uiAction(async () => { await control({ kind: 'status' }); }); }
     },
@@ -562,7 +563,7 @@
         throw error;
       } finally { signal?.removeEventListener('abort', abort); active.delete(id); finished(); render(false); changed(); }
     },
-    async cancelAll() { invalidateSetup(); generation++; clearAuthorizationTimer(); if (!['codex', 'codebuddy'].includes(current.adapter)) { return; } const pending = [...active.values()]; await control({ kind: 'cancel_all' }); await Promise.all(pending); },
+    async cancelAll() { invalidateSetup(); generation += 1; clearAuthorizationTimer(); if (!['codex', 'codebuddy'].includes(current.adapter)) { return; } const pending = [...active.values()]; await control({ kind: 'cancel_all' }); await Promise.all(pending); },
     // 表单执行方式是待保存的选择；业务使用状态快照，未确认的选择保持不可执行。
     formMode() { return input('ai-execution-harness')?.checked ? 'harness' : 'api'; },
     formAdapter() { return selectedAdapter(); },
@@ -579,7 +580,7 @@
       const epoch = generation;
       await control({ kind: 'save', mode, adapter: current.adapter, model, timeoutSeconds, revision: current.revision });
       if (epoch !== generation) { throw cancelled(); }
-      generation++;
+      generation += 1;
       if (mode === 'api') { draftAdapter = undefined; selectionFailure = ''; }
       clearAuthorizationTimer(); observeAuthorization();
       render(); changed();
@@ -611,14 +612,14 @@
       if (codebuddyModel) { codebuddyModel.onchange = () => { const model = codebuddyModel.value; void uiAction(() => selectModel(model)); }; }
       const retryModel = element('ai-codebuddy-model-retry');
       if (retryModel) { retryModel.onclick = () => { if (draftModel !== undefined) { const model = draftModel; void uiAction(() => selectModel(model)); } }; }
+      /** @param {string} mode */
+      function handleModeChange(mode) {
+        render(false);
+        if (mode === 'harness') { if (!['failed', 'cancelled'].includes(current.runtimeState)) { automaticPreparationAttempts.delete(current.adapter); } activateRuntime(); } else if (preparation || loginInProgress || current.runtimeState === 'preparing' || current.credentialStatus === 'authenticating') { void uiAction(() => api.cancelAll()); }
+      }
       for (const mode of ['api', 'harness']) {
-        const radio = input('ai-execution-' + mode);
-        if (radio) {
-          radio.onchange = () => {
-            render(false);
-            if (mode === 'harness') { if (!['failed', 'cancelled'].includes(current.runtimeState)) { automaticPreparationAttempts.delete(current.adapter); } activateRuntime(); } else if (preparation || loginInProgress || current.runtimeState === 'preparing' || current.credentialStatus === 'authenticating') { void uiAction(() => api.cancelAll()); }
-          };
-        }
+        const radio = input(`ai-execution-${mode}`);
+        if (radio) { radio.onchange = () => handleModeChange(mode); }
       }
       const prepare = element('ai-harness-prepare'); if (prepare) { prepare.onclick = () => { void uiAction(() => ensurePrepared()); }; }
       const codebuddyPrepare = element('ai-codebuddy-prepare'); if (codebuddyPrepare) { codebuddyPrepare.onclick = () => { void uiAction(() => ensurePrepared()); }; }
@@ -634,9 +635,14 @@
       const login = element('ai-harness-login'); if (login) { login.onclick = () => { void uiAction(loginSubscription); }; }
       const refresh = element('ai-harness-auth-refresh'); if (refresh) { refresh.onclick = () => { void uiAction(refreshStatus); }; }
       const logout = element('ai-harness-logout'); if (logout) { logout.onclick = () => { void uiAction(() => endAuthorization('logout')); }; }
+      /** @param {string} field */
+      function copyLoginInfo(field) {
+        const value = field === 'loginUrl' ? current.loginUrl : current.userCode;
+        if (value) { void navigator.clipboard.writeText(value).then(() => notice('已复制，请在浏览器中自行完成官方订阅登录。'), () => notice('复制失败，请选择登录信息手动复制。', true)); }
+      }
       for (const [id, field] of [['ai-harness-copy-url', 'loginUrl'], ['ai-harness-copy-code', 'userCode']]) {
         const copy = element(id);
-        if (copy) { copy.onclick = () => { const value = field === 'loginUrl' ? current.loginUrl : current.userCode; if (value) { void navigator.clipboard.writeText(value).then(() => notice('已复制，请在浏览器中自行完成官方订阅登录。'), () => notice('复制失败，请选择登录信息手动复制。', true)); } }; }
+        if (copy) { copy.onclick = () => copyLoginInfo(field); }
       }
       const stop = element('ai-harness-stop'); if (stop) { stop.onclick = () => { void uiAction(() => api.cancelAll()); }; }
       render();

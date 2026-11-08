@@ -30,14 +30,36 @@ function settingsElements() {
   for (const id of ['ai-harness-settings', 'ai-codex-settings', 'ai-codebuddy-settings', 'ai-deepseek-settings', 'ai-api-settings-fields', 'ai-settings-actions', 'ai-save-settings-v99', 'ai-test-connection-v99', 'ai-clear-settings-v99', 'ai-settings-status-v99']) { elements[id] = {}; }
   elements['ai-harness-adapter'] = { value: 'codex' };
   let selected = 'api';
-  for (const mode of ['api', 'harness']) { Object.defineProperty(elements['ai-execution-' + mode], 'checked', { get: () => selected === mode, set: (value) => { if (value) { selected = mode; } } }); }
+  function bindModeSelection(mode) { Object.defineProperty(elements[`ai-execution-${mode}`], 'checked', { get: () => selected === mode, set: (value) => { if (value) { selected = mode; } } }); }
+  for (const mode of ['api', 'harness']) { bindModeSelection(mode); }
   return elements;
 }
 function pollingClock() {
   const timers = new Map();let id = 0;
-  return { setTimeout(callback) { timers.set(++id, callback);return id; }, clearTimeout(key) { timers.delete(key); }, async tick() { const entry = timers.entries().next().value;assert(entry, '缺少状态轮询');timers.delete(entry[0]);await entry[1](); }, timers };
+  return { setTimeout(callback) { timers.set((id += 1), callback);return id; }, clearTimeout(key) { timers.delete(key); }, async tick() { const entry = timers.entries().next().value;assert(entry, '缺少状态轮询');timers.delete(entry[0]);await entry[1](); }, timers };
 }
 const managedStatus = { ...status, mode: 'api', model: '', credentialStatus: 'missing', runtimePath: '', runtimeVersion: '', runtimeSource: 'managed', runtimeState: 'unprepared', ready: false };
+
+test('复制登录信息的回调读取绑定后更新的状态', async () => {
+  const elements = settingsElements();
+  elements['ai-harness-copy-url'] = {};
+  elements['ai-harness-copy-code'] = {};
+  const copied = [];
+  const clock = { ...pollingClock(), navigator: { clipboard: { writeText: async (value) => { copied.push(value); } } } };
+  let native = { ...status, loginUrl: 'https://auth.example.invalid/old', userCode: 'OLD' };
+  const api = client(async () => ({ ...native }), elements, clock);
+  await api.initialize();
+  api.bind(() => {}, () => false);
+  elements['ai-harness-copy-url'].onclick();
+  elements['ai-harness-copy-code'].onclick();
+  await settleUi();
+  native = { ...native, revision: 5, loginUrl: 'https://auth.example.invalid/new', userCode: 'NEW' };
+  await api.initialize();
+  elements['ai-harness-copy-url'].onclick();
+  elements['ai-harness-copy-code'].onclick();
+  await settleUi();
+  assert.deepEqual(copied, ['https://auth.example.invalid/old', 'OLD', 'https://auth.example.invalid/new', 'NEW']);
+});
 
 test('下载中切换保留后台任务，切回不重新准备并按提供方取消', async () => {
   const elements = settingsElements();const clock = pollingClock();const calls = [];
@@ -72,7 +94,7 @@ test('组件恰好完成导致选择修订过期时，重读并保存同一次�
   const api = client(async (_command, { request }) => {
     calls.push(request.kind);
     if (request.kind === 'select_adapter') {
-      if (++selections === 1) { native = { ...native, revision: 5, runtimeState: 'ready', busy: false, componentTasks: [] };throw { code: 'harness_stale' }; }
+      if ((selections += 1) === 1) { native = { ...native, revision: 5, runtimeState: 'ready', busy: false, componentTasks: [] };throw { code: 'harness_stale' }; }
       assert.equal(request.revision, 5);
       native = { ...native, adapter: request.adapter, revision: 6 };
     }
@@ -124,7 +146,7 @@ test('选择立即阻断旧Codex快照，保存成功保留订阅且迟到状态
   const api = client(async (command, { request }) => {
     calls.push({ command, ...request });
     if (request.kind === 'select_adapter') { return saving.promise; }
-    if (request.kind === 'status' && ++reads > 1) { return stale.promise; }
+    if (request.kind === 'status' && (reads += 1) > 1) { return stale.promise; }
     return { ...status };
   }, elements);
   await api.initialize();api.bind(() => {}, () => false);
@@ -172,7 +194,7 @@ for (const outcome of ['success', 'failure']) {
     const api = client(async (command, { request }) => {
       calls.push({ command, ...request });
       if (request.kind === 'select_adapter') { return saving.promise; }
-      return ++reads === 1 ? { ...status } : { ...native };
+      return (reads += 1) === 1 ? { ...status } : { ...native };
     }, elements);
     await api.initialize();api.bind(() => {}, () => false);const old = api.snapshot();
     const selection = api.selectAdapter('codebuddy');const rejected = assert.rejects(selection);
@@ -196,7 +218,7 @@ test('旧初始化查询的失败不能覆盖新生命周期已确认的提供�
   const stale = deferred();let reads = 0;
   const native = { ...status, adapter: 'deepseek', ready: false, revision: 6, reason: 'DeepSeek 尚未接入。' };
   const api = client(async () => {
-    reads++;
+    reads += 1;
     if (reads === 1) { return { ...status }; }
     if (reads === 2) { return stale.promise; }
     return { ...native };
@@ -365,7 +387,7 @@ for (const available of [false, true]) {
     let executions = 0;
     const message = available ? '隔离执行失败' : '请先完成订阅登录';
     const api = client(async (command) => {
-      if (command === 'harness_execute') { executions++;throw { code: 'harness_unavailable', message }; }
+      if (command === 'harness_execute') { executions += 1;throw { code: 'harness_unavailable', message }; }
       return { ...status, ready: available, reason: message };
     }, elements);
     await api.initialize();
@@ -380,7 +402,7 @@ for (const available of [false, true]) {
 test('配置更新后拒绝旧快照，未授权不能执行，不静默回退', async () => {
   let current = { ...status };
   let executions = 0;
-  const api = client(async (command) => { if (command === 'harness_execute') { executions++; } return current; });
+  const api = client(async (command) => { if (command === 'harness_execute') { executions += 1; } return current; });
   await api.initialize();
   const frozen = api.snapshot();
   current = { ...status, revision: 5 };
@@ -418,7 +440,7 @@ test('订阅授权只轮询已有登录状态，完成或取消后释放计时�
   let timerId = 0;
   const requests = [];
   let authorization = 'authenticating';
-  const api = client(async (_command, args) => { requests.push(args.request.kind);return { ...status, credentialStatus: authorization, ready: authorization === 'subscription' }; }, {}, { setTimeout(callback, delay) { assert([1000, 15000].includes(delay));timers.set(++timerId, callback);return timerId; }, clearTimeout(id) { timers.delete(id); } });
+  const api = client(async (_command, args) => { requests.push(args.request.kind);return { ...status, credentialStatus: authorization, ready: authorization === 'subscription' }; }, {}, { setTimeout(callback, delay) { assert([1000, 15000].includes(delay));timers.set((timerId += 1), callback);return timerId; }, clearTimeout(id) { timers.delete(id); } });
   await api.initialize();
   assert.equal(timers.size, 1);
   const [id, callback] = [...timers][0];timers.delete(id);
@@ -444,9 +466,9 @@ test('较早发出的 status 迟到不能覆盖登录的新修订或停止授权
   const api = client(async (_command, args) => {
     if (args.request.kind === 'login') { return signingIn; }
     if (args.request.kind === 'save') { return initial; }
-    if (++reads === 1) { return initial; }
+    if ((reads += 1) === 1) { return initial; }
     return new Promise((resolve) => { resolveStatus = resolve; });
-  }, elements, { setTimeout(callback) { timers.set(++timerId, callback);return timerId; }, clearTimeout(id) { timers.delete(id); } });
+  }, elements, { setTimeout(callback) { timers.set((timerId += 1), callback);return timerId; }, clearTimeout(id) { timers.delete(id); } });
   await api.initialize();
   let changed;
   api.bind(() => changed?.(), () => false);
@@ -474,7 +496,7 @@ for (const action of ['cancel_all', 'logout']) {
     const api = client(async (_command, args) => {
       if (args.request.kind === 'logout') { return ended; }
       if (args.request.kind === 'cancel_all') { return action === 'logout' ? status : ended; }
-      if (++reads === 1) { return status; }
+      if ((reads += 1) === 1) { return status; }
       return new Promise((resolve) => { resolveStatus = resolve; });
     }, elements);
     await api.initialize();
@@ -517,7 +539,7 @@ test('取消全部任务等待在途执行终态，再允许保存配置', async
 test('统一入口返回 Harness 内容，失败不走 API response_format 重试', async () => {
   let apiCalls = 0;
   let harnessCalls = 0;
-  const context = vm.createContext({ ShirohaPlatform: { credentials: { native: true }, network: { ai() { apiCalls++; } }, harness: { async execute(snapshot, task) { harnessCalls++; assert.equal(snapshot.revision, 4); assert.equal(task, 'import_organize'); throw Object.assign(new Error('额度不足'), { code: 'quota_exceeded' }); } } } });
+  const context = vm.createContext({ ShirohaPlatform: { credentials: { native: true }, network: { ai() { apiCalls += 1; } }, harness: { async execute(snapshot, task) { harnessCalls += 1; assert.equal(snapshot.revision, 4); assert.equal(task, 'import_organize'); throw Object.assign(new Error('额度不足'), { code: 'quota_exceeded' }); } } } });
   installAiSettings(context);
   installAiTransport(context);
   await assert.rejects(context.requestAiChatV99({ execution: status }, [], { task: 'import_organize' }), /额度不足/);
@@ -531,7 +553,7 @@ test('同一修订的 status 逆序返回不能恢复较旧的 busy 状态', asy
   let reads = 0;
   const elements = { 'ai-harness-auth-refresh': {} };
   const api = client(async () => {
-    reads++;
+    reads += 1;
     if (reads === 1) { return status; }
     if (reads === 2) { return older.promise; }
     return newer.promise;
@@ -557,7 +579,7 @@ for (const ending of ['success', 'cancel']) {
     const api = client(async (command, args) => {
       if (command === 'harness_execute') { return execution.promise; }
       if (args.request.kind === 'cancel') { return { ...status, busy: true }; }
-      if (++reads === 3) { return delayedStatus.promise; }
+      if ((reads += 1) === 3) { return delayedStatus.promise; }
       return { ...status, busy: phase === 'running' };
     }, elements);
     await api.initialize();
@@ -585,8 +607,8 @@ for (const ending of ['unreadable', 'poisoned']) {
     let reads = 0;
     let runs = 0;
     const api = client(async (command) => {
-      if (command === 'harness_execute') { runs++;return { content: '完成结果' }; }
-      if (++reads === 1) { return status; }
+      if (command === 'harness_execute') { runs += 1;return { content: '完成结果' }; }
+      if ((reads += 1) === 1) { return status; }
       if (ending === 'unreadable') { throw { code: 'storage_unavailable', message: '状态查询失败' }; }
       return { ...status, ready: false, busy: true, reason: '进程尚未停止' };
     });
@@ -607,9 +629,9 @@ for (const action of ['logout', 'clear']) {
     let attempts = 0;
     const elements = { 'ai-harness-logout': {}, 'ai-harness-auth-refresh': {}, 'ai-harness-status': {} };
     const api = client(async (_command, args) => {
-      if (args.request.kind === 'status') { reads++;return status; }
+      if (args.request.kind === 'status') { reads += 1;return status; }
       if (args.request.kind === 'cancel_all') { return status; }
-      if (args.request.kind === action && ++attempts === 1) { return operation.promise; }
+      if (args.request.kind === action && (attempts += 1) === 1) { return operation.promise; }
       return { ...status, revision: 5, credentialStatus: 'missing', ready: false };
     }, elements);
     await api.initialize();
@@ -644,7 +666,7 @@ test('cancel_all 期间查询不得覆盖完成结果，即使查询与完成共
   const elements = { 'ai-harness-auth-refresh': {} };
   const api = client(async (_command, args) => {
     if (args.request.kind === 'cancel_all') { return stopping.promise; }
-    return ++reads === 1 ? status : observed.promise;
+    return (reads += 1) === 1 ? status : observed.promise;
   }, elements);
   await api.initialize();
   api.bind(() => {}, () => false);
@@ -666,7 +688,7 @@ test('终态查询过程中取消仍等待停止并重新确认状态，不返�
   const api = client(async (command, args) => {
     if (command === 'harness_execute') { return { content: '不能采用的结果' }; }
     if (args.request.kind === 'cancel') { return stopping.promise; }
-    if (++reads === 2) { phase = 'refreshing';return terminal.promise; }
+    if ((reads += 1) === 2) { phase = 'refreshing';return terminal.promise; }
     return status;
   });
   await api.initialize();
@@ -692,7 +714,7 @@ test('退出失败且状态读取失败后仍可重试退出，新的登录不�
   const api = client(async (_command, args) => {
     if (args.request.kind === 'status' && phase === 'failed') { throw { message: '状态读取失败' }; }
     if (args.request.kind === 'logout' && phase === 'initial') { phase = 'failed';throw { message: '退出失败' }; }
-    if (args.request.kind === 'login') { logins++; }
+    if (args.request.kind === 'login') { logins += 1; }
     return phase === 'retry' ? { ...status, revision: 5, credentialStatus: 'missing', ready: false } : status;
   }, elements);
   await api.initialize();
@@ -768,7 +790,7 @@ test('切回 API 取消准备和待续登录，迟到的已准备状态不能重
     calls.push(request.kind);
     if (request.kind === 'prepare_runtime') { return { ...managedStatus, runtimeState: 'preparing', busy: true, revision: 5 }; }
     if (request.kind === 'cancel_all') { return { ...managedStatus, runtimeState: 'cancelled', revision: 6 }; }
-    if (++reads === 1) { return managedStatus; }
+    if ((reads += 1) === 1) { return managedStatus; }
     return prepared.promise;
   }, elements, clock);
   await api.initialize();api.bind(() => {}, () => false);elements['ai-execution-harness'].checked = true;

@@ -11,11 +11,11 @@ test('整体撤销凭据后同步 Harness 修订，仍能保存直接 API 执行
     document: { getElementById: () => null, addEventListener() {} },
     ShirohaBrowser: {}, ShirohaBrowserCredentials: {}, ShirohaSaveQueue: { create: () => ({}) },
     ShirohaDesktopHost: { invoke: async (/** @type {string} */ command, /** @type {{request:{kind:string,revision?:number}}} */ args) => {
-      if (command === 'service_credential' && args.request.kind === 'invalidate') { revision++; return {}; }
+      if (command === 'service_credential' && args.request.kind === 'invalidate') { revision += 1; return {}; }
       assert.equal(command, 'harness_control');
       if (args.request.kind === 'save') {
         if (args.request.revision !== revision) { throw { code: 'harness_stale' }; }
-        revision++;
+        revision += 1;
       }
       return status();
     } },

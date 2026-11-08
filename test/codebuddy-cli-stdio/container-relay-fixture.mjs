@@ -27,12 +27,12 @@ const server = createServer(async (request, response) => {
   response.write(': synthetic AppContainer fixture\n\n');
   await new Promise((resolve) => setTimeout(resolve, 6_000));
   if (scenario === 'tool') {
-    response.end(chunk({ tool_calls: [{ index: 0, id: 'test-tool', type: 'function',
-      function: { name: 'Write', arguments: '{}' } }] }, 'tool_calls') + 'data: [DONE]\n\n');
+    response.end(`${chunk({ tool_calls: [{ index: 0, id: 'test-tool', type: 'function',
+      function: { name: 'Write', arguments: '{}' } }] }, 'tool_calls')}data: [DONE]\n\n`);
     return;
   }
   response.write(chunk({ role: 'assistant' }) + chunk({ content: '{"ok":true}' }));
-  response.end(scenario === 'eof' ? '' : chunk({}, 'stop') + 'data: [DONE]\n\n');
+  response.end(scenario === 'eof' ? '' : `${chunk({}, 'stop')}data: [DONE]\n\n`);
 });
 await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
 const relay = await createGuardedRelay(`http://127.0.0.1:${server.address().port}`);

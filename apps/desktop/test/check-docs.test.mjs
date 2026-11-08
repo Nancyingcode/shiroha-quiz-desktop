@@ -38,7 +38,7 @@ async function fixture(t) {
   ]) {
     const file = path.join(root, relative);
     await mkdir(path.dirname(file), { recursive: true });
-    await writeFile(file, '# 检查样例\n\n[当前文档](./' + path.basename(file) + ')\n\n```text\n示例\n```\n');
+    await writeFile(file, `# 检查样例\n\n[当前文档](./${path.basename(file)})\n\n\`\`\`text\n示例\n\`\`\`\n`);
   }
   return {
     root,

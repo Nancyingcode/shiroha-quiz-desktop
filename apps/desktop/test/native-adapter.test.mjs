@@ -14,8 +14,8 @@ test('复盘正文惰性读取与释放保留轻量摘要，重读不产生写�
   const scope = { ShirohaDesktopHost: { invoke: async (/** @type {string} */command, /** @type {{query?:{kind:string}}} */args) => {
     if (command === 'local_initialize') { return { revision: 1, hasData: true }; }
     if (args?.query?.kind === 'summary') { return { revision: 1, snapshot: globalThis.structuredClone(index) }; }
-    if (args?.query?.kind === 'details') { detailReads++;return [globalThis.structuredClone(full)]; }
-    assert.fail('只读复盘不应写入：' + command);
+    if (args?.query?.kind === 'details') { detailReads += 1;return [globalThis.structuredClone(full)]; }
+    assert.fail(`只读复盘不应写入：${command}`);
   } }, ShirohaBrowser: {}, ShirohaBrowserCredentials: {}, ShirohaSaveQueue: { create: () => ({}) }, localStorage: { getItem: () => null }, structuredClone: globalThis.structuredClone };
   vm.runInNewContext(source, scope);
   const storage = /** @type {import('../../web/platform/runtime.d.ts').BrowserStorage} */ (vm.runInNewContext('ShirohaPlatform.storage', scope));

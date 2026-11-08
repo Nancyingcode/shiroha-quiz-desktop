@@ -30,7 +30,9 @@
         if (textEl) { textEl.value = text;delete textEl.dataset.tableImportV49; }
         toast(`文件读取完成：提取到 ${text.split(/\n+/).filter(Boolean).length} 行文本。请点击“开始识别”。`, 'ok');
       } catch (err) {
+        // eslint-disable-next-line prefer-template -- 异常信息可能是对象，保留 + 的默认转换；统一异常类型后移除此例外。
         if (/\.pdf$/i.test(file.name || '')) { setOcrStatus('文字层提取失败：' + err.message + '。如果这是扫描件/图片型 PDF，可以尝试 OCR。', 'warn'); }
+        // eslint-disable-next-line prefer-template -- 异常信息可能是对象，保留 + 的默认转换；统一异常类型后移除此例外。
         toast('文件读取失败：' + err.message + '。可尝试复制文件内容粘贴到文本框。');
       }
     }
@@ -49,6 +51,7 @@
         }
         toast(`${kind === 'question' ? '题目' : '答案'}文件读取完成。`, 'ok');
       } catch (err) {
+        // eslint-disable-next-line prefer-template -- 异常信息可能是对象，保留 + 的默认转换；统一异常类型后移除此例外。
         toast('文件读取失败：' + err.message + '。');
       }
     }

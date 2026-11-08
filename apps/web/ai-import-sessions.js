@@ -36,10 +36,10 @@
         const current = importDraft.questions[currentIndex];
         if (!target || !current || aiQuestionFingerprintV991(current) !== target.fingerprint) { continue; }
         if (mode === 'analysis') {
-          if (item.analysis || item.note) { analysisSuggestions.set(item.questionId, item);stored++; }
+          if (item.analysis || item.note) { analysisSuggestions.set(item.questionId, item);stored += 1; }
         } else if (item.issues.length || item.note || item.canApply) {
           reviewSuggestions.set(item.questionId, item);
-          stored++;
+          stored += 1;
         }
       }
       return stored;

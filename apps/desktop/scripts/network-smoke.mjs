@@ -39,7 +39,7 @@ export async function createNativeMock(root) {
 export async function nativeServiceSmoke(page, origin) {
   await page.locator('.nav[data-view="ai-settings"]').click();
   await page.locator('#ai-provider-v99').selectOption('custom');
-  await page.locator('#ai-endpoint-v99').fill(origin + '/chat');
+  await page.locator('#ai-endpoint-v99').fill(`${origin}/chat`);
   await page.locator('#ai-model-v99').fill('mock-model');
   await page.locator('#ai-api-key-v99').fill('native-fixture-key');
   await page.locator('#ai-remember-key-v99').check();
@@ -49,11 +49,11 @@ export async function nativeServiceSmoke(page, origin) {
   await page.waitForFunction(() => document.querySelector('#ai-settings-status-v99')?.textContent?.includes('设置已保存'));
   return page.evaluate(async (origin) => {
     const platform = /** @type {import('../../web/platform/runtime.d.ts').BrowserGlobals['ShirohaPlatform']} */ (Reflect.get(window, 'ShirohaPlatform'));
-    const config = { endpoint: origin + '/chat', apiKey: '[已保存的凭据]', rememberKey: true };
+    const config = { endpoint: `${origin}/chat`, apiKey: '[已保存的凭据]', rememberKey: true };
     if (platform.credentials.status('ai', config) !== '[已保存的凭据]') { throw new Error('凭据状态未确认'); }
     const response = await platform.network.ai(config, { messages: [{ role: 'user', content: 'synthetic' }], stream: false });
     if (!(await response.text()).includes('native mock response')) { throw new Error('原生 AI 未返回 mock'); }
-    const dav = { endpoint: origin + '/dav', remoteDir: 'ShirohaQuiz/Web' };
+    const dav = { endpoint: `${origin}/dav`, remoteDir: 'ShirohaQuiz/Web' };
     const list = await platform.network.webdav(dav, '', 'ShirohaQuiz/Web', { method: 'PROPFIND', acceptStatuses: [207] });
     if (list.status !== 207) { throw new Error('原生 WebDAV 目录失败'); }
     const backupPath = 'ShirohaQuiz/Web/shiroha-web-backup-20261023-120000-12345678.json';
@@ -66,7 +66,7 @@ export async function nativeServiceSmoke(page, origin) {
     try { await platform.network.webdav(dav, '', 'ShirohaQuiz/Web/latest.json', { method: 'PUT', body: '{}' }); } catch { partial = true; }
     if (!partial || (await platform.network.webdav(dav, '', backupPath, { method: 'GET' })).status !== 200) { throw new Error('latest 失败丢失历史备份'); }
     const controller = new window.AbortController();
-    const delayed = platform.network.ai({ endpoint: origin + '/slow' }, { messages: [] }, controller.signal);
+    const delayed = platform.network.ai({ endpoint: `${origin}/slow` }, { messages: [] }, controller.signal);
     controller.abort();
     let cancelled = false;
     try { await delayed; } catch { cancelled = true; }

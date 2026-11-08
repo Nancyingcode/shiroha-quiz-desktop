@@ -139,7 +139,7 @@
       if (!path || path === '/') {
         url.pathname = '/v1/chat/completions';
       } else if (/\/v1$/i.test(path)) {
-        url.pathname = path + '/chat/completions';
+        url.pathname = `${path}/chat/completions`;
       }
 
       url.hash = '';
@@ -191,7 +191,7 @@
       }
 
       el.textContent = message;
-      el.className = 'notice' + (type ? ' ' + type : '');
+      el.className = `notice${type ? ` ${type}` : ''}`;
     }
 
     function aiCurrentOriginV375() {

@@ -43,7 +43,7 @@
         box.innerHTML = '';
         return;
       }
-      const review = reviewAiSessions.get(JSON.stringify(['practice:' + practiceSession.current.start, item.bankId || '', q.id || '']));
+      const review = reviewAiSessions.get(JSON.stringify([`practice:${practiceSession.current.start}`, item.bankId || '', q.id || '']));
       const inlineWrongAnalysis = st.answered && st.correct === false && (!String(q.analysis || '').trim() || !!review?.analysis);
       if (inlineWrongAnalysis) {
         box.innerHTML = '';
@@ -70,7 +70,7 @@
       const { configured, config } = aiSingleConfigV613();
       const isHarness = isAiHarnessExecutionV99(config.execution);
       const generationDisabled = !configured || busy;
-      const blocks = [`<div class="practice-ai-head-v613"><div><b>AI 单题解析</b><span>${configured || isHarness ? esc(aiExecutionLabelV99(config)) + (config.model ? ' · ' + esc(config.model) : '') : '尚未配置 AI 服务'}</span></div><span class="pill practice-ai-status-v613${busy ? ' is-busy' : ''}">${panelStatus}</span></div>`];
+      const blocks = [`<div class="practice-ai-head-v613"><div><b>AI 单题解析</b><span>${configured || isHarness ? esc(aiExecutionLabelV99(config)) + (config.model ? ` · ${esc(config.model)}` : '') : '尚未配置 AI 服务'}</span></div><span class="pill practice-ai-status-v613${busy ? ' is-busy' : ''}">${panelStatus}</span></div>`];
       blocks.push(`<div class="actions practice-ai-actions-v613"><button class="ghost mini-btn" type="button" data-ai-single-close-v613="1" aria-expanded="true">收起 AI 面板</button>${busy ? '<button class="ghost mini-btn" type="button" data-ai-single-stop-v613="1">停止请求</button>' : ''}</div>`);
       if (aiSingleHasImagesV613(item)) {
         blocks.push('<p class="practice-ai-warn-v613">本次仅发送文字，未发送题目图片；AI 无法读取图表细节，请人工核对。</p>');

@@ -30,7 +30,7 @@
     const view = new DataView(buf);
     const bytes = new Uint8Array(buf);
     let eocd = -1;
-    for (let i = bytes.length - 22; i >= Math.max(0, bytes.length - 66000); i--) {
+    for (let i = bytes.length - 22; i >= Math.max(0, bytes.length - 66000); i -= 1) {
       if (view.getUint32(i, true) === 0x06054b50) {
         eocd = i;
         break;
@@ -47,7 +47,7 @@
     const invalidDirectory = view.getUint16(eocd + 4, true) || view.getUint16(eocd + 6, true)
       || view.getUint16(eocd + 8, true) !== total || cdOffset + view.getUint32(eocd + 12, true) !== eocd;
     if (invalidDirectory) { throw new Error('ZIP directory is invalid.'); }
-    for (let i = 0; i < total; i++) {
+    for (let i = 0; i < total; i += 1) {
       if (off < 0 || off + 46 > bytes.length) { throw new Error('ZIP central directory is truncated.'); }
       if (view.getUint32(off, true) !== 0x02014b50) { throw new Error('ZIP directory is invalid.'); }
       const method = view.getUint16(off + 10, true);
@@ -206,7 +206,7 @@
     if (!crc32.table) {
       crc32.table = Array.from({ length: 256 }, (_, n) => {
         let c = n;
-        for (let k = 0; k < 8; k++) {
+        for (let k = 0; k < 8; k += 1) {
           c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
         }
         return c >>> 0;

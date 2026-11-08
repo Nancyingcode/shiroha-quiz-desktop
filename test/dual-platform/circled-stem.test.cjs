@@ -8,7 +8,7 @@ test('旧题中合并进选项的圈号陈述恢复到题干，保留答案且�
   const { api } = loadWeb();
   const statements = ['①有关法律、法规、规章和标准的规定', '②本地区、本部门、本单位的安全生产实际情况', '③应急组织和人员的职责分工明确，并有具体的落实措施', '④有明确的应急保障措施，满足本地区、本部门、本单位的应急工作需要'];
   const combinations = ['①②', '①②③', '②③④', '①②③④'];
-  const original = { id: 'legacy-55', type: 'single', question: '应急预案应当符合下列（ ）基本要求。', answer: ['D'], options: statements.map((text, i) => ({ key: 'ABCD'[i], text: text + ' ' + combinations[i] })) };
+  const original = { id: 'legacy-55', type: 'single', question: '应急预案应当符合下列（ ）基本要求。', answer: ['D'], options: statements.map((text, i) => ({ key: 'ABCD'[i], text: `${text} ${combinations[i]}` })) };
   const snapshot = structuredClone(original);
   const repaired = api.repairCircledCombinationQuestion(original);
   assert.equal(repaired.question, [original.question, ...statements].join('\n'));

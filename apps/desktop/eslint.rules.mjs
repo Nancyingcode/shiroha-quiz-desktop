@@ -47,6 +47,10 @@ export const semanticRules = {
     VariableDeclarator: { array: false, object: true },
     AssignmentExpression: { array: false, object: false },
   }, { enforceForRenamedProperties: false }],
+  'no-use-before-define': ['error', { functions: false, classes: false, variables: false }],
+  'no-loop-func': 'error',
+  'no-plusplus': 'error',
+  'prefer-template': 'error',
 };
 
 /** @type {import('eslint').Linter.RulesRecord} */

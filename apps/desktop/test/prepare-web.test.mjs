@@ -198,7 +198,8 @@ test('moves handlers to an external script while preserving click/error behavior
   let index = 0;
   const document = {
     querySelector() {
-      const element = elements[index++];
+      const element = elements[index];
+      index += 1;
       return Object.assign(element, {
         /** @param {string} type @param {(this: object, event: object) => void} callback */
         addEventListener(type, callback) { events.push({ type, callback }); },

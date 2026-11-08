@@ -264,3 +264,20 @@ test('页面工厂装配不访问 DOM，事件绑定留给页面初始化', () =
     assert.equal(typeof create(), 'object');
   }
 });
+
+test('切换练习或考试时请求序号沿用数值转换并使旧读取失效', () => {
+  const context = vm.createContext({});
+  runWebScripts(context, ['study-sessions.js']);
+  for (const create of [context.ShirohaStudySessions.createPractice, context.ShirohaStudySessions.createExam]) {
+    const session = create();
+    assert.equal(session.request, 0);
+    session.current = { timer: null };
+    assert.equal(session.request, 1);
+    session.request = '9';
+    session.current = { timer: null };
+    assert.equal(session.request, 10);
+    session.request = 10n;
+    session.current = { timer: null };
+    assert.equal(session.request, 11n);
+  }
+});

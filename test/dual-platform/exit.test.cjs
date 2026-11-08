@@ -48,7 +48,7 @@ test('确认退出时取消当前 OCR 并继续完成退出检查', async () => 
   let cancellations = 0;
   const f = fixture({
     confirm: () => true,
-    ocrSession: { isRunning: () => true, cancel: () => { cancellations++; } },
+    ocrSession: { isRunning: () => true, cancel: () => { cancellations += 1; } },
   });
   assert.equal(await f.close(), true);
   assert.equal(cancellations, 1);

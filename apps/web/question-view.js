@@ -104,7 +104,7 @@
         let m;
         while ((m = re.exec(source))) {
           if (!m[0]) {
-            re.lastIndex++;
+            re.lastIndex += 1;
             continue;
           }
           const seg = build(m);
@@ -344,7 +344,7 @@
         if (questionTextContainsDataUriV83(question, src)) {
           return;
         }
-        const alt = img.sourceName || ('题目图片' + (i + 1));
+        const alt = img.sourceName || (`题目图片${i + 1}`);
         rendered.push(`<figure class="question-media"><img class="question-image" src="${esc(src)}" alt="${esc(alt)}" loading="lazy"></figure>`);
       });
       return rendered.join('');
@@ -354,24 +354,24 @@
       return renderQuestionContent(question && question.question) + renderStructuredQuestionImagesV83(question && question.question, question && question.images);
     }
     function questionHtml(q, examMode, idx = 0, practiceItem = null) {
-      const meta = `<div class="qmeta">${practiceItem ? practiceSourceMeta(practiceItem) : ''}<span class="pill">${label(q.type)}</span><span class="pill">${esc(q.category || '未分类')}</span>${examMode ? `<span class="pill">${scoreOf(q)}分</span>` : ''}</div><div class="question-title">${examMode ? idx + '. ' : ''}${renderQuestionBodyV83(q)}</div>`;
+      const meta = `<div class="qmeta">${practiceItem ? practiceSourceMeta(practiceItem) : ''}<span class="pill">${label(q.type)}</span><span class="pill">${esc(q.category || '未分类')}</span>${examMode ? `<span class="pill">${scoreOf(q)}分</span>` : ''}</div><div class="question-title">${examMode ? `${idx}. ` : ''}${renderQuestionBodyV83(q)}</div>`;
       if (isMultiBlankQuestionV58914(q)) {
         const inputs = q.blankAnswers.map((_, index) => `<label class="multi-blank-answer-item-v58914"><span>第${index + 1}空</span><input class="text-answer multi-blank-answer-input-v58914" data-qid="${esc(q.id)}" data-blank-index-v58914="${index}" placeholder="请输入第${index + 1}空答案" /></label>`).join('');
-        return meta + `<div class="answer-input-wrap multi-blank-answer-list-v58914">${inputs}</div>`;
+        return `${meta}<div class="answer-input-wrap multi-blank-answer-list-v58914">${inputs}</div>`;
       }
       if (isTextType(q.type)) {
         const placeholder = q.type === 'short' ? '请输入你的简答内容；提交后可对照参考答案。' : '请输入答案。';
         const input = q.type === 'short' ? `<textarea class="text-answer" data-qid="${esc(q.id)}" placeholder="${placeholder}"></textarea>` : `<input class="text-answer" data-qid="${esc(q.id)}" placeholder="${placeholder}" />`;
-        return meta + `<div class="answer-input-wrap">${input}</div>`;
+        return `${meta}<div class="answer-input-wrap">${input}</div>`;
       }
-      return meta + `<div class="options">${q.options.map((o) => {
+      return `${meta}<div class="options">${q.options.map((o) => {
         const displayText = displayOptionTextV589(q, o);
         return `<label class="option${displayText ? '' : ' option-key-only-v59'}" data-key="${esc(o.key)}"><input type="${q.type === 'multiple' ? 'checkbox' : 'radio'}" name="q_${esc(q.id)}" value="${esc(o.key)}"><span class="option-key">${esc(o.key)}${displayText ? '.' : ''}</span>${displayText ? `<span class="option-text">${renderQuestionContent(displayText)}</span>` : ''}</label>`;
       }).join('')}</div>`;
     }
     function bindOptionSelect(root, q, canDeselect = () => false) {
-      const syncSelection = () => $$(root + ' .option').forEach((opt) => opt.classList.toggle('selected', opt.querySelector('input').checked));
-      $$(root + ' .option').forEach((opt) => {
+      const syncSelection = () => $$(`${root} .option`).forEach((opt) => opt.classList.toggle('selected', opt.querySelector('input').checked));
+      $$(`${root} .option`).forEach((opt) => {
         const input = opt.querySelector('input');
         input.addEventListener('input', syncSelection);
         if (q.type === 'multiple') {
@@ -439,10 +439,10 @@
       $$('[data-clear-answer-options]').forEach((button) => button.dispatchEvent(new Event('refresh-answer-options')));
     }
     function selectedKeys(root) {
-      return $$(root + ' input:checked').map((x) => x.value).sort();
+      return $$(`${root} input:checked`).map((x) => x.value).sort();
     }
     function textAnswer(root, q) {
-      const el = $(root + ' .text-answer');
+      const el = $(`${root} .text-answer`);
       if (!el) {
         return [];
       }
@@ -450,7 +450,7 @@
       return value.trim() ? [value] : [];
     }
     function multiBlankAnswerV58914(root) {
-      return $$(root + ' .multi-blank-answer-input-v58914').map((input) => String(input.value || '').trim());
+      return $$(`${root} .multi-blank-answer-input-v58914`).map((input) => String(input.value || '').trim());
     }
     function collectTextAnswerFromElementV58914(box, q) {
       if (!box) {
@@ -519,7 +519,7 @@
       if (isTextType(q.type)) {
         return;
       }
-      $$(root + ' .option').forEach((o) => {
+      $$(`${root} .option`).forEach((o) => {
         const k = o.dataset.key;
         if (q.answer.includes(k)) {
           o.classList.add('correct');
@@ -538,7 +538,7 @@
       return answers.map((key) => {
         const option = (question.options || []).find((value) => value.key === key);
         const text = option ? displayOptionTextV589(question, option) : '';
-        return `<div>${esc(key)}${text ? '. ' + renderQuestionContent(text) : ''}</div>`;
+        return `<div>${esc(key)}${text ? `. ${renderQuestionContent(text)}` : ''}</div>`;
       }).join('');
     }
     function renderReviewAnswerSummary(q, chosen = [], missingChoice = '未记录') {
@@ -567,22 +567,22 @@
     }
     function applyAnswerStateV26(root, q, chosen) {
       if (isMultiBlankQuestionV58914(q)) {
-        $$(root + ' .multi-blank-answer-input-v58914').forEach((input, index) => {
+        $$(`${root} .multi-blank-answer-input-v58914`).forEach((input, index) => {
           input.value = String((chosen || [])[index] || '');
         });
         return;
       }
       if (isTextType(q.type)) {
-        const el = $(root + ' .text-answer');
+        const el = $(`${root} .text-answer`);
         if (el) {
           el.value = (chosen || []).join('；');
         }
         return;
       }
-      $$(root + ' input').forEach((input) => {
+      $$(`${root} input`).forEach((input) => {
         input.checked = (chosen || []).includes(input.value);
       });
-      $$(root + ' .option').forEach((o) => o.classList.toggle('selected', o.querySelector('input').checked));
+      $$(`${root} .option`).forEach((o) => o.classList.toggle('selected', o.querySelector('input').checked));
     }
     return {
       renderQuestionContent, prewarmMathJaxV56, scheduleMathJaxTypesetV56, parseDocxMarkdownTableBlockV55,

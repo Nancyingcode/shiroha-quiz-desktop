@@ -343,7 +343,11 @@ function readSnapshot() {
   }
   const identity = (object) => {
     if (!object || typeof object !== 'object') { return null; }
-    if (!identities.ids.has(object)) { identities.ids.set(object, identities.next++); }
+    if (!identities.ids.has(object)) {
+      const { next } = identities;
+      identities.next += 1;
+      identities.ids.set(object, next);
+    }
     return identities.ids.get(object);
   };
   const item = practice.items[practice.idx];

@@ -44,7 +44,7 @@
       values.forEach(([id, value]) => { const el = $(id);if (el) { el.value = value || ''; } });const remember = $('#webdav-remember-v378');if (remember) { remember.checked = !!config.rememberPassword; }webdavRuntimeV378.formLoaded = true;
     }
     function webdavUrlV378(config, relativePath = '', trailingSlash = false) {
-      const base = String(config.endpoint || '').replace(/\/+$/, '') + '/';
+      const base = `${String(config.endpoint || '').replace(/\/+$/, '')}/`;
       const parts = String(relativePath || '').replace(/\\/g, '/').split('/').filter(Boolean);
       if (parts.some((x) => x === '.' || x === '..')) { throw new Error('WebDAV 路径不安全。'); }
       const encoded = parts.map((x) => encodeURIComponent(x)).join('/');
@@ -121,6 +121,7 @@
     function bindWebdavPanelV378() {
       const save = $('#webdav-save-v378');if (!save) { return; }
       save.onclick = async () => { try { const config = webdavConfigFromFormV378();await storeWebdavConfigV378(config, webdavPasswordFromFormV378());setWebdavStatusV378('配置已保存。密码按当前“记住密码”选项单独存放。', 'ok');toast('WebDAV 配置已保存。', 'ok'); } catch (error) { setWebdavStatusV378(error.message, 'danger'); } };
+      // eslint-disable-next-line prefer-template -- 异常信息可能是对象，保留 + 的默认转换；统一异常类型后移除此例外。
       $('#webdav-clear-v378').onclick = async () => { try { await clearWebdavStorageV378(); } catch (error) { setWebdavStatusV378('清除失败：' + error.message, 'warn');return; }webdavRuntimeV378 = { busy: false, action: '', backups: [], latestFile: '', status: '配置和密码已清除。', statusKind: 'ok', diagnostic: null, pendingRestore: null, formLoaded: false };fillWebdavFormV378();renderWebdavPanelV378();toast('WebDAV 配置已清除。', 'ok'); };
       $('#webdav-test-v378').onclick = () => runWebdavActionV378('测试连接', testWebdavConnectionV378);
       $('#webdav-upload-v378').onclick = () => runWebdavActionV378('上传备份', uploadWebdavBackupV378);
@@ -143,10 +144,10 @@
       const config = readWebdavConfigV378(); const configured = !!config.endpoint;const chip = $('#webdav-status-chip-v378');
       if (chip) {
         chip.textContent = configured ? '已配置' : '未配置';
-        if (webdavRuntimeV378.busy) { chip.textContent = webdavRuntimeV378.action + '中'; }
-        chip.className = 'webdav-chip-v378 ' + (webdavRuntimeV378.statusKind || (configured ? 'ok' : ''));
+        if (webdavRuntimeV378.busy) { chip.textContent = `${webdavRuntimeV378.action}中`; }
+        chip.className = `webdav-chip-v378 ${webdavRuntimeV378.statusKind || (configured ? 'ok' : '')}`;
       }
-      const status = $('#webdav-status-v378');if (status) { status.textContent = webdavRuntimeV378.status || (configured ? '配置已载入，可测试连接或刷新列表。' : '填写地址后可测试连接。');status.className = 'notice ' + (webdavRuntimeV378.statusKind || ''); }
+      const status = $('#webdav-status-v378');if (status) { status.textContent = webdavRuntimeV378.status || (configured ? '配置已载入，可测试连接或刷新列表。' : '填写地址后可测试连接。');status.className = `notice ${webdavRuntimeV378.statusKind || ''}`; }
       const summary = $('#webdav-last-summary-v378');if (summary) { summary.textContent = config.lastUploadAt ? `最近上传：${fmt(config.lastUploadAt)}｜${config.lastUploadFile || '—'}｜${formatBytesV376(config.lastUploadSize || 0)}｜SHA-256 ${String(config.lastUploadSha || '').slice(0, 12)}…` : '尚无成功上传记录。'; }
       ['#webdav-save-v378', '#webdav-test-v378', '#webdav-clear-v378', '#webdav-upload-v378', '#webdav-refresh-v378', '#webdav-restore-confirm-v378'].forEach((id) => { const el = $(id);if (el) { el.disabled = webdavRuntimeV378.busy; } });
       const list = $('#webdav-list-v378');
@@ -167,7 +168,7 @@
     }
     async function ensureWebdavDirectoryV378(config, password) {
       const parts = normalizeWebdavRemoteDirV378(config.remoteDir).split('/');let path = '';
-      for (const part of parts) { path = path ? path + '/' + part : part;await webdavRequestV378(config, password, path, { method: 'MKCOL', acceptStatuses: [200, 201, 204, 405] }); }
+      for (const part of parts) { path = path ? `${path}/${part}` : part;await webdavRequestV378(config, password, path, { method: 'MKCOL', acceptStatuses: [200, 201, 204, 405] }); }
     }
     async function sha256HexV378(bytes) {
       if (!globalThis.crypto || !globalThis.crypto.subtle) { throw webdavErrorV378('当前浏览器环境不支持 SHA-256 校验。请使用较新的浏览器并通过 HTTPS 或 localhost 打开。', { code: 'crypto_unavailable' }); }
@@ -180,12 +181,12 @@
       let text;try { text = JSON.stringify(buildBackupPayloadV23(getState().banks || [], 'all_data', true)); } catch (error) { if (typeof isStringTooLargeErrorV376 === 'function' && isStringTooLargeErrorV376(error)) { throw webdavErrorV378('当前完整备份过大，浏览器无法生成上传文本。请先减少大图片或拆分题库。', { code: 'payload_too_large' }); } throw error; }
       const bytes = new TextEncoder().encode(text); const sha = await sha256HexV378(bytes); const fileName = `shiroha-web-backup-${webdavTimestampV378()}-${sha.slice(0, 8)}.json`; const remoteDir = normalizeWebdavRemoteDirV378(config.remoteDir);
       await ensureWebdavDirectoryV378(config, password);
-      const fileResponse = await webdavRequestV378(config, password, remoteDir + '/' + fileName, { method: 'PUT', headers: { 'Content-Type': 'application/json; charset=utf-8' }, body: bytes, timeoutMs: 120000, acceptStatuses: [200, 201, 204] });
+      const fileResponse = await webdavRequestV378(config, password, `${remoteDir}/${fileName}`, { method: 'PUT', headers: { 'Content-Type': 'application/json; charset=utf-8' }, body: bytes, timeoutMs: 120000, acceptStatuses: [200, 201, 204] });
       const questionCount = (getState().banks || []).reduce((n, b) => n + (b.questions || []).length, 0); const manifest = { kind: 'shiroha_quiz_webdav_latest', version: 1, app: 'Shiroha Quiz', appVersion: APP_VERSION, updatedAt: now(), fileName, sha256: sha, sizeBytes: bytes.byteLength, bankCount: (getState().banks || []).length, questionCount };
-      let manifestWarning = '';try { await webdavRequestV378(config, password, remoteDir + '/latest.json', { method: 'PUT', headers: { 'Content-Type': 'application/json; charset=utf-8' }, body: JSON.stringify(manifest), acceptStatuses: [200, 201, 204] }); } catch (error) { manifestWarning = '；备份文件已上传，但 latest.json 更新失败';setWebdavDiagnosticV378('更新 latest.json', error); }
+      let manifestWarning = '';try { await webdavRequestV378(config, password, `${remoteDir}/latest.json`, { method: 'PUT', headers: { 'Content-Type': 'application/json; charset=utf-8' }, body: JSON.stringify(manifest), acceptStatuses: [200, 201, 204] }); } catch (error) { manifestWarning = '；备份文件已上传，但 latest.json 更新失败';setWebdavDiagnosticV378('更新 latest.json', error); }
       const saved = { ...config, lastUploadAt: manifest.updatedAt, lastUploadFile: fileName, lastUploadSize: bytes.byteLength, lastUploadSha: sha };await storeWebdavConfigV378(saved, password, false);
       try { await loadWebdavBackupListV378(config, password); } catch (error) { manifestWarning += '；远程列表刷新失败';setWebdavDiagnosticV378('刷新列表', error); }
-      if (!manifestWarning) { setWebdavDiagnosticV378('上传备份', null, { method: 'PUT', url: webdavUrlV378(config, remoteDir + '/' + fileName), status: fileResponse.status, summary: '完整备份及 latest.json 已上传。' }); }
+      if (!manifestWarning) { setWebdavDiagnosticV378('上传备份', null, { method: 'PUT', url: webdavUrlV378(config, `${remoteDir}/${fileName}`), status: fileResponse.status, summary: '完整备份及 latest.json 已上传。' }); }
       setWebdavStatusV378(`上传成功：${fileName}（${formatBytesV376(bytes.byteLength)}）${manifestWarning}`, manifestWarning ? 'warn' : 'ok');toast(manifestWarning ? '备份已上传，但索引或列表更新不完整。' : 'WebDAV 完整备份上传成功。', manifestWarning ? 'warn' : 'ok');
     }
     function xmlTextV378(node, name) { const el = node && node.getElementsByTagNameNS ? node.getElementsByTagNameNS('*', name)[0] : null;return el && el.textContent ? el.textContent.trim() : ''; }
@@ -211,7 +212,7 @@
     async function loadWebdavBackupListV378(config, password) {
       const remoteDir = normalizeWebdavRemoteDirV378(config.remoteDir); const response = await webdavRequestV378(config, password, remoteDir, { method: 'PROPFIND', trailingSlash: true, headers: { Depth: '1', 'Content-Type': 'application/xml; charset=utf-8' }, body: '<?xml version="1.0" encoding="utf-8"?><d:propfind xmlns:d="DAV:"><d:prop><d:getlastmodified/><d:getcontentlength/><d:getetag/><d:resourcetype/></d:prop></d:propfind>', acceptStatuses: [207] });
       webdavRuntimeV378.backups = parseWebdavBackupListV378(await response.text());webdavRuntimeV378.latestFile = '';webdavRuntimeV378.latestManifest = null;
-      try { const latest = await webdavRequestV378(config, password, remoteDir + '/latest.json', { method: 'GET', acceptStatuses: [200, 404] });if (latest.status === 200) { const manifest = JSON.parse(await latest.text());if (manifest && WEBDAV_BACKUP_FILE_RE_V378.test(String(manifest.fileName || ''))) { webdavRuntimeV378.latestFile = manifest.fileName;webdavRuntimeV378.latestManifest = manifest; } } } catch {
+      try { const latest = await webdavRequestV378(config, password, `${remoteDir}/latest.json`, { method: 'GET', acceptStatuses: [200, 404] });if (latest.status === 200) { const manifest = JSON.parse(await latest.text());if (manifest && WEBDAV_BACKUP_FILE_RE_V378.test(String(manifest.fileName || ''))) { webdavRuntimeV378.latestFile = manifest.fileName;webdavRuntimeV378.latestManifest = manifest; } } } catch {
         // latest.json 是可选索引，失败时仍保留已经读取的历史列表。
       }
       renderWebdavPanelV378();return response;
@@ -221,13 +222,13 @@
     }
     async function prepareWebdavRestoreV378(fileName) {
       if (!WEBDAV_BACKUP_FILE_RE_V378.test(String(fileName || ''))) { throw webdavErrorV378('远程文件名不符合 Shiroha Quiz 备份规则。', { code: 'invalid_file' }); }
-      const config = webdavConfigFromFormV378(); const password = webdavPasswordFromFormV378(); const remoteDir = normalizeWebdavRemoteDirV378(config.remoteDir); const response = await webdavRequestV378(config, password, remoteDir + '/' + fileName, { method: 'GET', timeoutMs: 120000, acceptStatuses: [200] });
-      const bytes = new Uint8Array(await response.arrayBuffer()); const sha = await sha256HexV378(bytes); const expected = String(fileName).match(WEBDAV_BACKUP_FILE_RE_V378)[3].toLowerCase();if (sha.slice(0, 8) !== expected) { throw webdavErrorV378('备份文件 SHA-256 与文件名不一致，已停止恢复。', { code: 'sha_mismatch', method: 'GET', url: webdavUrlV378(config, remoteDir + '/' + fileName) }); }
-      const manifest = webdavRuntimeV378.latestManifest;if (manifest && manifest.fileName === fileName && manifest.sha256 && String(manifest.sha256).toLowerCase() !== sha) { throw webdavErrorV378('备份文件 SHA-256 与 latest.json 不一致，已停止恢复。', { code: 'sha_mismatch', method: 'GET', url: webdavUrlV378(config, remoteDir + '/' + fileName) }); }
+      const config = webdavConfigFromFormV378(); const password = webdavPasswordFromFormV378(); const remoteDir = normalizeWebdavRemoteDirV378(config.remoteDir); const response = await webdavRequestV378(config, password, `${remoteDir}/${fileName}`, { method: 'GET', timeoutMs: 120000, acceptStatuses: [200] });
+      const bytes = new Uint8Array(await response.arrayBuffer()); const sha = await sha256HexV378(bytes); const expected = String(fileName).match(WEBDAV_BACKUP_FILE_RE_V378)[3].toLowerCase();if (sha.slice(0, 8) !== expected) { throw webdavErrorV378('备份文件 SHA-256 与文件名不一致，已停止恢复。', { code: 'sha_mismatch', method: 'GET', url: webdavUrlV378(config, `${remoteDir}/${fileName}`) }); }
+      const manifest = webdavRuntimeV378.latestManifest;if (manifest && manifest.fileName === fileName && manifest.sha256 && String(manifest.sha256).toLowerCase() !== sha) { throw webdavErrorV378('备份文件 SHA-256 与 latest.json 不一致，已停止恢复。', { code: 'sha_mismatch', method: 'GET', url: webdavUrlV378(config, `${remoteDir}/${fileName}`) }); }
       let data;try { data = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)); } catch { throw webdavErrorV378('远程备份不是有效的 UTF-8 JSON。', { code: 'json_invalid' }); }
       if (data.kind !== 'shiroha_quiz_web_full_backup' && data.exportType !== 'all_data') { throw webdavErrorV378('该文件不是 Web 完整备份，不能从云备份入口恢复。', { code: 'backup_kind' }); }
       const normalized = normalizeBackupPayloadV23(data, fileName);if (!normalized.banks.length) { throw webdavErrorV378('远程备份中没有可恢复的题库。', { code: 'backup_empty' }); }
-      webdavRuntimeV378.pendingRestore = { fileName, bytes: bytes.byteLength, sha, data, normalized, exportedAt: data.exportedAt || '', questionCount: normalized.banks.reduce((n, b) => n + (b.questions || []).length, 0) };openWebdavRestoreModalV378();setWebdavDiagnosticV378('下载备份', null, { method: 'GET', url: webdavUrlV378(config, remoteDir + '/' + fileName), status: response.status, summary: '下载和 SHA-256 校验通过，等待用户确认恢复。' });setWebdavStatusV378('备份下载并校验完成，请在确认框选择恢复方式。', 'ok');
+      webdavRuntimeV378.pendingRestore = { fileName, bytes: bytes.byteLength, sha, data, normalized, exportedAt: data.exportedAt || '', questionCount: normalized.banks.reduce((n, b) => n + (b.questions || []).length, 0) };openWebdavRestoreModalV378();setWebdavDiagnosticV378('下载备份', null, { method: 'GET', url: webdavUrlV378(config, `${remoteDir}/${fileName}`), status: response.status, summary: '下载和 SHA-256 校验通过，等待用户确认恢复。' });setWebdavStatusV378('备份下载并校验完成，请在确认框选择恢复方式。', 'ok');
     }
     function openWebdavRestoreModalV378() {
       const pending = webdavRuntimeV378.pendingRestore; const modal = $('#webdav-restore-modal-v378'); const meta = $('#webdav-restore-meta-v378');if (!pending || !modal) { return; }

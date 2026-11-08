@@ -53,11 +53,12 @@
       const b = activeBank();
       const inp = $('#bank-rename-input');
       if (inp && !inp.value) {
+        // eslint-disable-next-line prefer-template -- 历史数据字段可能是对象，保留 + 的默认转换；字段类型受约束后移除此例外。
         inp.placeholder = '当前：' + (b.name || '未命名题库');
       }
       const groupInput = $('#bank-group-rename-input-v58');
       if (groupInput) {
-        groupInput.placeholder = '当前：' + bankGroupNameV58(b);
+        groupInput.placeholder = `当前：${bankGroupNameV58(b)}`;
         if (!groupInput.dataset.lastBankIdV58 || groupInput.dataset.lastBankIdV58 !== b.id) {
           groupInput.value = normalizeBankGroupNameV58(b.groupName);
           groupInput.dataset.lastBankIdV58 = b.id || '';
@@ -79,7 +80,7 @@
         banks.sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')) || bankPathLabelV58(a).localeCompare(bankPathLabelV58(b), 'zh-CN'));
       }
       const validIds = new Set(state.banks.map((b) => b.id));
-      banks = nativePage(banks, 'banks:' + sort, box, renderBankList);
+      banks = nativePage(banks, `banks:${sort}`, box, renderBankList);
       setExportSelection(new Set([...getExportSelection()].filter((id) => validIds.has(id))));
       if (!banks.length) {
         box.innerHTML = '<p class="muted">暂无题库。</p>';
@@ -159,6 +160,7 @@
       }
       closeBankQuestionDetail();
       const renderVersion = beginNativeRender('banks');
+      // eslint-disable-next-line prefer-template -- 历史数据字段可能是对象，保留 + 的默认转换；字段类型受约束后移除此例外。
       const qs = nativePage(bank.questions, 'preview:' + bank.id, document.getElementById('bank-preview'), renderBankPreview);
       $('#bank-preview tbody').innerHTML = '<tr><td colspan="8" role="status">正在加载题目……</td></tr>';
       for (const id of ['select-bank-question-page', 'clear-bank-question-selection', 'delete-selected-questions']) {
@@ -230,7 +232,7 @@
         hasImages = true;
         seen.add(src);
         const safe = String(description || '').replace(/(?:data:|file:|https?:|[a-z]:[\\/])\S*/gi, '').trim();
-        return safe ? '[图片：' + safe + ']' : '[图片]';
+        return safe ? `[图片：${safe}]` : '[图片]';
       };
       let text = String(bankQuestionPreviewSource(q)).replace(/!\[([^\]]*)\]\(([^\n]*?)\)/g, (_, alt, src) => imageText(src, alt));
       text = text.replace(/【DOCX表格开始】[\s\S]*?【DOCX表格结束】/g, (block) => parseDocxMarkdownTableBlockV55(block).map((row) => row.join('\t')).join('\n'));
@@ -251,7 +253,7 @@
       for (const img of normalizeQuestionImagesForWebV83(q.images)) {
         const src = img.dataUrl || img.localPath;
         if (!seen.has(src)) {
-          text += '\n' + imageText(src, img.sourceName);
+          text += `\n${imageText(src, img.sourceName)}`;
         }
       }
       return { text, hasImages };
@@ -285,21 +287,21 @@
       }
       const detail = document.createElement('tr');
       detail.id = 'bank-question-detail';
-      detail.innerHTML = '<td colspan="' + table.tHead.rows[0].cells.length + '"><section class="bank-detail" aria-labelledby="bank-detail-title"><div class="bank-detail-toolbar"><h3 id="bank-detail-title" tabindex="-1">完整题干' + (favorite ? ' <span class="pill">题库第 ' + (bank.questions.indexOf(q) + 1) + ' 题</span>' : '') + '</h3><div><button type="button" class="ghost mini-btn" data-copy-question>复制题干</button> <button type="button" class="ghost mini-btn" data-close-detail>收起详情</button></div></div><div class="bank-detail-status" role="status" aria-live="polite"></div><div class="bank-detail-body">' + (copy.text.trim() ? renderQuestionBodyV83(preview) : '暂无题干') + '</div><h4>选项</h4>' + options.map((o) => {
+      detail.innerHTML = `<td colspan="${table.tHead.rows[0].cells.length}"><section class="bank-detail" aria-labelledby="bank-detail-title"><div class="bank-detail-toolbar"><h3 id="bank-detail-title" tabindex="-1">完整题干${favorite ? ` <span class="pill">题库第 ${bank.questions.indexOf(q) + 1} 题</span>` : ''}</h3><div><button type="button" class="ghost mini-btn" data-copy-question>复制题干</button> <button type="button" class="ghost mini-btn" data-close-detail>收起详情</button></div></div><div class="bank-detail-status" role="status" aria-live="polite"></div><div class="bank-detail-body">${copy.text.trim() ? renderQuestionBodyV83(preview) : '暂无题干'}</div><h4>选项</h4>${options.map((o) => {
         const matches = answers.includes(o.key) && options.filter((item) => item.key === o.key).length === 1;
-        return '<div class="bank-detail-option' + (matches ? ' is-answer' : '') + '"><b>' + esc(o.key) + '</b><div>' + (o.text ? renderQuestionContent(o.text) : '选项内容为空') + '</div>' + (matches ? '<span>已存答案</span>' : '') + '</div>';
-      }).join('') + (!options.length ? '<p class="muted">' + empty + '</p>' : '') + '<p><b>已存答案：</b>' + esc(answers.length ? answerDisplay(answers) : '未提供答案') + '</p>' + (favorite && q.analysis ? '<div class="bank-detail-analysis"><b>解析：</b>' + renderQuestionContent(q.analysis) + '</div>' : '') + '<div class="bank-manual-copy" hidden><label for="bank-question-manual-copy">完整题干纯文本</label><textarea id="bank-question-manual-copy" readonly></textarea><button type="button" class="ghost mini-btn" data-select-copy>全选文本</button> <button type="button" class="ghost mini-btn" data-hide-copy>收起手动复制区</button></div></section></td>';
+        return `<div class="bank-detail-option${matches ? ' is-answer' : ''}"><b>${esc(o.key)}</b><div>${o.text ? renderQuestionContent(o.text) : '选项内容为空'}</div>${matches ? '<span>已存答案</span>' : ''}</div>`;
+      }).join('')}${!options.length ? `<p class="muted">${empty}</p>` : ''}<p><b>已存答案：</b>${esc(answers.length ? answerDisplay(answers) : '未提供答案')}</p>${favorite && q.analysis ? `<div class="bank-detail-analysis"><b>解析：</b>${renderQuestionContent(q.analysis)}</div>` : ''}<div class="bank-manual-copy" hidden><label for="bank-question-manual-copy">完整题干纯文本</label><textarea id="bank-question-manual-copy" readonly></textarea><button type="button" class="ghost mini-btn" data-select-copy>全选文本</button> <button type="button" class="ghost mini-btn" data-hide-copy>收起手动复制区</button></div></section></td>`;
       row.after(detail);
       // 表格横向滚动容器会限制 CSS sticky，工具栏只在本详情范围内平移，并随关闭释放监听。
       const toolbar = detail.querySelector('.bank-detail-toolbar');
       const moveToolbar = () => {
-        detail.querySelector('.bank-detail').style.width = table.parentElement.clientWidth + 'px';
+        detail.querySelector('.bank-detail').style.width = `${table.parentElement.clientWidth}px`;
         toolbar.style.transform = '';
         const bounds = detail.getBoundingClientRect(); const bar = toolbar.getBoundingClientRect();
         const topbar = document.querySelector('.topbar'); const topBounds = topbar?.getBoundingClientRect();
         const fixedTop = topbar && ['fixed', 'sticky'].includes(window.getComputedStyle(topbar).position) && topBounds.bottom > 0 ? topBounds.bottom : 0;
         const offset = Math.max(0, Math.min(fixedTop + 8 - bar.top, bounds.bottom - bar.bottom - 8));
-        toolbar.style.transform = 'translateY(' + offset + 'px)';
+        toolbar.style.transform = `translateY(${offset}px)`;
       };
       document.addEventListener('scroll', moveToolbar, true);
       window.addEventListener('resize', moveToolbar);
@@ -354,7 +356,7 @@
       };
       detail.querySelectorAll('img').forEach((img) => img.addEventListener('error', () => {
         const fallback = document.createElement('span');
-        fallback.textContent = '图片加载失败：' + (img.alt || '题目图片');
+        fallback.textContent = `图片加载失败：${img.alt || '题目图片'}`;
         img.replaceWith(fallback);
       }, { once: true }));
       if (full) {

@@ -23,7 +23,7 @@ async function pageFor(t, raw, injection = '', appTransform = null) {
     const url = new URL(route.request().url());
     if (url.origin !== new URL(server.url).origin) { return route.abort(); }
     if (url.pathname === '/platform/index.js' && injection) {
-      const response = await route.fetch(); return route.fulfill({ response, body: await response.text() + '\n' + injection });
+      const response = await route.fetch(); return route.fulfill({ response, body: `${await response.text()}\n${injection}` });
     }
     if (url.pathname === '/app.js' && appTransform) {
       const response = await route.fetch(); return route.fulfill({ response, body: appTransform(await response.text()) });
@@ -404,7 +404,7 @@ test('训练复盘：按选题补读保存解析，离开页面后忽略迟到�
     globalThis.ShirohaPlatform.storage.ensureQuestions = async (snapshot, refs) => {
       globalThis.__reviewReads.push(refs);
       await new Promise((resolve) => { globalThis.__finishReviewRead = resolve; });
-      for (const ref of refs) { snapshot.banks.find((bank) => bank.id === ref.bankId).questions.find((q) => q.id === ref.questionId).analysis = '已保存的来源解析：' + ref.questionId; }
+      for (const ref of refs) { snapshot.banks.find((bank) => bank.id === ref.bankId).questions.find((q) => q.id === ref.questionId).analysis = `已保存的来源解析：${ref.questionId}`; }
     };
   });
   await page.locator('.nav[data-view="records"]').click();
@@ -412,7 +412,7 @@ test('训练复盘：按选题补读保存解析，离开页面后忽略迟到�
   await page.waitForFunction(() => globalThis.__reviewReads.length === 1);
   assert.deepEqual(await page.evaluate(() => globalThis.__reviewReads), [[{ bankId: bank.id, questionId: bank.questions[0].id }]]);
   await page.evaluate(() => globalThis.__finishReviewRead());
-  await page.locator('.training-analysis').filter({ hasText: '已保存的来源解析：' + bank.questions[0].id }).waitFor();
+  await page.locator('.training-analysis').filter({ hasText: `已保存的来源解析：${bank.questions[0].id}` }).waitFor();
   await page.waitForFunction(() => globalThis.document.activeElement?.id === 'training-review-back');
   await page.locator('#training-next').click();
   await page.waitForFunction(() => globalThis.__reviewReads.length === 2);
@@ -432,7 +432,7 @@ test('训练复盘：未知来源不读取当前题库的同 ID 解析', async (
   await page.locator('body[data-storage-state="ready"]').waitFor();
   await page.evaluate(() => {
     globalThis.__unknownSourceReads = 0;
-    globalThis.ShirohaPlatform.storage.ensureQuestions = async () => { globalThis.__unknownSourceReads++; throw new Error('未知来源不能补读当前库'); };
+    globalThis.ShirohaPlatform.storage.ensureQuestions = async () => { globalThis.__unknownSourceReads += 1; throw new Error('未知来源不能补读当前库'); };
   });
   await page.locator('.nav[data-view="records"]').click();
   await page.locator('#records [data-training-review]').click();
@@ -519,7 +519,7 @@ test('练习：旧题量确认迟到时不能重置已开始的新一轮', async
   await page.evaluate(() => {
     let calls = 0;
     globalThis.ShirohaDialogs.confirm = () => {
-      calls++;
+      calls += 1;
       if (calls === 1) { return new Promise((resolve) => { globalThis.__resolveOldPracticeConfirm = resolve; }); }
       return Promise.resolve(true);
     };
@@ -539,7 +539,7 @@ test('训练复盘：提前结束保留全部快照，选错与未答可筛选�
   const initial = webState(); initial.records = [];
   const q = initial.banks[0].questions.find((value) => value.type === 'single');
   initial.banks = [initial.banks[0]];
-  initial.banks[0].questions = Array.from({ length: 12 }, (_, i) => ({ ...q, id: 'training-' + i, question: '历史快照第' + (i + 1) + '题', answer: ['A'] }));
+  initial.banks[0].questions = Array.from({ length: 12 }, (_, i) => ({ ...q, id: `training-${i}`, question: `历史快照第${i + 1}题`, answer: ['A'] }));
   const page = await pageFor(t, JSON.stringify(initial)); page.setDefaultTimeout(5000);
   await page.locator('.nav[data-view="practice"]').click();
   await page.locator('#practice-limit').selectOption('all'); await page.locator('#start-practice-btn').click();
@@ -742,7 +742,7 @@ for (const type of ['single', 'judge', 'multiple']) {
     await page.locator('#start-exam-btn').click();
     const input = page.locator('#exam-card .option[data-key="A"] input');
     await input.focus();
-    for (let index = 0; index < 2; index++) {
+    for (let index = 0; index < 2; index += 1) {
       await page.keyboard.press('Space');
       assert(await input.isChecked());
       await page.keyboard.press('Space');
@@ -831,7 +831,7 @@ test('清空选项：考试到时交卷及保存失败重试保留空答案，�
 
 test('列表分页：直接跳页、四档条数、跨页选择、键盘与窄屏', async (t) => {
   const initial = webState();
-  initial.banks[0].questions = Array.from({ length: 503 }, (_, i) => ({ ...initial.banks[0].questions[0], id: 'page-' + i, question: '分页题干 ' + (i + 1) }));
+  initial.banks[0].questions = Array.from({ length: 503 }, (_, i) => ({ ...initial.banks[0].questions[0], id: `page-${i}`, question: `分页题干 ${i + 1}` }));
   const page = await pageFor(t, JSON.stringify(initial));
   page.setDefaultTimeout(5000);
   await page.locator('body[data-storage-state="ready"]').waitFor();
@@ -888,20 +888,20 @@ test('列表分页：直接跳页、四档条数、跨页选择、键盘与窄�
 test('列表分页：浏览器题库、错题、收藏、记录独立分页和筛选回首页', async (t) => {
   const initial = webState();
   const bank = initial.banks[0];
-  bank.questions = Array.from({ length: 23 }, (_, i) => ({ ...bank.questions[0], id: 'list-' + i, question: '列表题干 ' + i }));
-  initial.banks.push(...Array.from({ length: 21 }, (_, i) => ({ ...initial.banks[1], id: 'bank-extra-' + i, name: '分页题库 ' + i })));
+  bank.questions = Array.from({ length: 23 }, (_, i) => ({ ...bank.questions[0], id: `list-${i}`, question: `列表题干 ${i}` }));
+  initial.banks.push(...Array.from({ length: 21 }, (_, i) => ({ ...initial.banks[1], id: `bank-extra-${i}`, name: `分页题库 ${i}` })));
   initial.wrongBook = { 'bank-a': bank.questions.map((q) => ({ id: q.id, status: '未掌握', wrongCount: 1 })) };
   initial.favorites = { 'bank-a': bank.questions.map((q) => q.id) };
-  initial.records = Array.from({ length: 23 }, (_, i) => ({ ...initial.records[0], id: 'page-record-' + i, mode: i < 12 ? '考试' : '练习' }));
+  initial.records = Array.from({ length: 23 }, (_, i) => ({ ...initial.records[0], id: `page-record-${i}`, mode: i < 12 ? '考试' : '练习' }));
   const page = await pageFor(t, JSON.stringify(initial));
   page.setDefaultTimeout(5000);
   await page.locator('body[data-storage-state="ready"]').waitFor();
   for (const [view, id, row] of [['banks', 'bank-list', '.bank-item'], ['wrongbook', 'wrongbook-list', '.wrong-item'], ['favorites', 'favorites-list-v596', '.favorite-question-row'], ['records', 'records-list', 'details']]) {
     await page.locator(`.nav[data-view="${view}"]`).click();
-    const pager = page.locator('#' + id + '-pager');
-    assert.equal(await page.locator('#' + id).locator(row).count(), 10);
+    const pager = page.locator(`#${id}-pager`);
+    assert.equal(await page.locator(`#${id}`).locator(row).count(), 10);
     await pager.getByRole('button', { name: '第 3 页', exact: true }).click();
-    assert.equal(await page.locator('#' + id).locator(row).count(), 3);
+    assert.equal(await page.locator(`#${id}`).locator(row).count(), 3);
     if (view === 'favorites') { assert.equal(await page.locator('.favorite-question-number').first().innerText(), '21'); }
     if (view === 'wrongbook') {
       await page.locator('#wrong-sort-mode').selectOption('wrongCount');
@@ -927,7 +927,7 @@ test('列表分页：浏览器题库、错题、收藏、记录独立分页和�
 
 test('列表分页：删掉末页后回退，空库保留空态', async (t) => {
   const initial = webState();
-  initial.banks[0].questions = Array.from({ length: 21 }, (_, i) => ({ ...initial.banks[0].questions[0], id: 'delete-page-' + i }));
+  initial.banks[0].questions = Array.from({ length: 21 }, (_, i) => ({ ...initial.banks[0].questions[0], id: `delete-page-${i}` }));
   const page = await pageFor(t, JSON.stringify(initial));
   page.setDefaultTimeout(5000);
   await page.locator('body[data-storage-state="ready"]').waitFor();
@@ -948,7 +948,7 @@ test('列表分页：删掉末页后回退，空库保留空态', async (t) => {
 
 test('列表分页：快速翻页拒绝迟到正文，加载失败可在当前页重试', async (t) => {
   const initial = webState();
-  initial.banks[0].questions = Array.from({ length: 41 }, (_, i) => ({ ...initial.banks[0].questions[0], id: 'delay-' + i, question: '异步分页 ' + i }));
+  initial.banks[0].questions = Array.from({ length: 41 }, (_, i) => ({ ...initial.banks[0].questions[0], id: `delay-${i}`, question: `异步分页 ${i}` }));
   const page = await pageFor(t, JSON.stringify(initial));
   page.setDefaultTimeout(5000);
   await page.locator('body[data-storage-state="ready"]').waitFor();
@@ -1136,7 +1136,7 @@ test('旧组合题练习显示陈述与组合选项，作答仍使用原答案�
   const statements = ['①有关法律、法规、规章和标准的规定', '②本地区、本部门、本单位的安全生产实际情况', '③应急组织和人员的职责分工明确，并有具体的落实措施', '④有明确的应急保障措施'];
   const combinations = ['①②', '①②③', '②③④', '①②③④'];
   initial.banks = [initial.banks[0]];
-  initial.banks[0].questions = [{ id: 'legacy-combination', type: 'single', question: '应急预案应当符合下列（ ）基本要求。', answer: ['D'], options: statements.map((text, i) => ({ key: 'ABCD'[i], text: text + ' ' + combinations[i] })) }];
+  initial.banks[0].questions = [{ id: 'legacy-combination', type: 'single', question: '应急预案应当符合下列（ ）基本要求。', answer: ['D'], options: statements.map((text, i) => ({ key: 'ABCD'[i], text: `${text} ${combinations[i]}` })) }];
   const page = await pageFor(t, JSON.stringify(initial));
   await page.locator('.nav[data-view="practice"]').click();
   await page.locator('#start-practice-btn').click();
@@ -1152,7 +1152,7 @@ test('旧组合题练习显示陈述与组合选项，作答仍使用原答案�
 test('总提交结果列出全部错题，保留跨库来源且不截断到八题', async (t) => {
   const initial = webState();
   const first = initial.banks[0].questions[0];
-  initial.banks[0].questions = Array.from({ length: 12 }, (_, index) => ({ ...first, id: index ? 'review-' + index : first.id, question: '完整错题题干 ' + (index + 1) }));
+  initial.banks[0].questions = Array.from({ length: 12 }, (_, index) => ({ ...first, id: index ? `review-${index}` : first.id, question: `完整错题题干 ${index + 1}` }));
   initial.settings.practiceScope = { type: 'group', value: '自建样本' };
   const page = await pageFor(t, JSON.stringify(initial));
   await page.locator('body[data-storage-state="ready"]').waitFor();
@@ -1310,7 +1310,7 @@ for (const scenario of singleStartCases) {
     await page.locator('[data-practice-jump="0"]').waitFor();
     assert.equal(await page.locator('[data-practice-jump]').count(), scenario.expected.length);
     const numbers = [];
-    for (let index = 0; index < scenario.expected.length; index++) {
+    for (let index = 0; index < scenario.expected.length; index += 1) {
       await page.locator(`[data-practice-jump="${index}"]`).click();
       numbers.push(await page.locator('#practice-card .practice-source-number').innerText());
     }
@@ -1381,7 +1381,7 @@ for (const order of ['sequence', 'random']) {
       await page.locator('[data-practice-jump="0"]').waitFor();
       assert.equal(await page.locator('[data-practice-jump]').count(), expectedCount);
       const numbers = [];
-      for (let index = 0; index < expectedCount; index++) {
+      for (let index = 0; index < expectedCount; index += 1) {
         await page.locator(`[data-practice-jump="${index}"]`).click();
         numbers.push(await page.locator('#practice-card .practice-source-number').innerText());
       }
@@ -1456,7 +1456,7 @@ test('收藏详情：题库题号、完整选项解析、键盘关闭和只读�
 test('收藏详情：翻页、切库与窄屏工具栏', async (t) => {
   const initial = webState();
   const bank = initial.banks[0];
-  bank.questions = Array.from({ length: 21 }, (_, index) => ({ ...bank.questions[0], id: 'favorite-' + index }));
+  bank.questions = Array.from({ length: 21 }, (_, index) => ({ ...bank.questions[0], id: `favorite-${index}` }));
   initial.favorites = { 'bank-a': bank.questions.map((question) => question.id), 'bank-b': ['same-id'] };
   const page = await pageFor(t, JSON.stringify(initial));
   page.setDefaultTimeout(5000);
@@ -1485,7 +1485,7 @@ test('收藏详情：翻页、切库与窄屏工具栏', async (t) => {
 test('收藏详情：迟到正文不覆盖当前页，失败可重试', async (t) => {
   const initial = webState();
   const bank = initial.banks[0];
-  bank.questions = Array.from({ length: 21 }, (_, index) => ({ ...bank.questions[0], id: 'favorite-load-' + index }));
+  bank.questions = Array.from({ length: 21 }, (_, index) => ({ ...bank.questions[0], id: `favorite-load-${index}` }));
   initial.favorites = { 'bank-a': bank.questions.map((question) => question.id) };
   const page = await pageFor(t, JSON.stringify(initial));
   page.setDefaultTimeout(5000);
@@ -1532,7 +1532,7 @@ test('题库批量操作栏保留表格间距，选择提示居中且零选择�
 
 test('题库删除：单题取消、跨页批量、关联清理和重载保全', async (t) => {
   const initial = webState();
-  initial.banks[0].questions = Array.from({ length: 302 }, (_, i) => ({ ...initial.banks[0].questions[0], id: 'q' + i, number: '原' + i, question: '删除回归 ' + i, extensions: { preserve: i } }));
+  initial.banks[0].questions = Array.from({ length: 302 }, (_, i) => ({ ...initial.banks[0].questions[0], id: `q${i}`, number: `原${i}`, question: `删除回归 ${i}`, extensions: { preserve: i } }));
   initial.wrongBook['bank-a'] = ['q0', { id: 'q300', wrongCount: 2 }, 'q2'];
   initial.favorites['bank-a'] = ['q0', 'q300', 'q2'];
   initial.crossPlatformMeta.favoriteQuestions['bank-a'] = { q0: { favoritedAt: 1 }, q300: { favoritedAt: 2 }, q2: { favoritedAt: 3 } };
@@ -1549,7 +1549,7 @@ test('题库删除：单题取消、跨页批量、关联清理和重载保全',
   assert.equal(JSON.parse(await saved(page)).banks[0].questions.length, 302);
   page.on('app-dialog', (dialog) => dialog.accept());
   await page.locator('[data-select-bank-question="q0"]').check();
-  for (let i = 0;i < 6;i++) { await page.locator('#bank-preview-pager').getByRole('button', { name: '下一页', exact: true }).click(); }
+  for (let i = 0;i < 6;i += 1) { await page.locator('#bank-preview-pager').getByRole('button', { name: '下一页', exact: true }).click(); }
   await page.locator('[data-select-bank-question="q300"]').check();
   assert.match(await page.locator('#bank-question-selection').textContent(), /2/);
   await page.locator('#delete-selected-questions').click();
@@ -1663,7 +1663,7 @@ test('题库删除：失效 ID 不写入，重复点击只删除一次，旧编�
   await page.locator('[data-editbank-v45="bank-a"]').locator('..').locator('..').locator('summary').click();
   await page.locator('[data-editbank-v45="bank-a"]').click();
   await page.locator('.nav[data-view="banks"]').click();
-  const before = await saved(page);let confirmations = 0;page.on('app-dialog', () => { confirmations++; });
+  const before = await saved(page);let confirmations = 0;page.on('app-dialog', () => { confirmations += 1; });
   await page.locator('[data-delete-bank-question="same-id"]').evaluate((button) => { button.dataset.deleteBankQuestion = 'missing-id';button.click(); });
   assert.equal(await saved(page), before);assert.equal(confirmations, 0);
   await page.evaluate(() => { const { write } = globalThis.ShirohaPlatform.storage;globalThis.ShirohaPlatform.storage.write = async (...args) => { await new Promise((resolve) => setTimeout(resolve, 150));return write(...args); }; });
@@ -1725,6 +1725,26 @@ test('延迟保存只显示待保存状态；其他标签变化拒绝覆盖', as
   await page.locator('#save-all-btn').click();
   await page.locator('#platform-status.failed').waitFor();
   assert.equal(await saved(page), 'external-change');
+});
+test('保存锁定期间阻止交互，完成后原有监听器恢复放行', async (t) => {
+  const initial = JSON.stringify(webState());
+  const injection = 'const write=globalThis.ShirohaPlatform.storage.write;globalThis.ShirohaPlatform.storage.write=async(...args)=>{await new Promise(resolve=>{globalThis.__releaseSyntheticWrite=resolve});return write(...args)};';
+  const page = await pageFor(t, initial, injection);
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  const dispatch = () => page.evaluate(() => {
+    const target = globalThis.document.createElement('button');
+    globalThis.document.body.appendChild(target);
+    const results = ['click', 'change', 'input', 'keydown'].map((type) => target.dispatchEvent(new globalThis.Event(type, { bubbles: true, cancelable: true })));
+    target.remove();
+    return results;
+  });
+  assert.deepEqual(await dispatch(), [true, true, true, true]);
+  await page.locator('#save-all-btn').click();
+  await page.waitForFunction(() => typeof globalThis.__releaseSyntheticWrite === 'function');
+  assert.deepEqual(await dispatch(), [false, false, false, false]);
+  await page.evaluate(() => globalThis.__releaseSyntheticWrite());
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  assert.deepEqual(await dispatch(), [true, true, true, true]);
 });
 test('容量不足不清空编辑内容，重试成功后再离开编辑态', async (t) => {
   const page = await pageFor(t, JSON.stringify(webState()));
@@ -1892,7 +1912,7 @@ test('题库详情：旧组合题的陈述、选项和复制一致且不改写�
   const combinations = ['①②', '①②③', '②③④', '①②③④'];
   const question = initial.banks[0].questions[0];
   question.question = '应急预案应当符合下列（ ）基本要求。';
-  question.options = statements.map((text, i) => ({ key: 'ABCD'[i], text: text + ' ' + combinations[i] }));
+  question.options = statements.map((text, i) => ({ key: 'ABCD'[i], text: `${text} ${combinations[i]}` }));
   question.answer = ['D'];
   question.richContent = { fields: { question: { text: question.question }, options: question.options.map((option) => ({ ...option })) } };
   const page = await pageFor(t, JSON.stringify(initial));
@@ -1914,7 +1934,7 @@ test('题库详情：旧组合题的陈述、选项和复制一致且不改写�
 
 test('题库详情：完整长题干复制、拒绝回退与选择隔离', async (t) => {
   const initial = webState();
-  let full = '长题干材料。'.repeat(2000) + '\n第二段 $x^2$。';
+  let full = `${'长题干材料。'.repeat(2000)}\n第二段 $x^2$。`;
   initial.banks[0].questions[0].question = full;
   const page = await pageFor(t, JSON.stringify(initial));
   page.setDefaultTimeout(5000);
@@ -1949,7 +1969,7 @@ test('题库详情：完整长题干复制、拒绝回退与选择隔离', async
 
 test('题库详情：富内容复制、分页重置与异步反馈隔离', async (t) => {
   const initial = webState();
-  initial.banks[0].questions.push(...Array.from({ length: 50 }, (_, i) => ({ ...initial.banks[0].questions[0], id: 'extra-' + i })));
+  initial.banks[0].questions.push(...Array.from({ length: 50 }, (_, i) => ({ ...initial.banks[0].questions[0], id: `extra-${i}` })));
   const page = await pageFor(t, JSON.stringify(initial));
   page.setDefaultTimeout(5000);
   await page.locator('body[data-storage-state="ready"]').waitFor();

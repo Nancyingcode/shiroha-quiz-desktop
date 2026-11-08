@@ -11,7 +11,7 @@ for (const fail of [false, true]) {
     const pdf = { numPages: 1, getPage: async () => ({ getTextContent: async () => {
       if (fail) { throw new Error('damaged page'); }
       return { items: [{ str: 'A self authored question with enough text for extraction', transform: [0, 0, 0, 0, 0, 0] }] };
-    } }), destroy: async () => { destroyed++; } };
+    } }), destroy: async () => { destroyed += 1; } };
     const context = vm.createContext({ Uint8Array, TextDecoder });
     context.window = context;
     context.__pdfjsMixed = { lib: { getDocument: () => ({ promise: Promise.resolve(pdf), destroy: pdf.destroy }) } };
@@ -48,17 +48,17 @@ function ocrFixture({ recognize, viewport = { width: 1000, height: 1000 } }) {
   const page = {
     getViewport: () => viewport,
     render: () => ({ promise: Promise.resolve() }),
-    cleanup: () => { stats.cleaned++; },
+    cleanup: () => { stats.cleaned += 1; },
   };
   const pdf = { loadLocalPdfJs: async () => ({ lib: { getDocument: () => ({
     promise: Promise.resolve({ numPages: 1, getPage: async () => page }),
-    destroy: async () => { stats.destroyed++; },
+    destroy: async () => { stats.destroyed += 1; },
   }) } }), pdfDocumentOptions: (data) => ({ data }) };
   const context = vm.createContext({ document, Uint8Array });
   context.window = context;
   context.Tesseract = { createWorker: async () => ({
     recognize,
-    terminate: async () => { stats.terminated++; },
+    terminate: async () => { stats.terminated += 1; },
   }) };
   runWebScripts(context, ['ocr-import.js']);
   const session = context.ShirohaOcrImport.create({
@@ -84,7 +84,7 @@ test('cancelling pending recognition releases resources and permits retry withou
   let calls = 0;
   const { session, elements, stats } = ocrFixture({ recognize: () => {
     recognitionStarted();
-    return ++calls === 1 ? pending : Promise.resolve({ data: { text: 'new result' } });
+    return (calls += 1) === 1 ? pending : Promise.resolve({ data: { text: 'new result' } });
   } });
   let completed = false;
   const running = session.startPdfOcrImport().then(() => { completed = true; });

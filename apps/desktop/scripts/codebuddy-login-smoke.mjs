@@ -187,7 +187,7 @@ export async function codebuddyLoginSmoke(page, startPractice) {
     const host = /** @type {{invoke(command:string,args:Record<string,unknown>):Promise<unknown>}} */ (Reflect.get(window, 'ShirohaDesktopHost'));
     let denied = 0;
     for (const request of [{ kind: 'login', url: 'https://example.invalid' }, { kind: 'execute' }, { kind: 'logout', token: 'fake' }]) {
-      try { await host.invoke('codebuddy_control', { request }); } catch { denied++; }
+      try { await host.invoke('codebuddy_control', { request }); } catch { denied += 1; }
     }
     return denied;
   });

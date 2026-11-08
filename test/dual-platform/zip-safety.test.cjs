@@ -73,7 +73,7 @@ test('ZIP 打包每次取一次当前时间并为所有条目写入相同 DOS �
   context.Date = class extends Date {
     constructor(...args) {
       if (args.length) { return new Date(...args); }
-      calls++;
+      calls += 1;
       return fixed;
     }
   };

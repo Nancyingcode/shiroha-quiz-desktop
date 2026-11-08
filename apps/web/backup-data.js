@@ -124,7 +124,7 @@
       banks = banks.map((bank, index) => ({
         ...bank,
         id: String(bank.id || makeId('bank_import', index)),
-        name: String(bank.name || bank.title || ('导入题库_' + (index + 1))),
+        name: String(bank.name || bank.title || (`导入题库_${index + 1}`)),
         groupName: pickBankGroupNameFromJsonV58(bank), createdAt: bank.createdAt || now(), updatedAt: now(),
         questions: (bank.questions || []).map((question, questionIndex) => ({
           ...question, ...normalizeQuestion(question, questionIndex),
@@ -195,11 +195,12 @@
       normalized.banks.forEach((bank, idx) => {
         const oldId = bank.id;
         const groupName = normalizeBankGroupNameV58(bank.groupName);
-        let name = bank.name || ('导入题库_' + (idx + 1));
+        let name = bank.name || (`导入题库_${idx + 1}`);
         if (existingKeys.has(bankNameKeyV58(groupName, name))) {
           let suffix = 1;
+          // eslint-disable-next-line prefer-template -- 外部值可能是对象，保留 + 的默认转换；输入类型受约束后移除此例外。
           const base = name + '_导入';
-          while (existingKeys.has(bankNameKeyV58(groupName, base + suffix))) { suffix++; }
+          while (existingKeys.has(bankNameKeyV58(groupName, base + suffix))) { suffix += 1; }
           name = base + suffix;
         }
         let { id } = bank;

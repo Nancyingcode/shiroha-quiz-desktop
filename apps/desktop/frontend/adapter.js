@@ -316,7 +316,7 @@
     } finally { signal?.removeEventListener('abort', abort); }
   }
   const network = {
-    async cancelAll() { networkGeneration++; await credential({ kind: 'cancel_all' }); },
+    async cancelAll() { networkGeneration += 1; await credential({ kind: 'cancel_all' }); },
     /** @param {ServiceConfig} config @param {unknown} payload @param {AbortSignal} [signal] */
     ai(config, payload, signal) { return requestService('ai', config, config.apiKey || '', { kind: 'ai', payload }, signal); },
     /** @param {ServiceConfig} config @param {string} password @param {string} path @param {Parameters<import('../../web/platform/runtime').BrowserNetwork['webdav']>[3]} [options] */
@@ -324,6 +324,7 @@
       const directory = config.remoteDir || 'ShirohaQuiz/Web';
       const method = (options.method || 'GET').toUpperCase();
       /** @type {Record<string,unknown>} */ let operation;
+      // eslint-disable-next-line prefer-template -- 外部值可能是对象，保留 + 的默认转换；输入类型受约束后移除此例外。
       if (method === 'PROPFIND' && !path) { operation = { kind: 'probe' }; } else if (method === 'PROPFIND' && path === directory) { operation = { kind: 'list' }; } else if (method === 'MKCOL' && (path === directory || directory.startsWith(path + '/'))) { operation = { kind: 'ensure_directory', depth: path.split('/').length }; } else if (['GET', 'PUT'].includes(method) && path.startsWith(directory + '/') && !path.slice(directory.length + 1).includes('/')) {
         const name = path.slice(directory.length + 1);
         if (method === 'GET') { operation = { kind: 'download', name }; } else {
@@ -374,7 +375,7 @@
     status(service, config) { return ['remembered', 'session'].includes(credentialStates.get(binding(service, config))) ? MARKER : ''; },
     /** @param {'ai'|'webdav'} service @param {ServiceConfig} config @param {string} secret @param {boolean} remember */
     async set(service, config, secret, remember) {
-      networkGeneration++;
+      networkGeneration += 1;
       let input;
       if (secret === MARKER) {
         input = { kind: 'keep' };
@@ -414,7 +415,7 @@
     /** @param {Record<string,unknown>|null} config */
     updateDav(config) { davConfig = config; },
     async reset() {
-      networkGeneration++; await credential({ kind: 'invalidate' }); credentialStates.clear(); davConfig = null;
+      networkGeneration += 1; await credential({ kind: 'invalidate' }); credentialStates.clear(); davConfig = null;
       await scope.ShirohaPlatform?.harness?.initialize();
     },
   };

@@ -163,7 +163,7 @@
       } catch {
         // 模型可能在 JSON 前后附带说明，继续查找平衡的对象或数组。
       }
-      for (let start = 0;start < s.length;start++) {
+      for (let start = 0;start < s.length;start += 1) {
         if (s[start] !== '{' && s[start] !== '[') {
           continue;
         }
@@ -172,7 +172,7 @@
         let quoted = false;
         let escaped = false;
 
-        for (let i = start;i < s.length;i++) {
+        for (let i = start;i < s.length;i += 1) {
           const ch = s[i];
 
           if (quoted) {
@@ -416,6 +416,7 @@
       if (status >= 500) {
         return 'AI 服务内部错误，请稍后重试。';
       }
+      // eslint-disable-next-line prefer-template -- 外部值可能是对象，保留 + 的默认转换；输入类型受约束后移除此例外。
       return `AI 接口返回 HTTP ${status}${detail ? '：' + detail : ''}`;
     }
 

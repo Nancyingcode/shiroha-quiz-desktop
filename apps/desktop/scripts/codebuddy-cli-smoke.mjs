@@ -53,7 +53,7 @@ export async function codebuddyCliSmoke(page, profile, startPractice) {
     const host = /** @type {{invoke(command:string,args:Record<string,unknown>):Promise<unknown>}} */ (Reflect.get(window, 'ShirohaDesktopHost'));
     let rejected = 0;
     for (const request of [{ kind: 'login', revision: 0 }, { kind: 'logout' }, { kind: 'set_remember', revision: 0, remember: true }, { kind: 'refresh', revision: 0, path: 'untrusted' }]) {
-      try { await host.invoke('codebuddy_control', { request }); } catch { rejected++; }
+      try { await host.invoke('codebuddy_control', { request }); } catch { rejected += 1; }
     }
     return rejected;
   });

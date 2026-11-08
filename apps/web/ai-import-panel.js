@@ -300,7 +300,7 @@
           privacy.textContent = aiUnavailableReasonV99(config, 'import_organize');
           privacy.className = 'notice warn';
         } else if (isHarness) {
-          privacy.textContent = aiHarnessPrivacyV99(config, `本次${range.label}及相关核对上下文`) + '只返回待核对结果，不发送本地题库文件或图片。';
+          privacy.textContent = `${aiHarnessPrivacyV99(config, `本次${range.label}及相关核对上下文`)}只返回待核对结果，不发送本地题库文件或图片。`;
           privacy.className = 'notice warn';
         } else if (isLocalAiEndpointV99(config.endpoint)) {
           privacy.textContent = '当前使用本地 AI 服务。浏览器仍需获得跨域访问权限；整理结果只会在成功后替换当前预览。';
@@ -317,7 +317,7 @@
         return;
       }
       el.textContent = message;
-      el.className = 'notice' + (type ? ' ' + type : '');
+      el.className = `notice${type ? ` ${type}` : ''}`;
     }
     function closeAiPreviewPanelV991() {
       const panel = $('#ai-preview-panel-v991');
@@ -545,7 +545,7 @@
           status.textContent = `实际处理 ${details.indexes.length} 道题，超过单次任务 ${AI_PREVIEW_MAX_ITEMS_V991} 道上限。请缩小题号范围或改用勾选后处理，程序不会静默截断。`;
           status.className = 'notice warn';
         } else {
-          status.textContent = `范围内 ${details.baseIndexes.length} 道，实际处理 ${details.indexes.length} 道；按每批 ${batchSize} 道提交，预计请求 ${requests} 次。AI 结果只作为建议。${isHarness ? ' ' + aiHarnessPrivacyV99(config, '所选题目的文字与参考答案') : ''}`;
+          status.textContent = `范围内 ${details.baseIndexes.length} 道，实际处理 ${details.indexes.length} 道；按每批 ${batchSize} 道提交，预计请求 ${requests} 次。AI 结果只作为建议。${isHarness ? ` ${aiHarnessPrivacyV99(config, '所选题目的文字与参考答案')}` : ''}`;
           status.className = 'notice';
         }
       }
@@ -562,7 +562,7 @@
         return;
       }
       el.textContent = message;
-      el.className = 'notice' + (type ? ' ' + type : '');
+      el.className = `notice${type ? ` ${type}` : ''}`;
       if (sticky) {
         el.dataset.stickyV991 = '1';
       } else {

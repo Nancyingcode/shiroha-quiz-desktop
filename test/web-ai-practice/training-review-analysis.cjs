@@ -75,7 +75,7 @@ const cases = [
     async run(h) {
       await seedReview(h, { crossBankCollision: true });
       const panel = await openReview(h);
-      for (let index = 0; index < 3; index++) {
+      for (let index = 0; index < 3; index += 1) {
         await h.page.locator(`[data-training-question="${index}"]`).click();
         await button(panel, 'generate').waitFor();
         assert.match(await panel.innerText(), /暂无解析/);

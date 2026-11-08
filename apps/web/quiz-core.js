@@ -33,7 +33,7 @@
     } else if (start > 3) {
       numbers.push('ellipsis');
     }
-    for (let number = Math.max(2, start); number <= Math.min(pages - 1, end); number++) {
+    for (let number = Math.max(2, start); number <= Math.min(pages - 1, end); number += 1) {
       numbers.push(number);
     }
     if (end === pages - 2) {

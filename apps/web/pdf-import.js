@@ -14,7 +14,7 @@
           loadingTask = pdfjsLib.getDocument(pdfDocumentOptions(data, loaded));
           const pdf = await loadingTask.promise;
           const pages = [];let extractedChars = 0;
-          for (let pageNo = 1;pageNo <= pdf.numPages;pageNo++) {
+          for (let pageNo = 1;pageNo <= pdf.numPages;pageNo += 1) {
             const page = await pdf.getPage(pageNo);
             const content = await page.getTextContent();
             const pageText = pdfItemsToLines(content.items || []);
@@ -48,7 +48,7 @@
           const mod = await import(c.module);
           window.__pdfjsMixed = { lib: mod, workerSrc: c.worker, mode: c.mode, assetBase: c.assetBase };
           return window.__pdfjsMixed;
-        } catch (e) { warnDev('PDF.js 来源加载失败：' + c.mode, e); }
+        } catch (e) { warnDev(`PDF.js 来源加载失败：${c.mode}`, e); }
       }
       return null;
     }
@@ -56,11 +56,11 @@
       const options = { data };
       if (loaded && loaded.assetBase) {
         Object.assign(options, {
-          cMapUrl: loaded.assetBase + 'cmaps/',
+          cMapUrl: `${loaded.assetBase}cmaps/`,
           cMapPacked: true,
-          standardFontDataUrl: loaded.assetBase + 'standard_fonts/',
-          iccUrl: loaded.assetBase + 'iccs/',
-          wasmUrl: loaded.assetBase + 'wasm/',
+          standardFontDataUrl: `${loaded.assetBase}standard_fonts/`,
+          iccUrl: `${loaded.assetBase}iccs/`,
+          wasmUrl: `${loaded.assetBase}wasm/`,
           useWasm: true,
         });
       }
@@ -92,7 +92,7 @@
       return cleanupPdfLiteText(text);
     }
     function latin1(u8) { let out = '';const chunk = 0x8000;for (let i = 0;i < u8.length;i += chunk) { out += String.fromCharCode.apply(null, u8.slice(i, i + chunk)); } return out; }
-    function latin1ToBytes(s) { const out = new Uint8Array(s.length);for (let i = 0;i < s.length;i++) { out[i] = s.charCodeAt(i) & 255; } return out; }
+    function latin1ToBytes(s) { const out = new Uint8Array(s.length);for (let i = 0;i < s.length;i += 1) { out[i] = s.charCodeAt(i) & 255; } return out; }
     async function inflateBytes(u8) {
       if (!('DecompressionStream' in window)) { throw new Error('当前浏览器缺少 DecompressionStream，无法解压 PDF 压缩文本流'); }
       const tryOne = async (fmt) => new Uint8Array(await new globalThis.Response(new Blob([u8]).stream().pipeThrough(new globalThis.DecompressionStream(fmt))).arrayBuffer());
@@ -125,13 +125,13 @@
     }
     function decodePdfLiteral(s) {
       let out = '';
-      for (let i = 0;i < s.length;i++) {
+      for (let i = 0;i < s.length;i += 1) {
         const c = s[i];
         if (c === '\\') {
-          const n = s[++i];
+          const n = s[(i += 1)];
           if (n === 'n') { out += '\n'; } else if (n === 'r') { out += '\r'; } else if (n === 't') { out += '\t'; } else if (n === 'b') { out += '\b'; } else if (n === 'f') { out += '\f'; } else if (/[0-7]/.test(n || '')) {
-            let oct = n;for (let k = 0;k < 2 && /[0-7]/.test(s[i + 1] || '');k++) { oct += s[++i]; }out += String.fromCharCode(parseInt(oct, 8));
-          } else if (n === '\n' || n === '\r') { if (n === '\r' && s[i + 1] === '\n') { i++; } } else { out += n || ''; }
+            let oct = n;for (let k = 0;k < 2 && /[0-7]/.test(s[i + 1] || '');k += 1) { oct += s[(i += 1)]; }out += String.fromCharCode(parseInt(oct, 8));
+          } else if (n === '\n' || n === '\r') { if (n === '\r' && s[i + 1] === '\n') { i += 1; } } else { out += n || ''; }
         } else { out += c; }
       }
       return decodeMaybeUtf16OrGbk(out);
@@ -186,7 +186,7 @@
       if (!acc) { return cur; }
       const last = acc.slice(-1);
       const first = cur.charAt(0);
-      if (/[A-Za-z0-9)]/.test(last) && /[A-Za-z0-9(]/.test(first)) { return acc + ' ' + cur; }
+      if (/[A-Za-z0-9)]/.test(last) && /[A-Za-z0-9(]/.test(first)) { return `${acc} ${cur}`; }
       if (/[，。；：、？！,.!?;:]/.test(first)) { return acc + cur; }
       return acc + cur;
     }

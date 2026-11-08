@@ -34,6 +34,7 @@
       const renderVersion = beginNativeRender('favorites');
       const bank = activeBank();
       const allRows = favoriteRowsV596();
+      // eslint-disable-next-line prefer-template -- 外部值可能是对象，保留 + 的默认转换；输入类型受约束后移除此例外。
       const rows = nativePage(allRows, 'favorites:' + bank.id, box, renderFavoritesPageV596);
       const body = box.tBodies[0];
       body.innerHTML = '<tr><td colspan="7" role="status">正在加载收藏题……</td></tr>';
@@ -129,6 +130,7 @@
         entries.sort((a, b) => String(b.lastWrongAt || '').localeCompare(String(a.lastWrongAt || '')));
       }
       const map = new Map(activeBank().questions.map((q) => [q.id, q]));
+      // eslint-disable-next-line prefer-template -- 外部值可能是对象，保留 + 的默认转换；输入类型受约束后移除此例外。
       const rows = nativePage(entries.map((e) => ({ e, q: map.get(e.id) })).filter((x) => x.q), 'wrong:' + bid + ':' + filter + ':' + sort, document.getElementById('wrongbook-list'), renderWrongBook);
       if (!await loadNativeItems(practiceSessionItemsForBanksV8916([{ ...activeBank(), questions: rows.map((row) => row.q) }]))) {
         return;
@@ -136,7 +138,7 @@
       if (renderVersion !== nativeRenderVersions.get('wrongbook') || !nativeViewVisible('wrongbook') || activeBank().id !== bid) {
         return;
       }
-      $('#wrongbook-list').innerHTML = rows.length ? rows.map(({ e, q }) => `<div class="wrong-item"><div class="section-head"><div><b>${label(q.type)}</b><p class="muted">${isTextType(q.type) ? '答案：' + esc(q.answer.join('')) + '｜' : ''}状态：${esc(e.status)}｜错误 ${e.wrongCount} 次｜做对 ${e.rightCount} 次${e.lastWrongAt ? '｜最近错：' + fmt(e.lastWrongAt) : ''}</p></div><div class="row-actions"><button class="ghost mini-btn" data-toggle-master-wrong="${esc(q.id)}">${e.status === '已掌握' ? '取消掌握' : '标记已掌握'}</button><button class="ghost mini-btn" data-fav-wrong="${esc(q.id)}">${isFavoriteV27(q.id) ? '取消收藏' : '收藏'}</button><button class="ghost danger mini-btn" data-remove-wrong="${esc(q.id)}">移出</button></div></div><div class="question-title">${renderQuestionBodyV83(q)}</div>${renderReviewOptions(q, e.lastAnswer)}${renderReviewAnswerSummary(q, e.lastAnswer)}${renderReviewAnalysis({ bankId: bid, question: q }, e.lastAnswer, 'wrongbook')}</div>`).join('') : '<p class="muted">当前条件下暂无错题。</p>';
+      $('#wrongbook-list').innerHTML = rows.length ? rows.map(({ e, q }) => `<div class="wrong-item"><div class="section-head"><div><b>${label(q.type)}</b><p class="muted">${isTextType(q.type) ? `答案：${esc(q.answer.join(''))}｜` : ''}状态：${esc(e.status)}｜错误 ${e.wrongCount} 次｜做对 ${e.rightCount} 次${e.lastWrongAt ? `｜最近错：${fmt(e.lastWrongAt)}` : ''}</p></div><div class="row-actions"><button class="ghost mini-btn" data-toggle-master-wrong="${esc(q.id)}">${e.status === '已掌握' ? '取消掌握' : '标记已掌握'}</button><button class="ghost mini-btn" data-fav-wrong="${esc(q.id)}">${isFavoriteV27(q.id) ? '取消收藏' : '收藏'}</button><button class="ghost danger mini-btn" data-remove-wrong="${esc(q.id)}">移出</button></div></div><div class="question-title">${renderQuestionBodyV83(q)}</div>${renderReviewOptions(q, e.lastAnswer)}${renderReviewAnswerSummary(q, e.lastAnswer)}${renderReviewAnalysis({ bankId: bid, question: q }, e.lastAnswer, 'wrongbook')}</div>`).join('') : '<p class="muted">当前条件下暂无错题。</p>';
       $$('[data-remove-wrong]').forEach((b) => b.onclick = async () => runMutation(async () => {
         if (await globalThis.ShirohaDialogs.confirm('确定将这道题移出错题本？')) {
           removeWrong(b.dataset.removeWrong);

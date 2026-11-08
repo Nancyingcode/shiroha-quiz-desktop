@@ -16,7 +16,7 @@
       if (maxTokens) { base.max_tokens = maxTokens; }
       const attempts = plainText ? [base] : [{ ...base, response_format: { type: 'json_object' } }, base];
       let lastError = null;
-      for (let index = 0; index < attempts.length; index++) {
+      for (let index = 0; index < attempts.length; index += 1) {
         let result;
         try {
           result = await platform.network.ai(config, attempts[index], controller?.signal);

@@ -81,9 +81,9 @@ test('窄屏长选项可换行滚动，弹窗内的浮层可点击', async (t) =
     dialog.innerHTML = '<label>来源<select id="long"></select></label>';
     dialog.style.cssText = 'width:280px;max-height:180px;overflow:hidden';
     const select = dialog.querySelector('select');
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < 30; i += 1) {
       const option = globalThis.document.createElement('option');
-      option.value = String(i); option.textContent = `题库 ${i}：` + '超长题库名称用于核对窄屏显示'.repeat(3);
+      option.value = String(i); option.textContent = `题库 ${i}：${'超长题库名称用于核对窄屏显示'.repeat(3)}`;
       select.append(option);
     }
     globalThis.document.body.append(dialog); dialog.showModal();

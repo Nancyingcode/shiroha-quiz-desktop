@@ -13,12 +13,12 @@
       /** @param {import('./contracts').Snapshot} snapshot @param {string} [operationId] */
       save(snapshot, operationId) {
         const frozen = structuredClone(snapshot);
-        const id = operationId || `${prefix}-${++sequence}`;
-        pending++;
+        const id = operationId || `${prefix}-${(sequence += 1)}`;
+        pending += 1;
         const next = tail.then(async () => {
           if (blocked) { throw new Error('前一次保存失败，请先重试。'); }
           try { await storage.write(frozen, id, storage.revision()); } catch (error) { blocked = true; throw error; }
-        }).finally(() => { pending--; });
+        }).finally(() => { pending -= 1; });
         tail = next.catch(() => {});
         return next;
       },

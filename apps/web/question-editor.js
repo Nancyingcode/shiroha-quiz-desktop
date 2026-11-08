@@ -33,7 +33,7 @@
       const expected = d.expected || {};
       const expTotal = Number(expected.total || 0);
       const diff = expTotal ? arr.length - expTotal : 0;
-      const diffClass = !expTotal ? '' : ' ' + (Math.abs(diff) <= Math.max(2, Math.ceil(expTotal * 0.05)) ? 'ok' : 'warn');
+      const diffClass = !expTotal ? '' : ` ${Math.abs(diff) <= Math.max(2, Math.ceil(expTotal * 0.05)) ? 'ok' : 'warn'}`;
       const statusList = (arr || []).map((q) => importIssueStatus(q, d.profile || {}));
       const hardCount = statusList.filter((x) => importStatusSeverity(x) === 'error').length;
       const riskCount = statusList.filter((x) => importStatusSeverity(x) === 'warn').length;
@@ -113,8 +113,8 @@
       const filterLabel = { priority: '异常优先', problem: '仅异常', normal: '仅正常', all: '全部' }[importDraft.filter] || '异常优先';
       const report = importDraft.report ? `<div class="import-report">${esc(importDraft.report)}</div>` : '';
       renderImportReportPanel(arr);
-      $('#import-summary').innerHTML = arr.length ? `${report}<b>识别到 ${arr.length} 道题，当前显示 ${shown.length} 道（${filterLabel}），已选择 ${importDraft.selected.size} 道。</b>${warnings.length ? '<br>警告 ' + warnings.length + ' 条：<br>' + warnings.slice(0, 12).map(esc).join('<br>') + (warnings.length > 12 ? '<br>……' : '') : '<br>未发现明显异常。'}` : '尚未识别到题目。';
-      $('#import-summary').className = 'notice ' + (warnings.length ? 'warn' : 'ok');
+      $('#import-summary').innerHTML = arr.length ? `${report}<b>识别到 ${arr.length} 道题，当前显示 ${shown.length} 道（${filterLabel}），已选择 ${importDraft.selected.size} 道。</b>${warnings.length ? `<br>警告 ${warnings.length} 条：<br>${warnings.slice(0, 12).map(esc).join('<br>')}${warnings.length > 12 ? '<br>……' : ''}` : '<br>未发现明显异常。'}` : '尚未识别到题目。';
+      $('#import-summary').className = `notice ${warnings.length ? 'warn' : 'ok'}`;
       const pf = $('#import-preview-filter');
       if (pf && pf.value !== importDraft.filter) {
         pf.value = importDraft.filter;
@@ -214,7 +214,7 @@
           : `题干检测到 ${detected} 个明确题空，当前配置 ${configured} 个。`;
       }
       tip.textContent = message;
-      tip.className = 'muted ' + (detected && detected !== configured ? 'multi-blank-count-warn-v58914' : '');
+      tip.className = `muted ${detected && detected !== configured ? 'multi-blank-count-warn-v58914' : ''}`;
     }
     function renderEditBlankGroupsV58914() {
       const box = $('#edit-blank-groups-v58914');
@@ -434,8 +434,8 @@
       removeAiSuggestionsForQuestionV991(oldQuestion, i);
       importDraft.questions[i] = q;
       const status = validateQuestion(q);
-      $('#edit-status').textContent = '已保存。当前状态：' + status;
-      $('#edit-status').className = 'notice ' + (status === '正常' ? 'ok' : 'warn');
+      $('#edit-status').textContent = `已保存。当前状态：${status}`;
+      $('#edit-status').className = `notice ${status === '正常' ? 'ok' : 'warn'}`;
       renderImportPreview(importDraft.questions);
     }
     async function deleteEditQuestion() {
@@ -527,8 +527,8 @@
         });
         await saveSilent();
         const status = validateQuestion(next);
-        $('#edit-status').textContent = '已保存到来源题库。当前状态：' + status;
-        $('#edit-status').className = 'notice ' + (status === '正常' ? 'ok' : 'warn');
+        $('#edit-status').textContent = `已保存到来源题库。当前状态：${status}`;
+        $('#edit-status').className = `notice ${status === '正常' ? 'ok' : 'warn'}`;
         toast('已保存题目修改。', 'ok');
         renderStats();
         renderBankList();

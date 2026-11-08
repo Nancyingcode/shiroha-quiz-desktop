@@ -172,7 +172,7 @@ test('响应正文读取失败不触发格式兜底重试', async () => {
   let calls = 0;
   const failure = new Error('正文读取失败');
   const { context } = harness(false, async () => {
-    calls++;
+    calls += 1;
     return { ok: false, status: 400, text: async () => { throw failure; } };
   });
   await assert.rejects(context.requestAiChatV99(config, []), (error) => error === failure);
@@ -185,8 +185,8 @@ for (const status of [200, 400]) {
     let calls = 0;
     let reads = 0;
     const delayed = new Promise((resolve) => { finish = resolve; });
-    const response = { ok: status === 200, status, text: async () => { reads++; return '{"choices":[{"message":{"content":"结果"}}]}'; } };
-    const { context } = harness(false, async () => { calls++; return calls === 1 ? delayed : response; });
+    const response = { ok: status === 200, status, text: async () => { reads += 1; return '{"choices":[{"message":{"content":"结果"}}]}'; } };
+    const { context } = harness(false, async () => { calls += 1; return calls === 1 ? delayed : response; });
     const controller = new AbortController();
     const pending = context.requestAiChatV99(config, [], { controller });
     controller.abort();

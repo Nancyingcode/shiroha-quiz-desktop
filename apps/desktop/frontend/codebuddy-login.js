@@ -133,7 +133,7 @@
       if (disposed || action || refreshing || (cleanupPending && current.persistenceState !== 'clearing')) { return; }
       stopPolling();
       const epoch = generation;
-      const requestSequence = ++sequence;
+      sequence += 1; const requestSequence = sequence;
       refreshing = true; readFailed = false;
       if (!pendingLogin()) { notifyAccount(true); }
       render();
@@ -166,8 +166,8 @@
       // 登录绑定用户此刻看到的状态，原生端可拒绝排在取消或退出之后才开始的旧请求。
       let request;
       if (kind === 'login' || kind === 'set_remember') { request = { kind, revision: current.revision, remember: rememberChoice }; } else if (kind === 'retry_restore') { request = { kind, revision: current.revision }; } else { request = { kind }; }
-      const epoch = ++generation;
-      const requestSequence = ++sequence;
+      generation += 1; const epoch = generation;
+      sequence += 1; const requestSequence = sequence;
       stopPolling(); clearTimeout(readTimer); readTimer = undefined; refreshing = false; action = kind;
       const endingLogin = kind === 'cancel' || kind === 'logout';
       if (endingLogin) { cleanupPending = kind; }
@@ -213,7 +213,7 @@
     button('retry-restore')?.addEventListener('click', () => { void perform('retry_restore'); });
     button('retry-save')?.addEventListener('click', () => { rememberChoice = true; void perform('set_remember'); });
     document.addEventListener('shiroha-codebuddy-account-refresh', () => { void refreshStatus(); });
-    scope.addEventListener('pagehide', () => { disposed = true; generation++; stopPolling(); clearTimeout(readTimer); readTimer = undefined; }, { once: true });
+    scope.addEventListener('pagehide', () => { disposed = true; generation += 1; stopPolling(); clearTimeout(readTimer); readTimer = undefined; }, { once: true });
     render();
     void refreshStatus();
   }
@@ -264,7 +264,7 @@
       const supersedesRead = requestKind === 'refresh' && reading === 'status';
       if (reading && !supersedesRead) { return; }
       clearTimeout(timer); timer = undefined;
-      const requestSequence = ++sequence;
+      sequence += 1; const requestSequence = sequence;
       reading = requestKind; failed = false; notice = '';
       if (requestKind === 'refresh') { notify(true); }
       renderCli();
@@ -314,7 +314,7 @@
     }
     element('copy-command')?.addEventListener('click', () => { void copyCommand(); });
     document.addEventListener('shiroha-codebuddy-account-refresh', () => { void readCli(); });
-    scope.addEventListener('pagehide', () => { disposed = true;sequence++;clearTimeout(timer);for (const pending of readTimeouts) { clearTimeout(pending); }readTimeouts.clear(); }, { once: true });
+    scope.addEventListener('pagehide', () => { disposed = true;sequence += 1;clearTimeout(timer);for (const pending of readTimeouts) { clearTimeout(pending); }readTimeouts.clear(); }, { once: true });
     renderCli();
     void readCli();
   }

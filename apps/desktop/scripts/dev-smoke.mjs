@@ -224,12 +224,14 @@ async function main() {
     /** @type {Error|undefined} */
     let launchError;
     child.on('error', (error) => { launchError = error; });
+    /** @param {Buffer|string} chunk */
+    function captureDevelopmentOutput(chunk) {
+      const text = String(chunk);
+      developmentLog = (developmentLog + text).slice(-LOG_LIMIT);
+      process.stdout.write(text);
+    }
     for (const stream of [child.stdout, child.stderr]) {
-      stream?.on('data', (chunk) => {
-        const text = String(chunk);
-        developmentLog = (developmentLog + text).slice(-LOG_LIMIT);
-        process.stdout.write(text);
-      });
+      stream?.on('data', captureDevelopmentOutput);
     }
     const endpoint = await waitForDebugger(child, debugPort, () => launchError);
     browser = await chromium.connectOverCDP(endpoint, { timeout: ACTION_TIMEOUT_MS });

@@ -406,7 +406,7 @@ const cases = [
         window.__webAiQuotaTest = { attempts: 0, original };
         Storage.prototype.setItem = function (name, value) {
           if (this === localStorage && String(name) === key) {
-            window.__webAiQuotaTest.attempts++;
+            window.__webAiQuotaTest.attempts += 1;
             throw new DOMException('Synthetic quota exceeded', 'QuotaExceededError');
           }
           return original.call(this, name, value);

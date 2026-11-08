@@ -10,10 +10,10 @@ const { TEST_ROOT, WEB_ROOT, within, reportPath, storageKeys, loadPlaywright, st
 
 function argumentsFrom(argv) {
   const options = { timeout: 10000, headed: false, selfTest: false, list: false, filter: '' };
-  for (let index = 0; index < argv.length; index++) {
+  for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index];
     if (token === '--headed') { options.headed = true; } else if (token === '--self-test') { options.selfTest = true; } else if (token === '--list') { options.list = true; } else if (['--base-url', '--timeout', '--filter', '--report', '--executable-path'].includes(token)) {
-      const value = argv[++index];
+      const value = argv[(index += 1)];
       assert(value && !value.startsWith('--'), `Missing value for ${token}.`);
       if (token === '--base-url') { options.url = baseUrl(value); }
       if (token === '--timeout') { options.timeout = Number(value); }
@@ -148,7 +148,7 @@ async function main() {
           try { await h.cleanup(); } catch (cause) { error ||= cause; }
         }
       }
-      if (error) { failed++; } else { passed++; }
+      if (error) { failed += 1; } else { passed += 1; }
       emit({ type: 'case', name: test.name, status: error ? 'failed' : 'passed', durationMs: Date.now() - beginning, ...diagnostics, ...(error ? { error: error.message, stack: error.stack } : {}) });
     }
     exitCode = failed ? 1 : 0;
