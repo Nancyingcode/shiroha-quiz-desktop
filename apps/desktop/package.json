@@ -31,7 +31,7 @@
     "bench:desktop": "node scripts/benchmark.mjs",
     "lint:incremental": "node scripts/lint-incremental.mjs",
     "lint:index": "node scripts/lint-index.mjs",
-    "lint:fixtures": "node --test test/lint-config.test.mjs test/lint-cli.test.mjs test/lint-worktree.test.mjs test/lint-runner.test.mjs",
+    "lint:fixtures": "node --test test/lint-config.test.mjs test/lint-cli.test.mjs test/lint-worktree.test.mjs test/lint-runner.test.mjs test/lint-suppressions.test.mjs test/lint-mixed-extensions.test.mjs test/lint-deleted-worktree.test.mjs",
     "lint:debt": "node scripts/lint-debt.mjs"
   },
   "devDependencies": {

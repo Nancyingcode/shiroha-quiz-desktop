@@ -149,6 +149,26 @@ test('pre-commit refuses an untracked lint runner when JavaScript is staged', as
   assert.equal(f.git(['status', '--porcelain=v1']).stdout, before);
 });
 
+test('pre-commit refuses untracked lint regression files when JavaScript is staged', async (t) => {
+  const f = await fixture(t);
+  const directory = path.join(f.project, 'test');
+  const names = ['lint-suppressions.test.mjs', 'lint-mixed-extensions.test.mjs', 'lint-deleted-worktree.test.mjs'];
+  await mkdir(directory, { recursive: true });
+  for (const name of names) {
+    await writeFile(path.join(directory, name), "console.log('untracked regression');\n");
+  }
+  const before = f.git(['status', '--porcelain=v1']).stdout;
+  const result = f.git(['commit', '-m', 'chore: 更新检查用例']);
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stdout + result.stderr, /配置或暂存检查脚本与索引不一致/);
+  assert.equal(f.git(['rev-parse', '--verify', 'HEAD']).status, 128);
+  for (const name of names) {
+    assert.match(result.stdout + result.stderr, new RegExp(name.replaceAll('.', '\\.')));
+    assert.equal(await readFile(path.join(directory, name), 'utf8'), "console.log('untracked regression');\n");
+  }
+  assert.equal(f.git(['status', '--porcelain=v1']).stdout, before);
+});
+
 test('pre-commit runs every parallel check and only checks the index after all pass', async (t) => {
   const f = await fixture(t);
   await copyFile(path.join(desktop, 'scripts/lint-runner.mjs'), path.join(f.project, 'scripts/lint-runner.mjs'));
