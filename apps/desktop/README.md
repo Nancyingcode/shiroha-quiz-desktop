@@ -61,6 +61,10 @@ npm run build:offline
 
 两个命令均生成 x64 NSIS，目标为 `src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/Shiroha Quiz_0.1.3_x64-setup.exe`。第二次构建会覆盖同名文件，需要在构建下一种制品前另存并记录 SHA-256。普通配置缺少 WebView2 时联网下载；离线配置嵌入完整 WebView2 安装程序，构建阶段仍需联网下载运行时。不得把普通包标记为离线包。配置遵循 [Tauri Windows 安装说明](https://v2.tauri.app/distribute/windows-installer/)。
 
+`build:nsis`、`build:offline`、`bundle:nsis` 和 `bundle:offline` 完成后，npm 的 `post` 步骤会自动检查默认 x64 release 安装包的 Windows 完整性标记。若文件从工作区继承了 Low 标记，会仅将这个安装包修正为 Medium 并回读验证；文件内容和目录访问授权保持不变。使用上述完整 npm 命令，不跳过生命周期脚本；直接执行 Tauri CLI 或自定义输出位置时，需要另行处理对应产物。发布收集脚本在复制普通/离线安装包后再次修正副本，并在最终验证时拒绝仍带 Low 标记的附件。
+
+Low 标记会使安装包以低完整性运行，无法写入正常临时目录，即使该目录可写且磁盘空间充足，也可能出现 `Error writing temporary file`。机制见 [Microsoft 完整性控制说明](https://learn.microsoft.com/en-us/windows/win32/secauthz/mandatory-integrity-control)。检查或修正失败会使打包命令失败；如果受限执行环境不允许修改标记，在普通用户 PowerShell 中进入本目录执行 `npm run repair:installer`，修正刚生成的默认安装包即可，无需重新编译。此步骤不需要以管理员身份运行。通过后再另存或分发安装包；复制到另一个 Low 目录仍可能重新继承标记。
+
 离线 NSIS 仅包含 WebView2 离线安装程序，不包含 Codex 运行组件。首次使用 Codex Harness 仍需联网准备组件；已缓存且校验通过的组件可在本机复用，订阅登录与 AI 任务仍需联网。
 
 默认安装到当前用户，无需为应用本身申请管理员权限。应用身份、生产数据目录和版本来源保持不变；安装配置拒绝版本降级。候选包未签名，尚不能作为已验收发行版。当前实际运行环境仅为 Windows 11 26200 x64、WebView2 155.0.4283.62；没有测得最低运行时版本，也没有验证 Win10 支持。

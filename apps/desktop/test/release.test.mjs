@@ -7,6 +7,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { releaseContext, validateVersions, initializeRelease, stageArtifact, finalizeRelease, verifyRelease, releaseDirectory, binaryNames } from '../scripts/release-artifacts.mjs';
 import { createReleaseDraft } from '../scripts/release-github.mjs';
+import { ensureInstallerIntegrity } from '../scripts/installer-integrity.mjs';
 
 const input = {
   ref: 'refs/tags/desktop-v0.1.0', commit: 'a'.repeat(40),
@@ -125,6 +126,25 @@ test('rejects two installer labels containing the same build', async (t) => {
   await stageArtifact(f.root, f.context, 'nsis');
   await stageArtifact(f.root, f.context, 'offline');
   await assert.rejects(finalizeRelease(f.root, f.context), /identical|相同/i);
+});
+
+test('release copies inherited low-integrity installers safely and rejects relabeled assets', {
+  skip: process.platform !== 'win32',
+}, async (t) => {
+  const f = await fixture(t);
+  await initializeRelease(f.root, f.context);
+  execFileSync('icacls.exe', [f.output, '/setintegritylevel', '(OI)(CI)L'], { windowsHide: true });
+  await f.put(executable, 'MZ standalone');
+  await stageArtifact(f.root, f.context, 'exe');
+  for (const kind of /** @type {const} */ (['nsis', 'offline'])) {
+    await f.put(installer, `MZ ${kind} installer`);
+    await stageArtifact(f.root, f.context, kind);
+    await ensureInstallerIntegrity(path.join(f.output, binaryNames(f.context)[kind]), { repair: false });
+  }
+  await finalizeRelease(f.root, f.context);
+  const collected = path.join(f.output, binaryNames(f.context).offline);
+  execFileSync('icacls.exe', [collected, '/setintegritylevel', 'L'], { windowsHide: true });
+  await assert.rejects(verifyRelease(f.root, f.context), /低完整性/);
 });
 
 test('rejects junctions in source and output paths without touching the destination', async (t) => {

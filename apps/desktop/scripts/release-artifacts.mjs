@@ -3,6 +3,7 @@ import { constants, createReadStream } from 'node:fs';
 import { copyFile, lstat, mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { ensureInstallerIntegrity } from './installer-integrity.mjs';
 
 /** @typedef {{ ref: string, tag: string, version: string, commit: string, repository: string, runId: string, runAttempt: string }} ReleaseContext */
 const desktopRoot = fileURLToPath(new URL('..', import.meta.url));
@@ -134,6 +135,7 @@ export async function stageArtifact(root, context, kind) {
   await nonemptyFile(source);
   await rejectLinkedPath(destination);
   await copyFile(source, destination, constants.COPYFILE_EXCL);
+  if (kind !== 'exe') { await ensureInstallerIntegrity(destination); }
 }
 
 /** @param {string} file */
@@ -199,6 +201,10 @@ export async function verifyRelease(root, context) {
   const assetNames = [...Object.values(binaryNames(context)), metadataName, checksumName];
   const expected = [...assetNames, notesName].sort();
   if (JSON.stringify((await readdir(output)).sort()) !== JSON.stringify(expected)) { throw new Error('Release 文件清单不匹配'); }
+  const names = binaryNames(context);
+  for (const name of [names.nsis, names.offline]) {
+    await ensureInstallerIntegrity(path.join(output, name), { repair: false });
+  }
   if (await readText(path.join(output, checksumName)) !== await checksums(root, context)) { throw new Error('Release SHA-256 校验失败'); }
   if (await readText(path.join(output, notesName)) !== releaseNotes(context)) { throw new Error('Release 发布说明不匹配'); }
   return assetNames.map((name) => path.join(output, name));
