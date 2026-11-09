@@ -572,6 +572,29 @@ test('训练复盘：提前结束保留全部快照，选错与未答可筛选�
   assert.match(await page.locator('#training-question').textContent(), /历史快照第1题/);
 });
 
+test('练习设置自定义题量控件不被裁切，结果页查看复盘按钮与提示条留出间距', async (t) => {
+  const initial = webState(); initial.records = [];
+  initial.banks = [initial.banks[0]];
+  const page = await pageFor(t, JSON.stringify(initial)); page.setDefaultTimeout(5000);
+  await page.locator('.nav[data-view="practice"]').click();
+  const overflow = await page.locator('#practice-custom-count').evaluate((node) => {
+    const label = node.closest('label');
+    return { overRight: node.getBoundingClientRect().right - label.getBoundingClientRect().right, clipped: label.scrollWidth - label.clientWidth };
+  });
+  assert(overflow.overRight <= 1, `自定义题量输入框超出所在 label：${overflow.overRight}px`);
+  assert(overflow.clipped <= 1, `自定义题量控件被 overflow 裁切：${overflow.clipped}px`);
+  await page.locator('#practice-limit').selectOption('all');
+  await page.locator('#start-practice-btn').click();
+  await page.locator('#practice-card .option[data-key="B"]').click();
+  await page.locator('#p-submit').click();
+  await page.locator('#p-exit').click();
+  const gap = await page.locator('#practice-review-result').evaluate((button) => {
+    const notice = button.closest('.actions').nextElementSibling;
+    return notice ? notice.getBoundingClientRect().top - button.getBoundingClientRect().bottom : -1;
+  });
+  assert(gap >= 12, `查看复盘按钮与提示条间距不足 12px：${gap}px`);
+});
+
 for (const mode of ['single', 'total']) {
   test(`训练计时：${mode} 设置往返暂停、保存失败重试保持冻结用时`, async (t) => {
     const initial = webState(); initial.records = [];

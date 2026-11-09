@@ -297,7 +297,7 @@
           renderPracticeWrongPage(rec);
         }
         $('#practice-card > .notice').textContent = `${trainingCompletion(rec)}，记录已保存。可查看本轮全部题目的作答情况。`;
-        $('#practice-card .score-card').insertAdjacentHTML('afterend', `<p class="training-result-summary">${trainingCompletion(rec)} · 未作答 ${rec.reviewSummary.unanswered} 题 · 用时 ${ShirohaTraining.formatDuration(rec.duration)}</p><div class="actions"><button type="button" class="primary" id="practice-review-result">查看复盘</button></div>`);
+        $('#practice-card .score-card').insertAdjacentHTML('afterend', `<p class="training-result-summary">${trainingCompletion(rec)} · 未作答 ${rec.reviewSummary.unanswered} 题 · 用时 ${ShirohaTraining.formatDuration(rec.duration)}</p><div class="actions training-result-actions"><button type="button" class="primary" id="practice-review-result">查看复盘</button></div>`);
         $('#practice-review-result').onclick = () => openTrainingReview(rec.id, 'practice');
         $('#back-practice-setup').onclick = () => exitPracticeFocus();
         $('#again-practice').onclick = () => startPractice();

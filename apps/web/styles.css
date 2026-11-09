@@ -7260,7 +7260,7 @@ body.exam-rail-collapsed-v34 #exam-answer-card-v30 .rail-show-btn-v34:hover{
   min-width:0 !important;
 }
 .limit-control-v60.is-custom{
-  grid-template-columns:minmax(0,1fr) 92px !important;
+  grid-template-columns:minmax(0,1fr) auto !important;
 }
 .limit-control-v60 select,
 .limit-control-v60 input{
@@ -7269,8 +7269,27 @@ body.exam-rail-collapsed-v34 #exam-answer-card-v30 .rail-show-btn-v34:hover{
   height:44px !important;
 }
 .limit-control-v60 input{
+  width:88px !important;
+  padding-left:4px !important;
+  padding-right:4px !important;
   text-align:center !important;
   font-weight:900 !important;
+}
+/* 数字输入框的步进器会把控件撑得比网格轨道更宽，溢出部分被 .form-grid label 的
+   overflow:hidden 裁掉，选中「自定义」时右侧边框与聚焦描边都看不全。
+   轨道改为随输入框固定宽度收窄，并把聚焦描边改为内嵌，选中态完整显示。 */
+.limit-control-v60 :is(select,input):focus,
+.limit-control-v60 :is(select,input):focus-visible{
+  outline:2px solid rgba(47,111,237,.55) !important;
+  outline-offset:-2px !important;
+}
+@media(forced-colors:active){
+  /* 高对比度模式保留系统聚焦色，避免内嵌描边与系统色冲突。 */
+  .limit-control-v60 :is(select,input):focus,
+  .limit-control-v60 :is(select,input):focus-visible{
+    outline:2px solid Highlight !important;
+    outline-offset:0 !important;
+  }
 }
 .quick-action-field-v60 button{
   width:100% !important;
@@ -7294,6 +7313,40 @@ body.exam-rail-collapsed-v34 #exam-answer-card-v30 .rail-show-btn-v34:hover{
   }
 }
 /* SHIROHA_WEB_V58_9_5_LIMIT_CONTROL_END */
+
+/* SHIROHA_WEB_V61_WRONGBOOK_CONTROL_ALIGN_START
+   错题本筛选行是四列 .form-grid 且 align-items:end。掌握状态/排序下拉沿用基础选择器尺寸
+   （22px 行高 + 14px 上下内边距 + 2px 边框 ≈ 38px），题量控件固定 44px、快捷按钮 min-height 44px，
+   底对齐后顶部必然参差，因此按断点统一该行控件高度，不改动基础表单尺寸与练习页题量控件。
+   题量数量输入框是该 label 的最后一行，而移动端防溢出规则给 .form-grid label 设了
+   overflow:hidden !important，外扩的 outline/box-shadow 聚焦环会在输入框右边缘与底边被裁切，
+   只剩左上一段弧线。改为内嵌描边后聚焦态完整可见，也无需放开 overflow 裁切而引入横向溢出风险。 */
+@media(min-width:721px){
+  .wrongbook-controls-v60 :is(select,input,button){
+    height:44px !important;
+    min-height:44px !important;
+  }
+}
+@media(max-width:720px){
+  /* 与移动端 input/select 的 min-height:54px 保持一致，单列布局下同样等高。 */
+  .wrongbook-controls-v60 :is(select,input,button){
+    height:54px !important;
+    min-height:54px !important;
+  }
+}
+.wrongbook-controls-v60 :is(select,input):focus{
+  outline:2px solid rgba(47,111,237,.55) !important;
+  outline-offset:-2px !important;
+  box-shadow:none !important;
+}
+@media(forced-colors:active){
+  /* 高对比度模式下保留系统聚焦色，避免内嵌描边与系统色冲突。 */
+  .wrongbook-controls-v60 :is(select,input):focus{
+    outline:2px solid Highlight !important;
+    outline-offset:0 !important;
+  }
+}
+/* SHIROHA_WEB_V61_WRONGBOOK_CONTROL_ALIGN_END */
 
 
 /* SHIROHA_WEB_V58_9_6_FAVORITES_HOTKEY_RAIL_START */
@@ -8163,6 +8216,8 @@ body.practice-focus .practice-focus-head{flex-wrap:wrap}
 .training-history-row>div{min-width:0;flex:1}
 .training-history-row p{margin:5px 0;font-size:13px}
 .training-result-summary{margin:16px 0;font-variant-numeric:tabular-nums}
+/* 复盘按钮所在 .actions 只有 margin-top，紧跟在后面的 .notice 没有上间距，按钮会贴在提示条上。 */
+.training-result-actions{margin-top:0;margin-bottom:16px}
 #training-review-content{min-width:0;overflow-wrap:anywhere}
 #training-review-content>.section-head{margin-top:20px}
 .training-filters{display:flex;flex-wrap:wrap;gap:8px;margin:22px 0 16px}
