@@ -8214,6 +8214,94 @@ body.practice-focus .practice-focus-head{flex-wrap:wrap}
 .practice-ai-actions-v613{margin-top:12px;margin-bottom:12px;flex-wrap:wrap}
 /* 考试范围提示条升级为独立卡片：白底、完整描边加双层投影，与下方配置区形成高度层次。 */
 .scope-platform-note-v8916{background:#fff;border:1px solid rgba(47,111,237,.16);border-left:3px solid rgba(47,111,237,.55);box-shadow:0 10px 24px rgba(47,111,237,.12),0 2px 6px rgba(15,23,42,.05)}
+
+/* 原生 file 控件的“选择文件”按钮由浏览器绘制，高度、圆角、配色都不受主题控制，
+   而且按内部行内盒撑高；同排 input/select 是按内边距撑高。两者盒模型不同，
+   一旦并排就会出现高度差与文字基线错位（既不等高，也不居中）。
+   因此导入页把同一网格内的字段统一成同一盒模型：等高 44px、纵向 0 内边距,
+   由盒高自动垂直居中；原生 input 视觉隐藏（保留 label 点击、Tab 焦点和既有
+   change 读取），视觉改由主题按钮 + 文件名回显承担。 */
+#import .form-grid{
+  --field-height-v615:44px
+}
+#import .form-grid > label > :is(input,select){
+  height:var(--field-height-v615);
+  padding:0 12px;
+  line-height:normal;
+  box-sizing:border-box
+}
+.file-control-v615{
+  position:relative;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  box-sizing:border-box;
+  height:var(--field-height-v615,44px);
+  padding:0 12px 0 6px;
+  border:1px solid var(--line);
+  border-radius:14px;
+  background:#fff;
+  color:var(--muted);
+  font-weight:500;
+  overflow:hidden;
+  cursor:pointer
+}
+.file-control-v615:hover{
+  border-color:rgba(47,111,237,.4)
+}
+/* 聚焦环用内嵌阴影：.form-grid label 在窄屏带 overflow:hidden，外扩描边会被裁掉。 */
+.file-control-v615:focus-within{
+  border-color:rgba(47,111,237,.55);
+  box-shadow:inset 0 0 0 2px rgba(47,111,237,.32)
+}
+@media(forced-colors:active){
+  .file-control-v615:focus-within{
+    outline:2px solid Highlight;
+    outline-offset:-2px
+  }
+}
+/* 视觉隐藏而非 display:none：display:none 会让 label 点击与键盘焦点一起失效。 */
+.file-control-v615 .file-input-v615{
+  position:absolute;
+  inset:auto;
+  width:1px;
+  height:1px;
+  margin:-1px;
+  padding:0;
+  border:0;
+  opacity:1;
+  overflow:hidden;
+  clip-path:inset(50%);
+  white-space:nowrap
+}
+.file-control-v615 .file-button-v615{
+  flex:0 0 auto;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  height:30px;
+  padding:0 14px;
+  border:1px solid rgba(47,111,237,.34);
+  border-radius:10px;
+  background:linear-gradient(135deg,#eaf2ff,#d8e8ff);
+  color:#1d4ed8;
+  font-size:13px;
+  font-weight:800;
+  line-height:1
+}
+.file-control-v615 .file-name-v615{
+  flex:1 1 auto;
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  font-size:13px;
+  line-height:1.4
+}
+.file-control-v615.has-file-v615 .file-name-v615{
+  color:var(--ink);
+  font-weight:700
+}
 @media(min-width:1280px){
   /* 遵守已有内容区宽度，避免主卡片越界后被固定统计栏遮挡。 */
   body.practice-focus #practice-card{width:min(920px,100%) !important}
@@ -8249,3 +8337,92 @@ body.practice-focus .practice-focus-head{flex-wrap:wrap}
 .training-analysis>b{display:block;margin-bottom:10px}
 @media(max-width:600px){.practice-clock{margin-left:0;width:100%}.training-history-row>div{flex-basis:100%}.training-answer-card{grid-template-columns:repeat(auto-fill,minmax(42px,1fr))}.training-answer-comparison{padding:12px}}
 @media(forced-colors:active){.training-answer-card button,.training-filters button{color:ButtonText;background:ButtonFace}.training-answer-card button[aria-pressed=true],.training-filters button[aria-pressed=true]{outline:2px solid Highlight}}
+
+/* 导入页文本域聚焦态“被遮挡”：.form-grid / .split-grid 的 label 带 overflow:hidden
+   !important（窄屏防横向溢出），而全局聚焦样式是向外扩 2px 的 outline，超出部分被
+   容器裁掉，只剩上缘和左缘半圈弧线。改为内嵌描边（outline-offset:-2px）+ 内阴影，
+   聚焦环完整落在控件内部，裁剪容器里也不会缺边。 */
+:is(.form-grid,.split-grid) :is(input,select,textarea):focus,
+:is(.form-grid,.split-grid) :is(input,select,textarea):focus-visible{
+  outline:2px solid rgba(47,111,237,.55);
+  outline-offset:-2px;
+  border-color:rgba(47,111,237,.55);
+  box-shadow:inset 0 0 0 1px rgba(47,111,237,.22)
+}
+:is(.form-grid,.split-grid) textarea:focus,
+:is(.form-grid,.split-grid) textarea:focus-visible{
+  box-shadow:inset 0 0 0 1px rgba(47,111,237,.26)
+}
+@media(forced-colors:active){
+  :is(.form-grid,.split-grid) :is(input,select,textarea):focus{
+    outline:2px solid Highlight;
+    outline-offset:-2px
+  }
+}
+
+/* 顶栏“题库下拉 + 保存数据”不等高：select 由内边距 + 行内盒撑高，button 由内边距 +
+   行高撑高，两者盒模型不同，并排后底边与高度都会差 2~4px。统一成 44px 等高盒，
+   纵向内边距归零、由盒高居中；窄屏的 54px 规则带 !important，仍按各自断点生效。 */
+.topbar .top-actions select,
+.topbar .top-actions button{
+  height:44px;
+  min-height:44px;
+  padding-top:0;
+  padding-bottom:0;
+  box-sizing:border-box;
+  font-size:14px;
+  line-height:1.4
+}
+.topbar .top-actions button{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  padding-left:16px;
+  padding-right:16px
+}
+.topbar .top-actions select{
+  padding-left:12px;
+  padding-right:34px
+}
+
+/* 聚焦/选中态最终方案（第三次修正）。前两版分别用 outline、再改 outline-offset、再用
+   inset box-shadow，都没绕开真正的裁剪源：.form-grid / .split-grid 的 label 带
+   overflow:hidden !important（styles.css:3169-3175），焦点环只要有一点落在该盒子之外
+   就会被切掉，所以截图里始终只剩上缘一条线。这次同时做两件事：
+   1) 放开导入页这些 label 的裁剪。该规则原本是为数字输入框步进器溢出加的，而导入页
+      .form-grid 里没有数字输入框（OCR 页数输入框在 .ocr-options 内），放开不会产生横向溢出。
+   2) 选中态改为 border 变色 + 内嵌 2px 环 + 背景微调，全部画在盒子内部，
+      即使外层容器将来又被加上裁剪，四边也完整可见。 */
+#import .form-grid > label,
+#import .split-grid > label{
+  overflow:visible !important
+}
+#import .form-grid > label > :is(input,select,textarea):focus,
+#import .form-grid > label > :is(input,select,textarea):focus-visible,
+#import .split-grid > label > :is(input,select,textarea):focus,
+#import .split-grid > label > :is(input,select,textarea):focus-visible,
+#import-text:focus,
+#import-text:focus-visible{
+  outline:none !important;
+  border-color:#2f6fed !important;
+  background:#fbfdff !important;
+  box-shadow:inset 0 0 0 2px rgba(47,111,237,.45) !important;
+  /* 相邻列/紧邻元素若有不透明背景，聚焦控件不提升层级时其 1px 描边会被压在下层,
+     看起来就是“选中态被遮挡”。position:relative + z-index 只影响绘制顺序，不改布局。 */
+  position:relative;
+  z-index:1
+}
+/* 文件控件内部是主题按钮 + 文件名，聚焦时给整块同样的内描边，与其他输入框保持同一种选中语言。 */
+.file-control-v615:focus-within{
+  border-color:#2f6fed !important;
+  background:#fbfdff !important;
+  box-shadow:inset 0 0 0 2px rgba(47,111,237,.45) !important;
+  z-index:1
+}
+@media(forced-colors:active){
+  #import :is(input,select,textarea):focus,
+  .file-control-v615:focus-within{
+    outline:2px solid Highlight !important;
+    outline-offset:-2px !important
+  }
+}

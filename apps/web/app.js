@@ -546,7 +546,26 @@
       resetViewScrollV282();
     });
   }
+  /* 文件名回显只负责界面提示；文件读取仍由原有 onchange 绑定处理，因此用
+     addEventListener 叠加，避免覆盖 readImportFile / readDualFile。 */
+  function bindFileFieldsV615() {
+    $$('.file-control-v615').forEach((control) => {
+      if (control.dataset.fileBoundV615 === '1') { return; }
+      const input = control.querySelector('input[type="file"]');
+      const nameEl = control.querySelector('.file-name-v615');
+      if (!input || !nameEl) { return; }
+      control.dataset.fileBoundV615 = '1';
+      const emptyText = nameEl.dataset.emptyText || nameEl.textContent;
+      input.addEventListener('change', () => {
+        const file = input.files && input.files[0];
+        nameEl.textContent = file ? file.name : emptyText;
+        control.classList.toggle('has-file-v615', Boolean(file));
+      });
+    });
+  }
+
   function bindEvents() {
+    bindFileFieldsV615();
     bindReviewAnalysisEvents();
     bindTrainingReviewEvents();
     bindPracticeClockLifecycle();

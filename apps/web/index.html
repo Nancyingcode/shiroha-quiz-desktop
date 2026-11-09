@@ -146,7 +146,7 @@
             <label>题库名称<input id="import-bank-name" placeholder="例如：安全培训题库" /></label>
             <label>识别模式<select id="import-mode"><option value="auto">自动识别</option><option value="wenjuanxing">问卷星/考试星</option><option value="normal">普通题库</option><option value="json">JSON</option></select></label>
             <label>解析策略<select id="import-strategy"><option value="auto" selected>自动推荐</option><option value="standard">标准逐行解析</option><option value="volume">分卷分区三层解析</option><option value="compact">紧凑格式解析</option></select></label>
-            <label>上传文件<input id="import-file" type="file" accept=".txt,.json,.csv,.xlsx,.docx,.doc,.pdf" /></label>
+            <label>上传文件<span class="file-control-v615"><input id="import-file" class="file-input-v615" type="file" accept=".txt,.json,.csv,.xlsx,.docx,.doc,.pdf" aria-label="选择要导入的题库文件" /><span class="file-button-v615" aria-hidden="true">选择文件</span><span class="file-name-v615" id="import-file-name-v615" data-empty-text="未选择文件" aria-live="polite">未选择文件</span></span></label>
           </div>
           <textarea id="import-text" placeholder="把题库文本粘贴到这里，或上传 .docx / .xlsx / .csv / .txt / .json / 文字层 PDF 后导入。扫描 PDF 请先使用下方 OCR 测试功能转成文本或 DOCX，再核对导入。支持：A、选项(正确答案)、答案：D、答案：A/B/C、解析：……"></textarea>
           <div class="ai-import-panel-v99 ai-hidden-v99" id="ai-import-panel-v99">
@@ -206,8 +206,8 @@
           <div class="section-head"><div><p class="kicker">Dual File Import</p><h2>双文件导入：题目文件 + 答案文件</h2></div><button id="dual-load-sample-btn" class="ghost">填入双文件示例</button></div>
           <p class="muted">适用于“一个文件只写题目，另一个文件只写答案”的试卷/答案卷。题目文件支持 .docx / .txt / .json / 文字层 .pdf；答案文件支持 .docx / .txt / 文字层 .pdf。双文件导入仍建议使用文字层 PDF；扫描 PDF 请先在 OCR 测试区转成文本后再整理导入。</p>
           <div class="form-grid">
-            <label>题目文件<input id="dual-question-file" type="file" accept=".txt,.json,.csv,.docx,.doc,.pdf" /></label>
-            <label>答案文件<input id="dual-answer-file" type="file" accept=".txt,.csv,.docx,.doc,.pdf" /></label>
+            <label>题目文件<span class="file-control-v615"><input id="dual-question-file" class="file-input-v615" type="file" accept=".txt,.json,.csv,.docx,.doc,.pdf" aria-label="选择题目的题目文件" /><span class="file-button-v615" aria-hidden="true">选择文件</span><span class="file-name-v615" id="dual-question-file-name-v615" data-empty-text="未选择文件" aria-live="polite">未选择文件</span></span></label>
+            <label>答案文件<span class="file-control-v615"><input id="dual-answer-file" class="file-input-v615" type="file" accept=".txt,.csv,.docx,.doc,.pdf" aria-label="选择题目的答案文件" /><span class="file-button-v615" aria-hidden="true">选择文件</span><span class="file-name-v615" id="dual-answer-file-name-v615" data-empty-text="未选择文件" aria-live="polite">未选择文件</span></span></label>
             <label>匹配方式<select id="dual-match-mode"><option value="auto" selected>自动匹配</option><option value="group">题型分组 + 顺序匹配</option><option value="number">按题号匹配</option><option value="number-strict">严格题号匹配</option><option value="order">按顺序匹配</option></select></label>
           </div>
           <div class="split-grid">
