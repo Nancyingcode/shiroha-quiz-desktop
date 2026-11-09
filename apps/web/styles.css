@@ -8202,6 +8202,18 @@ body .list-pagination select.list-page-size{
 .practice-clock{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-left:auto;white-space:nowrap}
 .practice-clock b{font-variant-numeric:tabular-nums;display:inline-block;min-width:5ch}
 body.practice-focus .practice-focus-head{flex-wrap:wrap}
+/* 头部进度文字与右侧 42px 工具按钮高度不同，强制同高盒居中，避免小字号文字视觉重心偏上。 */
+#practice-card .practice-focus-head .practice-round-progress{display:inline-flex;align-items:center;align-self:center;vertical-align:middle;min-height:42px;line-height:1.4}
+/* 题库名是纯文本、相邻是带内边距的 pill，纵向按中间对齐才不会比 pill 文字偏高。 */
+#practice-card .practice-source-bank{display:inline-flex;align-items:center;align-self:center;vertical-align:middle;line-height:1.5}
+/* .qmeta 默认 align-items:stretch，纯文本条目被拉满行高后文字贴顶，与内部居中的 pill 不在同一水平线。 */
+#practice-card .qmeta{align-items:center}
+/* 批量管理按钮组与下方“已选择 N 个题库”提示条之间保留呼吸区。 */
+.bank-manage-toolbar-v28 .bank-toolbar-actions-v28{padding-top:2px;margin-bottom:12px}
+/* AI 面板操作按钮与紧随其后的说明文字需要留白，避免贴在一起。 */
+.practice-ai-actions-v613{margin-top:12px;margin-bottom:12px;flex-wrap:wrap}
+/* 考试范围提示条升级为独立卡片：白底、完整描边加双层投影，与下方配置区形成高度层次。 */
+.scope-platform-note-v8916{background:#fff;border:1px solid rgba(47,111,237,.16);border-left:3px solid rgba(47,111,237,.55);box-shadow:0 10px 24px rgba(47,111,237,.12),0 2px 6px rgba(15,23,42,.05)}
 @media(min-width:1280px){
   /* 遵守已有内容区宽度，避免主卡片越界后被固定统计栏遮挡。 */
   body.practice-focus #practice-card{width:min(920px,100%) !important}
