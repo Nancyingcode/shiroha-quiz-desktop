@@ -14,7 +14,7 @@ test.after(async () => { await browser?.close(); await server?.close(); });
 
 async function component(t, desktop = false) {
   const page = await browser.newPage({ reducedMotion: 'reduce' }); t.after(() => page.close());
-  await page.setContent(`<body class="${desktop ? 'desktop-mist-blue' : ''}"><label>题型<select id="type"><option value="all">全部题型</option><option value="single">单选题</option><option value="disabled" disabled>不可用题型</option><option value="multiple">多选题</option></select></label><button id="next">下一项</button></body>`);
+  await page.setContent(`<body class="${desktop ? 'desktop-mist-blue' : ''}"><label>名称<input id="name" type="text"></label><label>说明<textarea id="note"></textarea></label><label>题型<select id="type"><option value="all">全部题型</option><option value="single">单选题</option><option value="disabled" disabled>不可用题型</option><option value="multiple">多选题</option></select></label><button id="next">下一项</button></body>`);
   await page.addStyleTag({ path: path.join(WEB_ROOT, 'styles.css') });
   if (desktop) { await page.addStyleTag({ path: path.join(WEB_ROOT, '../desktop/frontend/desktop.css') }); }
   return page;
@@ -27,12 +27,17 @@ for (const desktop of [false, true]) {
     const style = await select.evaluate((el) => ({
       appearance: globalThis.getComputedStyle(el).appearance,
       radius: globalThis.getComputedStyle(el).borderRadius,
+      inputRadius: globalThis.getComputedStyle(globalThis.document.getElementById('name')).borderRadius,
+      textareaRadius: globalThis.getComputedStyle(globalThis.document.getElementById('note')).borderRadius,
       popup: globalThis.getComputedStyle(el, '::picker(select)').borderRadius,
       disabled: globalThis.getComputedStyle(el.options[2]).cursor,
       selected: globalThis.getComputedStyle(el.options[0], '::checkmark').content,
     }));
     assert.equal(style.appearance, 'base-select');
-    assert.equal(style.radius, '6px');
+    // 输入控件圆角统一由 --field-radius 提供，select 必须与同页 input、textarea 同值。
+    assert.equal(style.radius, '14px');
+    assert.equal(style.inputRadius, style.radius);
+    assert.equal(style.textareaRadius, style.radius);
     assert.equal(style.popup, '8px');
     assert.equal(style.disabled, 'not-allowed');
     assert.notEqual(style.selected, 'none');

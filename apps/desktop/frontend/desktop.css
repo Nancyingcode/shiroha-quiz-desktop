@@ -294,7 +294,8 @@ body.desktop-mist-blue .primary { background: var(--blue); color: #fff; }
 body.desktop-mist-blue .primary:hover { background: #345b8d; }
 body.desktop-mist-blue .ghost:not(.danger) { border-color: var(--line); background: var(--card); color: var(--ink); }
 body.desktop-mist-blue .ghost:not(.danger):hover { background: var(--blue-soft); }
-body.desktop-mist-blue :is(input, select, textarea) { background: #fbfdff; border-color: var(--line); border-radius: 10px; }
+/* 输入控件圆角统一走 --field-radius，与 Web 端同一来源；此前这里是硬编码 10px，特异性压过 Web 规则导致同一表单里 input/select 与 textarea、文件控件圆角不一致。 */
+body.desktop-mist-blue :is(input, select, textarea) { background: #fbfdff; border-color: var(--line); border-radius: var(--field-radius, 14px); }
 body.desktop-mist-blue :is(button, input, select, textarea, summary, a):focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
 body.desktop-mist-blue :is(.table-wrap, .bank-list, .list) { border-color: var(--line); box-shadow: none; }
 
