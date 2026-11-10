@@ -561,16 +561,24 @@ async function notificationVisualSmoke(page) {
   const appearance = async (selector) => page.locator(selector).evaluateAll((nodes) => nodes.map((node) => {
     const style = window.getComputedStyle(node); const rect = node.getBoundingClientRect();
     const paragraph = node.querySelector('p');
-    return { background: style.backgroundColor, border: Number.parseFloat(style.borderTopWidth), radius: Number.parseFloat(style.borderRadius), shadow: style.boxShadow,
+    return { background: style.backgroundColor, border: Number.parseFloat(style.borderTopWidth), borderLeft: Number.parseFloat(style.borderLeftWidth),
+      borderColor: style.borderTopColor, borderLeftColor: style.borderLeftColor, radius: Number.parseFloat(style.borderRadius), shadow: style.boxShadow,
       fits: rect.left >= 0 && rect.right <= window.innerWidth + 1 && rect.top >= (document.getElementById('desktop-titlebar')?.getBoundingClientRect().bottom ?? 0) && rect.bottom <= window.innerHeight + 1 && node.scrollWidth <= node.clientWidth + 1,
       wrapped: !paragraph || paragraph.getBoundingClientRect().height > Number.parseFloat(window.getComputedStyle(paragraph).lineHeight) * 1.5 };
   }));
-  /** @param {Awaited<ReturnType<typeof appearance>>} styles */
-  const verify = (styles) => styles.forEach((style) => {
+  /** @param {Awaited<ReturnType<typeof appearance>>} styles @param {boolean} [coloredShadow] */
+  const verify = (styles, coloredShadow = false) => styles.forEach((style) => {
     const channels = style.background.match(/[\d.]+/g)?.map(Number).slice(0, 3) ?? [];
     assert(channels.length === 3 && Math.min(...channels) >= 240 && channels[2] > channels[0], '通知未使用浅雾蓝底色');
     assert(style.border > 0 && style.border <= 1 && style.radius >= 10, '通知缺少细边框或圆角');
-    assert(style.shadow === 'none' || Number(style.shadow.match(/rgba\([^)]*,\s*([\d.]+)\)/)?.[1]) <= 0.15, '通知阴影过重');
+    const shadowOpacities = [...style.shadow.matchAll(/rgba\([^)]*,\s*([\d.]+)\)/g)].map((match) => Number(match[1]));
+    if (coloredShadow) {
+      assert(style.borderLeft === style.border && style.borderLeftColor === style.borderColor, '通知左侧不应有实色强调边框');
+      assert(shadowOpacities.length >= 2 && shadowOpacities[0] > 0 && shadowOpacities[0] <= 0.35
+        && shadowOpacities.slice(1).every((opacity) => opacity <= 0.15), '通知彩色阴影缺失或过重');
+    } else {
+      assert(style.shadow === 'none' || (shadowOpacities.length > 0 && shadowOpacities.every((opacity) => opacity <= 0.15)), '通知阴影过重');
+    }
     assert(style.fits && style.wrapped, '通知越过视口、标题栏或长文件名未换行');
   });
   const screenshot = path.join(path.dirname(SCREENSHOT_PATH), 'mist-blue-notifications.png');
@@ -586,7 +594,8 @@ async function notificationVisualSmoke(page) {
     await markNotice('danger', '识别失败');
     await page.locator('[data-visual-smoke]').evaluateAll((nodes) => Promise.all(nodes.flatMap((node) => node.getAnimations().map((animation) => animation.finished))));
     const notices = await appearance('[data-visual-smoke]');
-    assert.equal(notices.length, 3); verify(notices);
+    assert.equal(notices.length, 3); verify(notices, true);
+    assert.equal(new Set(notices.map((notice) => notice.shadow)).size, 3, '三种通知应使用不同颜色的阴影');
     await page.screenshot({ path: screenshot });
     for (const type of ['ok', 'warn', 'danger']) {
       const notice = page.locator(`[data-visual-smoke="${type}"]`); const close = notice.getByRole('button', { name: '关闭', exact: true });

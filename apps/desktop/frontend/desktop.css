@@ -567,13 +567,18 @@ body.desktop-mist-blue #desktop-window-status {
   overflow-wrap: anywhere;
 }
 
-body.desktop-mist-blue .toast-item { gap: 12px; }
+body.desktop-mist-blue .toast-item {
+  --toast-shadow-color: rgba(64, 107, 164, .22);
+  gap: 12px;
+  border-left: 1px solid var(--line);
+  box-shadow: -5px 0 18px var(--toast-shadow-color), 0 6px 18px rgba(35, 54, 78, .07);
+}
 body.desktop-mist-blue .toast-item > div { flex: 1; min-width: 0; }
 body.desktop-mist-blue .toast-item b { margin-bottom: 4px; color: var(--ink); font-size: 14px; font-weight: 600; line-height: 1.5; }
 body.desktop-mist-blue .toast-item p { color: var(--muted); font-size: 13px; line-height: 1.65; }
-body.desktop-mist-blue .toast-item.ok { border-left-color: #608a80; }
-body.desktop-mist-blue .toast-item.warn { border-left-color: #b18b57; }
-body.desktop-mist-blue .toast-item.danger,
+body.desktop-mist-blue .toast-item.ok { --toast-shadow-color: rgba(96, 138, 128, .32); }
+body.desktop-mist-blue .toast-item.warn { --toast-shadow-color: rgba(177, 139, 87, .32); }
+body.desktop-mist-blue .toast-item.danger { --toast-shadow-color: rgba(179, 109, 116, .32); }
 body.desktop-mist-blue .platform-status.failed,
 body.desktop-mist-blue #desktop-window-status { border-left-color: #b36d74; }
 

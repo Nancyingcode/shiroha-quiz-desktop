@@ -728,6 +728,7 @@ textarea.text-answer{
   pointer-events:none
 }
 .toast-item{
+  --toast-shadow-color:rgba(47,111,237,.18);
   pointer-events:auto;
   display:flex;
   align-items:flex-start;
@@ -737,7 +738,7 @@ textarea.text-answer{
   border-radius:16px;
   background:#fff;
   border:1px solid #d8e2f2;
-  box-shadow:0 14px 38px rgba(15,23,42,.18);
+  box-shadow:-5px 0 18px var(--toast-shadow-color),0 14px 38px rgba(15,23,42,.18);
   animation:toastIn .18s ease-out;
   color:#172033
 }
@@ -762,13 +763,13 @@ textarea.text-answer{
   padding:0 2px
 }
 .toast-item.ok{
-  border-left:6px solid #16a34a
+  --toast-shadow-color:rgba(22,163,74,.28)
 }
 .toast-item.warn{
-  border-left:6px solid #f59e0b
+  --toast-shadow-color:rgba(245,158,11,.28)
 }
 .toast-item.danger{
-  border-left:6px solid #dc2626
+  --toast-shadow-color:rgba(220,38,38,.28)
 }
 .toast-item.hide{
   opacity:0;
