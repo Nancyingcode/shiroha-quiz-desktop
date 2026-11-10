@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { copyFile, mkdir, mkdtemp, readFile, rm, symlink, unlink, writeFile } from 'node:fs/promises';
+import { chmod, copyFile, mkdir, mkdtemp, readFile, rm, symlink, unlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -66,7 +66,7 @@ async function fixture(t) {
   const fullLint = () => spawnSync('npm run lint', {
     shell: true, cwd: project, env, encoding: 'utf8', windowsHide: true,
   });
-  return { temporary, repository, project, probe, git, install, fullLint };
+  return { temporary, repository, project, probe, git, install, fullLint, env };
 }
 
 test('first commit uses valid staged contents and preserves invalid unstaged and untracked code', async (t) => {
@@ -307,6 +307,19 @@ test('commit-msg rejects invalid messages and accepts Chinese Conventional Commi
   await writeFile(f.probe, "console.log('updated');\n");
   expectSuccess(f.git(['add', '.']));
   expectSuccess(f.git(['commit', '-m', 'fix(desktop): 更新检查样例']));
+});
+
+test('commit message validation does not require starting npm', async (t) => {
+  const f = await fixture(t);
+  const fakeBin = path.join(f.temporary, 'fake-bin');
+  await mkdir(fakeBin);
+  const npm = path.join(fakeBin, 'npm');
+  await writeFile(npm, '#!/bin/sh\nexit 42\n');
+  await chmod(npm, 0o755);
+  const pathKey = Object.keys(f.env).find((key) => key.toUpperCase() === 'PATH');
+  assert(pathKey);
+  f.env[pathKey] = `${fakeBin}${path.delimiter}${f.env[pathKey]}`;
+  expectSuccess(f.git(['commit', '-m', 'chore: 验证提交信息']));
 });
 
 test('hooks validate the message file supplied by Git in a linked worktree with spaces and Chinese in its path', async (t) => {

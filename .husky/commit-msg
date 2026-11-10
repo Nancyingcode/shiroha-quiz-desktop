@@ -1,1 +1,1 @@
-npm --prefix apps/desktop run commitlint -- --edit "$1"
+exec node apps/desktop/node_modules/@commitlint/cli/cli.js --cwd . --config apps/desktop/commitlint.config.mjs --edit "$1"

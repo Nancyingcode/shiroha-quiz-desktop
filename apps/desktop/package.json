@@ -16,6 +16,7 @@
     "test:shared": "node --test ../../test/dual-platform/*.test.cjs",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.platform.json",
     "lint": "node scripts/lint-runner.mjs",
+    "lint:ci": "node scripts/lint-ci.mjs",
     "lint:eslint": "eslint scripts test *.config.mjs eslint.rules.mjs eslint.migration.mjs --max-warnings 0",
     "lint:platform": "node scripts/lint-platform.mjs",
     "lint:docs": "node scripts/check-docs.mjs",

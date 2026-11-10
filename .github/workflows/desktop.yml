@@ -2,6 +2,7 @@ name: Windows desktop checks
 
 on:
   pull_request:
+  merge_group:
   push:
     branches: [main]
   workflow_dispatch:
@@ -18,6 +19,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   checks:
@@ -62,7 +64,11 @@ jobs:
           COMMITLINT_TO: ${{ github.event.pull_request.head.sha }}
         run: npm run commitlint -- --from "$env:COMMITLINT_FROM" --to "$env:COMMITLINT_TO" --verbose
       - run: npm run typecheck
-      - run: npm run lint
+      - name: CI lint
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          LINT_EXPECTED_SHA: ${{ inputs.release_commit || github.sha }}
+        run: npm run lint:ci
       - run: npm test
       - run: npm run test:web-platform
       - run: npm run test:documents

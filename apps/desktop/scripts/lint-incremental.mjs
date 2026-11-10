@@ -16,13 +16,28 @@ const candidates = execFileSync('git', ['ls-files', '--cached', '--others', '--e
   encoding: 'utf8',
   windowsHide: true,
 }).split('\0').filter((file) => /\.(?:js|mjs|cjs)$/i.test(file));
+const modes = new Map();
+const entries = execFileSync('git', ['ls-files', '--stage', '-z'], {
+  cwd: root, encoding: 'utf8', windowsHide: true,
+});
+for (const entry of entries.split('\0').filter(Boolean)) {
+  const separator = entry.indexOf('\t');
+  const [mode, , stage] = entry.slice(0, separator).split(' ');
+  const file = entry.slice(separator + 1);
+  if (!modes.has(file) || stage === '0') { modes.set(file, stage === '0' ? mode : 'unmerged'); }
+}
 const files = [];
 for (const file of candidates) {
   const target = path.join(root, file);
   if (await lint.isPathIgnored(target)) { continue; }
   // Git 索引仍包含未暂存的删除路径；其他文件访问错误不能当作删除忽略。
   try {
-    await lstat(target);
+    const stat = await lstat(target);
+    const mode = modes.get(file);
+    // Git 的符号链接在 Windows 可能以普通文件检出，文件系统类型不能代替索引类型。
+    if (!stat.isFile() || (mode !== undefined && mode !== '100644' && mode !== '100755')) {
+      throw new Error(`无法检查非普通 JavaScript 文件：${file}`);
+    }
   } catch (error) {
     const { code } = /** @type {NodeJS.ErrnoException} */ (error);
     if (code === 'ENOENT' || code === 'ENOTDIR') { continue; }

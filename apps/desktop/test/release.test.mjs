@@ -289,6 +289,8 @@ test('workflow preserves the online build before overwrite and gates writes behi
     previous = position;
   }
   assert.match(checks, /collect_release:[\s\S]*?default: false/);
+  assert.match(checks, /^permissions:\s+contents: read\s+actions: read/m);
+  assert.match(release, /^permissions:\s+contents: read\s+actions: read/m);
   assert.doesNotMatch(checks, /contents: write|release-github\.mjs/);
   assert.match(release, /tags: \['desktop-v\*'\]/);
   assert.doesNotMatch(release, /pull_request|branches:|workflow_run|secrets: inherit/);

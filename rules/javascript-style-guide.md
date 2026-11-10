@@ -57,7 +57,8 @@
 - [迁移清单](../apps/desktop/eslint.migration.mjs) 中的文件级历史语义和格式例外已全部清零；手写 JavaScript 文件执行目标规则，包括 `app.js` 和此前门禁外的 15 个测试工具，上述局部例外由独立测试约束。`lint:debt` 只报告迁移清单，不统计行内例外；新路径默认完整检查，已清零范围不能退回。覆盖数量随新增或删除文件变化，以增量检查输出为准。
 - P5 完成四类高风险状态审查及局部提炼，没有新增规则豁免或扩大正式门禁；P5 时的债务实测和当时未覆盖竞态见[实施计划第 11 节](../docs/superpowers/plans/2026-11-05-airbnb-javascript-refactor.md)。
 - `npm run lint:debt` 输出历史债务的逐文件/规则数量及行列消息；清单为空时返回空报告，显式指定文件仍可查看语义诊断。解析、配置、缺失文件或执行失败非零退出。正式门禁和报告都不写业务文件。`npm run lint:fixtures` 用真实 ESLint 验证违规拒绝、项目例外与失败传播，隔离样例不进入业务资源。
-- `pre-commit` 直接运行 [暂存区检查脚本](../apps/desktop/scripts/lint-index.mjs)，按索引中的完整文件检查本次暂存的手写 JavaScript。部分暂存和首次提交同样适用。钩子会校验检查入口及所用配置的一致性，拒绝非普通 JavaScript 文件，保留工作区和索引内容。完整规则回归和全库检查由 Windows CI 的 `npm run lint` 执行。
+- `pre-commit` 直接运行 [暂存区检查脚本](../apps/desktop/scripts/lint-index.mjs)，按索引中的完整文件检查本次暂存的手写 JavaScript。部分暂存和首次提交同样适用。钩子会校验检查入口及所用配置的一致性，拒绝非普通 JavaScript 文件，保留工作区和索引内容。
+- Windows CI 的 `npm run lint:ci` 对普通 PR 校验检出的合并提交，并与该合并提交的目标分支父提交比较，检查整个 PR 改动涉及的手写 JavaScript 完整文件。只有目标提交已有成功的 Windows push 检查及全量 lint 记录时才使用增量范围；记录不可用、历史或父提交不匹配时回退全量。检查配置、忽略规则、锁文件、工具版本、类型配置或 CI 工作流变化也回退全量，重命名与删除的原路径同样参与判断。增量与全量检查均拒绝非普通手写 JavaScript 文件；对已跟踪文件还核对 Git 索引类型，防止 Windows 将符号链接检出为普通文件后绕过检查。主线 push、合并队列、手动运行和发行检查始终执行全量 `npm run lint`。文档链接检查和项目级 typecheck 保持全量，规则回归由同一 CI job 的 `npm test` 执行；手动完整检查仍可运行 `npm run lint`。
 - 浏览器源码按 classic script 解析；`frontend/bridge.js` 是 esbuild 输入，单独按 ESM 解析，产物仍为既有 IIFE。Node `.mjs`、`.cjs` 及 `.js` 按实际包边界分类，全局变量只读；Playwright 序列化回调所需浏览器名称仅在明确列出的宿主工具和 Web AI 测试文件开放，测试桥接的应用状态名称仅在对应文件开放。没有放宽生产 CSP 或提供新的求值能力。
 - import-x 本阶段没有引入；核心规则覆盖重复导入，扩展名与具名导出保留。缺失模块、循环和未使用模块分析没有专门 lint 覆盖，仍需实际执行/构建和审查，不启用 ESLint 10 下无效的 `no-unused-modules`。
 - 一次只改一个可验收切片。格式调整与逻辑抽取分批审查；不能顺带修改答案、评分、备份格式、持久化键、凭据或权限。

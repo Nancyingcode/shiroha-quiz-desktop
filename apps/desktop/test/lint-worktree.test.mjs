@@ -45,3 +45,16 @@ test('incremental CLI finds untracked code outside the old scopes and reads comp
   assert.equal(valid.status, 0, valid.stderr + valid.stdout);
   assert.match(valid.stdout, /Checked 7 complete/);
 });
+
+test('full lint rejects a tracked symlink checked out as a regular file', async (t) => {
+  const f = await repositoryFixture(t);
+  const file = 'test/new-slice/link.cjs';
+  await writeFile(path.join(f.temporary, file), "console.log('valid');\n");
+  const hash = f.git(['hash-object', '-w', file]);
+  assert.equal(hash.status, 0, hash.stderr);
+  const staged = f.git(['update-index', '--add', '--cacheinfo', `120000,${hash.stdout.trim()},${file}`]);
+  assert.equal(staged.status, 0, staged.stderr);
+  const result = f.run('lint-incremental.mjs');
+  assert.equal(result.status, 1, result.stderr + result.stdout);
+  assert.match(result.stderr, /非普通 JavaScript 文件/);
+});
