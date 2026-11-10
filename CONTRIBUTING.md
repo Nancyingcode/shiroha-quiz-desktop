@@ -75,7 +75,7 @@ docs: 补充开发说明
 npm run commitlint -- --from main --to HEAD --verbose
 ```
 
-在 `apps/desktop` 运行 `npm run lint:css` 可单独检查 Web 根目录、`apps/web/styles/` 和桌面 `frontend/` 中的 CSS。命令只读，使用 Stylelint 官方推荐规则。现有样式按文件和规则记录历史诊断数量，没有历史来源的新文件从零开始检查。修复历史问题后同步下调对应计数；同一文件同一规则一增一减时，计数无法区分具体位置，审查时仍要核对变更。[拆分设计与基线](./docs/superpowers/specs/2026-11-10-web-styles-split.md) · [历史计数](./apps/desktop/stylelint-suppressions.json)
+在 `apps/desktop` 运行 `npm run lint:css` 可单独检查 Web 根目录、`apps/web/styles/` 和桌面 `frontend/` 中的 CSS，扩展名大小写均纳入。命令只读，使用 Stylelint 官方推荐规则。现有样式按文件和规则记录历史诊断数量，没有历史来源的新文件从零开始检查。修复历史问题后同步下调对应计数；同一文件同一规则一增一减时，计数无法区分具体位置，审查时仍要核对变更。[拆分设计与基线](./docs/superpowers/specs/2026-11-10-web-styles-split.md) · [历史计数](./apps/desktop/stylelint-suppressions.json)
 
 Windows CI 运行类型检查、测试和 `npm run lint:ci`。有可信基线的普通 PR 按变更检查 JavaScript，涉及 CSS 增删改名或内容变更时也执行 `lint:css`。检查配置或历史计数有变动、基线无法确认及推送 `main` 时执行全量 lint。开发者可以在 `apps/desktop` 运行 `npm run lint` 一并验证 JavaScript、CSS、规则回归和文档。PR 还校验 base 到 head 的提交说明。
 

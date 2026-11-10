@@ -10,6 +10,8 @@ const platformDocuments = [
   'rules/javascript-style-guide.md',
   'docs/superpowers/specs/2026-11-05-airbnb-javascript-refactor.md',
   'docs/superpowers/plans/2026-11-05-airbnb-javascript-refactor.md',
+  'docs/superpowers/specs/2026-11-10-web-styles-split.md',
+  'docs/superpowers/plans/2026-11-10-web-styles-split.md',
   'test/web-ai-practice/README.md',
   'test/web-webdav/README.md',
   'docs/superpowers/specs/2026-10-23-web-desktop-dual-platform-design.md',

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { appendFile, copyFile, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { appendFile, copyFile, mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
 import { repositoryFixture } from './lint-fixture-helpers.mjs';
@@ -36,4 +36,28 @@ test('CSS lint limits historical violations to their original files and checks n
   for (const file of [...legacy, fragment]) { assert(diagnostics.includes(path.basename(file)), diagnostics); }
   assert.match(diagnostics, /no-duplicate-selectors/);
   assert.equal(await readFile(fragment, 'utf8'), source);
+});
+
+test('CSS lint rejects mixed-case extensions in each handwritten stylesheet directory', async (t) => {
+  const { temporary } = await repositoryFixture(t);
+  const desktop = path.resolve(import.meta.dirname, '..');
+  const project = path.join(temporary, 'apps/desktop');
+  for (const dir of ['frontend/nested', '../web/styles/components']) {
+    await mkdir(path.join(project, dir), { recursive: true });
+  }
+  for (const file of ['../web/styles.css', 'frontend/desktop.css', 'package.json', 'stylelint.config.mjs', 'stylelint-suppressions.json']) {
+    await copyFile(path.join(desktop, file), path.join(project, file));
+  }
+  for (const file of ['../web/probe.CSS', '../web/styles/components/probe.CsS', 'frontend/nested/probe.cSS']) {
+    const target = path.join(project, file);
+    await writeFile(target, 'a { colr: red; }\n');
+    const result = spawnSync('npm run --silent lint:css', {
+      cwd: project, shell: true, encoding: 'utf8', windowsHide: true,
+    });
+    const diagnostics = result.stdout + result.stderr;
+    assert.equal(result.status, 2, diagnostics);
+    assert.match(diagnostics, /property-no-unknown/);
+    assert(diagnostics.includes(path.basename(file)), diagnostics);
+    await unlink(target);
+  }
 });

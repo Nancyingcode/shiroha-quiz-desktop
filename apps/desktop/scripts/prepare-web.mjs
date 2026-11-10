@@ -2,6 +2,7 @@ import { lstat, mkdir, readFile, readdir, realpath, rm, writeFile } from 'node:f
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
+import { html as htmlStandard, parse } from 'parse5';
 
 const desktopRoot = fileURLToPath(new URL('..', import.meta.url));
 const entries = ['index.html', 'app.js', 'training.js', 'quiz-core.js', 'text-answers.js', 'text-parser.js', 'backup-core.js', 'zip.js', 'backup-archive.js', 'backup-data.js', 'webdav-panel.js', 'docx-import.js', 'pdf-import.js', 'ocr-import.js', 'table-import.js', 'import-preview.js', 'ai-results.js', 'ai-import-sessions.js', 'ai-question-sessions.js', 'ai-settings.js', 'ai-transport.js', 'ai-prompts.js', 'question-view.js', 'bank-page.js', 'saved-questions-page.js', 'training-review-page.js', 'bank-editor.js', 'study-sessions.js', 'exam-page.js', 'practice-selection.js', 'practice-page.js', 'ai-import-panel.js', 'ai-question-panels.js', 'question-editor.js', 'styles.css', 'styles', 'question-bank.js', 'app-icon.png', 'data', 'media', 'libs', 'platform'];
@@ -100,21 +101,36 @@ function applyDesktopStyles(html) {
 
 /** @param {string} html */
 function validateSharedStyles(html) {
-  const uncommented = html.replace(/<!--[\s\S]*?-->/g, '');
-  const head = uncommented.match(/<head\b[^>]*>([\s\S]*?)<\/head>/i);
-  if (!head) { throw new Error('Web entry point has no complete head'); }
-  const links = [...uncommented.matchAll(/<link\b[^>]*>/gi)];
-  /** @param {string} tag @param {string} name */
-  const attribute = (tag, name) => {
-    const match = tag.match(new RegExp(`\\s${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s'">]+))`, 'i'));
-    return match?.[1] ?? match?.[2] ?? match?.[3] ?? '';
-  };
-  const styles = links.filter(([tag]) => attribute(tag, 'rel').toLowerCase().split(/\s+/).includes('stylesheet'))
-    .map(([tag]) => attribute(tag, 'href').replace(/^\.\//, ''));
-  const headLinks = [...head[1].matchAll(/<link\b[^>]*>/gi)]
-    .filter(([tag]) => attribute(tag, 'rel').toLowerCase().split(/\s+/).includes('stylesheet'));
-  if (styles.length !== sharedStyles.length || new Set(styles).size !== styles.length
-    || headLinks.length !== styles.length || styles.some((name) => !sharedStyles.includes(name))) {
+  const document = parse(html, { sourceCodeLocationInfo: true });
+  const root = document.childNodes.find((node) => node.nodeName === 'html');
+  const head = root && 'childNodes' in root ? root.childNodes.find((node) => node.nodeName === 'head') : undefined;
+  if (!head || !('tagName' in head) || !head.sourceCodeLocation?.startTag || !head.sourceCodeLocation.endTag) {
+    throw new Error('Web entry point has no complete head');
+  }
+  /** @type {import('parse5').DefaultTreeAdapterTypes.Node[]} */
+  const pending = [document];
+  /** @type {Array<{name: string, inHead: boolean}>} */
+  const styles = [];
+  while (pending.length) {
+    const node = pending.pop();
+    if (!node) { break; }
+    if ('tagName' in node && node.tagName === 'link' && node.namespaceURI === htmlStandard.NS.HTML) {
+      const rel = node.attrs.find((item) => item.name === 'rel')?.value ?? '';
+      const relations = rel.toLowerCase().split(/[ \t\r\n\f]+/);
+      const disabled = node.attrs.some((item) => item.name === 'disabled');
+      const type = (node.attrs.find((item) => item.name === 'type')?.value ?? '').split(';')[0].trim().toLowerCase();
+      const isCss = type === '' || type === 'text/css';
+      if (relations.includes('stylesheet') && !relations.includes('alternate') && !disabled && isCss) {
+        const href = node.attrs.find((item) => item.name === 'href')?.value ?? '';
+        styles.push({ name: href.replace(/^\.\//, ''), inHead: node.parentNode === head });
+      }
+    }
+    // 模板内容位于独立 fragment，不是文档中生效的样式链接。
+    if ('childNodes' in node) { pending.push(...node.childNodes); }
+  }
+  const names = styles.map((style) => style.name);
+  if (names.length !== sharedStyles.length || new Set(names).size !== names.length
+    || styles.some((style) => !style.inHead || !sharedStyles.includes(style.name))) {
     throw new Error('Web stylesheet references do not match the required shared assets');
   }
 }

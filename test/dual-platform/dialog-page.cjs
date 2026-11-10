@@ -20,6 +20,35 @@ async function component(t) {
   await page.locator('#trigger').focus();
   return page;
 }
+test('组件样式按 HTML 语义解析属性、注释、模板和媒体条件', async (t) => {
+  const page = await browser.newPage(); t.after(() => page.close());
+  await page.setContent('<select><option>题型</option></select>');
+  const html = [
+    '<!doctype html><html><head>',
+    "<link data-note='a > b' href='./styles.css' media='all' rel='stylesheet'>",
+    '<!-- <link rel="stylesheet" href="./missing-comment.css"> -->',
+    '<template><link rel="stylesheet" href="./missing-template.css"></template>',
+    '<noscript><link rel="stylesheet" href="./missing-noscript.css"></noscript>',
+    '<link rel="stylesheet" href="./missing-disabled.css" disabled>',
+    '<link rel="alternate stylesheet" href="./missing-alternate.css">',
+    '<link rel="stylesheet" href="./missing-type.css" type="text/plain">',
+    '<link rel="other\u00a0stylesheet" href="./missing-nbsp.css">',
+    '<link media="screen" href="./styles/controls-and-feedback.css" rel="stylesheet">',
+    '</head><body><svg><link rel="stylesheet" href="./missing-svg.css"></link></svg></body></html>',
+  ].join('');
+  await addSharedStyles(page, html);
+  const styles = await page.evaluate(() => [...globalThis.document.styleSheets].map((sheet) => ({
+    media: sheet.media.mediaText,
+    rules: sheet.cssRules.length,
+  })));
+  assert.equal(styles.length, 2);
+  assert.deepEqual(styles.map((sheet) => sheet.media), ['all', 'screen']);
+  assert(styles.every((sheet) => sheet.rules > 0));
+  assert.equal(await page.locator('select').evaluate((element) => globalThis.getComputedStyle(element).borderRadius), '14px');
+  await assert.rejects(addSharedStyles(page, '<head><!-- <link rel="stylesheet" href="./styles.css"> --></head>'), /no shared stylesheets/);
+  await assert.rejects(addSharedStyles(page, '<head><link rel="stylesheet" href="../outside.css"></head>'), /outside the Web directory/);
+  await assert.rejects(addSharedStyles(page, '<head><link rel="stylesheet"></head>'), /has no href/);
+});
 test('确认框居中、取消无副作用、焦点循环恢复且按键不泄露', async (t) => {
   const page = await component(t);
   await page.evaluate(() => {

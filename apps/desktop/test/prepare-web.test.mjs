@@ -265,6 +265,12 @@ test('rejects missing shared styles and incorrect stylesheet references without 
   for (const links of [
     f.html.replace(`<link rel="stylesheet" href="./${missing}">`, ''),
     f.html.replace(`<link rel="stylesheet" href="./${missing}">`, `<!-- <link rel="stylesheet" href="./${missing}"> -->`),
+    f.html.replace(`<link rel="stylesheet" href="./${missing}">`, `<template><link rel="stylesheet" href="./${missing}"></template>`),
+    f.html.replace(`<link rel="stylesheet" href="./${missing}">`, `<noscript><link rel="stylesheet" href="./${missing}"></noscript>`),
+    f.html.replace(`<link rel="stylesheet" href="./${missing}">`, `<link rel="stylesheet" href="./${missing}" disabled>`),
+    f.html.replace(`<link rel="stylesheet" href="./${missing}">`, `<link rel="alternate stylesheet" href="./${missing}">`),
+    f.html.replace(`<link rel="stylesheet" href="./${missing}">`, `<link rel="stylesheet" href="./${missing}" type="text/plain">`),
+    f.html.replace(`<link rel="stylesheet" href="./${missing}">`, `<link rel="other\u00a0stylesheet" href="./${missing}">`),
     f.html.replace(`<link rel="stylesheet" href="./${missing}">`, '').replace('</body>', `<link rel="stylesheet" href="./${missing}"></body>`),
     f.html.replace('</head>', `<link rel="stylesheet" href="./${missing}"></head>`),
     f.html.replace('</head>', '<link rel="stylesheet" href="./unexpected.css"></head>'),
@@ -273,6 +279,20 @@ test('rejects missing shared styles and incorrect stylesheet references without 
     await assert.rejects(prepareWeb(f.web, f.desktop), /stylesheet/i);
     assert.deepEqual(await snapshot(f.dist), before);
   }
+});
+
+test('accepts equivalent stylesheet attributes and preserves their source order', async (t) => {
+  const f = await fixture(t);
+  const first = '<link rel="stylesheet" href="./styles.css">';
+  const replacement = "<link data-note='a > b' href='./styles.css' media='all' rel='stylesheet'>";
+  const source = f.html.replace(first, replacement)
+    .replace('</body>', '<svg><link rel="stylesheet" href="./missing-svg.css"></link></svg></body>');
+  await writeFile(path.join(f.web, 'index.html'), source);
+  await prepareWeb(f.web, f.desktop);
+  const html = await readFile(path.join(f.dist, 'index.html'), 'utf8');
+  assert(html.includes(replacement));
+  assert(html.indexOf(replacement) < html.indexOf('./styles/responsive-artwork.css'));
+  assert(html.indexOf('./styles/controls-and-feedback.css') < html.indexOf('./desktop.css'));
 });
 
 test('injects local titlebar resources and removes only the navigation brand', async (t) => {
