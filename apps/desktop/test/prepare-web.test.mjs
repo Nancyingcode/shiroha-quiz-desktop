@@ -6,6 +6,17 @@ import test from 'node:test';
 import vm from 'node:vm';
 import { optimizeDesktopHtml, prepareWeb, requiredAssets } from '../scripts/prepare-web.mjs';
 
+const sharedStyles = [
+  'styles.css',
+  'styles/responsive-artwork.css',
+  'styles/app-shell.css',
+  'styles/dashboard-and-media.css',
+  'styles/focus-panels-and-stats.css',
+  'styles/bank-and-study-tools.css',
+  'styles/ai-panels.css',
+  'styles/controls-and-feedback.css',
+];
+
 /** @param {import('node:test').TestContext} t */
 async function fixture(t) {
   const root = await mkdtemp(path.join(os.tmpdir(), 'shiroha-assets-'));
@@ -27,7 +38,12 @@ async function fixture(t) {
     await mkdir(path.dirname(path.join(web, name)), { recursive: true });
     await writeFile(path.join(web, name), 'fixture');
   }
-  const html = '<html><head><link rel="stylesheet" href="./styles.css"><meta name="theme-color" content="#ffffff"></head><body class="app-ready"><button onclick="this.textContent=&quot;done&quot;">Go</button><img onerror="this.hidden=true"><script src="./app.js"></script></body></html>';
+  for (const name of sharedStyles) {
+    await mkdir(path.dirname(path.join(web, name)), { recursive: true });
+    await writeFile(path.join(web, name), 'fixture');
+  }
+  const links = sharedStyles.map((name) => `<link rel="stylesheet" href="./${name}">`).join('');
+  const html = `<html><head>${links}<meta name="theme-color" content="#ffffff"></head><body class="app-ready"><button onclick="this.textContent=&quot;done&quot;">Go</button><img onerror="this.hidden=true"><script src="./app.js"></script></body></html>`;
   await writeFile(path.join(web, 'index.html'), html);
   return { root, web, desktop, html, desktopCss, dist: path.join(desktop, 'dist') };
 }
@@ -215,18 +231,48 @@ test('moves handlers to an external script while preserving click/error behavior
 
 test('loads desktop styles last in the head and preserves the source and existing body classes', async (t) => {
   const f = await fixture(t);
+  await writeFile(path.join(f.web, 'styles/unlisted.css'), 'not part of the application');
   await prepareWeb(f.web, f.desktop);
   const html = await readFile(path.join(f.dist, 'index.html'), 'utf8');
   assert.match(html, /<link rel="stylesheet" href="\.\/desktop\.css"\s*\/?>\s*<\/head>/);
-  assert.ok(html.indexOf('./styles.css') < html.indexOf('./desktop.css'));
+  const links = [...html.matchAll(/<link rel="stylesheet" href="\.\/([^"]+)"/g)].map((match) => match[1]);
+  assert.deepEqual(links, [...sharedStyles, 'desktop.css']);
+  for (const name of sharedStyles) {
+    assert.deepEqual(await readFile(path.join(f.dist, name)), await readFile(path.join(f.web, name)));
+  }
+  await assert.rejects(readFile(path.join(f.dist, 'styles/unlisted.css')), { code: 'ENOENT' });
   assert.match(html, /<body class="app-ready desktop-mist-blue">/);
   assert.equal(await readFile(path.join(f.dist, 'desktop.css'), 'utf8'), f.desktopCss);
   assert.equal(await readFile(path.join(f.web, 'index.html'), 'utf8'), f.html);
   assert.equal(await readFile(path.join(f.web, 'styles.css'), 'utf8'), 'fixture');
   assert.equal(await readFile(path.join(f.desktop, 'frontend/desktop.css'), 'utf8'), f.desktopCss);
+  await writeFile(path.join(f.dist, 'styles/unlisted.css'), 'stale');
   await prepareWeb(f.web, f.desktop);
   assert.equal(await readFile(path.join(f.dist, 'index.html'), 'utf8'), html);
   assert.equal(await readFile(path.join(f.dist, 'desktop.css'), 'utf8'), f.desktopCss);
+  await assert.rejects(readFile(path.join(f.dist, 'styles/unlisted.css')), { code: 'ENOENT' });
+});
+
+test('rejects missing shared styles and incorrect stylesheet references without changing existing output', async (t) => {
+  const f = await fixture(t);
+  await prepareWeb(f.web, f.desktop);
+  const before = await snapshot(f.dist);
+  const missing = sharedStyles[3];
+  await rm(path.join(f.web, missing));
+  await assert.rejects(prepareWeb(f.web, f.desktop), /dashboard-and-media\.css/);
+  assert.deepEqual(await snapshot(f.dist), before);
+  await writeFile(path.join(f.web, missing), 'fixture');
+  for (const links of [
+    f.html.replace(`<link rel="stylesheet" href="./${missing}">`, ''),
+    f.html.replace(`<link rel="stylesheet" href="./${missing}">`, `<!-- <link rel="stylesheet" href="./${missing}"> -->`),
+    f.html.replace(`<link rel="stylesheet" href="./${missing}">`, '').replace('</body>', `<link rel="stylesheet" href="./${missing}"></body>`),
+    f.html.replace('</head>', `<link rel="stylesheet" href="./${missing}"></head>`),
+    f.html.replace('</head>', '<link rel="stylesheet" href="./unexpected.css"></head>'),
+  ]) {
+    await writeFile(path.join(f.web, 'index.html'), links);
+    await assert.rejects(prepareWeb(f.web, f.desktop), /stylesheet/i);
+    assert.deepEqual(await snapshot(f.dist), before);
+  }
 });
 
 test('injects local titlebar resources and removes only the navigation brand', async (t) => {

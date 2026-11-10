@@ -27,6 +27,8 @@ function affectsLintConfiguration(file) {
   const name = path.posix.basename(file);
   return file.startsWith('.github/workflows/')
     || file.startsWith('.husky/')
+    || file === 'apps/desktop/.stylelintignore'
+    || file === 'apps/desktop/stylelint-suppressions.json'
     || /^apps\/desktop\/scripts\/(?:lint[^/]*|check-docs)\.mjs$/i.test(file)
     || /^apps\/desktop\/test\/lint-[^/]*\.mjs$/i.test(file)
     || /^(?:eslint(?:\.|$)|\.eslint|prettier(?:\.|$)|\.prettier|tsconfig(?:\.|$)|jsconfig(?:\.|$))/i.test(name)
@@ -179,8 +181,10 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
     if (!runNpm('lint')) { process.exitCode = 1; }
   } else {
     const passed = await lintChangedFiles(root, plan.files);
+    const cssChanged = plan.changed.some((file) => /\.css$/i.test(file));
+    const cssPassed = !cssChanged || runNpm('lint:css');
     // 文档检查涉及链接目标，仍保持项目级检查；规则回归由同一 CI job 的 npm test 执行。
     const docsPassed = runNpm('lint:docs');
-    if (!passed || !docsPassed) { process.exitCode = 1; }
+    if (!passed || !docsPassed || !cssPassed) { process.exitCode = 1; }
   }
 }

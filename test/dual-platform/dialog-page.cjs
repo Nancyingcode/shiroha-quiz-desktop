@@ -5,6 +5,7 @@ const path = require('node:path');
 const { chromium } = require('../../apps/desktop/node_modules/playwright-core');
 const { startServer, WEB_ROOT } = require('../web-ai-practice/harness.cjs');
 const { webState } = require('./fixtures/dataset.cjs');
+const { addSharedStyles } = require('./styles.cjs');
 let browser; let server;
 test.before(async () => {
   server = await startServer(WEB_ROOT);
@@ -14,7 +15,7 @@ test.after(async () => { await browser?.close(); await server?.close(); });
 async function component(t) {
   const page = await browser.newPage({ reducedMotion: 'reduce' }); t.after(() => page.close());
   await page.setContent('<button id="trigger">打开</button>');
-  await page.addStyleTag({ path: path.join(WEB_ROOT, 'styles.css') });
+  await addSharedStyles(page);
   await page.addScriptTag({ path: path.join(WEB_ROOT, 'platform/dialogs.js') });
   await page.locator('#trigger').focus();
   return page;

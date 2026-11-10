@@ -4,10 +4,20 @@ import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 
 const desktopRoot = fileURLToPath(new URL('..', import.meta.url));
-const entries = ['index.html', 'app.js', 'training.js', 'quiz-core.js', 'text-answers.js', 'text-parser.js', 'backup-core.js', 'zip.js', 'backup-archive.js', 'backup-data.js', 'webdav-panel.js', 'docx-import.js', 'pdf-import.js', 'ocr-import.js', 'table-import.js', 'import-preview.js', 'ai-results.js', 'ai-import-sessions.js', 'ai-question-sessions.js', 'ai-settings.js', 'ai-transport.js', 'ai-prompts.js', 'question-view.js', 'bank-page.js', 'saved-questions-page.js', 'training-review-page.js', 'bank-editor.js', 'study-sessions.js', 'exam-page.js', 'practice-selection.js', 'practice-page.js', 'ai-import-panel.js', 'ai-question-panels.js', 'question-editor.js', 'styles.css', 'question-bank.js', 'app-icon.png', 'data', 'media', 'libs', 'platform'];
+const entries = ['index.html', 'app.js', 'training.js', 'quiz-core.js', 'text-answers.js', 'text-parser.js', 'backup-core.js', 'zip.js', 'backup-archive.js', 'backup-data.js', 'webdav-panel.js', 'docx-import.js', 'pdf-import.js', 'ocr-import.js', 'table-import.js', 'import-preview.js', 'ai-results.js', 'ai-import-sessions.js', 'ai-question-sessions.js', 'ai-settings.js', 'ai-transport.js', 'ai-prompts.js', 'question-view.js', 'bank-page.js', 'saved-questions-page.js', 'training-review-page.js', 'bank-editor.js', 'study-sessions.js', 'exam-page.js', 'practice-selection.js', 'practice-page.js', 'ai-import-panel.js', 'ai-question-panels.js', 'question-editor.js', 'styles.css', 'styles', 'question-bank.js', 'app-icon.png', 'data', 'media', 'libs', 'platform'];
+const sharedStyles = [
+  'styles.css',
+  'styles/responsive-artwork.css',
+  'styles/app-shell.css',
+  'styles/dashboard-and-media.css',
+  'styles/focus-panels-and-stats.css',
+  'styles/bank-and-study-tools.css',
+  'styles/ai-panels.css',
+  'styles/controls-and-feedback.css',
+];
 export const requiredAssets = [
   'platform/validation.js', 'platform/browser.js', 'platform/browser-network.js', 'platform/browser-credentials.js', 'platform/save-queue.js', 'platform/index.js',
-  'index.html', 'app.js', 'training.js', 'quiz-core.js', 'text-answers.js', 'text-parser.js', 'backup-core.js', 'zip.js', 'backup-archive.js', 'backup-data.js', 'webdav-panel.js', 'docx-import.js', 'pdf-import.js', 'ocr-import.js', 'table-import.js', 'import-preview.js', 'ai-results.js', 'ai-import-sessions.js', 'ai-question-sessions.js', 'ai-settings.js', 'ai-transport.js', 'ai-prompts.js', 'question-view.js', 'bank-page.js', 'saved-questions-page.js', 'training-review-page.js', 'bank-editor.js', 'study-sessions.js', 'exam-page.js', 'practice-selection.js', 'practice-page.js', 'ai-import-panel.js', 'ai-question-panels.js', 'question-editor.js', 'styles.css', 'question-bank.js', 'app-icon.png',
+  'index.html', 'app.js', 'training.js', 'quiz-core.js', 'text-answers.js', 'text-parser.js', 'backup-core.js', 'zip.js', 'backup-archive.js', 'backup-data.js', 'webdav-panel.js', 'docx-import.js', 'pdf-import.js', 'ocr-import.js', 'table-import.js', 'import-preview.js', 'ai-results.js', 'ai-import-sessions.js', 'ai-question-sessions.js', 'ai-settings.js', 'ai-transport.js', 'ai-prompts.js', 'question-view.js', 'bank-page.js', 'saved-questions-page.js', 'training-review-page.js', 'bank-editor.js', 'study-sessions.js', 'exam-page.js', 'practice-selection.js', 'practice-page.js', 'ai-import-panel.js', 'ai-question-panels.js', 'question-editor.js', ...sharedStyles, 'question-bank.js', 'app-icon.png',
   'libs/pdf.min.mjs', 'libs/pdf.worker.min.mjs',
   'libs/wasm/openjpeg.wasm', 'libs/standard_fonts/LiberationSans-Regular.ttf',
   'libs/cmaps/Adobe-GB1-UCS2.bcmap', 'libs/iccs/CGATS001Compat-v2-micro.icc',
@@ -88,6 +98,27 @@ function applyDesktopStyles(html) {
     });
 }
 
+/** @param {string} html */
+function validateSharedStyles(html) {
+  const uncommented = html.replace(/<!--[\s\S]*?-->/g, '');
+  const head = uncommented.match(/<head\b[^>]*>([\s\S]*?)<\/head>/i);
+  if (!head) { throw new Error('Web entry point has no complete head'); }
+  const links = [...uncommented.matchAll(/<link\b[^>]*>/gi)];
+  /** @param {string} tag @param {string} name */
+  const attribute = (tag, name) => {
+    const match = tag.match(new RegExp(`\\s${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s'">]+))`, 'i'));
+    return match?.[1] ?? match?.[2] ?? match?.[3] ?? '';
+  };
+  const styles = links.filter(([tag]) => attribute(tag, 'rel').toLowerCase().split(/\s+/).includes('stylesheet'))
+    .map(([tag]) => attribute(tag, 'href').replace(/^\.\//, ''));
+  const headLinks = [...head[1].matchAll(/<link\b[^>]*>/gi)]
+    .filter(([tag]) => attribute(tag, 'rel').toLowerCase().split(/\s+/).includes('stylesheet'));
+  if (styles.length !== sharedStyles.length || new Set(styles).size !== styles.length
+    || headLinks.length !== styles.length || styles.some((name) => !sharedStyles.includes(name))) {
+    throw new Error('Web stylesheet references do not match the required shared assets');
+  }
+}
+
 /** @typedef {{ source?: string, contents?: Uint8Array | string } | null} Asset */
 
 /** @param {string} source @param {Map<string, import('node:fs').Stats>} inspected @param {Map<string, Asset>} expected */
@@ -96,6 +127,7 @@ function collectAssets(source, inspected, expected) {
   for (const [input, metadata] of inspected) {
     const name = path.relative(source, input);
     if (!entries.includes(name.split(path.sep)[0])) { continue; }
+    if (name.startsWith(`styles${path.sep}`) && !sharedStyles.includes(name.split(path.sep).join('/'))) { continue; }
     const parent = path.dirname(name);
     if (parent !== '.' && !expected.has(parent)) { continue; }
     const basename = path.basename(input);
@@ -176,6 +208,7 @@ export async function prepareWeb(sourceDir, projectDir) {
     titlebarAssets.set(name, await readFile(input, 'utf8'));
   }
   const transformed = externalizeEvents(optimizeDesktopHtml(await readFile(path.join(source, 'index.html'), 'utf8')));
+  validateSharedStyles(transformed.html);
   const bridge = await build({ entryPoints: [path.join(frontend, 'bridge.js')], bundle: true, write: false, format: 'iife', platform: 'browser', target: 'es2022', legalComments: 'inline' });
   const desktopHtml = applyDesktopStyles(transformed.html)
     .replace(/<script src="\.\/(?:platform\/index|app)\.js"><\/script>/, (script) => `<script src="./bridge.js"></script>\n<script src="./adapter.js"></script>\n<script src="./harness.js"></script>\n<script src="./codebuddy-login.js"></script>\n${script}`)

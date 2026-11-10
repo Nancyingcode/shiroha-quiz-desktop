@@ -190,7 +190,8 @@ test('the hook checks the index while the CI lint command still runs every full 
   const pkgPath = path.join(f.project, 'package.json');
   const pkg = JSON.parse(await readFile(pkgPath, 'utf8'));
   pkg.scripts.lint = 'node scripts/lint-runner.mjs';
-  for (const name of ['eslint', 'platform', 'incremental', 'fixtures', 'docs']) {
+  const names = ['eslint', 'platform', 'incremental', 'fixtures', 'docs', 'css'];
+  for (const name of names) {
     pkg.scripts[`lint:${name}`] = `node scripts/hook-check.mjs ${name}`;
   }
   await writeFile(pkgPath, JSON.stringify(pkg));
@@ -198,7 +199,6 @@ test('the hook checks the index while the CI lint command still runs every full 
   expectSuccess(f.git(['add', '.']));
   expectSuccess(f.git(['commit', '--file', '-'], f.repository, 'chore: 验证并行检查\n'));
   assert.equal(f.git(['log', '-1', '--format=%s']).stdout.trim(), 'chore: 验证并行检查');
-  const names = ['eslint', 'platform', 'incremental', 'fixtures', 'docs'];
   for (const name of names) {
     await assert.rejects(readFile(path.join(f.repository, `.git/ran-${name}`)), { code: 'ENOENT' });
   }

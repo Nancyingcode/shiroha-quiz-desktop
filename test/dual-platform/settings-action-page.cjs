@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 const { chromium } = require('../../apps/desktop/node_modules/playwright-core');
 const { startServer, WEB_ROOT } = require('../web-ai-practice/harness.cjs');
+const { addSharedStyles } = require('./styles.cjs');
 
 let browser; let server;
 test.before(async () => {
@@ -26,7 +27,7 @@ const FORM = [
 async function component(t, desktop = false) {
   const page = await browser.newPage({ reducedMotion: 'reduce' }); t.after(() => page.close());
   await page.setContent(`<body class="${desktop ? 'desktop-mist-blue' : ''}">${FORM}</body>`);
-  await page.addStyleTag({ path: path.join(WEB_ROOT, 'styles.css') });
+  await addSharedStyles(page);
   if (desktop) { await page.addStyleTag({ path: path.join(WEB_ROOT, '../desktop/frontend/desktop.css') }); }
   return page;
 }
@@ -76,7 +77,7 @@ test('窄屏快捷操作按钮与输入框同高', async (t) => {
   assert.ok(Math.abs(box.cell.height - (box.caption.height + box.row.height + 7)) <= 1, `窄屏快捷操作单元高度应等于标题 + 间距 + 按钮行 ${JSON.stringify(box)}`);
 });
 
-// 选中态“被遮挡”回归：.form-grid > label 带 overflow:hidden !important（styles.css:3172-3178，
+// 选中态“被遮挡”回归：.form-grid > label 带 overflow:hidden !important（styles/responsive-artwork.css，
 // 窄屏防止数字步进器把控件撑出轨道），向控件外侧扩的 outline 会被这个裁剪盒切掉，
 // 实际只剩上缘一段弧线。这里断言聚焦环整个画在控件盒内部，且控件盒不越出裁剪边界。
 const FOCUS_FORM = [
@@ -89,7 +90,7 @@ const FOCUS_FORM = [
 async function focusComponent(t, desktop = false) {
   const page = await browser.newPage({ reducedMotion: 'reduce' }); t.after(() => page.close());
   await page.setContent(`<body class="${desktop ? 'desktop-mist-blue' : ''}">${FOCUS_FORM}</body>`);
-  await page.addStyleTag({ path: path.join(WEB_ROOT, 'styles.css') });
+  await addSharedStyles(page);
   if (desktop) { await page.addStyleTag({ path: path.join(WEB_ROOT, '../desktop/frontend/desktop.css') }); }
   return page;
 }

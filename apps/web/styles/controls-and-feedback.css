@@ -1,0 +1,521 @@
+
+.platform-status{position:fixed;bottom:12px;left:50%;transform:translateX(-50%);z-index:99999;max-width:90vw;padding:12px 18px;border-radius:10px;background:#17364d;color:white;box-shadow:0 4px 20px #0003}.platform-status.failed{background:#793427}.platform-status button{margin-left:12px}
+/* Harness 只在桌面适配器初始化后显示，hidden 必须覆盖表单网格的 display。 */
+#ai-execution-settings[hidden],#ai-harness-settings[hidden],#ai-harness-login-details[hidden],#ai-api-settings-fields[hidden]{display:none}
+#ai-harness-runtime-progress[hidden],#ai-harness-prepare[hidden],#ai-harness-prepare-cancel[hidden]{display:none}
+#ai-harness-advanced summary{cursor:pointer;font-weight:600}
+#ai-harness-advanced .muted{overflow-wrap:anywhere}
+#ai-codebuddy-model{margin-top:7px}
+#ai-harness-loading[hidden],#ai-harness-load-retry[hidden],#ai-harness-background[hidden],.ai-execution-choice[hidden]{display:none}
+#ai-harness-background-status{margin-top:0}
+#ai-harness-auth-status,#ai-codebuddy-status{min-height:1.5em}
+.ai-execution-choice{display:flex;flex-wrap:wrap;gap:12px 24px;margin:16px 0;padding:12px;border:1px solid var(--line,#dbe3ef);border-radius:10px}
+.ai-execution-choice label{display:flex;align-items:center;gap:6px}
+.ai-execution-choice input{width:auto}
+
+/* 详情仅撑开当前题目；正文沿页面滚动，避免长材料形成嵌套纵向滚动。 */
+#bank-question-detail > td{padding:0;white-space:normal}
+.bank-detail{padding:18px 22px;background:#f4f8fe;overflow-wrap:anywhere;color:var(--ink)}
+.bank-detail-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;background:#f4f8fe;padding:8px 0}
+.bank-detail-toolbar h3{margin:0;scroll-margin-top:100px}
+.bank-detail-body{line-height:1.8;white-space:pre-wrap}
+.bank-detail-body img,.bank-detail-option img{max-width:100%;height:auto}
+.bank-detail-option{display:flex;align-items:flex-start;gap:14px;padding:12px;margin:8px 0;background:var(--card);border:1px solid var(--line);border-radius:10px;white-space:pre-wrap}
+.bank-detail-option > div{flex:1;min-width:0}
+.bank-detail-option > span{font-size:12px;white-space:nowrap;color:#2457a7}
+.bank-detail-option.is-answer{background:#e9f2ff;border-color:#8eb8ed}
+.bank-detail-status{font-size:13px;color:var(--muted);margin:8px 0}
+.bank-manual-copy textarea{display:block;width:100%;min-height:180px;margin:8px 0;resize:vertical}
+.bank-detail .q-table-wrap{max-width:100%;overflow-x:auto}
+.bank-detail-toolbar{position:relative;z-index:2;border-bottom:1px solid var(--line)}
+.bank-detail-toolbar button:focus-visible{outline:2px solid #2457a7;outline-offset:3px}
+.bank-question-actions{align-items:center;margin-bottom:14px}
+#bank-preview th:last-child,#bank-preview > tbody > tr:not(#bank-question-detail) > td:last-child{min-width:108px}
+#bank-preview > thead > tr > :is(:nth-child(3),:nth-child(6),:nth-child(7),:nth-child(8)),
+#bank-preview > tbody > tr:not(#bank-question-detail) > :is(:nth-child(3),:nth-child(6),:nth-child(7),:nth-child(8)){width:1%;white-space:nowrap}
+#bank-preview [data-delete-bank-question]{white-space:nowrap}
+#bank-preview [data-preview-question],#bank-preview [data-preview-full]{white-space:nowrap}
+.bank-detail{position:sticky;left:0;box-sizing:border-box;max-width:100%}
+.bank-detail-analysis{line-height:1.8;white-space:pre-wrap;overflow-wrap:anywhere}
+.bank-detail-analysis img{max-width:100%;height:auto}
+#favorites-list-v596 .favorite-question-number{color:var(--blue);font-weight:700}
+#favorites-list-v596 > thead > tr > :is(:nth-child(1),:nth-child(2),:nth-child(4),:nth-child(5),:nth-child(6),:nth-child(7)),
+#favorites-list-v596 > tbody > .favorite-question-row > :is(:nth-child(1),:nth-child(2),:nth-child(4),:nth-child(5),:nth-child(6),:nth-child(7)){width:1%;white-space:nowrap}
+.favorite-question-actions{display:flex;flex-wrap:wrap;gap:6px;min-width:110px}
+.favorite-question-actions button{white-space:nowrap}
+#practice-card .practice-source-number{color:var(--blue);background:var(--blue2);font-weight:800}
+#practice-card .practice-source-bank{color:var(--muted);font-size:13px;overflow-wrap:anywhere}
+#practice-card .practice-round-progress{font-size:13px;white-space:normal}
+
+/* 原生 dialog 的顶层模态隔离背景；独立 ID 避免历史主题规则改变确认框布局。 */
+#app-dialog{position:fixed;inset:0;margin:auto;width:440px;max-width:calc(100% - 32px);max-height:calc(100% - 32px);padding:28px;border:1px solid #d5e2f0;border-radius:20px;background:#fff;color:#193553;box-shadow:0 24px 70px #19355330;overflow:auto;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif;text-align:left;box-sizing:border-box}
+#app-dialog::backdrop{background:rgba(23,44,72,.25)}
+#app-dialog .app-dialog-form{margin:0;display:block}
+#app-dialog .app-dialog-icon{display:flex;align-items:center;justify-content:center;width:46px;height:46px;border-radius:14px;background:#eaf2ff;color:#2563eb;margin-bottom:18px;font:600 25px Georgia,serif}
+#app-dialog #app-dialog-title{font-size:20px;line-height:1.4;margin:0 30px 12px 0;font-weight:600;color:#183451}
+#app-dialog #app-dialog-message{font-size:14px;line-height:1.7;margin:0;color:#61738b;white-space:pre-wrap;overflow-wrap:anywhere}
+#app-dialog #app-dialog-input{box-sizing:border-box;width:100%;margin-top:18px;padding:11px 12px;border:1px solid #cbdcf0;border-radius:var(--field-radius);background:#fff;color:#193553;font:inherit}
+#app-dialog .app-dialog-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:28px;flex-wrap:wrap}
+#app-dialog button{font:500 14px/1.5 "Segoe UI","Microsoft YaHei",sans-serif;border:1px solid #d1dff0;background:#f4f8fd;color:#234461;border-radius:10px;padding:10px 18px;min-height:42px;box-shadow:none;cursor:pointer;transform:none}
+#app-dialog button:hover{background:#eaf2fc}
+#app-dialog [data-dialog-accept]{background:#2563eb;color:#fff;border-color:#2563eb}
+#app-dialog [data-dialog-accept]:hover{background:#1d4ed8}
+#app-dialog [data-dialog-close]{position:absolute;right:14px;top:12px;background:transparent;border:0;padding:4px;width:36px;min-height:36px;font-size:24px;color:#718299}
+#app-dialog :is(button,input):focus-visible{outline:3px solid #83b5ff;outline-offset:3px}
+#app-dialog [hidden]{display:none}
+@media(max-width:480px){#app-dialog{padding:24px 20px}#app-dialog button{padding:10px 14px}}
+
+.list-pagination{
+  container-type:inline-size;
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  justify-content:flex-end;
+  gap:12px 20px;
+  margin-top:20px;
+  min-width:0;
+  font-size:13px;
+  font-weight:400;
+}
+.list-pagination-status{margin-right:auto;color:var(--muted);font-size:12px;line-height:1.5}
+.list-pagination-controls{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:12px 20px;max-width:100%;min-width:0}
+.list-page-numbers{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:6px;min-width:0}
+.list-page-numbers.is-compact{display:none}
+.list-pagination .list-page-button,.list-pagination .list-page-gap{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  flex:0 0 auto;
+  width:32px;
+  height:32px;
+  min-height:32px;
+  padding:0;
+  border:1px solid transparent;
+  border-radius:6px;
+  background:transparent;
+  color:var(--ink);
+  box-shadow:none;
+  font-size:13px;
+  font-weight:400;
+  line-height:1;
+  transform:none;
+}
+.list-pagination .list-page-gap{color:#a8b0bc;width:24px}
+.list-pagination .list-page-button:hover:not(:disabled){border-color:var(--line);background:var(--blue2);color:var(--blue);transform:none;box-shadow:none}
+.list-pagination .list-page-button[aria-current="page"],.list-pagination .list-page-button[aria-current="page"]:hover{border-color:#1677ff;color:#1677ff;background:#fff;font-weight:600}
+.list-pagination .list-page-button:disabled{color:#c3c9d2;cursor:not-allowed;opacity:1}
+.list-pagination .list-page-button[data-page-control="previous"],.list-pagination .list-page-button[data-page-control="next"]{font-size:23px;font-weight:300}
+/* 历史移动端表单对高度与圆角使用 important；分页须保留紧凑尺寸。 */
+body .list-pagination select.list-page-size:not([multiple]):not([size]){width:104px;min-height:32px !important;height:32px;padding:4px 8px;border:1px solid #d7dbe1;border-color:#d7dbe1 !important;border-radius:6px !important;background:#fff;color:var(--ink);font-size:13px;font-weight:400;box-shadow:none} /* 分页是 32px 紧凑控件，保留 6px 圆角，不参与输入框统一；全局下拉框规则同为 important，只能靠 :not() 提高特异性压过它，不能只加 body 前缀（两者都是 (0,2,2)，后来的胜出）。 */
+.list-pagination :is(button,select):focus-visible{outline:2px solid var(--blue);outline-offset:3px}
+:is(#bank-list,#bank-preview,#wrongbook-list,#favorites-list-v596,#records-list,#p-wrong-overview-list){scroll-margin-top:76px}
+@container (max-width:440px){
+  .list-page-numbers.is-wide{display:none}
+  .list-page-numbers.is-compact{display:flex}
+  .list-pagination-controls{gap:10px 12px}
+  .list-page-numbers{gap:3px}
+  .list-pagination .list-page-button{width:28px;height:30px;min-height:30px}
+  .list-pagination .list-page-gap{width:20px}
+}
+@media(prefers-reduced-motion:no-preference){#app-dialog[open]{animation:app-dialog-enter .14s ease-out}@keyframes app-dialog-enter{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}}
+
+/* 保留原生表单与键盘语义；旧浏览器继续使用系统弹层，支持 base-select 时再增强列表样式。 */
+body select:not([multiple]):not([size]){
+  --select-arrow:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='m2 4 4 4 4-4' fill='none' stroke='%238c8c8c' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  appearance:none;
+  min-width:0;
+  padding:7px 34px 7px 12px;
+  border:1px solid #d9d9d9;
+  /* 历史移动端规则使用 important，统一选择器外观时仍保留其触控高度。 */
+  border-color:#d9d9d9 !important;
+  /* 与其他输入控件共用同一圆角来源，避免下拉框单独被钉在 6px。 */
+  border-radius:var(--field-radius) !important;
+  background-color:#fff;
+  background-image:var(--select-arrow);
+  background-repeat:no-repeat;
+  background-position:right 12px center;
+  color:var(--ink);
+  font-size:14px;
+  font-weight:400;
+  line-height:1.5715;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  cursor:pointer;
+  box-shadow:none;
+}
+body select:not([multiple]):not([size]):enabled:hover{
+  border-color:#4096ff !important;
+}
+body select:not([multiple]):not([size]):enabled:is(:focus,:open){
+  border-color:#1677ff !important;
+  outline:none;
+  box-shadow:0 0 0 2px rgba(5,145,255,.1);
+}
+body select:not([multiple]):not([size]):disabled{
+  background-color:#f5f5f5;
+  color:#8c8c8c;
+  cursor:not-allowed;
+  opacity:1;
+}
+body .list-pagination select.list-page-size{
+  padding:4px 28px 4px 10px;
+  background-position:right 9px center;
+  font-size:13px;
+}
+@supports (appearance:base-select) and selector(::picker(select)){
+  body select:not([multiple]):not([size]),
+  body select:not([multiple]):not([size])::picker(select){
+    appearance:base-select;
+  }
+  body select:not([multiple]):not([size]){
+    /* 原生回填区域无法单独设置样式；固定箭头列避免长名称挤出或覆盖箭头。 */
+    display:grid;
+    grid-template-columns:minmax(0,1fr) 32px;
+    align-items:center;
+    padding-right:0;
+    background-image:none;
+    overflow:hidden;
+  }
+  body select:not([multiple]):not([size])::picker-icon{
+    content:"";
+    grid-column:2;
+    align-self:stretch;
+    width:32px;
+    height:100%;
+    margin:0;
+    background-color:inherit;
+    background-image:var(--select-arrow);
+    background-repeat:no-repeat;
+    background-position:center;
+    rotate:0deg;
+  }
+  body select:not([multiple]):not([size]):open::picker-icon{
+    rotate:180deg;
+  }
+  body select:not([multiple]):not([size])::picker(select){
+    width:anchor-size(self-inline);
+    max-width:calc(100vw - 16px);
+    max-height:min(256px,calc(100dvh - 16px));
+    position-try-order:normal;
+    margin-block:4px;
+    padding:4px;
+    border:1px solid #f0f0f0;
+    border-radius:8px;
+    background:#fff;
+    color:var(--ink);
+    box-shadow:0 6px 16px rgba(0,0,0,.08),0 3px 6px -4px rgba(0,0,0,.12),0 9px 28px 8px rgba(0,0,0,.05);
+    font-size:14px;
+    font-weight:400;
+    overflow:auto;
+    overscroll-behavior:contain;
+    scrollbar-width:thin;
+  }
+  body select:not([multiple]):not([size]) option{
+    min-height:32px;
+    padding:5px 12px;
+    gap:8px;
+    border:0;
+    border-radius:4px;
+    background:transparent;
+    color:var(--ink);
+    font-weight:400;
+    line-height:22px;
+    white-space:normal;
+    overflow-wrap:anywhere;
+    cursor:pointer;
+  }
+  body select:not([multiple]):not([size]) option:enabled:is(:hover,:focus){
+    background:#f5f5f5;
+    outline:none;
+  }
+  body select:not([multiple]):not([size]) option:checked,
+  body select:not([multiple]):not([size]) option:checked:enabled:is(:hover,:focus){
+    background:#e6f4ff;
+    font-weight:600;
+  }
+  body select:not([multiple]):not([size]) option::checkmark{
+    content:"✓";
+    order:1;
+    margin-left:auto;
+    color:#1677ff;
+  }
+  body select:not([multiple]):not([size]) option:disabled{
+    color:#bfbfbf;
+    cursor:not-allowed;
+  }
+  body .list-pagination select.list-page-size{
+    grid-template-columns:minmax(0,1fr) 24px;
+    padding-right:0;
+  }
+  body .list-pagination select.list-page-size::picker-icon{
+    width:24px;
+  }
+}
+@media(prefers-reduced-motion:no-preference){
+  body select:not([multiple]):not([size]){
+    transition:border-color .15s,box-shadow .15s;
+  }
+  body select:not([multiple]):not([size])::picker-icon{
+    transition:rotate .15s;
+  }
+}
+@media(forced-colors:active){
+  body select:not([multiple]):not([size]):enabled:is(:focus,:open){
+    outline:2px solid Highlight;
+    outline-offset:2px;
+  }
+}
+
+.practice-clock{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-left:auto;white-space:nowrap}
+.practice-clock b{font-variant-numeric:tabular-nums;display:inline-block;min-width:5ch}
+body.practice-focus .practice-focus-head{flex-wrap:wrap}
+/* 头部进度文字与右侧 42px 工具按钮高度不同，强制同高盒居中，避免小字号文字视觉重心偏上。 */
+#practice-card .practice-focus-head .practice-round-progress{display:inline-flex;align-items:center;align-self:center;vertical-align:middle;min-height:42px;line-height:1.4}
+/* 题库名是纯文本、相邻是带内边距的 pill，纵向按中间对齐才不会比 pill 文字偏高。 */
+#practice-card .practice-source-bank{display:inline-flex;align-items:center;align-self:center;vertical-align:middle;line-height:1.5}
+/* .qmeta 默认 align-items:stretch，纯文本条目被拉满行高后文字贴顶，与内部居中的 pill 不在同一水平线。 */
+#practice-card .qmeta{align-items:center}
+/* 批量管理按钮组与下方“已选择 N 个题库”提示条之间保留呼吸区。 */
+.bank-manage-toolbar-v28 .bank-toolbar-actions-v28{padding-top:2px;margin-bottom:12px}
+/* AI 面板操作按钮与紧随其后的说明文字需要留白，避免贴在一起。 */
+.practice-ai-actions-v613{margin-top:12px;margin-bottom:12px;flex-wrap:wrap}
+/* 考试范围提示条升级为独立卡片：白底、完整描边加双层投影，与下方配置区形成高度层次。 */
+.scope-platform-note-v8916{background:#fff;border:1px solid rgba(47,111,237,.16);border-left:3px solid rgba(47,111,237,.55);box-shadow:0 10px 24px rgba(47,111,237,.12),0 2px 6px rgba(15,23,42,.05)}
+
+/* 原生 file 控件的“选择文件”按钮由浏览器绘制，高度、圆角、配色都不受主题控制，
+   而且按内部行内盒撑高；同排 input/select 是按内边距撑高。两者盒模型不同，
+   一旦并排就会出现高度差与文字基线错位（既不等高，也不居中）。
+   因此导入页把同一网格内的字段统一成同一盒模型：等高 44px、纵向 0 内边距,
+   由盒高自动垂直居中；原生 input 视觉隐藏（保留 label 点击、Tab 焦点和既有
+   change 读取），视觉改由主题按钮 + 文件名回显承担。 */
+#import .form-grid{
+  --field-height-v615:44px
+}
+#import .form-grid > label > :is(input,select){
+  height:var(--field-height-v615);
+  padding:0 12px;
+  line-height:normal;
+  box-sizing:border-box
+}
+.file-control-v615{
+  position:relative;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  box-sizing:border-box;
+  height:var(--field-height-v615,44px);
+  padding:0 12px 0 6px;
+  border:1px solid var(--line);
+  border-radius:var(--field-radius);
+  background:#fff;
+  color:var(--muted);
+  font-weight:500;
+  overflow:hidden;
+  cursor:pointer
+}
+.file-control-v615:hover{
+  border-color:rgba(47,111,237,.4)
+}
+/* 聚焦环用内嵌阴影：.form-grid label 在窄屏带 overflow:hidden，外扩描边会被裁掉。 */
+.file-control-v615:focus-within{
+  border-color:rgba(47,111,237,.55);
+  box-shadow:inset 0 0 0 2px rgba(47,111,237,.32)
+}
+@media(forced-colors:active){
+  .file-control-v615:focus-within{
+    outline:2px solid Highlight;
+    outline-offset:-2px
+  }
+}
+/* 视觉隐藏而非 display:none：display:none 会让 label 点击与键盘焦点一起失效。 */
+.file-control-v615 .file-input-v615{
+  position:absolute;
+  inset:auto;
+  width:1px;
+  height:1px;
+  margin:-1px;
+  padding:0;
+  border:0;
+  opacity:1;
+  overflow:hidden;
+  clip-path:inset(50%);
+  white-space:nowrap
+}
+.file-control-v615 .file-button-v615{
+  flex:0 0 auto;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  height:30px;
+  padding:0 14px;
+  border:1px solid rgba(47,111,237,.34);
+  border-radius:10px;
+  background:linear-gradient(135deg,#eaf2ff,#d8e8ff);
+  color:#1d4ed8;
+  font-size:13px;
+  font-weight:800;
+  line-height:1
+}
+.file-control-v615 .file-name-v615{
+  flex:1 1 auto;
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  font-size:13px;
+  line-height:1.4
+}
+.file-control-v615.has-file-v615 .file-name-v615{
+  color:var(--ink);
+  font-weight:700
+}
+@media(min-width:1280px){
+  /* 遵守已有内容区宽度，避免主卡片越界后被固定统计栏遮挡。 */
+  body.practice-focus #practice-card{width:min(920px,100%) !important}
+}
+.practice-pause-dialog{width:min(460px,calc(100vw - 32px));max-height:calc(100vh - 48px);overflow:auto;border:1px solid var(--line);border-radius:20px;padding:40px 28px;text-align:center;color:var(--ink);background:var(--card)}
+.practice-pause-dialog::backdrop{background:var(--bg)}
+.practice-pause-dialog h2{margin:0 0 12px}
+.practice-pause-dialog strong{display:block;margin:24px 0;font-size:36px;font-variant-numeric:tabular-nums}
+.recent-training{margin-top:22px}
+.training-history-row{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:15px 0;border-bottom:1px dashed var(--line)}
+.training-history-row:last-child{border-bottom:0}
+.training-history-row>div{min-width:0;flex:1}
+.training-history-row p{margin:5px 0;font-size:13px}
+.training-result-summary{margin:16px 0;font-variant-numeric:tabular-nums}
+/* 复盘按钮所在 .actions 只有 margin-top，紧跟在后面的 .notice 没有上间距，按钮会贴在提示条上。 */
+.training-result-actions{margin-top:0;margin-bottom:16px}
+#training-review-content{min-width:0;overflow-wrap:anywhere}
+#training-review-content>.section-head{margin-top:20px}
+.training-filters{display:flex;flex-wrap:wrap;gap:8px;margin:22px 0 16px}
+.training-filters button[aria-pressed=true]{background:var(--blue2);color:var(--blue);border-color:var(--blue)}
+.training-answer-card{display:grid;grid-template-columns:repeat(auto-fill,minmax(48px,1fr));gap:9px;margin-bottom:16px}
+.training-answer-card button{min-height:40px;padding:7px 3px;font-variant-numeric:tabular-nums}
+.training-status-correct{color:#23724f}
+.training-status-wrong{color:#a23f40}
+.training-answer-card .training-status-correct{background:#e6f3eb;color:#23724f}
+.training-answer-card .training-status-wrong{background:#fae9e9;color:#a23f40}
+.training-answer-card button[aria-pressed=true]{outline:2px solid var(--blue);outline-offset:2px}
+#training-question{border-top:1px solid var(--line);margin-top:20px;padding-top:20px;scroll-margin-top:80px}
+.training-answer-comparison{display:flex;gap:16px;flex-wrap:wrap;padding:16px;background:var(--blue3);border-radius:12px;margin:16px 0}
+.training-answer-comparison>div{min-width:0;flex:1 1 220px}
+.training-reference-answer{color:#23724f}
+.training-analysis{padding:16px 0}
+.training-analysis>b{display:block;margin-bottom:10px}
+@media(max-width:600px){.practice-clock{margin-left:0;width:100%}.training-history-row>div{flex-basis:100%}.training-answer-card{grid-template-columns:repeat(auto-fill,minmax(42px,1fr))}.training-answer-comparison{padding:12px}}
+@media(forced-colors:active){.training-answer-card button,.training-filters button{color:ButtonText;background:ButtonFace}.training-answer-card button[aria-pressed=true],.training-filters button[aria-pressed=true]{outline:2px solid Highlight}}
+
+/* 导入页文本域聚焦态“被遮挡”：.form-grid / .split-grid 的 label 带 overflow:hidden
+   !important（窄屏防横向溢出），而全局聚焦样式是向外扩 2px 的 outline，超出部分被
+   容器裁掉，只剩上缘和左缘半圈弧线。改为内嵌描边（outline-offset:-2px）+ 内阴影，
+   聚焦环完整落在控件内部，裁剪容器里也不会缺边。 */
+:is(.form-grid,.split-grid) :is(input,select,textarea):focus,
+:is(.form-grid,.split-grid) :is(input,select,textarea):focus-visible{
+  outline:2px solid rgba(47,111,237,.55);
+  outline-offset:-2px;
+  border-color:rgba(47,111,237,.55);
+  box-shadow:inset 0 0 0 1px rgba(47,111,237,.22)
+}
+:is(.form-grid,.split-grid) textarea:focus,
+:is(.form-grid,.split-grid) textarea:focus-visible{
+  box-shadow:inset 0 0 0 1px rgba(47,111,237,.26)
+}
+@media(forced-colors:active){
+  :is(.form-grid,.split-grid) :is(input,select,textarea):focus{
+    outline:2px solid Highlight;
+    outline-offset:-2px
+  }
+}
+
+/* 顶栏“题库下拉 + 保存数据”不等高：select 由内边距 + 行内盒撑高，button 由内边距 +
+   行高撑高，两者盒模型不同，并排后底边与高度都会差 2~4px。统一成 44px 等高盒，
+   纵向内边距归零、由盒高居中；窄屏的 54px 规则带 !important，仍按各自断点生效。 */
+.topbar .top-actions select,
+.topbar .top-actions button{
+  height:44px;
+  min-height:44px;
+  padding-top:0;
+  padding-bottom:0;
+  box-sizing:border-box;
+  font-size:14px;
+  line-height:1.4
+}
+.topbar .top-actions button{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  padding-left:16px;
+  padding-right:16px
+}
+.topbar .top-actions select{
+  padding-left:12px;
+  padding-right:34px
+}
+
+/* 聚焦/选中态最终方案（第三次修正）。前两版分别用 outline、再改 outline-offset、再用
+   inset box-shadow，都没绕开真正的裁剪源：.form-grid / .split-grid 的 label 带
+   overflow:hidden !important（见 responsive-artwork.css 的表单布局规则），焦点环只要有一点落在该盒子之外
+   就会被切掉，所以截图里始终只剩上缘一条线。这次同时做两件事：
+   1) 放开导入页这些 label 的裁剪。该规则原本是为数字输入框步进器溢出加的，而导入页
+      .form-grid 里没有数字输入框（OCR 页数输入框在 .ocr-options 内），放开不会产生横向溢出。
+   2) 选中态改为 border 变色 + 内嵌 2px 环 + 背景微调，全部画在盒子内部，
+      即使外层容器将来又被加上裁剪，四边也完整可见。 */
+#import .form-grid > label,
+#import .split-grid > label{
+  overflow:visible !important
+}
+#import .form-grid > label > :is(input,select,textarea):focus,
+#import .form-grid > label > :is(input,select,textarea):focus-visible,
+#import .split-grid > label > :is(input,select,textarea):focus,
+#import .split-grid > label > :is(input,select,textarea):focus-visible,
+#import-text:focus,
+#import-text:focus-visible{
+  outline:none !important;
+  border-color:#2f6fed !important;
+  background:#fbfdff !important;
+  box-shadow:inset 0 0 0 2px rgba(47,111,237,.45) !important;
+  /* 相邻列/紧邻元素若有不透明背景，聚焦控件不提升层级时其 1px 描边会被压在下层,
+     看起来就是“选中态被遮挡”。position:relative + z-index 只影响绘制顺序，不改布局。 */
+  position:relative;
+  z-index:1
+}
+/* 文件控件内部是主题按钮 + 文件名，聚焦时给整块同样的内描边，与其他输入框保持同一种选中语言。 */
+.file-control-v615:focus-within{
+  border-color:#2f6fed !important;
+  background:#fbfdff !important;
+  box-shadow:inset 0 0 0 2px rgba(47,111,237,.45) !important;
+  z-index:1
+}
+@media(forced-colors:active){
+  #import :is(input,select,textarea):focus,
+  .file-control-v615:focus-within{
+    outline:2px solid Highlight !important;
+    outline-offset:-2px !important
+  }
+}
+
+/* 考试/练习设置表单的“选中态被遮挡”：.form-grid > label 带 overflow:hidden !important
+   （见 responsive-artwork.css，窄屏防止数字步进器把控件撑出轨道），而全局聚焦样式是向外扩
+   2px 的 outline。控件盒的边正好压在 label 的裁剪边界上，超出部分被切掉，实际只剩
+   上缘一段弧线加左右半条边。沿用本文件前面的导入页最终方案：描边整个
+   画在控件盒内部，外层容器将来再被加上裁剪也不会缺边。
+   数字输入框的固有最小宽度来自步进器，会把控件挤得比轨道略宽，右侧竖边因此仍在
+   label 盒外；先把 min-width 归零，内嵌环的右边缘才落回可绘制范围内。 */
+:is(#exam,#practice) .form-grid > label > :is(input,select,textarea){
+  min-width:0
+}
+:is(#exam,#practice) .form-grid > label > :is(input,select,textarea):focus,
+:is(#exam,#practice) .form-grid > label > :is(input,select,textarea):focus-visible{
+  outline:none !important;
+  border-color:#2f6fed !important;
+  background:#fbfdff !important;
+  box-shadow:inset 0 0 0 2px rgba(47,111,237,.45) !important
+}
+@media(forced-colors:active){
+  /* 高对比度模式不渲染 box-shadow，改用系统聚焦色，仍内嵌以免被 label 裁掉。 */
+  :is(#exam,#practice) .form-grid > label > :is(input,select,textarea):focus,
+  :is(#exam,#practice) .form-grid > label > :is(input,select,textarea):focus-visible{
+    outline:2px solid Highlight !important;
+    outline-offset:-2px !important
+  }
+}

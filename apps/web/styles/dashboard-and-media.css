@@ -1,0 +1,871 @@
+
+
+/* SHIROHA_WEB_V28_3_HOME_DASHBOARD_REFLOW_START
+   Web 首页专属：解决首页主卡片大面积空白，换用压缩后的原始挥手素材，并按桌面端仪表盘重新排布。 */
+#dashboard .dashboard-home-hero{
+  display:grid !important;
+  grid-template-columns:minmax(0,1.25fr) minmax(300px,.75fr) !important;
+  gap:18px !important;
+  align-items:stretch !important;
+  padding:22px !important;
+  min-height:0 !important;
+}
+#dashboard .dashboard-home-main{
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  gap:14px;
+}
+#dashboard .dashboard-home-main .kicker{
+  width:max-content;
+  margin:0;
+  padding:7px 12px;
+  border-radius:999px;
+  background:#eef6ff;
+  color:#2f6fed;
+  letter-spacing:.03em;
+}
+#dashboard .dashboard-home-main h2{
+  margin:0 !important;
+  font-size:clamp(26px,2.4vw,34px) !important;
+  line-height:1.18 !important;
+  color:#10233f !important;
+}
+#dashboard .dashboard-home-desc{
+  max-width:720px;
+  margin:0 !important;
+  color:#52657f !important;
+  line-height:1.75 !important;
+}
+#dashboard .dashboard-action-grid{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:12px;
+  margin-top:2px;
+}
+#dashboard .dashboard-action-card{
+  min-height:126px;
+  padding:18px 14px;
+  border-radius:20px;
+  border:1px solid rgba(47,111,237,.10);
+  background:#fff;
+  box-shadow:0 12px 26px rgba(37,99,235,.055);
+  text-align:center;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  color:#12233f;
+  transition:transform .16s ease, box-shadow .16s ease, border-color .16s ease;
+}
+#dashboard .dashboard-action-card::before{
+  content:"";
+  width:44px;
+  height:44px;
+  border-radius:16px;
+  display:block;
+  background:linear-gradient(135deg,#3b82f6,#6aa6ff);
+  box-shadow:0 10px 20px rgba(59,130,246,.20);
+}
+#dashboard .dashboard-action-card.green::before{background:linear-gradient(135deg,#34d399,#60d6bc)}
+#dashboard .dashboard-action-card.violet::before{background:linear-gradient(135deg,#8b5cf6,#b69cff)}
+#dashboard .dashboard-action-card.amber::before{background:linear-gradient(135deg,#f59e0b,#ffc767)}
+#dashboard .dashboard-action-card:hover{
+  transform:translateY(-2px);
+  border-color:rgba(47,111,237,.24);
+  box-shadow:0 18px 34px rgba(37,99,235,.10);
+}
+#dashboard .dashboard-action-card span{
+  font-size:17px;
+  font-weight:900;
+}
+#dashboard .dashboard-action-card small{
+  color:#60738f;
+  font-size:12px;
+  line-height:1.45;
+  font-weight:700;
+}
+#dashboard .dashboard-progress-row{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:10px;
+  margin-top:4px;
+  padding-top:14px;
+  border-top:1px solid rgba(47,111,237,.10);
+}
+#dashboard .dashboard-mini-metric{
+  display:flex;
+  align-items:center;
+  gap:9px;
+  min-width:0;
+}
+#dashboard .dashboard-mini-metric b{
+  font-size:20px;
+  color:#16335d;
+  line-height:1;
+}
+#dashboard .dashboard-mini-metric span{
+  color:#60738f;
+  font-size:12px;
+  font-weight:800;
+}
+#dashboard .dashboard-home-side{
+  display:grid;
+  grid-template-rows:minmax(220px,1fr) auto;
+  gap:12px;
+  min-width:0;
+}
+#dashboard .dashboard-character-card{
+  min-height:230px !important;
+  height:100%;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:14px !important;
+  border-radius:24px !important;
+  background:#fff !important;
+  border:1px solid rgba(47,111,237,.10) !important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.9),0 12px 26px rgba(37,99,235,.055) !important;
+}
+#dashboard .dashboard-character-card .hero-mascot-main{
+  position:static !important;
+  display:block !important;
+  width:auto !important;
+  height:auto !important;
+  max-width:min(100%,300px) !important;
+  max-height:260px !important;
+  object-fit:contain !important;
+  filter:none !important;
+  margin:0 auto !important;
+}
+#dashboard .dashboard-stat-grid{
+  display:grid !important;
+  grid-template-columns:repeat(3,minmax(0,1fr)) !important;
+  gap:12px !important;
+}
+#dashboard .dashboard-stat-grid > div{
+  min-height:94px;
+  padding:18px 14px !important;
+  border-radius:18px !important;
+  background:#fff !important;
+  border:1px solid rgba(47,111,237,.10) !important;
+  box-shadow:0 10px 24px rgba(37,99,235,.05) !important;
+}
+#dashboard .dashboard-stat-grid b{
+  font-size:30px !important;
+  line-height:1.05 !important;
+  color:#10233f !important;
+}
+#dashboard .dashboard-stat-grid span{
+  margin-top:6px;
+  display:block;
+  color:#60738f !important;
+  font-weight:750;
+}
+#dashboard .dashboard-lower-grid{
+  display:grid;
+  grid-template-columns:1.1fr 1fr 1fr;
+  gap:16px;
+  margin-top:16px;
+}
+#dashboard .dashboard-panel{
+  margin-bottom:0 !important;
+  min-height:182px;
+}
+#dashboard .section-head.compact{
+  margin-bottom:12px !important;
+}
+#dashboard .dashboard-quick-actions{
+  display:grid !important;
+  grid-template-columns:1fr 1fr !important;
+  gap:10px !important;
+  margin:0 0 12px !important;
+}
+#dashboard .dashboard-quick-actions button,
+#dashboard .dashboard-card-actions button{
+  width:100%;
+  min-height:46px;
+}
+#dashboard .dashboard-tips{
+  margin:0;
+  padding-left:18px;
+  color:#52657f;
+  line-height:1.7;
+  font-weight:700;
+}
+@media(max-width:1180px){
+  #dashboard .dashboard-home-hero{grid-template-columns:1fr !important;}
+  #dashboard .dashboard-home-side{grid-template-columns:minmax(0,1fr) minmax(260px,.9fr);grid-template-rows:auto;}
+  #dashboard .dashboard-lower-grid{grid-template-columns:1fr;}
+}
+@media(max-width:760px){
+  #dashboard .dashboard-action-grid,
+  #dashboard .dashboard-progress-row,
+  #dashboard .dashboard-home-side,
+  #dashboard .dashboard-stat-grid,
+  #dashboard .dashboard-quick-actions{grid-template-columns:1fr !important;}
+  #dashboard .dashboard-action-card{min-height:92px;}
+  #dashboard .dashboard-character-card{min-height:190px !important;}
+  #dashboard .dashboard-character-card .hero-mascot-main{max-height:190px !important;}
+}
+/* SHIROHA_WEB_V28_3_HOME_DASHBOARD_REFLOW_END */
+
+
+/* SHIROHA_WEB_V28_4_QUICK_CARD_IMAGE_FIT_START
+   Web 首页小修：快捷卡配色收敛到蓝白体系，并缩小角色素材，优先完整显示。 */
+#dashboard .dashboard-action-card{
+  min-height:118px !important;
+  padding:16px 12px !important;
+  border-color:rgba(47,111,237,.12) !important;
+  background:linear-gradient(180deg,rgba(255,255,255,.98),rgba(247,251,255,.96)) !important;
+  box-shadow:0 10px 24px rgba(37,99,235,.055), inset 0 1px 0 rgba(255,255,255,.92) !important;
+}
+#dashboard .dashboard-action-card::before{
+  width:40px !important;
+  height:40px !important;
+  border-radius:15px !important;
+  background:linear-gradient(135deg,#4f8df7,#8bbcff) !important;
+  box-shadow:0 10px 20px rgba(47,111,237,.16) !important;
+}
+#dashboard .dashboard-action-card.blue::before{
+  background:linear-gradient(135deg,#3f7df2,#8bbcff) !important;
+}
+#dashboard .dashboard-action-card.green::before{
+  background:linear-gradient(135deg,#5b9cff,#a8d8ff) !important;
+}
+#dashboard .dashboard-action-card.violet::before{
+  background:linear-gradient(135deg,#6f95f4,#bdccff) !important;
+}
+#dashboard .dashboard-action-card.amber::before{
+  background:linear-gradient(135deg,#7fa9dd,#c8ddff) !important;
+}
+#dashboard .dashboard-action-card span{
+  font-size:16px !important;
+  letter-spacing:.01em !important;
+}
+#dashboard .dashboard-action-card small{
+  min-height:0 !important;
+  color:#667891 !important;
+  font-size:12px !important;
+  line-height:1.25 !important;
+  white-space:nowrap !important;
+}
+#dashboard .dashboard-character-card{
+  padding:22px 26px !important;
+  overflow:hidden !important;
+}
+#dashboard .dashboard-character-card .hero-mascot-main{
+  max-width:min(92%,250px) !important;
+  max-height:230px !important;
+  object-fit:contain !important;
+  object-position:center center !important;
+}
+.hero-visual-card .hero-mascot-main{
+  max-width:min(92%,220px) !important;
+  max-height:220px !important;
+  object-fit:contain !important;
+  object-position:center center !important;
+}
+.import-stage-art{
+  overflow:visible !important;
+}
+.import-art-main{
+  max-width:140px !important;
+  max-height:132px !important;
+  object-fit:contain !important;
+  object-position:center center !important;
+  margin:0 6px 0 0 !important;
+}
+.page-art-strip,
+.practice-art-strip,
+.exam-art-strip,
+.wrongbook-art-strip,
+.records-art-strip,
+.settings-art-strip,
+.bank-art-strip{
+  overflow:hidden !important;
+}
+.page-art-strip img,
+.practice-art-strip img,
+.exam-art-strip img,
+.wrongbook-art-strip img,
+.records-art-strip img,
+.settings-art-strip img,
+.bank-art-strip img{
+  width:auto !important;
+  max-width:108px !important;
+  max-height:86px !important;
+  margin:0 8px 0 0 !important;
+  object-fit:contain !important;
+  object-position:center center !important;
+  opacity:.9 !important;
+  transform:translateY(-50%) scale(.92) !important;
+}
+.practice-art-strip img,
+.exam-art-strip img,
+.wrongbook-art-strip img{
+  max-width:112px !important;
+  max-height:90px !important;
+}
+.bank-art-strip img,
+.records-art-strip img,
+.settings-art-strip img{
+  max-width:102px !important;
+  max-height:82px !important;
+}
+.asset-reference-details img{
+  max-width:min(100%,420px) !important;
+  max-height:240px !important;
+  object-fit:contain !important;
+}
+@media(max-width:760px){
+  #dashboard .dashboard-action-card{min-height:88px !important;}
+  #dashboard .dashboard-action-card small{white-space:normal !important;}
+  #dashboard .dashboard-character-card .hero-mascot-main{max-height:188px !important;}
+  .page-art-strip img,
+  .practice-art-strip img,
+  .exam-art-strip img,
+  .wrongbook-art-strip img,
+  .records-art-strip img,
+  .settings-art-strip img,
+  .bank-art-strip img{
+    max-width:96px !important;
+    max-height:78px !important;
+    margin:0 !important;
+    transform:none !important;
+  }
+}
+/* SHIROHA_WEB_V28_4_QUICK_CARD_IMAGE_FIT_END */
+
+/* SHIROHA_WEB_V28_5_ART_WHITE_CARD_FILL_START
+   Web 版图片卡片白底修复：透明素材不再透出页面蓝底，所有带图卡片底层统一填充白色。 */
+#dashboard .dashboard-character-card,
+.hero-visual-card,
+.import-stage-panel,
+.import-stage-art,
+.page-art-strip,
+.practice-art-strip,
+.exam-art-strip,
+.wrongbook-art-strip,
+.records-art-strip,
+.settings-art-strip,
+.bank-art-strip,
+.asset-reference-details{
+  background:#fff !important;
+  background-color:#fff !important;
+  border-color:rgba(47,111,237,.10) !important;
+  isolation:isolate !important;
+}
+
+#dashboard .dashboard-character-card::before,
+#dashboard .dashboard-character-card::after,
+.hero-visual-card::before,
+.hero-visual-card::after,
+.import-stage-panel::before,
+.import-stage-panel::after,
+.import-stage-art::before,
+.import-stage-art::after,
+.page-art-strip::before,
+.page-art-strip::after,
+.practice-art-strip::before,
+.practice-art-strip::after,
+.exam-art-strip::before,
+.exam-art-strip::after,
+.wrongbook-art-strip::before,
+.wrongbook-art-strip::after,
+.records-art-strip::before,
+.records-art-strip::after,
+.settings-art-strip::before,
+.settings-art-strip::after,
+.bank-art-strip::before,
+.bank-art-strip::after,
+.asset-reference-details::before,
+.asset-reference-details::after{
+  background:#fff !important;
+  opacity:1 !important;
+}
+
+#dashboard .dashboard-character-card img,
+.hero-visual-card img,
+.import-stage-art img,
+.page-art-strip img,
+.practice-art-strip img,
+.exam-art-strip img,
+.wrongbook-art-strip img,
+.records-art-strip img,
+.settings-art-strip img,
+.bank-art-strip img,
+.asset-reference-details img{
+  background:transparent !important;
+  mix-blend-mode:normal !important;
+}
+/* SHIROHA_WEB_V28_5_ART_WHITE_CARD_FILL_END */
+
+
+
+
+
+/* SHIROHA_WEB_V28_7_HOME_BALANCE_AND_PEEKING_REFINEMENT_START
+   Web 首页再平衡：左上版本标签上提、首屏左右区尽量等高；右下角 peeking 素材去卡片化并增加小隐藏按钮。 */
+#dashboard .dashboard-home-hero{
+  grid-template-columns:minmax(0,1.22fr) minmax(332px,.78fr) !important;
+  gap:18px !important;
+  padding:18px 22px 20px !important;
+  min-height:388px !important;
+}
+#dashboard .dashboard-home-main{
+  justify-content:flex-start !important;
+  align-self:stretch !important;
+  height:100% !important;
+  gap:12px !important;
+}
+#dashboard .dashboard-home-main .kicker{
+  align-self:flex-start;
+  margin:0 0 2px 0 !important;
+}
+#dashboard .dashboard-home-main h2{
+  margin:0 !important;
+}
+#dashboard .dashboard-home-desc{
+  margin:0 0 2px 0 !important;
+}
+#dashboard .dashboard-action-grid{
+  margin-top:0 !important;
+}
+#dashboard .dashboard-progress-row{
+  margin-top:auto !important;
+}
+#dashboard .dashboard-home-side{
+  grid-template-rows:minmax(0,1fr) auto !important;
+  align-self:stretch !important;
+  height:100% !important;
+}
+#dashboard .dashboard-character-card{
+  min-height:0 !important;
+}
+#dashboard .dashboard-stat-grid{
+  align-self:end;
+}
+
+.web-peeking-wrap{
+  position:fixed;
+  right:10px;
+  bottom:18px;
+  width:clamp(110px, 8.6vw, 145px);
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:6px;
+  z-index:8;
+  pointer-events:none;
+  user-select:none;
+}
+.web-peeking-wrap::before{
+  content:none !important;
+}
+.web-peeking-art{
+  display:block;
+  width:100%;
+  height:auto;
+  background:transparent !important;
+  position:relative;
+  filter:drop-shadow(0 10px 22px rgba(148,162,214,.16));
+  transition:opacity .18s ease, transform .18s ease;
+  pointer-events:none;
+}
+.web-peeking-toggle{
+  pointer-events:auto;
+  appearance:none;
+  border:1px solid rgba(210,223,246,.96);
+  background:rgba(255,255,255,.88);
+  color:#7386a5;
+  border-radius:999px;
+  padding:4px 10px;
+  min-height:24px;
+  line-height:1;
+  font-size:11px;
+  font-weight:800;
+  letter-spacing:.02em;
+  box-shadow:0 10px 24px rgba(132,156,204,.12);
+  backdrop-filter:blur(10px);
+  cursor:pointer;
+}
+.web-peeking-toggle:hover{
+  color:#5676ac;
+  border-color:rgba(174,198,236,.98);
+  background:rgba(255,255,255,.96);
+}
+.web-peeking-wrap.collapsed{
+  width:auto;
+  align-items:flex-end;
+}
+.web-peeking-wrap.collapsed .web-peeking-art{
+  opacity:0;
+  transform:translateY(8px) scale(.92);
+  width:0;
+  height:0;
+  overflow:hidden;
+}
+@media (max-width: 1320px){
+  .web-peeking-wrap{display:none;}
+}
+/* SHIROHA_WEB_V28_7_HOME_BALANCE_AND_PEEKING_REFINEMENT_END */
+
+/* SHIROHA_WEB_V28_8_HOME_SPACE_AND_TOGGLE_TUNE_START
+   Web 首页二次微调：缩小右侧图片区域，取消左侧下段被 auto 撑开的空白；隐藏按钮右移并降低存在感。 */
+#dashboard .dashboard-home-hero{
+  min-height:338px !important;
+  padding:18px 22px !important;
+  align-items:stretch !important;
+}
+#dashboard .dashboard-home-main{
+  gap:10px !important;
+  justify-content:flex-start !important;
+}
+#dashboard .dashboard-home-main .kicker{
+  margin-bottom:0 !important;
+}
+#dashboard .dashboard-home-desc{
+  line-height:1.55 !important;
+  margin-bottom:0 !important;
+}
+#dashboard .dashboard-action-grid{
+  gap:10px !important;
+}
+#dashboard .dashboard-action-card{
+  min-height:104px !important;
+  padding:14px 12px !important;
+}
+#dashboard .dashboard-action-card::before{
+  width:36px !important;
+  height:36px !important;
+  border-radius:14px !important;
+}
+#dashboard .dashboard-progress-row{
+  margin-top:12px !important;
+  padding-top:12px !important;
+}
+#dashboard .dashboard-mini-metric b{
+  font-size:19px !important;
+}
+#dashboard .dashboard-home-side{
+  grid-template-rows:minmax(176px, .82fr) auto !important;
+  gap:10px !important;
+}
+#dashboard .dashboard-character-card{
+  min-height:176px !important;
+  padding:12px 18px !important;
+}
+#dashboard .dashboard-character-card .hero-mascot-main{
+  max-width:min(84%,205px) !important;
+  max-height:176px !important;
+}
+#dashboard .dashboard-stat-grid{
+  gap:10px !important;
+}
+#dashboard .dashboard-stat-grid > div{
+  min-height:78px !important;
+  padding:14px 12px !important;
+}
+#dashboard .dashboard-stat-grid b{
+  font-size:26px !important;
+}
+#dashboard .dashboard-stat-grid span{
+  margin-top:4px !important;
+  font-size:12px !important;
+}
+.web-peeking-wrap{
+  right:0 !important;
+  align-items:flex-end !important;
+  gap:4px !important;
+}
+.web-peeking-art{
+  width:94% !important;
+}
+.web-peeking-toggle{
+  align-self:flex-end !important;
+  transform:translateX(6px) !important;
+  opacity:.42 !important;
+  background:rgba(255,255,255,.42) !important;
+  border-color:rgba(205,220,246,.45) !important;
+  color:rgba(88,107,136,.72) !important;
+  box-shadow:none !important;
+}
+.web-peeking-toggle:hover{
+  opacity:.88 !important;
+  background:rgba(255,255,255,.82) !important;
+}
+@media(max-width:1180px){
+  #dashboard .dashboard-home-hero{
+    min-height:0 !important;
+  }
+}
+/* SHIROHA_WEB_V28_8_HOME_SPACE_AND_TOGGLE_TUNE_END */
+
+
+/* SHIROHA_WEB_V29_2_FORM_ACTIONS_AND_HOME_TUNE_START */
+/* 快捷操作按钮组必须和同排输入框对齐：label 是「文字 + 7px 间距 + 控件」的两行 grid，
+   这里原先是 flex + gap:10px + 54px 按钮行 + 自定 14px/1.2 标签，文字行高、间距、
+   控件盒高三处都与 label 不同，按钮行因此整体错位、底边压不到 input/select 上。
+   改为复用同一套排版参数，并用 --settings-field-height 让按钮行与同排输入框同高。 */
+#practice .form-grid,
+#exam .form-grid{
+  --settings-field-height:46px;
+  align-items:end;
+}
+#practice .form-grid > label > :is(input,select),
+#exam .form-grid > label > :is(input,select){
+  min-height:var(--settings-field-height);
+}
+@media(max-width:720px){
+  /* 窄屏 input/select 有 54px 触控高度，按钮行跟随同一数值，避免两套断点各写一遍。 */
+  #practice .form-grid,
+  #exam .form-grid{
+    --settings-field-height:54px;
+  }
+}
+#practice .web-settings-action-cell,
+#exam .web-settings-action-cell{
+  display:grid;
+  align-content:end;
+  gap:7px;
+  min-width:0;
+}
+#practice .web-settings-action-cell .control-label,
+#exam .web-settings-action-cell .control-label{
+  display:block;
+  font-weight:800;
+  /* 不设 line-height：必须继承与 label 文字相同的行高，标题行才能和左侧「题型范围」等标签同基线；
+     写 normal(≈19px) 时与 label 的 1.6(≈22.4px) 相差约 3px，会把整块按钮组推低。 */
+  color:#334155;
+}
+#practice .web-settings-action-cell .settings-action-buttons,
+#exam .web-settings-action-cell .settings-action-buttons{
+  display:flex;
+  flex-wrap:nowrap;
+  gap:10px;
+  align-items:stretch;
+  min-width:0;
+  min-height:var(--settings-field-height);
+}
+#practice .web-settings-action-cell .settings-action-buttons button,
+#exam .web-settings-action-cell .settings-action-buttons button{
+  /* 按钮换行会让整个快捷操作单元比左侧「标签 + 控件」两行更高：1020px 下三列每列约 240px，
+     两个 128px 按钮 + 10px 间距放不下就折成两排，单元被撑到 131px（实测），标题行随之比
+     左侧标签高出 56px、第二排按钮掉到下拉框那一行下面。改为单行可收缩，单元高度恒等于 label。 */
+  flex:1 1 128px;
+  min-width:0;
+  min-height:var(--settings-field-height);
+  white-space:nowrap;
+}
+#dashboard .dashboard-progress-row{
+  gap:14px !important;
+}
+#dashboard .dashboard-mini-metric{
+  align-items:flex-start !important;
+  gap:10px !important;
+}
+#dashboard .dashboard-mini-metric b{
+  min-width:2.6em;
+}
+#dashboard .dashboard-mini-metric span{
+  font-size:13px !important;
+  line-height:1.35 !important;
+  font-weight:750 !important;
+  color:#6c7f98 !important;
+}
+#dashboard .dashboard-quick-actions{
+  grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+  align-items:stretch !important;
+}
+#dashboard .dashboard-quick-actions button{
+  white-space:nowrap !important;
+  font-size:15px !important;
+  padding-left:14px !important;
+  padding-right:14px !important;
+}
+@media (max-width:980px){
+  #practice .web-settings-action-cell,
+  #exam .web-settings-action-cell{
+    grid-column:1 / -1;
+  }
+}
+@media (max-width:760px){
+  #dashboard .dashboard-quick-actions{
+    grid-template-columns:1fr !important;
+  }
+  #dashboard .dashboard-quick-actions button{
+    white-space:normal !important;
+  }
+  #practice .web-settings-action-cell .settings-action-buttons,
+  #exam .web-settings-action-cell .settings-action-buttons{
+    flex-direction:column;
+    align-items:stretch;
+  }
+  #practice .web-settings-action-cell .settings-action-buttons button,
+  #exam .web-settings-action-cell .settings-action-buttons button{
+    width:100%;
+    min-width:0;
+    /* 纵向堆叠时 flex-basis 会变成高度，这里重置回内容高度，避免按钮被拉成 128px 高。 */
+    flex:0 0 auto;
+    /* 窄屏 .primary/.ghost/.danger 带 min-height:52px !important，这里必须同级覆盖，
+       否则按钮比 54px 的输入框矮 2px。 */
+    min-height:var(--settings-field-height) !important;
+  }
+}
+/* SHIROHA_WEB_V29_2_FORM_ACTIONS_AND_HOME_TUNE_END */
+
+
+/* SHIROHA_WEB_V29_3_HOME_BALANCE_REFINE_START
+   Web 首页精修：
+   - 删除左侧底部三个说明性 mini metric 后，重新平衡左右区域；
+   - 版本提示与快捷卡片之间拉开一点；
+   - 右侧角色卡片略微缩小；
+   - 左右主区域接近等宽，避免左侧过宽、右侧视觉偏重。 */
+#dashboard .dashboard-home-hero{
+  grid-template-columns:minmax(0,1fr) minmax(320px,.92fr) !important;
+  gap:22px !important;
+  align-items:center !important;
+  padding:22px 24px !important;
+  min-height:0 !important;
+}
+
+#dashboard .dashboard-home-main{
+  justify-content:center !important;
+  gap:16px !important;
+}
+
+#dashboard .dashboard-home-main .kicker{
+  margin-bottom:2px !important;
+}
+
+#dashboard .dashboard-home-main h2{
+  margin-bottom:4px !important;
+}
+
+#dashboard .dashboard-home-desc{
+  margin-bottom:4px !important;
+}
+
+#dashboard .dashboard-action-grid{
+  margin-top:14px !important;
+  gap:12px !important;
+}
+
+#dashboard .dashboard-progress-row{
+  display:none !important;
+}
+
+#dashboard .dashboard-home-side{
+  grid-template-rows:auto auto !important;
+  align-content:center !important;
+  gap:12px !important;
+}
+
+#dashboard .dashboard-character-card{
+  min-height:164px !important;
+  max-height:188px !important;
+  padding:12px 18px !important;
+}
+
+#dashboard .dashboard-character-card .hero-mascot-main{
+  max-width:min(78%,190px) !important;
+  max-height:160px !important;
+}
+
+#dashboard .dashboard-stat-grid{
+  gap:10px !important;
+}
+
+#dashboard .dashboard-stat-grid > div{
+  min-height:74px !important;
+  padding:12px 12px !important;
+}
+
+#dashboard .dashboard-stat-grid b{
+  font-size:25px !important;
+}
+
+#dashboard .dashboard-stat-grid span{
+  margin-top:4px !important;
+  font-size:12px !important;
+}
+
+@media(max-width:1180px){
+  #dashboard .dashboard-home-hero{
+    grid-template-columns:1fr !important;
+  }
+  #dashboard .dashboard-home-side{
+    grid-template-columns:minmax(0,1fr) minmax(260px,.9fr) !important;
+    grid-template-rows:auto !important;
+  }
+}
+
+@media(max-width:760px){
+  #dashboard .dashboard-home-side{
+    grid-template-columns:1fr !important;
+  }
+}
+/* SHIROHA_WEB_V29_3_HOME_BALANCE_REFINE_END */
+
+
+/* SHIROHA_WEB_V29_6_DOCX_IMAGE_IMPORT_FIX_START
+   DOCX 图片题导入显示：支持从 Word 中提取 png/jpeg/gif/webp/bmp/svg 图片并在题干中渲染。 */
+.question-media{
+  margin:12px 0 10px;
+  padding:10px;
+  border:1px solid rgba(120,150,220,.16);
+  border-radius:18px;
+  background:linear-gradient(180deg,#fff 0%,#f8fbff 100%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.9);
+  overflow:hidden;
+}
+.question-image{
+  display:block;
+  max-width:100%;
+  max-height:520px;
+  object-fit:contain;
+  margin:0 auto;
+  border-radius:12px;
+}
+@media(max-width:720px){
+  .question-media{margin:10px 0;padding:8px;border-radius:16px;}
+  .question-image{max-height:360px;}
+}
+/* SHIROHA_WEB_V29_6_DOCX_IMAGE_IMPORT_FIX_END */
+
+
+/* SHIROHA_WEB_V29_7_DOCX_IMAGE_EXAM_VERIFIED_START
+   DOCX 图片题显示优化：导入阶段会压缩大图，这里限制展示尺寸，避免图形题/资料图撑开页面。 */
+.question-media{
+  margin:14px 0;
+  padding:10px;
+  border:1px solid rgba(120,154,210,.18);
+  border-radius:16px;
+  background:#fff;
+  overflow:auto;
+}
+.question-image{
+  display:block;
+  max-width:100%;
+  max-height:520px;
+  width:auto;
+  height:auto;
+  object-fit:contain;
+  margin:0 auto;
+}
+.import-table td .question-media,
+.preview-table td .question-media{
+  display:none!important;
+}
+@media(max-width:720px){
+  .question-media{padding:8px;border-radius:14px;margin:12px 0;}
+  .question-image{max-height:360px;}
+}
+/* SHIROHA_WEB_V29_7_DOCX_IMAGE_EXAM_VERIFIED_END */
+
+
+/* SHIROHA_WEB_V29_8_IMPORT_REVIEW_ANALYSIS_AND_LONG_STEM_FIX
+   逻辑改动在 app.js；这里保留版本标记，便于确认样式包版本。 */

@@ -182,16 +182,21 @@ test('a baseline requires the matching successful push job and its full lint ste
     json: async () => ({ workflow_runs: [{ ...run, head_branch: 'other' }] }) }) }), false);
 });
 
-test('CI entry rejects lint errors and a failed full fallback using the actual checkout', async (t) => {
+/** @param {import('node:test').TestContext} t @param {(root: string) => Promise<void>} change */
+async function ciEntryFixture(t, change) {
   const f = await fixture(t);
   const ciScript = path.join(f.temporary, 'apps/desktop/scripts/lint-ci.mjs');
   await copyFile(new URL('../scripts/lint-ci.mjs', import.meta.url), ciScript);
   const driver = path.join(f.temporary, 'npm-driver.mjs');
-  await writeFile(driver, "if (process.argv[3] === 'lint') { process.exitCode = 7; }\n");
+  await writeFile(driver, [
+    'console.log(process.argv[3]);',
+    "if (['lint', 'lint:css'].includes(process.argv[3])) { process.exitCode = 7; }",
+  ].join('\n'));
+  await writeFile(path.join(f.temporary, 'apps/web/styles.css'), 'body { color: black; }\n');
   const base = commit(f, 'initial');
   git(f, ['switch', '-c', 'feature']);
-  await writeFile(path.join(f.temporary, 'apps/web/题库 测试.js'), 'var broken = 1; console.log(broken);\n');
-  const head = commit(f, 'invalid source');
+  await change(f.temporary);
+  const head = commit(f, 'PR change');
   git(f, ['switch', '--detach', base]);
   git(f, ['merge', '--no-ff', '--no-edit', head]);
   const merge = git(f, ['rev-parse', 'HEAD']);
@@ -219,14 +224,43 @@ test('CI entry rejects lint errors and a failed full fallback using the actual c
       cwd: f.temporary, env: { ...environment, MOCK_BASELINE: baseline }, encoding: 'utf8', windowsHide: true,
     },
   );
+  return { runCi, temporary: f.temporary };
+}
+
+test('CI entry rejects lint errors and a failed full fallback using the actual checkout', async (t) => {
+  const { runCi, temporary } = await ciEntryFixture(t, (root) => writeFile(
+    path.join(root, 'apps/web/题库 测试.js'),
+    'var broken = 1; console.log(broken);\n',
+  ));
   const incremental = runCi('yes');
   assert.equal(incremental.status, 1, incremental.stderr + incremental.stdout);
   assert.match(incremental.stdout, /CI lint: changed/, incremental.stderr);
   assert.match(incremental.stdout, /no-var/);
+  assert.match(incremental.stdout, /^lint:docs$/m);
+  assert.doesNotMatch(incremental.stdout, /^lint:css$/m);
   const fallback = runCi('no');
   assert.equal(fallback.status, 1, fallback.stderr + fallback.stdout);
   assert.match(fallback.stdout, /CI lint: full/);
-  await writeFile(path.join(f.temporary, 'apps/web/题库 测试.js'), "console.log('different worktree');\n");
+  await writeFile(path.join(temporary, 'apps/web/题库 测试.js'), "console.log('different worktree');\n");
   const dirty = runCi('yes');
   assert.notEqual(dirty.status, 0);
+});
+
+test('a CSS-only deletion runs the CSS check once and propagates its failure', async (t) => {
+  const { runCi } = await ciEntryFixture(t, (root) => unlink(path.join(root, 'apps/web/styles.css')));
+  const result = runCi('yes');
+  assert.equal(result.status, 1, result.stderr + result.stdout);
+  assert.match(result.stdout, /CI lint: changed/);
+  assert.deepEqual(result.stdout.split(/\r?\n/).filter((line) => line === 'lint:css'), ['lint:css']);
+  assert.match(result.stdout, /^lint:docs$/m);
+});
+
+test('changing only the Stylelint suppression baseline requires the full check', async (t) => {
+  const { runCi } = await ciEntryFixture(t, (root) => writeFile(
+    path.join(root, 'apps/desktop/stylelint-suppressions.json'),
+    '{}\n',
+  ));
+  const result = runCi('yes');
+  assert.match(result.stdout, /CI lint: full .*stylelint-suppressions\.json/);
+  assert.equal(result.status, 1, result.stderr + result.stdout);
 });

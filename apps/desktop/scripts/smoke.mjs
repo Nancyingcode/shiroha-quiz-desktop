@@ -4,6 +4,7 @@ import { createNativeMock, nativeServiceSmoke } from './network-smoke.mjs';
 import { documentSmoke } from './document-smoke.mjs';
 import { harnessSmoke, harnessSwitchingSmoke } from './harness-smoke.mjs';
 import { codebuddyCliSmoke, codebuddyCliAfterRestart, codebuddyCliPersistenceSmoke } from './codebuddy-cli-smoke.mjs';
+import { requiredAssets } from './prepare-web.mjs';
 import { spawn, execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { mkdir, mkdtemp, realpath, rm, stat, readFile, writeFile } from 'node:fs/promises';
@@ -479,7 +480,16 @@ async function scrollbarSmoke(page) {
 async function desktopVisualSmoke(runtime) {
   const { page } = runtime;
   await page.locator('body.desktop-mist-blue').waitFor({ state: 'attached' });
-  assert(await page.evaluate(() => Array.from(document.styleSheets).some((sheet) => sheet.href && new URL(sheet.href).pathname.endsWith('/desktop.css') && sheet.cssRules.length > 0)), '桌面本地样式未加载');
+  const stylesheets = await page.evaluate(() => Array.from(document.querySelectorAll('link[rel~="stylesheet"]')).map((node) => {
+    const link = /** @type {HTMLLinkElement} */ (node);
+    return { pathname: new URL(link.href).pathname, rules: link.sheet?.cssRules.length ?? 0 };
+  }));
+  const shared = requiredAssets.filter((name) => name === 'styles.css' || name.startsWith('styles/'));
+  const expected = [...shared, 'desktop.css'];
+  assert.equal(stylesheets.length, expected.length, '桌面样式链接数量不正确');
+  expected.forEach((name, index) => {
+    assert(stylesheets[index].pathname.endsWith(`/${name}`) && stylesheets[index].rules > 0, `桌面样式未按顺序加载：${name}`);
+  });
   const original = await page.evaluate(() => ({ width: window.innerWidth, height: window.innerHeight }));
   const snapshots = [];
   let scrollbars;
@@ -1095,7 +1105,7 @@ async function main() {
           popupRadius: window.getComputedStyle(element, '::picker(select)').borderRadius,
         }));
         assert.equal(style.appearance, 'base-select');
-        assert.equal(style.radius, '6px');
+        assert.equal(style.radius, '14px');
         assert.equal(style.popupRadius, '8px');
         await select.click();
         assert(await select.evaluate((element) => element.matches(':open')));
@@ -1292,6 +1302,12 @@ async function main() {
       await migratedRestart.page.locator('#bank-preview tbody tr').first().getByText('lazy-a 正文 0', { exact: true }).waitFor();
       assert.equal(await migratedRestart.page.locator('#bank-preview tbody tr').count(), 10);
       const previewPager = migratedRestart.page.locator('#bank-preview-pager');
+      const pagerStyle = await previewPager.locator('select').evaluate((element) => ({
+        height: element.getBoundingClientRect().height,
+        radius: window.getComputedStyle(element).borderRadius,
+      }));
+      assert.equal(pagerStyle.height, 32);
+      assert.equal(pagerStyle.radius, '6px');
       assert.equal(await previewPager.locator('select').inputValue(), '10');
       await previewPager.locator('select').selectOption('20');
       await migratedRestart.page.locator('[data-select-bank-question="q19"]').waitFor();

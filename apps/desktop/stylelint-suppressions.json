@@ -1,0 +1,74 @@
+{
+  "../web/styles.css": {
+    "no-descending-specificity": {
+      "count": 16
+    },
+    "no-duplicate-selectors": {
+      "count": 6
+    }
+  },
+  "../web/styles/responsive-artwork.css": {
+    "declaration-property-value-keyword-no-deprecated": {
+      "count": 2
+    },
+    "no-descending-specificity": {
+      "count": 18
+    },
+    "no-duplicate-selectors": {
+      "count": 87
+    }
+  },
+  "../web/styles/app-shell.css": {
+    "no-descending-specificity": {
+      "count": 12
+    }
+  },
+  "../web/styles/dashboard-and-media.css": {
+    "no-descending-specificity": {
+      "count": 16
+    },
+    "no-duplicate-selectors": {
+      "count": 60
+    }
+  },
+  "../web/styles/focus-panels-and-stats.css": {
+    "no-descending-specificity": {
+      "count": 21
+    },
+    "no-duplicate-selectors": {
+      "count": 28
+    }
+  },
+  "../web/styles/bank-and-study-tools.css": {
+    "no-descending-specificity": {
+      "count": 4
+    },
+    "no-duplicate-selectors": {
+      "count": 5
+    }
+  },
+  "../web/styles/ai-panels.css": {
+    "no-descending-specificity": {
+      "count": 1
+    },
+    "no-duplicate-selectors": {
+      "count": 2
+    }
+  },
+  "../web/styles/controls-and-feedback.css": {
+    "no-descending-specificity": {
+      "count": 11
+    },
+    "no-duplicate-selectors": {
+      "count": 4
+    }
+  },
+  "frontend/desktop.css": {
+    "no-descending-specificity": {
+      "count": 12
+    },
+    "no-duplicate-selectors": {
+      "count": 2
+    }
+  }
+}

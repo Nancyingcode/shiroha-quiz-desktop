@@ -40,6 +40,8 @@
 
 ## 工程与发布
 
+- [Web 共享样式拆分设计与 Stylelint 基线](./superpowers/specs/2026-11-10-web-styles-split.md)
+- [Web 共享样式拆分实施计划与验证](./superpowers/plans/2026-11-10-web-styles-split.md)
 - [Airbnb JavaScript 项目适配指南](../rules/javascript-style-guide.md)
 - [Airbnb JavaScript 规范引入与重构设计（已批准，分阶段实施）](./superpowers/specs/2026-11-05-airbnb-javascript-refactor.md)
 - [Airbnb JavaScript 分阶段实施计划与验证记录](./superpowers/plans/2026-11-05-airbnb-javascript-refactor.md)

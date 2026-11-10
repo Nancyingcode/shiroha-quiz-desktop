@@ -40,6 +40,40 @@ async function pageFor(t, raw, injection = '', appTransform = null) {
 }
 const saved = (page) => page.evaluate((key) => globalThis.localStorage.getItem(key), KEY);
 
+test('子路径入口加载全部共享样式且关键控件样式生效', async (t) => {
+  const context = await browser.newContext({ reducedMotion: 'reduce' }); t.after(() => context.close());
+  const responses = new Map();
+  await context.route('**/*', async (route) => {
+    const url = new URL(route.request().url());
+    if (url.origin !== new URL(server.url).origin || !url.pathname.startsWith('/quiz/')) { return route.abort(); }
+    const response = await route.fetch({ url: new URL(url.pathname.slice('/quiz/'.length) + url.search, server.url).href });
+    if (route.request().resourceType() === 'stylesheet') { responses.set(url.pathname, response.status()); }
+    return route.fulfill({ response });
+  });
+  const page = await context.newPage();
+  await page.goto(new URL('quiz/index.html', server.url).href);
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  const styles = await page.locator('link[rel="stylesheet"]').evaluateAll((links) => links.map((link) => ({
+    path: new URL(link.href).pathname, loaded: Boolean(link.sheet && link.sheet.cssRules.length),
+  })));
+  assert.deepEqual(styles.map((item) => item.path), [
+    '/quiz/styles.css',
+    '/quiz/styles/responsive-artwork.css',
+    '/quiz/styles/app-shell.css',
+    '/quiz/styles/dashboard-and-media.css',
+    '/quiz/styles/focus-panels-and-stats.css',
+    '/quiz/styles/bank-and-study-tools.css',
+    '/quiz/styles/ai-panels.css',
+    '/quiz/styles/controls-and-feedback.css',
+  ]);
+  for (const item of styles) {
+    assert.equal(responses.get(item.path), 200, item.path);
+    assert.equal(item.loaded, true, item.path);
+  }
+  const field = await page.locator('#import-bank-name').evaluate((element) => globalThis.getComputedStyle(element).borderRadius);
+  assert.equal(field, '14px');
+});
+
 for (const format of ['json', 'zip']) {
   test(`旧 Android v3 ${format} 实际导入保留图片、多空、收藏和记录`, async (t) => {
     const page = await pageFor(t, JSON.stringify(webState()));
@@ -1861,6 +1895,12 @@ test('file URL 支持 ZIP 与文本导入且不依赖可选 PDF/OCR', async (t) 
   await context.route('**/libs/**', (route) => route.abort());
   await page.goto(pathToFileURL(path.join(WEB_ROOT, 'index.html')).href);
   await page.locator('body[data-storage-state="ready"]').waitFor();
+  const styles = await page.locator('link[rel="stylesheet"]').evaluateAll(
+    (nodes) => nodes.map((node) => ({ href: node.getAttribute('href'), loaded: Boolean(node.sheet) })),
+  );
+  assert.equal(styles.length, 8);
+  assert(styles.every((item) => item.loaded), JSON.stringify(styles));
+  assert.equal(await page.locator('#import-bank-name').evaluate((element) => globalThis.getComputedStyle(element).borderRadius), '14px');
   const scripts = await page.locator('script[src]').evaluateAll(
     (nodes) => nodes.map((node) => node.getAttribute('src')),
   );
@@ -1899,6 +1939,9 @@ test('file URL 支持 ZIP 与文本导入且不依赖可选 PDF/OCR', async (t) 
   await page.locator('#save-all-btn').click();
   await page.locator('body[data-storage-state="ready"]').waitFor();
   assert(JSON.parse(await saved(page)).banks.length > 0);
+  await page.locator('.nav[data-view="practice"]').click();
+  await page.locator('#start-practice-btn').click();
+  await page.locator('#practice-card .option[data-key="B"]').first().waitFor();
 });
 test('恢复写入失败保留原库与文件选择，重试才提交恢复', async (t) => {
   const original = JSON.stringify(webState());const page = await pageFor(t, original);

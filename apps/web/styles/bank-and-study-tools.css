@@ -1,0 +1,823 @@
+
+/* SHIROHA_WEB_V45_FOCUS_NAV_AND_BANK_EDITOR_START
+   修复沉浸页展开导航无效；题库操作改为右侧上下对齐；增加题库二次编辑提示条。 */
+@media (min-width:721px){
+  body.practice-focus:not(.side-collapsed) .side,
+  body.exam-focus:not(.side-collapsed) .side{
+    display:block !important;
+    position:fixed !important;
+    left:var(--shiroha-side-left,20px) !important;
+    top:18px !important;
+    bottom:18px !important;
+    width:var(--shiroha-side-width,188px) !important;
+    height:auto !important;
+    transform:none !important;
+    opacity:1 !important;
+    pointer-events:auto !important;
+    z-index:1160 !important;
+    border-radius:24px !important;
+    border:1px solid rgba(191,219,254,.62) !important;
+    box-shadow:0 18px 42px rgba(37,99,235,.12) !important;
+    background:rgba(255,255,255,.94) !important;
+    backdrop-filter:blur(12px) !important;
+    -webkit-backdrop-filter:blur(12px) !important;
+  }
+  body.practice-focus .sidebar-toggle,
+  body.exam-focus .sidebar-toggle{
+    display:inline-flex !important;
+    align-items:center !important;
+    justify-content:center !important;
+    z-index:1200 !important;
+  }
+}
+
+.bank-item-compact-v28{
+  grid-template-columns:auto minmax(0,1fr) max-content !important;
+  align-items:center !important;
+}
+.bank-card-actions-v33{
+  grid-column:3 !important;
+  grid-row:1 !important;
+  display:flex !important;
+  flex-direction:column !important;
+  flex-wrap:nowrap !important;
+  align-items:stretch !important;
+  justify-content:center !important;
+  justify-self:end !important;
+  align-self:center !important;
+  gap:6px !important;
+  width:64px !important;
+  min-width:64px !important;
+}
+.bank-card-actions-v33 .bank-more-menu-v28,
+.bank-card-actions-v33 .bank-delete-quick-v32{
+  width:64px !important;
+  min-width:64px !important;
+  max-width:64px !important;
+  margin:0 !important;
+}
+.bank-card-actions-v33 .bank-more-menu-v28 summary,
+.bank-card-actions-v33 .bank-delete-quick-v32{
+  width:64px !important;
+  min-width:64px !important;
+  max-width:64px !important;
+  height:34px !important;
+  min-height:34px !important;
+  max-height:34px !important;
+  padding:0 !important;
+  border-radius:14px !important;
+  display:inline-flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  box-sizing:border-box !important;
+  line-height:1 !important;
+  white-space:nowrap !important;
+  font-size:12px !important;
+}
+.bank-card-actions-v33 .bank-more-panel-v28{
+  right:0 !important;
+  left:auto !important;
+  top:calc(100% + 8px) !important;
+  min-width:168px !important;
+}
+.bank-card-actions-v33 .bank-more-panel-v28 button{
+  width:100% !important;
+  justify-content:flex-start !important;
+  min-height:34px !important;
+}
+
+.bank-edit-panel-v45{
+  margin:0 0 12px !important;
+  padding:12px 14px !important;
+  border:1px solid rgba(47,111,237,.16) !important;
+  border-radius:18px !important;
+  background:linear-gradient(145deg,rgba(255,255,255,.98),rgba(241,247,255,.92)) !important;
+  box-shadow:0 10px 24px rgba(37,99,235,.055), inset 0 1px 0 rgba(255,255,255,.96) !important;
+  display:flex !important;
+  align-items:center !important;
+  justify-content:space-between !important;
+  gap:12px !important;
+}
+.bank-edit-panel-v45.hidden{
+  display:none !important;
+}
+.bank-edit-panel-v45 b{
+  display:block !important;
+  color:#10233f !important;
+  font-size:15px !important;
+  line-height:1.35 !important;
+}
+.bank-edit-panel-v45 span{
+  display:block !important;
+  margin-top:2px !important;
+  color:#5f7496 !important;
+  font-size:13px !important;
+  line-height:1.4 !important;
+}
+.bank-edit-panel-actions-v45{
+  display:flex !important;
+  align-items:center !important;
+  justify-content:flex-end !important;
+  gap:8px !important;
+  flex:0 0 auto !important;
+}
+@media(max-width:720px){
+  .bank-edit-panel-v45{
+    flex-direction:column !important;
+    align-items:stretch !important;
+  }
+  .bank-edit-panel-actions-v45{
+    justify-content:flex-start !important;
+    flex-wrap:wrap !important;
+  }
+}
+/* SHIROHA_WEB_V45_FOCUS_NAV_AND_BANK_EDITOR_END */
+
+/* v51: import text find / replace */
+.import-actions-v51{
+  align-items:center;
+}
+.import-actions-v51 .import-actions-spacer-v51{
+  flex:1 1 auto;
+  min-width:24px;
+}
+.import-find-replace-trigger-v51{
+  margin-left:auto;
+}
+.import-find-replace-panel-v51.hidden{
+  display:none;
+}
+.import-find-replace-panel-v51{
+  position:fixed;
+  inset:0;
+  z-index:2200;
+  display:flex;
+  align-items:flex-start;
+  justify-content:center;
+  padding:96px 20px 20px;
+  background:rgba(15,23,42,.18);
+  backdrop-filter:blur(6px);
+}
+.import-find-replace-card-v51{
+  width:min(760px, calc(100vw - 40px));
+  border:1px solid rgba(47,111,237,.14);
+  border-radius:24px;
+  background:rgba(255,255,255,.97);
+  box-shadow:0 24px 70px rgba(37,99,235,.18), inset 0 1px 0 rgba(255,255,255,.94);
+  padding:20px;
+}
+.import-find-replace-head-v51{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:14px;
+}
+.import-find-replace-head-v51 strong{
+  font-size:20px;
+  color:#0f2544;
+}
+.import-find-close-v51{
+  width:36px;
+  height:36px;
+  padding:0 !important;
+  border-radius:999px !important;
+  min-height:36px !important;
+}
+.import-find-replace-grid-v51{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:14px;
+}
+.import-find-replace-options-v51{
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px 18px;
+  margin:14px 0 8px;
+  color:#52657f;
+  font-weight:800;
+}
+.import-find-replace-options-v51 label{
+  display:inline-flex;
+  align-items:center;
+  gap:7px;
+}
+.import-find-replace-options-v51 input{
+  width:auto;
+  min-height:0 !important;
+}
+.import-find-replace-actions-v51{
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+  margin-top:12px;
+}
+.import-find-replace-tip-v51{
+  margin:12px 0 10px;
+}
+.import-find-status-v51{
+  margin-top:8px;
+}
+.import-find-status-v51.ok{
+  border-color:#bfdbfe;
+  background:#eff6ff;
+  color:#1d4ed8;
+}
+.import-find-status-v51.danger{
+  border-color:#fecaca;
+  background:#fff7f7;
+  color:#dc2626;
+}
+@media (max-width: 760px){
+  .import-actions-v51 .import-actions-spacer-v51{
+    display:none;
+  }
+  .import-find-replace-trigger-v51{
+    margin-left:0;
+  }
+  .import-find-replace-panel-v51{
+    align-items:flex-end;
+    padding:16px;
+  }
+  .import-find-replace-card-v51{
+    width:100%;
+    max-height:calc(100vh - 32px);
+    overflow:auto;
+    border-radius:22px;
+  }
+  .import-find-replace-grid-v51{
+    grid-template-columns:1fr;
+  }
+  .import-find-replace-actions-v51 button{
+    flex:1 1 100%;
+  }
+}
+
+/* SHIROHA_WEB_V58_8_BANK_ACTION_NOWRAP_FIX_START */
+.bank-card-actions-v33{
+  width:86px !important;
+  min-width:86px !important;
+}
+.bank-card-actions-v33 [data-openbank]{
+  width:86px !important;
+  min-width:86px !important;
+  max-width:86px !important;
+  white-space:nowrap !important;
+  word-break:keep-all !important;
+  line-height:1 !important;
+  font-size:12px !important;
+}
+/* SHIROHA_WEB_V58_8_BANK_ACTION_NOWRAP_FIX_END */
+
+/* SHIROHA_WEB_V58_9_BANK_ACTION_AND_IMAGE_OPTION_FIX_START */
+.bank-card-actions-v33{
+  width:92px !important;
+  min-width:92px !important;
+  max-width:92px !important;
+  align-items:stretch !important;
+}
+.bank-card-actions-v33 [data-openbank],
+.bank-card-actions-v33 .bank-more-menu-v28,
+.bank-card-actions-v33 .bank-more-menu-v28 summary,
+.bank-card-actions-v33 .bank-delete-quick-v32{
+  width:92px !important;
+  min-width:92px !important;
+  max-width:92px !important;
+  height:34px !important;
+  min-height:34px !important;
+  max-height:34px !important;
+  margin:0 !important;
+  padding:0 !important;
+  box-sizing:border-box !important;
+  display:flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  white-space:nowrap !important;
+  word-break:keep-all !important;
+  line-height:1 !important;
+  font-size:12px !important;
+}
+.option.option-key-only-v59{
+  justify-content:flex-start;
+}
+.option.option-key-only-v59 .option-key{
+  min-width:auto;
+  font-size:18px;
+}
+/* SHIROHA_WEB_V58_9_BANK_ACTION_AND_IMAGE_OPTION_FIX_END */
+
+/* SHIROHA_WEB_V58_9_5_LIMIT_CONTROL_START
+   练习页与错题页题量控制：自定义输入与固定题量保持在同一行，延续卡片内轻量表单布局。 */
+.limit-field-v60{
+  min-width:0 !important;
+}
+.limit-control-v60{
+  display:grid !important;
+  grid-template-columns:minmax(0,1fr) !important;
+  gap:8px !important;
+  align-items:center !important;
+  min-width:0 !important;
+}
+.limit-control-v60.is-custom{
+  grid-template-columns:minmax(0,1fr) auto !important;
+}
+.limit-control-v60 select,
+.limit-control-v60 input{
+  width:100% !important;
+  min-width:0 !important;
+  height:44px !important;
+}
+.limit-control-v60 input{
+  width:88px !important;
+  padding-left:4px !important;
+  padding-right:4px !important;
+  text-align:center !important;
+  font-weight:900 !important;
+}
+/* 数字输入框的步进器会把控件撑得比网格轨道更宽，溢出部分被 .form-grid label 的
+   overflow:hidden 裁掉，选中「自定义」时右侧边框与聚焦描边都看不全。
+   轨道改为随输入框固定宽度收窄，并把聚焦描边改为内嵌，选中态完整显示。 */
+.limit-control-v60 :is(select,input):focus,
+.limit-control-v60 :is(select,input):focus-visible{
+  outline:2px solid rgba(47,111,237,.55) !important;
+  outline-offset:-2px !important;
+}
+@media(forced-colors:active){
+  /* 高对比度模式保留系统聚焦色，避免内嵌描边与系统色冲突。 */
+  .limit-control-v60 :is(select,input):focus,
+  .limit-control-v60 :is(select,input):focus-visible{
+    outline:2px solid Highlight !important;
+    outline-offset:0 !important;
+  }
+}
+.quick-action-field-v60 button{
+  width:100% !important;
+  min-height:44px !important;
+}
+.wrongbook-controls-v60{
+  grid-template-columns:repeat(4,minmax(0,1fr)) !important;
+  align-items:end !important;
+}
+@media(max-width:1080px){
+  .wrongbook-controls-v60{
+    grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+  }
+}
+@media(max-width:720px){
+  .wrongbook-controls-v60{
+    grid-template-columns:1fr !important;
+  }
+  .limit-control-v60.is-custom{
+    grid-template-columns:minmax(0,1fr) 88px !important;
+  }
+}
+/* SHIROHA_WEB_V58_9_5_LIMIT_CONTROL_END */
+
+/* SHIROHA_WEB_V61_WRONGBOOK_CONTROL_ALIGN_START
+   错题本筛选行是四列 .form-grid 且 align-items:end。掌握状态/排序下拉沿用基础选择器尺寸
+   （22px 行高 + 14px 上下内边距 + 2px 边框 ≈ 38px），题量控件固定 44px、快捷按钮 min-height 44px，
+   底对齐后顶部必然参差，因此按断点统一该行控件高度，不改动基础表单尺寸与练习页题量控件。
+   题量数量输入框是该 label 的最后一行，而移动端防溢出规则给 .form-grid label 设了
+   overflow:hidden !important，外扩的 outline/box-shadow 聚焦环会在输入框右边缘与底边被裁切，
+   只剩左上一段弧线。改为内嵌描边后聚焦态完整可见，也无需放开 overflow 裁切而引入横向溢出风险。 */
+@media(min-width:721px){
+  .wrongbook-controls-v60 :is(select,input,button){
+    height:44px !important;
+    min-height:44px !important;
+  }
+}
+@media(max-width:720px){
+  /* 与移动端 input/select 的 min-height:54px 保持一致，单列布局下同样等高。 */
+  .wrongbook-controls-v60 :is(select,input,button){
+    height:54px !important;
+    min-height:54px !important;
+  }
+}
+.wrongbook-controls-v60 :is(select,input):focus{
+  outline:2px solid rgba(47,111,237,.55) !important;
+  outline-offset:-2px !important;
+  box-shadow:none !important;
+}
+@media(forced-colors:active){
+  /* 高对比度模式下保留系统聚焦色，避免内嵌描边与系统色冲突。 */
+  .wrongbook-controls-v60 :is(select,input):focus{
+    outline:2px solid Highlight !important;
+    outline-offset:0 !important;
+  }
+}
+/* SHIROHA_WEB_V61_WRONGBOOK_CONTROL_ALIGN_END */
+
+
+/* SHIROHA_WEB_V58_9_6_FAVORITES_HOTKEY_RAIL_START */
+.favorites-card-v596{overflow:hidden;}
+.favorites-hero-v596{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  align-items:center;
+  gap:14px;
+  margin:10px 0 16px;
+  padding:14px;
+  border:1px solid rgba(47,111,237,.12);
+  border-radius:20px;
+  background:linear-gradient(135deg,rgba(247,251,255,.96),rgba(255,255,255,.86));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.9);
+}
+.favorites-hero-v596 b{display:block;color:#10233f;font-size:16px;}
+.favorites-hero-v596 span{display:block;margin-top:4px;color:#64748b;font-size:13px;line-height:1.55;}
+.favorites-actions-top-v596{display:flex;align-items:center;justify-content:flex-end;gap:10px;flex-wrap:wrap;}
+.favorites-list-v596{display:flex;flex-direction:column;gap:10px;}
+.favorite-item-v596{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  align-items:center;
+  gap:12px;
+  padding:13px 14px;
+  border:1px solid rgba(148,163,184,.22);
+  border-radius:18px;
+  background:rgba(255,255,255,.78);
+  box-shadow:0 8px 20px rgba(37,99,235,.035);
+}
+.favorite-item-title-v596{display:flex;align-items:center;gap:8px;min-width:0;}
+.favorite-item-title-v596 b{min-width:0;color:#10233f;line-height:1.45;}
+.favorite-item-main-v596 p{margin:6px 0 0;line-height:1.55;}
+.favorite-actions-v596{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap;}
+body.practice-focus.practice-rail-collapsed-v34 #practice-card > .practice-side-v31{
+  width:auto !important;
+  max-height:none !important;
+  overflow:visible !important;
+  align-items:flex-end !important;
+  background:transparent !important;
+}
+body.practice-focus.practice-rail-collapsed-v34 #practice-card > .practice-side-v31 #practice-stat-card-v30{
+  width:auto !important;
+  min-width:0 !important;
+  max-width:none !important;
+  height:auto !important;
+  min-height:0 !important;
+  max-height:none !important;
+  padding:0 !important;
+  border:0 !important;
+  background:transparent !important;
+  box-shadow:none !important;
+  overflow:visible !important;
+}
+body.practice-focus.practice-rail-collapsed-v34 #practice-card > .practice-side-v31 #practice-stat-card-v30 > :not(.rail-show-btn-v34){display:none !important;}
+body.practice-focus.practice-rail-collapsed-v34 #practice-card > .practice-side-v31 #practice-stat-card-v30 > .rail-show-btn-v34{
+  display:inline-flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  width:auto !important;
+  min-width:58px !important;
+  max-width:none !important;
+  height:30px !important;
+  min-height:30px !important;
+  max-height:30px !important;
+  padding:0 12px !important;
+  border:1px solid rgba(210,223,246,.96) !important;
+  border-radius:999px !important;
+  background:rgba(255,255,255,.88) !important;
+  color:#7386a5 !important;
+  box-shadow:0 10px 24px rgba(132,156,204,.12) !important;
+  backdrop-filter:blur(10px) !important;
+  writing-mode:horizontal-tb !important;
+  letter-spacing:.02em !important;
+  font-size:11px !important;
+  font-weight:800 !important;
+  line-height:1 !important;
+  white-space:nowrap !important;
+}
+body.practice-focus.practice-rail-collapsed-v34 #practice-card > .practice-side-v31 #practice-stat-card-v30 > .rail-show-btn-v34:hover{
+  color:#5676ac !important;
+  border-color:rgba(174,198,236,.98) !important;
+  background:rgba(255,255,255,.96) !important;
+}
+@media(max-width:720px){
+  .favorites-hero-v596{grid-template-columns:1fr;}
+  .favorites-actions-top-v596{justify-content:flex-start;}
+  .favorite-item-v596{grid-template-columns:1fr;align-items:stretch;}
+  .favorite-actions-v596{justify-content:flex-start;}
+}
+/* SHIROHA_WEB_V58_9_6_FAVORITES_HOTKEY_RAIL_END */
+
+/* SHIROHA_WEB_V58_9_6_1_PRACTICE_STATS_TOGGLE_TRANSPARENT_FIX_START
+   刷题统计收起按钮对齐右下角人物“显示/隐藏”胶囊：半透明、弱边框、无重阴影。 */
+body.practice-focus.practice-rail-collapsed-v34 #practice-card > .practice-side-v31 #practice-stat-card-v30 > .rail-show-btn-v34{
+  width:auto !important;
+  min-width:50px !important;
+  max-width:none !important;
+  height:auto !important;
+  min-height:24px !important;
+  max-height:none !important;
+  padding:4px 10px !important;
+  border:1px solid rgba(205,220,246,.45) !important;
+  border-radius:999px !important;
+  background:rgba(255,255,255,.42) !important;
+  color:rgba(88,107,136,.72) !important;
+  box-shadow:none !important;
+  backdrop-filter:blur(10px) !important;
+  -webkit-backdrop-filter:blur(10px) !important;
+  opacity:.42 !important;
+  transform:translateX(6px) !important;
+  writing-mode:horizontal-tb !important;
+  letter-spacing:.02em !important;
+  font-size:11px !important;
+  font-weight:800 !important;
+  line-height:1 !important;
+  white-space:nowrap !important;
+}
+body.practice-focus.practice-rail-collapsed-v34 #practice-card > .practice-side-v31 #practice-stat-card-v30 > .rail-show-btn-v34:hover{
+  opacity:.88 !important;
+  background:rgba(255,255,255,.82) !important;
+  border-color:rgba(174,198,236,.72) !important;
+  color:#5676ac !important;
+  box-shadow:none !important;
+}
+/* SHIROHA_WEB_V58_9_6_1_PRACTICE_STATS_TOGGLE_TRANSPARENT_FIX_END */
+
+/* v58.9.8.1: import preview toolbar alignment */
+.import-preview-head-v5981{
+  display:grid !important;
+  grid-template-columns:minmax(360px,1fr) minmax(0,690px) !important;
+  align-items:start !important;
+  gap:18px 24px !important;
+}
+.import-preview-title-v5981{
+  min-width:0 !important;
+}
+.import-preview-title-v5981 h2{
+  margin-bottom:10px !important;
+}
+.import-preview-title-v5981 .muted{
+  max-width:720px !important;
+  line-height:1.65 !important;
+}
+.import-preview-tools-v5981{
+  width:100% !important;
+  min-width:0 !important;
+  max-width:690px !important;
+  margin-left:auto !important;
+  display:flex !important;
+  align-items:center !important;
+  justify-content:flex-end !important;
+  flex-wrap:nowrap !important;
+  gap:10px !important;
+}
+.import-preview-filter-v5981{
+  height:46px !important;
+  min-height:46px !important;
+  display:flex !important;
+  align-items:center !important;
+  gap:8px !important;
+  white-space:nowrap !important;
+}
+.import-preview-filter-v5981 select{
+  width:140px !important;
+  min-width:140px !important;
+  height:46px !important;
+  min-height:46px !important;
+  padding:0 36px 0 14px !important;
+  border-radius:16px !important;
+  text-align-last:left !important;
+}
+.import-preview-tools-v5981 button{
+  width:112px !important;
+  min-width:112px !important;
+  height:46px !important;
+  min-height:46px !important;
+  padding:0 14px !important;
+  border-radius:16px !important;
+  white-space:nowrap !important;
+  margin:0 !important;
+}
+#import-preview-filter,
+.import-preview-tools-v5981 button{
+  box-sizing:border-box !important;
+}
+@media(max-width:1080px){
+  .import-preview-head-v5981{
+    grid-template-columns:1fr !important;
+  }
+  .import-preview-tools-v5981{
+    width:100% !important;
+    margin-left:0 !important;
+    justify-content:flex-start !important;
+    flex-wrap:wrap !important;
+  }
+}
+@media(max-width:720px){
+  .import-preview-tools-v5981{
+    display:grid !important;
+    grid-template-columns:1fr 1fr !important;
+    gap:10px !important;
+  }
+  .import-preview-filter-v5981{
+    grid-column:1 / -1 !important;
+    width:100% !important;
+  }
+  .import-preview-filter-v5981 select{
+    flex:1 !important;
+    width:auto !important;
+    min-width:0 !important;
+  }
+  .import-preview-tools-v5981 button{
+    width:100% !important;
+    min-width:0 !important;
+  }
+}
+
+
+/* SHIROHA_WEB_V89_16_GROUP_PRACTICE_SCOPE */
+.practice-scope-summary-v8916,
+.bank-scope-status-v8916{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:8px 12px;
+  margin:12px 0 16px;
+  padding:12px 14px;
+  border:1px solid rgba(79,124,255,.18);
+  border-radius:14px;
+  background:rgba(245,249,255,.86);
+}
+.practice-scope-summary-v8916 span,
+.bank-scope-status-v8916 span{font-size:.8rem;color:var(--muted);}
+.practice-scope-summary-v8916 b,
+.bank-scope-status-v8916 b{font-size:.96rem;}
+.practice-scope-summary-v8916 small,
+.bank-scope-status-v8916 small{color:var(--muted);}
+.home-practice-scope-v8916{max-width:540px;background:rgba(255,255,255,.7);}
+.bank-scope-status-v8916>div{display:flex;align-items:center;gap:8px;min-width:min(100%,320px);}
+.practice-scope-badge-v8916{
+  display:inline-flex;align-items:center;padding:3px 8px;border-radius:999px;
+  font-size:.72rem;font-weight:700;color:#315fc6;background:rgba(79,124,255,.12);
+}
+.bank-group-actions-v8916{display:flex;align-items:center;justify-content:flex-end;gap:10px;flex-wrap:wrap;}
+.practice-group-active-v8916>.bank-group-head-v58{border-color:rgba(79,124,255,.28);background:rgba(79,124,255,.055);}
+.scope-platform-note-v8916{margin:0 0 12px;padding:8px 12px;border-left:3px solid rgba(79,124,255,.4);background:rgba(79,124,255,.045);border-radius:8px;}
+@media (max-width:720px){
+  .bank-group-actions-v8916{width:100%;justify-content:space-between;}
+  .bank-group-head-v58{align-items:flex-start;flex-wrap:wrap;}
+  .practice-scope-summary-v8916,.bank-scope-status-v8916{align-items:flex-start;}
+}
+.record-source-v8916{display:block;margin-top:4px;color:var(--muted);font-size:.76rem;font-weight:500;}
+
+
+/* SHIROHA_WEB_V58_9_14_MULTI_BLANK_SYNC_START */
+#edit-answer-single-wrap-v58914.hidden,
+#edit-multi-blank-wrap-v58914.hidden,
+#edit-enable-multi-blank-btn-v58914.hidden{display:none!important}
+.multi-blank-answer-list-v58914{display:grid;gap:12px}
+.multi-blank-answer-item-v58914{display:grid;grid-template-columns:minmax(58px,auto) minmax(0,1fr);gap:10px;align-items:center}
+.multi-blank-answer-item-v58914>span{font-weight:700;color:var(--text-soft,#526071)}
+.multi-blank-answer-item-v58914 .text-answer{width:100%;min-width:0}
+.multi-blank-editor-v58914{margin:14px 0;padding:14px;border:1px solid var(--line,#dce5ef);border-radius:16px;background:var(--panel-soft,#f7faff)}
+.multi-blank-editor-head-v58914,.multi-blank-edit-head-v58914{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.multi-blank-editor-head-v58914 p{margin:4px 0 0}
+.multi-blank-count-warn-v58914{color:var(--warn,#b56b00)!important}
+.multi-blank-edit-group-v58914{margin-top:12px;padding:12px;border:1px solid var(--line,#dce5ef);border-radius:14px;background:var(--card,#fff)}
+.multi-blank-edit-fields-v58914{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:10px}
+.multi-blank-edit-fields-v58914 input{width:100%;min-width:0}
+.multi-blank-comparison-v58914{display:grid;gap:7px;margin-top:10px}
+.multi-blank-comparison-row-v58914{display:grid;grid-template-columns:auto minmax(0,1fr) minmax(0,1fr);gap:10px;padding:8px 10px;border-radius:10px;background:rgba(255,255,255,.62)}
+.multi-blank-record-v58914{display:grid;gap:4px;min-width:140px}
+.multi-blank-record-v58914 span{display:block;white-space:normal}
+@media (max-width:720px){
+  .multi-blank-answer-item-v58914{grid-template-columns:1fr;gap:6px}
+  .multi-blank-edit-fields-v58914{grid-template-columns:1fr}
+  .multi-blank-editor-head-v58914,.multi-blank-edit-head-v58914{align-items:stretch;flex-direction:column}
+  .multi-blank-comparison-row-v58914{grid-template-columns:1fr;gap:4px}
+}
+/* SHIROHA_WEB_V58_9_14_MULTI_BLANK_SYNC_END */
+
+/* SHIROHA_WEB_V58_9_16_PRACTICE_PROGRESS_START
+   练习起点与自选题号复用现有第二行，不新增独立配置区。 */
+.practice-start-field-v58916,
+.practice-range-field-v58916{
+  min-width:0 !important;
+}
+#practice-start-mode-v58916,
+.practice-number-range-v58916{
+  width:100% !important;
+  min-width:0 !important;
+  height:44px !important;
+}
+.practice-number-range-v58916[hidden],
+#practice-range-label-v58916[hidden],
+#practice-limit-control-v58916[hidden]{
+  display:none !important;
+}
+#practice-start-mode-v58916 option:disabled{
+  color:#94a3b8;
+}
+@media(max-width:760px){
+  .practice-number-range-v58916{
+    font-size:14px !important;
+  }
+}
+/* SHIROHA_WEB_V58_9_16_PRACTICE_PROGRESS_END */
+
+/* SHIROHA_V61_1_SETTINGS_BACKUP_LAYOUT_FIX_START */
+#settings .settings-main-actions-v611{
+  margin-top:18px !important;
+  margin-bottom:18px !important;
+}
+#settings #export-output{
+  margin-top:0 !important;
+}
+#settings #settings-backup-panel-v23{
+  margin-top:22px !important;
+}
+#settings #settings-backup-panel-v23 .wrap-v23{
+  gap:10px !important;
+}
+/* SHIROHA_V61_1_SETTINGS_BACKUP_LAYOUT_FIX_END */
+
+/* SHIROHA_V61_1_ART_STRIP_ALIGNMENT_FIX_START */
+.page-art-strip,
+.practice-art-strip,
+.exam-art-strip,
+.wrongbook-art-strip,
+.records-art-strip,
+.settings-art-strip,
+.bank-art-strip{
+  display:grid !important;
+  grid-template-columns:minmax(0,1fr) 132px !important;
+  align-items:center !important;
+  min-height:124px !important;
+  max-height:none !important;
+  padding:14px 18px 14px 26px !important;
+  gap:14px !important;
+}
+.page-art-strip > div,
+.practice-art-strip > div,
+.exam-art-strip > div,
+.wrongbook-art-strip > div,
+.records-art-strip > div,
+.settings-art-strip > div,
+.bank-art-strip > div{
+  min-height:64px !important;
+  display:flex !important;
+  flex-direction:column !important;
+  justify-content:center !important;
+  align-self:center !important;
+  min-width:0 !important;
+}
+.page-art-strip b,
+.practice-art-strip b,
+.exam-art-strip b,
+.wrongbook-art-strip b,
+.records-art-strip b,
+.settings-art-strip b,
+.bank-art-strip b{
+  margin:0 !important;
+}
+.page-art-strip img,
+.practice-art-strip img,
+.exam-art-strip img,
+.wrongbook-art-strip img,
+.records-art-strip img,
+.settings-art-strip img,
+.bank-art-strip img{
+  justify-self:end !important;
+  align-self:center !important;
+  transform:none !important;
+  margin:0 !important;
+  max-width:118px !important;
+  max-height:86px !important;
+  object-fit:contain !important;
+  object-position:center center !important;
+}
+/* SHIROHA_V61_1_ART_STRIP_ALIGNMENT_FIX_END */
+
+/* SHIROHA_V61_1_FAVORITES_HERO_TONE_FIX_START */
+.favorites-hero-v596{
+  border-color:rgba(47,111,237,.10) !important;
+  background:rgba(255,255,255,.92) !important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.94), 0 10px 26px rgba(37,99,235,.035) !important;
+}
+/* SHIROHA_V61_1_FAVORITES_HERO_TONE_FIX_END */
+
+/* SHIROHA_V61_1_ROLE_ART_CENTER_RESTORE_START */
+.practice-art-strip img,
+.exam-art-strip img,
+.wrongbook-art-strip img,
+.records-art-strip img,
+.settings-art-strip img,
+.bank-art-strip img{
+  position:static !important;
+  inset:auto !important;
+  display:block !important;
+  place-self:center !important;
+  justify-self:center !important;
+  align-self:center !important;
+  width:auto !important;
+  height:92px !important;
+  max-width:132px !important;
+  max-height:92px !important;
+  margin:0 !important;
+  object-fit:contain !important;
+  object-position:center center !important;
+  opacity:1 !important;
+  transform:none !important;
+}
+/* SHIROHA_V61_1_ROLE_ART_CENTER_RESTORE_END */
