@@ -59,7 +59,10 @@
     }
 
     function aiUnavailableReasonV99(config, task) {
-      return aiHarnessTaskReasonV99(config, task) || config.execution?.reason || '尚未配置 AI 服务，请先前往“AI 设置”。';
+      if (isAiHarnessExecutionV99(config.execution)) {
+        return aiHarnessTaskReasonV99(config, task) || config.execution.reason || '所选 Harness 尚未就绪，请检查 AI 设置。';
+      }
+      return '尚未配置 AI 服务，请先前往“AI 设置”。';
     }
 
     function aiHarnessPrivacyV99(config, subject) {
@@ -97,6 +100,21 @@
       }
 
       return config.execution.adapter === 'codex' || (Number.isSafeInteger(config.execution.accountRevision) && config.execution.accountRevision >= 0);
+    }
+
+    function aiAvailabilityV99(config, task = 'connection_test') {
+      const unsupported = aiHarnessTaskReasonV99(config, task);
+      if (unsupported) { return { state: 'unsupported', reason: unsupported }; }
+      if (isAiHarnessExecutionV99(config.execution)) {
+        const { readiness } = config.execution;
+        if (readiness === 'checking' || readiness === 'error' || readiness === 'blocked') {
+          return { state: readiness, reason: config.execution.reason || 'AI 状态尚未确认。', retryable: config.execution.readinessRetryable !== false };
+        }
+        if (!aiConfiguredV99(config, task)) { return { state: 'action_required', reason: aiUnavailableReasonV99(config, task) }; }
+      } else if (!aiConfiguredV99(config, task)) {
+        return { state: 'unconfigured', reason: aiUnavailableReasonV99(config, task) };
+      }
+      return { state: 'ready', reason: '' };
     }
 
     function aiExecutionLabelV99(config) {
@@ -448,7 +466,12 @@
 
       pill.className = 'pill ai-status-pill-v99';
 
-      if (status === 'ok') {
+      if (config.execution?.readiness === 'checking') {
+        pill.textContent = '正在检查';
+      } else if (config.execution?.readiness === 'error' || config.execution?.readiness === 'blocked') {
+        pill.textContent = '检查未完成';
+        pill.classList.add('is-error');
+      } else if (status === 'ok') {
         pill.textContent = '连接正常';
         pill.classList.add('is-ok');
       } else if (status === 'error') {
@@ -513,7 +536,7 @@
       aiLastDiagnosticV375 = null;
       aiDiagnosticsVisibleV375 = false;
     }
-    return { defaultAiConfigV99, normalizeAiConfigV99, aiProviderLabelV99, isAiHarnessExecutionV99, aiHarnessLabelV99, aiHarnessTaskReasonV99, aiUnavailableReasonV99, aiHarnessPrivacyV99, aiExecutionConfigV99, aiConfiguredV99, aiExecutionLabelV99, aiRequestConfigV99, normalizeAiEndpointV99, isLocalAiEndpointV99, readAiFormV99, setAiSettingsStatusV99, sanitizeAiDiagnosticDetailV375, aiOllamaCorsCommandV375, buildAiDiagnosticV375, renderAiDiagnosticV375, setAiDiagnosticV375, toggleAiDiagnosticV375, copyAiDiagnosticV375, copyAiOllamaCorsCommandV375, updateAiConnectionPillV99, renderAiSettingsV99, setState, reset };
+    return { defaultAiConfigV99, normalizeAiConfigV99, aiProviderLabelV99, isAiHarnessExecutionV99, aiHarnessLabelV99, aiHarnessTaskReasonV99, aiUnavailableReasonV99, aiHarnessPrivacyV99, aiExecutionConfigV99, aiConfiguredV99, aiAvailabilityV99, aiExecutionLabelV99, aiRequestConfigV99, normalizeAiEndpointV99, isLocalAiEndpointV99, readAiFormV99, setAiSettingsStatusV99, sanitizeAiDiagnosticDetailV375, aiOllamaCorsCommandV375, buildAiDiagnosticV375, renderAiDiagnosticV375, setAiDiagnosticV375, toggleAiDiagnosticV375, copyAiDiagnosticV375, copyAiOllamaCorsCommandV375, updateAiConnectionPillV99, renderAiSettingsV99, setState, reset };
   }
   const AI_PROVIDER_PRESETS_V99_DEFAULT = AI_PROVIDER_PRESETS_V99;
   globalThis.ShirohaAiSettings = Object.freeze({ create, presets: AI_PROVIDER_PRESETS_V99 });

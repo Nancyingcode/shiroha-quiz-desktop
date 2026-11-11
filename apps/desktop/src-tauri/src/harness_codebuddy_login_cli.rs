@@ -60,7 +60,12 @@ impl Login {
         Ok(())
     }
 
-    pub(super) fn refresh_cli(self: &Arc<Self>, revision: u64) -> Result<Status> {
+    fn begin_cli_refresh(
+        &self,
+        revision: u64,
+        cancel: Arc<AtomicBool>,
+        allow_after_restore: bool,
+    ) -> Result<(Status, Option<(Attempt, Snapshot)>)> {
         let mut state = self.inner.lock().map_err(|_| unavailable())?;
         if revision != state.revision {
             return Err(Error::new("codebuddy_login_stale"));
@@ -68,16 +73,18 @@ impl Login {
         if state.busy() {
             return Err(Error::new("codebuddy_login_busy"));
         }
+        if state.cli.as_ref().is_some_and(|cli| cli.restore_blocked) && !allow_after_restore {
+            return Err(Error::new("codebuddy_restore_required"));
+        }
         let snapshot = state.cli.as_ref().ok_or_else(unavailable)?.read();
         let snapshot = match snapshot {
             Ok(Some(snapshot)) => snapshot,
             other => {
                 state.apply_cli_observation(other)?;
-                return Ok(state.snapshot());
+                return Ok((state.snapshot(), None));
             }
         };
         state.clear(Phase::Restoring)?;
-        let cancel = Arc::new(AtomicBool::new(false));
         state.cancel = Some(cancel.clone());
         state.message = "正在核验 CodeBuddy CLI 登录状态…";
         let cli = state.cli.as_mut().ok_or_else(unavailable)?;
@@ -89,40 +96,86 @@ impl Login {
             cancel,
         };
         let initial = state.snapshot();
-        drop(state);
+        Ok((initial, Some((attempt, snapshot))))
+    }
+
+    pub(super) fn refresh_cli(self: &Arc<Self>, revision: u64) -> Result<Status> {
+        let (initial, work) =
+            self.begin_cli_refresh(revision, Arc::new(AtomicBool::new(false)), true)?;
+        let Some((attempt, snapshot)) = work else {
+            return Ok(initial);
+        };
         let service = self.clone();
         tauri::async_runtime::spawn(async move {
-            let result = MemorySession::restore(snapshot.session, &attempt.cancel).await;
-            let accepted = service.finish_cli(&attempt, result).unwrap_or(false);
-            if accepted {
-                let root = service.root.clone();
-                let cleanup = tauri::async_runtime::spawn_blocking(move || {
-                    let Some(root) = root else {
-                        return Ok(());
-                    };
-                    crate::harness_codebuddy_store::Store::retire_legacy(&root)
-                })
-                .await;
-                if let Ok(mut state) = service.inner.lock() {
-                    if state.persistence_state == PersistenceState::Clearing {
-                        let failed = !matches!(cleanup, Ok(Ok(())));
-                        state.persistence_state = if failed {
-                            PersistenceState::CleanupRequired
-                        } else {
-                            PersistenceState::None
-                        };
-                        state.persistence_error_code =
-                            failed.then_some("codebuddy_store_unavailable");
-                    }
-                }
-            }
+            let _ = service.complete_cli_refresh(attempt, snapshot).await;
         });
         Ok(initial)
+    }
+
+    pub(crate) async fn verify_cli_for_readiness(
+        self: &Arc<Self>,
+        cancel: Arc<AtomicBool>,
+    ) -> Result<()> {
+        let account = self.execution_status()?;
+        if account.signed_in {
+            return Ok(());
+        }
+        let (_, work) = self.begin_cli_refresh(account.revision, cancel, false)?;
+        if let Some((attempt, snapshot)) = work {
+            self.complete_cli_refresh(attempt, snapshot).await?;
+        }
+        Ok(())
+    }
+
+    async fn complete_cli_refresh(
+        self: &Arc<Self>,
+        attempt: Attempt,
+        snapshot: Snapshot,
+    ) -> Result<()> {
+        let result = MemorySession::restore(snapshot.session, &attempt.cancel).await;
+        let error_code = result.as_ref().err().map(|error| error.code);
+        let accepted = self.finish_cli(&attempt, result)?;
+        if accepted {
+            let root = self.root.clone();
+            let cleanup = tauri::async_runtime::spawn_blocking(move || {
+                let Some(root) = root else {
+                    return Ok(());
+                };
+                crate::harness_codebuddy_store::Store::retire_legacy(&root)
+            })
+            .await;
+            let mut state = self.inner.lock().map_err(|_| unavailable())?;
+            if state.persistence_state == PersistenceState::Clearing {
+                let failed = !matches!(cleanup, Ok(Ok(())));
+                state.persistence_state = if failed {
+                    PersistenceState::CleanupRequired
+                } else {
+                    PersistenceState::None
+                };
+                state.persistence_error_code = failed.then_some("codebuddy_store_unavailable");
+            }
+        }
+        if let Some(code) = error_code {
+            return Err(Error::new(code));
+        }
+        Ok(())
     }
 
     fn finish_cli(&self, attempt: &Attempt, result: Result<MemorySession>) -> Result<bool> {
         self.check_cli(true)?;
         let mut state = self.inner.lock().map_err(|_| unavailable())?;
+        let owns_cancelled_attempt = state.phase == Phase::Restoring
+            && state.revision == attempt.revision
+            && attempt.cancel.load(std::sync::atomic::Ordering::Acquire)
+            && state
+                .cancel
+                .as_ref()
+                .is_some_and(|cancel| Arc::ptr_eq(cancel, &attempt.cancel));
+        if owns_cancelled_attempt {
+            state.clear(Phase::SignedOut)?;
+            state.message = CLI_DETECTED;
+            return Ok(false);
+        }
         let current = state.phase == Phase::Restoring
             && state.revision == attempt.revision
             && !attempt.cancel.load(std::sync::atomic::Ordering::Acquire)
@@ -320,6 +373,44 @@ mod tests {
             );
         }
         assert!(!f.root.join("codebuddy-account.sqlite3").exists());
+    }
+
+    #[test]
+    fn startup_cli_readiness_reuses_source_and_respects_restore_barrier() {
+        let f = Fixture::new();
+        f.login_file();
+        let before = fs::read(&f.file).unwrap();
+        tauri::async_runtime::block_on(
+            f.service
+                .verify_cli_for_readiness(Arc::new(AtomicBool::new(false))),
+        )
+        .unwrap();
+        assert!(f.service.execution_status().unwrap().signed_in);
+        assert_eq!(fs::read(&f.file).unwrap(), before);
+        assert!(!f.root.join("codebuddy-account.sqlite3").exists());
+        f.service.block_cli_for_restore().unwrap();
+        let error = tauri::async_runtime::block_on(
+            f.service
+                .verify_cli_for_readiness(Arc::new(AtomicBool::new(false))),
+        )
+        .unwrap_err();
+        assert_eq!(error.code, "codebuddy_restore_required");
+        assert!(!f.service.execution_status().unwrap().signed_in);
+    }
+
+    #[test]
+    fn cancelled_startup_cli_check_cannot_leave_a_restoring_account() {
+        let f = Fixture::new();
+        f.login_file();
+        let error = tauri::async_runtime::block_on(
+            f.service
+                .verify_cli_for_readiness(Arc::new(AtomicBool::new(true))),
+        )
+        .unwrap_err();
+        assert_eq!(error.code, "cancelled");
+        let status = f.service.status().unwrap();
+        assert_eq!(status.phase, Phase::SignedOut);
+        assert!(!status.busy);
     }
 
     #[test]

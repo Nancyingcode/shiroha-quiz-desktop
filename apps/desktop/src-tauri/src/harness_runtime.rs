@@ -368,6 +368,73 @@ fn install_component_directory(
     Ok((canonical, protected))
 }
 
+#[cfg(any(test, not(feature = "native-test")))]
+pub(crate) async fn check_existing(
+    root: &Path,
+    component: Component,
+    cancel: &AtomicBool,
+) -> Result<PathBuf> {
+    let (bytes, sha256) = match component {
+        Component::Codex => (EXECUTABLE_BYTES, EXECUTABLE_SHA256),
+        Component::CodeBuddy => (
+            crate::harness_codebuddy_runtime::EXECUTABLE_BYTES,
+            crate::harness_codebuddy_runtime::EXECUTABLE_SHA256,
+        ),
+    };
+    let manifest = Manifest {
+        url: String::new(),
+        bytes,
+        sha256: sha256.into(),
+    };
+    check_existing_with(root, component, cancel, &manifest).await
+}
+
+#[cfg(any(test, not(feature = "native-test")))]
+async fn check_existing_with(
+    root: &Path,
+    component: Component,
+    cancel: &AtomicBool,
+    manifest: &Manifest,
+) -> Result<PathBuf> {
+    if !root.is_absolute()
+        || root
+            .components()
+            .any(|part| part == std::path::Component::ParentDir)
+    {
+        return Err(failure("harness_runtime_storage"));
+    }
+    reject_links(root).map_err(storage_error)?;
+    let mut protected = Vec::new();
+    for ancestor in root.ancestors().collect::<Vec<_>>().into_iter().rev() {
+        protected.push(pin_directory(ancestor)?);
+    }
+    let canonical_root = fs::canonicalize(root).map_err(storage_error)?;
+    let target = component.managed_path(&canonical_root);
+    let relative = target
+        .parent()
+        .and_then(|parent| parent.strip_prefix(&canonical_root).ok())
+        .ok_or_else(|| failure("harness_runtime_storage"))?;
+    let mut directory = canonical_root.clone();
+    for part in relative {
+        directory.push(part);
+        match fs::symlink_metadata(&directory) {
+            Ok(_) => protected.push(pin_directory(&directory)?),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                return Err(failure("harness_runtime"))
+            }
+            Err(error) => return Err(storage_error(error)),
+        }
+    }
+    if fs::canonicalize(&directory).map_err(storage_error)? != directory {
+        return Err(failure("harness_runtime_storage"));
+    }
+    if !valid_cache(&target, manifest, cancel).await? {
+        return Err(failure("harness_runtime_integrity"));
+    }
+    drop(protected);
+    Ok(target)
+}
+
 fn preparation_lock(directory: &Path) -> Result<File> {
     let path = directory.join("prepare.lock");
     reject_links(&path).map_err(storage_error)?;
@@ -703,6 +770,39 @@ mod tests {
     use std::time::Instant;
 
     const BODY: &[u8] = b"isolated synthetic runtime: never execute";
+
+    #[test]
+    fn checking_existing_component_never_creates_or_repairs_cache() {
+        let fixture = Fixture::new();
+        let cancel = AtomicBool::new(false);
+        let missing = run(check_existing(&fixture.0, Component::Codex, &cancel)).unwrap_err();
+        assert_eq!(missing.code, "harness_runtime");
+        assert!(!fixture.0.join("runtime").exists());
+        let target = fixture.write_cache(BODY);
+        let manifest = Manifest {
+            url: String::new(),
+            bytes: BODY.len() as u64,
+            sha256: format!("{:x}", Sha256::digest(BODY)),
+        };
+        let checked = run(check_existing_with(
+            &fixture.0,
+            Component::Codex,
+            &cancel,
+            &manifest,
+        ))
+        .unwrap();
+        assert_eq!(checked, fs::canonicalize(&target).unwrap());
+        fs::write(&target, b"corrupt").unwrap();
+        let error = run(check_existing_with(
+            &fixture.0,
+            Component::Codex,
+            &cancel,
+            &manifest,
+        ))
+        .unwrap_err();
+        assert_eq!(error.code, "harness_runtime_integrity");
+        assert_eq!(fs::read(&target).unwrap(), b"corrupt");
+    }
 
     #[test]
     fn codebuddy_cache_and_lock_are_independent_of_codex() {

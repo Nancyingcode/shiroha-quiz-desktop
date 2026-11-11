@@ -85,15 +85,28 @@ export async function codebuddyCliSmoke(page, profile, startPractice) {
   return { cliGuidance: true, cliLoginReused: true, cliLogoutObserved: true, connectionTest: true, questionAnalysis: true, followUp: true, manualSave: true, apiPreserved: true, codexPreserved: true, legacyActionsRejected: denied, noAppCredentials: true };
 }
 
-/** @param {Page} page */
-export async function codebuddyCliAfterRestart(page) {
+/** @param {Page} page @param {()=>Promise<unknown>} startPractice */
+export async function codebuddyCliAfterRestart(page, startPractice) {
   await waitForPhase(page, 'signed_in');
+  await page.waitForFunction(() => Reflect.get(window, 'ShirohaPlatform')?.harness?.status().ready);
+  assert.equal(await page.locator('#ai-settings').evaluate((element) => element.classList.contains('active')), false);
   const selected = await executionStatus(page);
   assert.equal(selected.adapter, 'codebuddy');
   assert.equal(selected.model, 'hy3');
+  await page.locator('.nav[data-view="practice"]').click();
+  await page.locator('#practice-submit-mode').selectOption('total');
+  await startPractice();
+  await page.locator('#practice-card .option[data-key="B"]').click();
+  await page.locator('[data-ai-single-open-v613]').click();
+  await page.locator('[data-ai-single-analysis-v613]').click();
+  await page.waitForFunction(() => document.querySelector('.practice-ai-text-v613')?.textContent?.includes('隔离 CodeBuddy 测试解析。'));
+  await page.locator('#p-exit').click();
+  await page.locator('#app-dialog [data-dialog-accept]').click();
+  await page.waitForFunction(() => !document.body.classList.contains('practice-focus'));
+  await page.locator('#practice-submit-mode').selectOption('single');
   await page.locator('.nav[data-view="ai-settings"]').click();
   await page.locator('#ai-codebuddy-cli-guide').waitFor({ state: 'hidden' });
-  return { cliReverifiedAfterRestart: true, modelPreserved: true };
+  return { cliReverifiedAfterRestart: true, modelPreserved: true, practiceBeforeSettings: true };
 }
 
 /** @param {Page} initialPage @param {string} profile @param {()=>Promise<Page>} restart */

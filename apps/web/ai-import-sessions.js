@@ -106,7 +106,12 @@
       }, requestConfig.timeoutSeconds * 1000);
 
       try {
-        const result = await requestAiChatV99(requestConfig, mode === 'analysis' ? buildAiAnalysisMessagesV991(batchItems.map((x) => x.payload)) : buildAiReviewMessagesV991(batchItems.map((x) => x.payload)), { controller, task: mode === 'analysis' ? 'batch_analysis' : 'batch_review' });
+        const isCurrent = () => aiPreviewRequestV991 === owner && !owner.cancelled && getPreviewMode() === mode
+          && batchItems.every((item) => {
+            const index = findIndex(item.id, item.index); const question = importDraft.questions[index];
+            return !!question && aiQuestionFingerprintV991(question) === item.fingerprint;
+          });
+        const result = await requestAiChatV99(requestConfig, mode === 'analysis' ? buildAiAnalysisMessagesV991(batchItems.map((x) => x.payload)) : buildAiReviewMessagesV991(batchItems.map((x) => x.payload)), { controller, task: mode === 'analysis' ? 'batch_analysis' : 'batch_review', isCurrent });
         if (timedOut) { throw new Error(`当前批次请求超过 ${requestConfig.timeoutSeconds} 秒，已自动停止。`); }
         return result;
       } catch (error) {
@@ -250,6 +255,7 @@
       const requestConfig = aiRequestConfigV99(config);
       const beforeCount = importDraft.questions.length;
       const context = aiRefactorContextV384(range);
+      const contextSnapshot = JSON.stringify(context);
 
       const owner = { running: true, controller: null, cancelled: false };
       aiImportRequestV99 = owner;
@@ -257,12 +263,17 @@
       setAiImportStatusV99('正在调用 AI 结构化整理题库。将优先生成 questions，结构校验失败时自动退回文本清洗。');
 
       const isCurrentImportRequest = () => aiImportRequestV99 === owner && !owner.cancelled;
+      const isCurrentBeforeSend = () => {
+        const currentRange = aiImportRangeV992();
+        return isCurrentImportRequest() && currentRange.scope === range.scope && currentRange.text === text
+          && JSON.stringify(aiRefactorContextV384(currentRange)) === contextSnapshot;
+      };
 
       const previous = importDraft.snapshot();
 
       const requestPass = async (mode, fallbackReason = '') => withAiTimeoutV99(config.timeoutSeconds, (controller) => {
         owner.controller = controller;
-        return requestAiChatV99(requestConfig, buildAiMessagesV99(text, { requestedMode: mode, fallbackReason, currentQuestions: context.currentQuestions, warnings: context.warnings }), { controller, task: 'import_organize' });
+        return requestAiChatV99(requestConfig, buildAiMessagesV99(text, { requestedMode: mode, fallbackReason, currentQuestions: context.currentQuestions, warnings: context.warnings }), { controller, task: 'import_organize', isCurrent: isCurrentBeforeSend });
       });
 
       try {

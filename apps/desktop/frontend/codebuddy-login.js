@@ -298,7 +298,10 @@
         if (requestTimeout !== undefined) { readTimeouts.delete(requestTimeout); }
         if (isCurrentCliRead(requestSequence)) {
           reading = undefined; renderCli();
-          if (shouldAutoRefresh) { void readCli('refresh'); } else { timer = setTimeout(() => { timer = undefined;void readCli(); }, pollIntervalMs); }
+          if (shouldAutoRefresh && scope.ShirohaPlatform?.harness?.ensureReady) {
+            void scope.ShirohaPlatform.harness.ensureReady();
+            timer = setTimeout(() => { timer = undefined;void readCli(); }, pollIntervalMs);
+          } else if (shouldAutoRefresh) { void readCli('refresh'); } else { timer = setTimeout(() => { timer = undefined;void readCli(); }, pollIntervalMs); }
         }
       }
     }

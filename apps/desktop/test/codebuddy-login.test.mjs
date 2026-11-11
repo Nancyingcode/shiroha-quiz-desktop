@@ -27,7 +27,7 @@ function status(phase = 'signed_out', revision = 0) {
   return { phase, revision, loginUrl: phase === 'authenticating' ? 'https://copilot.tencent.com/login?platform=CLI&state=synthetic' : '', message: `合成状态：${phase}`, browserOpened: phase === 'authenticating', busy: ['authenticating', 'restoring'].includes(phase), rememberLogin: false, persistenceState: 'none', persistenceErrorCode: null };
 }
 
-/** @param {{desktop?:boolean,loading?:boolean,cli?:boolean,cliSelected?:boolean,clipboard?:boolean}} [options] */
+/** @param {{desktop?:boolean,loading?:boolean,cli?:boolean,cliSelected?:boolean,clipboard?:boolean,sharedReadiness?:boolean}} [options] */
 function fixture(options = {}) {
   const names = ['settings', 'phase', 'status', 'login', 'details', 'login-url', 'browser-status', 'open-login', 'copy-link', 'refresh', 'cancel', 'logout', 'remember', 'retry-restore', 'retry-save', 'cli-guide', 'copy-command'];
   const elements = new Map(names.map((name) => [`ai-codebuddy-${name}`, new Element()]));
@@ -37,6 +37,7 @@ function fixture(options = {}) {
   /** @type {Array<{command:string,request:Record<string,unknown>}>} */ const calls = [];
   /** @type {string[]} */ const copied = [];
   /** @type {Array<{revision:number,phase:string,blocked:boolean}>} */ const accounts = [];
+  /** @type {string[]} */ const checks = [];
   /** @type {Map<number,()=>void|Promise<void>>} */ const timers = new Map();
   /** @type {Map<string,()=>void>} */ const events = new Map();
   let timerId = 0;
@@ -47,7 +48,8 @@ function fixture(options = {}) {
   };
   const context = {
     ShirohaDesktopHost: options.desktop === false ? undefined : host,
-    ShirohaPlatform: { harness: { status() { return { adapter: options.cliSelected ? 'codebuddy' : 'codex', mode: 'harness' }; }, codebuddyAccountChanged(/** @type {{revision:number,phase:string,blocked:boolean}} */ account) { accounts.push(account); } } },
+    ShirohaPlatform: { harness: { status() { return { adapter: options.cliSelected ? 'codebuddy' : 'codex', mode: 'harness' }; }, codebuddyAccountChanged(/** @type {{revision:number,phase:string,blocked:boolean}} */ account) { accounts.push(account); },
+      ...(options.sharedReadiness ? { ensureReady: async () => { checks.push('readiness'); } } : {}) } },
     document: {
       readyState: options.loading ? 'loading' : 'complete',
       getElementById: (/** @type {string} */ id) => elements.get(id),
@@ -59,7 +61,7 @@ function fixture(options = {}) {
     addEventListener: (/** @type {string} */ name, /** @type {()=>void} */ callback) => events.set(name, callback),
   };
   return {
-    get, calls, copied, accounts, timers, events,
+    get, calls, copied, accounts, checks, timers, events,
     start: () => vm.runInNewContext(source, context),
     /** @param {(kind:string)=>Promise<unknown>} response */
     respond(response) { respond = response; },
@@ -366,6 +368,17 @@ test('selected CodeBuddy verifies an available CLI source once without invoking 
   f.respond(async () => ({ ...status('signed_in', 4), authSource: 'cli', cliLoginAvailable: true }));
   await f.tick();
   assert.equal(f.get('cli-guide').hidden, true);
+  assert.equal(f.calls.every((call) => call.command === 'codebuddy_control'), true);
+});
+
+test('selected CLI account delegates automatic verification to shared readiness', async () => {
+  const f = fixture({ cli: true, cliSelected: true, sharedReadiness: true });
+  f.respond(async () => ({ ...status('signed_out', 3), authSource: 'cli', cliLoginAvailable: true }));
+  f.start(); await setImmediate();
+  assert.deepEqual(f.calls.map((call) => call.request.kind), ['status']);
+  assert.deepEqual(f.checks, ['readiness']);
+  await f.tick();
+  assert.deepEqual(f.checks, ['readiness']);
   assert.equal(f.calls.every((call) => call.command === 'codebuddy_control'), true);
 });
 

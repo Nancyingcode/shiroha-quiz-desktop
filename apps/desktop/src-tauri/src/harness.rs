@@ -21,6 +21,7 @@ use std::{
 
 const MAX_CANCELLED_REQUESTS: usize = 1024;
 const STOP_WAIT_TIMEOUT: Duration = Duration::from_secs(7);
+const READINESS_TIMEOUT: Duration = Duration::from_secs(30);
 const MAX_MESSAGES: usize = 100;
 const MAX_MESSAGE_BYTES: usize = 512 * 1024;
 const MIN_TIMEOUT_SECONDS: u64 = 10;
@@ -121,6 +122,7 @@ pub struct Status {
     account_revision: Option<u64>,
     operation_busy: bool,
     component_tasks: Vec<ComponentTaskStatus>,
+    restore_required: bool,
 }
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -158,6 +160,13 @@ pub enum Control {
     },
     UseManagedRuntime {},
     Inspect,
+    #[serde(rename_all = "camelCase")]
+    CheckReadiness {
+        id: String,
+        revision: u64,
+        #[serde(default)]
+        confirmed_after_restore: bool,
+    },
     CancelAll,
     Cancel {
         id: String,
@@ -219,6 +228,8 @@ struct Inner {
     preparations: Vec<ComponentTask>,
     barrier: bool,
     restores: usize,
+    // 同进程的页面重载不能把恢复后的状态当成冷启动；仅主动核验成功后解除。
+    readiness_requires_user: bool,
     cancel_waiters: usize,
     cancelled: HashSet<String>,
     subscription: bool,
@@ -343,6 +354,7 @@ impl Harness {
                 return Err(error);
             }
             if invalidate {
+                state.readiness_requires_user = true;
                 state.candidate = None;
                 state.codebuddy_runtime.verified = false;
                 if state.codebuddy_runtime.state != RuntimeState::Preparing {
@@ -472,7 +484,8 @@ impl Harness {
             }
             state.active = None;
             state.cancelled.remove(&operation.id);
-            let result = if operation.cancel.load(Ordering::Acquire) {
+            let timed_out = result.as_ref().is_err_and(|error| error.code == "timeout");
+            let result = if operation.cancel.load(Ordering::Acquire) && !timed_out {
                 Err(failure("cancelled"))
             } else if operation.config.revision != state.config.revision {
                 Err(failure("harness_stale"))
@@ -558,10 +571,138 @@ impl Harness {
             }
             if let Some(subscribed) = subscribed {
                 state.update_subscription(subscribed)?;
+                state.readiness_requires_user = false;
             }
             Ok(state.status())
         })
     }
+
+    fn check_readiness(
+        &self,
+        id: String,
+        revision: u64,
+        confirmed_after_restore: bool,
+    ) -> Result<Status> {
+        if uuid::Uuid::parse_str(&id).is_err() {
+            return Err(failure("invalid_input"));
+        }
+        let operation = self.with(|state| {
+            if state.cancelled.remove(&id) {
+                return Err(failure("cancelled"));
+            }
+            state.ensure_idle()?;
+            if revision != state.config.revision {
+                return Err(failure("harness_stale"));
+            }
+            if state.config.mode != "harness"
+                || !matches!(state.config.adapter.as_str(), "codex" | "codebuddy")
+            {
+                return Err(failure("harness_provider_unavailable"));
+            }
+            if state.config.adapter == "codex" && state.config.logout_pending {
+                return Err(failure("harness_auth_cleanup"));
+            }
+            if state.config.adapter == "codex"
+                && state.readiness_requires_user
+                && !confirmed_after_restore
+            {
+                return Err(failure("harness_restore_required"));
+            }
+            let operation = state.start(id, false)?;
+            if let Some(active) = &mut state.active {
+                active.readonly = true;
+            }
+            Ok(operation)
+        })?;
+        let timed_out = Arc::new(AtomicBool::new(false));
+        let timeout_flag = timed_out.clone();
+        let timeout_cancel = operation.cancel.clone();
+        let (finished, wait) = std::sync::mpsc::sync_channel::<()>(1);
+        let watchdog = std::thread::Builder::new()
+            .name("harness-readiness-timeout".into())
+            .spawn(move || {
+                if wait.recv_timeout(READINESS_TIMEOUT).is_err() {
+                    timeout_flag.store(true, Ordering::Release);
+                    timeout_cancel.store(true, Ordering::Release);
+                }
+            });
+        if watchdog.is_err() {
+            return self.finish(
+                &operation,
+                Err(failure("harness_unavailable")),
+                |_, result: Result<()>| result.and_then(|()| Err(failure("harness_unavailable"))),
+            );
+        }
+        let result = if operation.config.adapter == "codex" {
+            codex::inspect_cancellable(&operation.config.runtime_path, &operation.cancel)
+                .and_then(|()| {
+                    codex::subscription(
+                        &operation.root,
+                        &operation.config.runtime_path,
+                        &operation.cancel,
+                    )
+                })
+                .map(|subscribed| (operation.config.runtime_path.clone(), Some(subscribed)))
+        } else {
+            check_existing_codebuddy(&operation).and_then(|path| {
+                tauri::async_runtime::block_on(
+                    operation
+                        .codebuddy_login
+                        .verify_cli_for_readiness(operation.cancel.clone()),
+                )?;
+                Ok((path, None))
+            })
+        };
+        let _ = finished.send(());
+        if let Ok(watchdog) = watchdog {
+            let _ = watchdog.join();
+        }
+        let result = if timed_out.load(Ordering::Acquire) {
+            Err(failure("timeout"))
+        } else {
+            result
+        };
+        self.finish(&operation, result, |state, result| {
+            let (path, subscribed) = match result {
+                Ok(value) => value,
+                Err(error) => {
+                    if !matches!(error.code, "cancelled" | "harness_stale") {
+                        if operation.config.adapter == "codex" {
+                            state.update_subscription(false)?;
+                        } else {
+                            state.codebuddy_runtime.verified = false;
+                            state.codebuddy_runtime.state = RuntimeState::Unprepared;
+                        }
+                    }
+                    return Err(error);
+                }
+            };
+            if let Some(subscribed) = subscribed {
+                if !state.config.verified {
+                    let mut config = state.config.clone();
+                    config.verified = true;
+                    config.revision = config
+                        .revision
+                        .checked_add(1)
+                        .ok_or_else(|| failure("harness_unavailable"))?;
+                    state.persist(config)?;
+                }
+                state.runtime_state = RuntimeState::Ready;
+                state.notice.clear();
+                state.update_subscription(subscribed)?;
+                if confirmed_after_restore {
+                    state.readiness_requires_user = false;
+                }
+            } else {
+                state.codebuddy_runtime.path = path;
+                state.codebuddy_runtime.verified = true;
+                state.codebuddy_runtime.state = RuntimeState::Ready;
+                state.codebuddy_runtime.notice.clear();
+            }
+            Ok(state.status())
+        })
+    }
+
     fn control(self: &Arc<Self>, request: Control) -> Result<Status> {
         match request {
             Control::Status => self.with(|state| Ok(state.status())),
@@ -644,6 +785,11 @@ impl Harness {
                 }
             }
             Control::Inspect => self.inspect_runtime(),
+            Control::CheckReadiness {
+                id,
+                revision,
+                confirmed_after_restore,
+            } => self.check_readiness(id, revision, confirmed_after_restore),
             Control::Save {
                 mode,
                 adapter,
@@ -1119,6 +1265,28 @@ impl Harness {
     }
 }
 
+fn check_existing_codebuddy(operation: &Operation) -> Result<PathBuf> {
+    #[cfg(not(any(test, feature = "native-test")))]
+    {
+        tauri::async_runtime::block_on(crate::harness_runtime::check_existing(
+            &operation.root,
+            crate::harness_runtime::Component::CodeBuddy,
+            &operation.cancel,
+        ))
+        .map_err(crate::harness_codebuddy_runtime::preparation_error)
+    }
+    #[cfg(any(test, feature = "native-test"))]
+    {
+        if operation.cancel.load(Ordering::Acquire) {
+            return Err(failure("cancelled"));
+        }
+        if !operation.root.join("fake-codebuddy-cached").is_file() {
+            return Err(failure("codebuddy_runtime_unavailable"));
+        }
+        Ok(PathBuf::from("isolated-fake-codebuddy.exe"))
+    }
+}
+
 fn prepare_component(
     operation: &Operation,
     progress: &(dyn Fn(u64, u64) + Send + Sync),
@@ -1189,6 +1357,9 @@ fn prepare_component(
         if operation.config.adapter == "codebuddy" {
             (context.phase)(PreparationPhase::Extracting);
         }
+        if operation.config.adapter == "codebuddy" {
+            std::fs::write(operation.root.join("fake-codebuddy-cached"), b"fixture")?;
+        }
         Ok(PathBuf::from(if operation.config.adapter == "codebuddy" {
             "isolated-fake-codebuddy.exe"
         } else {
@@ -1245,6 +1416,7 @@ impl Inner {
             preparations: Vec::new(),
             barrier: false,
             restores: 0,
+            readiness_requires_user: false,
             cancel_waiters: 0,
             cancelled: HashSet::new(),
             subscription: false,
@@ -1450,6 +1622,7 @@ impl Inner {
             account_revision: account.as_ref().ok().map(|account| account.revision),
             operation_busy: self.operation_busy() || account_busy,
             component_tasks: self.component_tasks(),
+            restore_required: false,
         }
     }
     fn status(&self) -> Status {
@@ -1464,6 +1637,7 @@ impl Inner {
             && !self.config.logout_pending
             && self.subscription
             && !self.config.model.is_empty()
+            && !self.readiness_requires_user
             && !self.busy();
         let reason = if self.config.adapter == "deepseek" {
             "DeepSeek 的 Harness 订阅执行尚未接入。"
@@ -1471,6 +1645,8 @@ impl Inner {
             "Codex 停止状态尚未确认，请重新启动应用。"
         } else if self.restores > 0 {
             "数据恢复期间不能启动 Codex，请等待恢复完成后重新检测。"
+        } else if self.readiness_requires_user {
+            failure("harness_restore_required").message
         } else if self.runtime_state == RuntimeState::Preparing {
             "正在准备 Codex 组件，可取消；不会发起模型请求。"
         } else if !self.notice.is_empty() {
@@ -1527,6 +1703,7 @@ impl Inner {
             account_revision: None,
             operation_busy: self.operation_busy(),
             component_tasks: self.component_tasks(),
+            restore_required: codex_selected && self.readiness_requires_user,
         }
     }
 }
@@ -1573,6 +1750,8 @@ pub(crate) fn failure(code: &'static str) -> Error {
         "harness_runtime_busy" => "另一个进程正在准备 Codex 组件，请稍后重试。",
         "harness_runtime_storage" => "Codex 组件无法写入本地缓存，请检查权限和可用空间后重试。",
         "harness_not_ready" => "所选 Harness 尚未就绪，请准备组件并完成订阅登录。",
+        "harness_restore_required" => "数据恢复后请主动重新检查 Codex 状态。",
+        "codebuddy_restore_required" => "数据恢复后请先主动刷新 CodeBuddy 登录状态。",
         "harness_task_unavailable" => "CodeBuddy 当前支持连接测试、单题解析和追问；尚未开放批量与导入任务。",
         "codebuddy_account_stale" | "codebuddy_login_stale" => "CodeBuddy 账户已变化，请重新发起任务。",
         "codebuddy_auth_expired" | "codebuddy_auth_required" | "codebuddy_login_not_ready" => "CodeBuddy 登录已失效，请重新登录后再试。",
@@ -2555,6 +2734,105 @@ mod tests {
     }
 
     #[test]
+    fn saved_codex_readiness_is_checked_without_entering_settings() {
+        let fixture = Fixture::new();
+        std::fs::write(
+            fixture.root.join("ai-execution/fake-subscription"),
+            b"fixture",
+        )
+        .unwrap();
+        let before = fixture.service.control(Control::Status).unwrap();
+        assert!(!before.ready);
+        let control: Control = serde_json::from_value(json!({
+            "kind": "check_readiness", "id": uuid::Uuid::new_v4().to_string(), "revision": before.revision
+        })).unwrap();
+        let after = fixture.service.control(control).unwrap();
+        assert!(after.ready);
+        assert_eq!(after.credential_status, "subscription");
+    }
+
+    #[test]
+    fn readiness_rejects_stale_revision_and_invalid_request_id() {
+        let fixture = Fixture::new();
+        let revision = fixture.service.control(Control::Status).unwrap().revision;
+        for (id, current, expected) in [
+            ("invalid".to_owned(), revision, "invalid_input"),
+            (
+                uuid::Uuid::new_v4().to_string(),
+                revision + 1,
+                "harness_stale",
+            ),
+        ] {
+            let control: Control = serde_json::from_value(json!({
+                "kind": "check_readiness", "id": id, "revision": current
+            }))
+            .unwrap();
+            assert_eq!(
+                fixture.service.control(control).err().unwrap().code,
+                expected
+            );
+        }
+    }
+
+    #[test]
+    fn saved_codebuddy_component_and_account_can_be_checked_after_restart() {
+        let (fixture, _, account_revision) = codebuddy_fixture();
+        fixture
+            .service
+            .with(|state| {
+                state.codebuddy_runtime = CodeBuddyRuntime::default();
+                Ok(())
+            })
+            .unwrap();
+        let before = fixture.service.control(Control::Status).unwrap();
+        assert!(!before.ready);
+        let after = fixture
+            .service
+            .control(Control::CheckReadiness {
+                id: uuid::Uuid::new_v4().to_string(),
+                revision: before.revision,
+                confirmed_after_restore: false,
+            })
+            .unwrap();
+        assert!(after.ready);
+        assert_eq!(after.account_revision, Some(account_revision));
+        std::fs::remove_file(fixture.root.join("ai-execution/fake-codebuddy-cached")).unwrap();
+        let missing = fixture
+            .service
+            .control(Control::CheckReadiness {
+                id: uuid::Uuid::new_v4().to_string(),
+                revision: after.revision,
+                confirmed_after_restore: false,
+            })
+            .err()
+            .unwrap();
+        assert_eq!(missing.code, "codebuddy_runtime_unavailable");
+        assert!(!fixture.service.control(Control::Status).unwrap().ready);
+    }
+
+    #[test]
+    fn missing_codebuddy_component_does_not_start_preparation() {
+        let fixture = Fixture::new();
+        let revision = fixture.service.control(Control::Status).unwrap().revision;
+        let selected = select_adapter(&fixture.service, "codebuddy", revision).unwrap();
+        let error = fixture
+            .service
+            .control(Control::CheckReadiness {
+                id: uuid::Uuid::new_v4().to_string(),
+                revision: selected.revision,
+                confirmed_after_restore: false,
+            })
+            .err()
+            .unwrap();
+        assert_eq!(error.code, "codebuddy_runtime_unavailable");
+        assert!(!fixture
+            .root
+            .join("ai-execution/fake-codebuddy-cached")
+            .exists());
+        assert!(!fixture.service.control(Control::Status).unwrap().ready);
+    }
+
+    #[test]
     fn custom_preparation_never_downloads_and_client_cannot_supply_a_url() {
         let f = Fixture::new();
         std::fs::write(f.root.join("ai-execution/fake-prepare-failed"), b"fixture").unwrap();
@@ -2790,6 +3068,60 @@ mod tests {
         assert!(!f.service.refresh().unwrap().busy);
         assert!(!f.service.refresh().unwrap().ready);
         assert!(f.service.control(Control::Inspect).unwrap().ready);
+    }
+    #[test]
+    fn automatic_readiness_cannot_bypass_restore_in_same_process() {
+        let f = Fixture::new();
+        f.service.control(Control::Login).unwrap();
+        wait_login(&f.service);
+        drop(f.service.begin_restore().unwrap());
+
+        // 页面重载不会重新创建原生服务，重复自动检查也不能代替用户确认。
+        for _ in 0..2 {
+            let revision = f.service.control(Control::Status).unwrap().revision;
+            assert_eq!(
+                f.service
+                    .control(Control::CheckReadiness {
+                        id: uuid::Uuid::new_v4().to_string(),
+                        revision,
+                        confirmed_after_restore: false,
+                    })
+                    .err()
+                    .unwrap()
+                    .code,
+                "harness_restore_required"
+            );
+        }
+        let before = f.service.control(Control::Status).unwrap();
+        assert!(before.restore_required && !before.ready);
+        assert!(
+            f.service
+                .control(Control::CheckReadiness {
+                    id: uuid::Uuid::new_v4().to_string(),
+                    revision: before.revision,
+                    confirmed_after_restore: true,
+                })
+                .unwrap()
+                .ready
+        );
+
+        drop(f.service.begin_restore().unwrap());
+        assert!(f.service.control(Control::Inspect).unwrap().ready);
+
+        // 退出并重新启动应用后，新的进程可以按正常冷启动流程检查。
+        drop(f.service.begin_restore().unwrap());
+        let reopened = Arc::new(Harness::open(&f.root));
+        let revision = reopened.control(Control::Status).unwrap().revision;
+        assert!(
+            reopened
+                .control(Control::CheckReadiness {
+                    id: uuid::Uuid::new_v4().to_string(),
+                    revision,
+                    confirmed_after_restore: false,
+                })
+                .unwrap()
+                .ready
+        );
     }
     #[test]
     fn restore_guard_survives_failed_storage_operation_and_corrupt_harness() {

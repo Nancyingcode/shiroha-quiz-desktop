@@ -416,7 +416,7 @@
     updateDav(config) { davConfig = config; },
     async reset() {
       networkGeneration += 1; await credential({ kind: 'invalidate' }); credentialStates.clear(); davConfig = null;
-      await scope.ShirohaPlatform?.harness?.initialize();
+      await scope.ShirohaPlatform?.harness?.initialize({ restored: true });
     },
   };
   scope.ShirohaPlatform = { ...scope.ShirohaBrowser, storage, saves: scope.ShirohaSaveQueue.create(storage),

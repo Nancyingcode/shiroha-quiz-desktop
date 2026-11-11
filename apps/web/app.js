@@ -54,7 +54,7 @@
     if (sourceKey && sourceKey !== KEY) { migrated.settings = { ...(migrated.settings || {}), migratedFromStorageKey: sourceKey }; }
     return migrated;
   }
-  async function clearStoredState() { await ShirohaPlatform.harness?.cancelAll();if (ShirohaPlatform.storage.reset) { await ShirohaPlatform.storage.reset(); } else { await ShirohaPlatform.credentials.reset(); } await ShirohaPlatform.harness?.initialize(); }
+  async function clearStoredState() { await ShirohaPlatform.harness?.cancelAll();if (ShirohaPlatform.storage.reset) { await ShirohaPlatform.storage.reset(); } else { await ShirohaPlatform.credentials.reset(); } await ShirohaPlatform.harness?.initialize({ restored: true }); }
   async function saveState() { return runMutation(async () => { await saveSilent();toast(ShirohaPlatform.storage.checkpoint ? '已保存到本机数据库。' : '已保存到浏览器本地。', 'ok'); }); }
   function now() { return new Date().toISOString(); }
   function makeId(prefix = 'id', ...parts) {
@@ -173,7 +173,7 @@
     presets: AI_PROVIDER_PRESETS_V99, platform: ShirohaPlatform, config: ensureAiImportStateV99, readKey: readStoredAiKeyV99,
     view: { select: $, escape: esc, copy: copyTextV23, toast },
   });
-  const { defaultAiConfigV99, normalizeAiConfigV99, isAiHarnessExecutionV99, aiHarnessLabelV99, aiHarnessTaskReasonV99, aiUnavailableReasonV99, aiHarnessPrivacyV99, aiExecutionConfigV99, aiConfiguredV99, aiExecutionLabelV99, aiRequestConfigV99, isLocalAiEndpointV99, readAiFormV99, setAiSettingsStatusV99, sanitizeAiDiagnosticDetailV375, buildAiDiagnosticV375, renderAiDiagnosticV375, setAiDiagnosticV375, toggleAiDiagnosticV375, copyAiDiagnosticV375, copyAiOllamaCorsCommandV375, updateAiConnectionPillV99, renderAiSettingsV99 } = aiSettings;
+  const { defaultAiConfigV99, normalizeAiConfigV99, isAiHarnessExecutionV99, aiHarnessLabelV99, aiHarnessTaskReasonV99, aiUnavailableReasonV99, aiHarnessPrivacyV99, aiExecutionConfigV99, aiConfiguredV99, aiAvailabilityV99, aiExecutionLabelV99, aiRequestConfigV99, isLocalAiEndpointV99, readAiFormV99, setAiSettingsStatusV99, sanitizeAiDiagnosticDetailV375, buildAiDiagnosticV375, renderAiDiagnosticV375, setAiDiagnosticV375, toggleAiDiagnosticV375, copyAiDiagnosticV375, copyAiOllamaCorsCommandV375, updateAiConnectionPillV99, renderAiSettingsV99 } = aiSettings;
   const { requestAiChatV99, withAiTimeoutV99 } = globalThis.ShirohaAiTransport.create({
     platform: ShirohaPlatform,
     harness: { isHarness: isAiHarnessExecutionV99, taskReason: aiHarnessTaskReasonV99, configured: aiConfiguredV99, unavailableReason: aiUnavailableReasonV99 },
@@ -327,7 +327,7 @@
   } = practicePage;
   const aiImportPanel = globalThis.ShirohaAiImportPanel.create({
     draft: importDraft, sessions: aiImportSessions, platform: ShirohaPlatform, select: $, selectAll: $$, escape: esc, label, toast, showNotice,
-    settings: { presets: AI_PROVIDER_PRESETS_V99, config: aiExecutionConfigV99, configured: aiConfiguredV99, isHarness: isAiHarnessExecutionV99,
+    settings: { presets: AI_PROVIDER_PRESETS_V99, config: aiExecutionConfigV99, configured: aiConfiguredV99, availability: aiAvailabilityV99, isHarness: isAiHarnessExecutionV99,
       unavailable: aiUnavailableReasonV99, executionLabel: aiExecutionLabelV99, privacy: aiHarnessPrivacyV99,
       localEndpoint: isLocalAiEndpointV99, updatePill: updateAiConnectionPillV99, render: renderAiSettingsV99,
       toggleDiagnostic: toggleAiDiagnosticV375, copyDiagnostic: copyAiDiagnosticV375, copyCors: copyAiOllamaCorsCommandV375,
@@ -336,7 +336,8 @@
       startPreview: startAiPreviewTaskV991, cancelPreview: cancelAiPreviewRequestV991 },
     editor: { isEditing: () => !!bankEditor.current(), openQuestion: (...args) => openEditQuestion(...args), normalizeQuestion },
     preview: { status: importIssueStatus, key: aiQuestionKeyV991, findIndex: findImportIndexByAiKeyV991,
-      render: (...args) => renderImportPreview(...args), renderPracticeAi: (...args) => renderPracticeAiPanelV613(...args), switchView: switchViewV45 },
+      render: (...args) => renderImportPreview(...args), renderPracticeAi: (...args) => renderPracticeAiPanelV613(...args),
+      updateReview: (...args) => updateReviewAnalysisPanels(...args), switchView: switchViewV45 },
     limits: { importChars: AI_IMPORT_MAX_CHARS_V99, items: AI_PREVIEW_MAX_ITEMS_V991,
       analysisBatch: AI_ANALYSIS_DEFAULT_BATCH_V991, reviewBatch: AI_REVIEW_DEFAULT_BATCH_V991 },
   });
@@ -350,9 +351,10 @@
     session: practiceSession, practiceAi: practiceAiSessions, reviewAi: reviewAiSessions, select: $, selectAll: $$, escape: esc,
     question: { currentItem: currentPracticeItemV8916, question: practiceQuestionV8916, key: practiceItemKeyV8916,
       answer: getPracticeAnswerStateV26, hasImages: aiSingleHasImagesV613, source: reviewAnalysisSource, content: renderQuestionContent },
-    settings: { config: aiExecutionConfigV99, configured: aiConfiguredV99, request: aiRequestConfigV99, isHarness: isAiHarnessExecutionV99,
+    settings: { config: aiExecutionConfigV99, configured: aiConfiguredV99, availability: aiAvailabilityV99, request: aiRequestConfigV99, isHarness: isAiHarnessExecutionV99,
       label: aiExecutionLabelV99, privacy: aiHarnessPrivacyV99 },
     actions: { practiceSession: aiSingleSessionV613, runPractice: runAiSingleAnalysisV613, followUp: runAiSingleFollowUpV613,
+      retryReadiness: () => ShirohaPlatform.harness?.retryReadiness(),
       save: saveAiSingleAnalysisV613, runReview: runReviewAnalysis, saveReview: saveReviewAnalysis,
       exitPractice: exitPracticeFocus, exitExam: exitExamFocus, switchView: switchViewV45, isReady: () => applicationReady },
   });
@@ -2333,6 +2335,9 @@ D. 高速通过积水路段`;
   // 页面拥有单个写入事务；保存期间冻结交互，避免失败回滚覆盖后续编辑。
   // 仅 action 的同步调用链可加入当前事务；action 返回或抛错时立即重置，异步期间仍由 mutationBusy 独占。
   let mutationBusy = false; let enteringMutation = false; let mutationSaveError = null; let applicationReady = false;
+  // 启动代次只属于当前窗口；恢复后的新启动不能沿用旧冷启动检查。
+  let applicationStarted = false;
+  let applicationGeneration = 0;
   let retryMutation = null;
   function platformStatus(message, failed = false) {
     let el = document.getElementById('platform-status');
@@ -2399,12 +2404,19 @@ D. 高速通过积水路段`;
     container.append(load, select, repair, backup, message);
   }
   async function startApplication() {
+    const coldStart = !applicationStarted;applicationStarted = true;applicationGeneration += 1;const generation = applicationGeneration;
     lockApplication(true);document.body.dataset.storageState = 'loading';platformStatus('正在读取本地数据…');
     try {
       Object.assign(state, await loadState());
       await ShirohaPlatform.credentials.initialize(ensureAiImportStateV99(), state.serviceConfigurations);
-      await ShirohaPlatform.harness?.initialize();
+      const harnessInitialization = ShirohaPlatform.harness?.initialize({ restored: !coldStart });
       init();applicationReady = true;lockApplication(false);platformStatus('');
+      if (harnessInitialization) {
+        void harnessInitialization.then(() => {
+          if (coldStart && generation === applicationGeneration && applicationReady) { return ShirohaPlatform.harness?.ensureReady(); }
+          return undefined;
+        }).catch(() => { if (generation === applicationGeneration) { platformStatus('AI 状态检查未完成，请在 AI 设置中重试。', true); } });
+      }
       if (ShirohaPlatform.credentials.migrateLegacy) {
         const retryCredentials = async () => { try { await ShirohaPlatform.credentials.migrateLegacy();renderAiSettingsV99();renderWebdavPanelV378(true);platformStatus(''); } catch { platformStatus('旧凭据迁移未完成，旧值已保留，可独立重试。', true);const retry = document.createElement('button');retry.textContent = '重试凭据迁移';retry.onclick = retryCredentials;document.getElementById('platform-status').appendChild(retry); } };
         await retryCredentials();

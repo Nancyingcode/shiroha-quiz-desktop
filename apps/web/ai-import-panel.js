@@ -2,8 +2,8 @@
   'use strict';
   function create({ draft: importDraft, sessions: aiImportSessions, platform: ShirohaPlatform,
     select: $, selectAll: $$, escape: esc, label, toast, showNotice, settings, requests, editor, preview, limits }) {
-    const { presets: AI_PROVIDER_PRESETS_V99, config: aiExecutionConfigV99, configured: aiConfiguredV99, isHarness: isAiHarnessExecutionV99,
-      unavailable: aiUnavailableReasonV99, executionLabel: aiExecutionLabelV99, privacy: aiHarnessPrivacyV99,
+    const { presets: AI_PROVIDER_PRESETS_V99, config: aiExecutionConfigV99, configured: aiConfiguredV99, availability: aiAvailabilityV99, isHarness: isAiHarnessExecutionV99,
+      executionLabel: aiExecutionLabelV99, privacy: aiHarnessPrivacyV99,
       localEndpoint: isLocalAiEndpointV99, updatePill: updateAiConnectionPillV99, render: renderAiSettingsV99,
       toggleDiagnostic: toggleAiDiagnosticV375, copyDiagnostic: copyAiDiagnosticV375, copyCors: copyAiOllamaCorsCommandV375,
       save: saveAiSettingsV99, test: testAiConnectionV99, clear: clearAiSettingsV99 } = settings;
@@ -11,7 +11,7 @@
       startPreview: startAiPreviewTaskV991, cancelPreview: cancelAiPreviewRequestV991 } = requests;
     const { isEditing: isEditingBank, openQuestion: openEditQuestion, normalizeQuestion } = editor;
     const { status: importIssueStatus, key: aiQuestionKeyV991, findIndex: findImportIndexByAiKeyV991,
-      render: renderImportPreview, renderPracticeAi: renderPracticeAiPanelV613, switchView: switchViewV45 } = preview;
+      render: renderImportPreview, renderPracticeAi: renderPracticeAiPanelV613, updateReview, switchView: switchViewV45 } = preview;
     const { importChars: AI_IMPORT_MAX_CHARS_V99, items: AI_PREVIEW_MAX_ITEMS_V991,
       analysisBatch: AI_ANALYSIS_DEFAULT_BATCH_V991, reviewBatch: AI_REVIEW_DEFAULT_BATCH_V991 } = limits;
     // 文本选择与预览范围只属于当前导入页；重新输入时丢弃旧选择。
@@ -23,6 +23,7 @@
         refreshAiImportPanelV99();
         refreshAiPreviewPanelV991();
         renderPracticeAiPanelV613();
+        updateReview?.();
       }, aiTasksBusyV99);
       const provider = $('#ai-provider-v99');
       if (provider) {
@@ -82,7 +83,7 @@
       }
       const settings = $('#ai-import-settings-btn-v99');
       if (settings) {
-        settings.onclick = async () => await switchViewV45('ai-settings');
+        settings.onclick = async () => await openSettingsOrRetry('import_organize');
       }
       const review = $('#ai-review-import-btn-v991');
       if (review) {
@@ -108,7 +109,7 @@
       }
       const previewSettings = $('#ai-preview-settings-btn-v991');
       if (previewSettings) {
-        previewSettings.onclick = async () => await switchViewV45('ai-settings');
+        previewSettings.onclick = async () => await openSettingsOrRetry(aiPreviewPanelModeV991 === 'analysis' ? 'batch_analysis' : 'batch_review');
       }
       const importText = $('#import-text');
       if (importText && !importText.dataset.aiSelectionBoundV992) {
@@ -168,6 +169,14 @@
       renderAiSettingsV99();
       syncAiImportActionV99();
       syncAiPreviewToolsV991();
+    }
+    async function openSettingsOrRetry(task) {
+      const availability = aiAvailabilityV99(aiExecutionConfigV99(), task);
+      if ((availability.state === 'error' || availability.state === 'blocked') && availability.retryable) {
+        await ShirohaPlatform.harness?.retryReadiness();
+      } else {
+        await switchViewV45('ai-settings');
+      }
     }
     function syncAiImportActionV99() {
       const busy = !!aiImportSessions.importRequest.running || !!aiImportSessions.previewRequest.running;
@@ -241,6 +250,8 @@
     function refreshAiImportPanelV99() {
       const config = aiExecutionConfigV99();
       const configured = aiConfiguredV99(config, 'import_organize');
+      const availability = aiAvailabilityV99(config, 'import_organize');
+      const checking = availability.state === 'checking';
       const isHarness = isAiHarnessExecutionV99(config.execution);
       const selected = currentAiImportSelectionV992();
       const selectedInput = $('#ai-import-scope-selection-v992');
@@ -288,16 +299,18 @@
         hint.textContent = range.scope === 'selection' ? `将只发送当前选中的 ${range.text.length.toLocaleString('zh-CN')} 字；成功后预览显示本次整理结果，导入框原文不变。` : '将整理导入框中的全部原始文本；成功后更新当前预览，导入框原文不变。';
       }
       if (start) {
-        start.classList.toggle('ai-hidden-v99', !configured);
-        start.disabled = aiImportSessions.importRequest.running || !range.text || range.text.length > AI_IMPORT_MAX_CHARS_V99;
+        start.classList.toggle('ai-hidden-v99', !configured && !checking);
+        start.disabled = checking || aiImportSessions.importRequest.running || !range.text || range.text.length > AI_IMPORT_MAX_CHARS_V99;
         start.textContent = aiImportSessions.importRequest.running ? '正在整理……' : '开始整理';
       }
       if (settings) {
-        settings.classList.toggle('ai-hidden-v99', configured);
+        settings.classList.toggle('ai-hidden-v99', configured || checking);
+        settings.textContent = (availability.state === 'error' || availability.state === 'blocked') && availability.retryable ? '重试检查' : '前往 AI 设置';
       }
       if (privacy) {
+        privacy.setAttribute?.('role', 'status'); privacy.setAttribute?.('aria-live', 'polite'); privacy.setAttribute?.('aria-busy', String(checking));
         if (!configured) {
-          privacy.textContent = aiUnavailableReasonV99(config, 'import_organize');
+          privacy.textContent = availability.reason;
           privacy.className = 'notice warn';
         } else if (isHarness) {
           privacy.textContent = `${aiHarnessPrivacyV99(config, `本次${range.label}及相关核对上下文`)}只返回待核对结果，不发送本地题库文件或图片。`;
@@ -429,6 +442,8 @@
       const config = aiExecutionConfigV99();
       const task = mode === 'analysis' ? 'batch_analysis' : 'batch_review';
       const configured = aiConfiguredV99(config, task);
+      const availability = aiAvailabilityV99(config, task);
+      const checking = availability.state === 'checking';
       const isHarness = isAiHarnessExecutionV99(config.execution);
       const title = $('#ai-preview-title-v991');
       const badge = $('#ai-preview-badge-v991');
@@ -520,17 +535,19 @@
         model.textContent = config.model || '—';
       }
       if (settings) {
-        settings.classList.toggle('ai-hidden-v99', configured);
+        settings.classList.toggle('ai-hidden-v99', configured || checking);
+        settings.textContent = (availability.state === 'error' || availability.state === 'blocked') && availability.retryable ? '重试检查' : '前往 AI 设置';
       }
       if (start) {
-        start.classList.toggle('ai-hidden-v99', !configured);
-        start.disabled = aiImportSessions.previewRequest.running || !!details.error || !details.indexes.length || details.indexes.length > AI_PREVIEW_MAX_ITEMS_V991;
+        start.classList.toggle('ai-hidden-v99', !configured && !checking);
+        start.disabled = checking || aiImportSessions.previewRequest.running || !!details.error || !details.indexes.length || details.indexes.length > AI_PREVIEW_MAX_ITEMS_V991;
         start.textContent = aiImportSessions.previewRequest.running ? '处理中……' : `开始${aiPreviewModeLabelV991(mode)}`;
       }
       const status = $('#ai-preview-status-v991');
       if (status && !aiImportSessions.previewRequest.running && status.dataset.stickyV991 !== '1') {
+        status.setAttribute?.('role', 'status'); status.setAttribute?.('aria-live', 'polite'); status.setAttribute?.('aria-busy', String(checking));
         if (!configured) {
-          status.textContent = aiUnavailableReasonV99(config, task);
+          status.textContent = availability.reason;
           status.className = 'notice warn';
         } else if (details.error) {
           status.textContent = details.error;

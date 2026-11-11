@@ -53,6 +53,8 @@
 - [Web 与 Windows 桌面双端设计](./superpowers/specs/2026-10-23-web-desktop-dual-platform-design.md)
 - [AI 设置中的 Harness 执行方式设计（已确认，仅订阅登录）](./superpowers/specs/2026-10-24-ai-harness-execution.md)
 - [Codex Harness 实施计划与验证记录](./superpowers/plans/2026-10-24-ai-harness-execution.md)
+- [AI 启动就绪检查设计（已确认）](./superpowers/specs/2026-11-11-ai-startup-readiness.md)
+- [AI 启动就绪检查实施计划与验证](./superpowers/plans/2026-11-11-ai-startup-readiness.md)
 - [Codex 组件自动管理设计](./superpowers/specs/2026-10-25-managed-codex-runtime.md)
 - [Codex 组件自动管理实施与验证](./superpowers/plans/2026-10-25-managed-codex-runtime.md)
 - [CodeBuddy CLI 直接管道可行性验证（P0 未通过）](./superpowers/plans/2026-10-25-codebuddy-cli-stdio-p0.md)

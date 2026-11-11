@@ -71,14 +71,19 @@ export type CodeBuddyCliControl = {kind:'status'}|{kind:'refresh';revision:numbe
 export interface HarnessStatus {
   mode:'api'|'harness'; adapter:string; model:string; timeoutSeconds:number;
   credentialStatus:string; runtimePath:string; runtimeVersion:string; ready:boolean; reason:string; revision:number; busy:boolean;
+  restoreRequired?:boolean;
   runtimeSource:'managed'|'custom'; runtimeState:'unprepared'|'preparing'|'ready'|'failed'|'cancelled'; runtimeReceivedBytes:number; runtimeTotalBytes:number;
   loginUrl?:string; userCode?:string;
   accountRevision?:number;
   operationBusy?:boolean;
   componentTasks?:HarnessComponentTask[];
+  readiness?:'checking'|'error'|'blocked';
+  readinessRetryable?:boolean;
 }
 export interface HarnessApi {
-  initialize():Promise<void>;
+  initialize(options?:{restored?:boolean}):Promise<void>;
+  ensureReady():Promise<void>;
+  retryReadiness():Promise<void>;
   status():HarnessStatus;
   snapshot():Readonly<HarnessStatus>;
   execute(snapshot:Readonly<HarnessStatus>,task:AiTaskKind,messages:{role:'system'|'user'|'assistant';content:string}[],signal?:AbortSignal):Promise<{content:string}>;

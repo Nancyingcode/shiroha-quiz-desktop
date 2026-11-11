@@ -2,15 +2,27 @@
   'use strict';
 
   function create({ platform, harness, response }) {
-    async function requestAiChatV99(config, messages, { controller, maxTokens, testMode, plainText, task } = {}) {
+    async function requestAiChatV99(config, messages, { controller, maxTokens, testMode, plainText, task, isCurrent } = {}) {
       if (harness.isHarness(config.execution)) {
         if (!platform.harness) { throw new Error('当前平台不支持 Harness，请在桌面端配置。'); }
         const unavailable = harness.taskReason(config, task);
         if (unavailable) { throw new Error(unavailable); }
-        if (config.execution.adapter === 'codebuddy' && !harness.configured(config, task)) {
+        let { execution } = config;
+        if (platform.harness.status?.().readiness === 'checking') {
+          await platform.harness.ensureReady();
+          if (controller?.signal?.aborted) { const error = new Error('AI 请求已取消。');error.name = 'AbortError';throw error; }
+          const current = platform.harness.snapshot();
+          const configurationChanged = current.adapter !== execution.adapter || current.mode !== execution.mode
+            || current.model !== execution.model || current.timeoutSeconds !== execution.timeoutSeconds
+            || current.revision !== execution.revision || current.accountRevision !== execution.accountRevision;
+          if (configurationChanged || typeof isCurrent !== 'function' || !isCurrent()) { throw new Error('题目或 AI 配置已变化，请重新发起请求。'); }
+          if (!current.ready) { throw new Error(current.reason || 'AI 状态尚未就绪，请重试。'); }
+          execution = current;
+        }
+        if (execution.adapter === 'codebuddy' && !harness.configured({ ...config, execution }, task)) {
           throw new Error(harness.unavailableReason(config, task));
         }
-        return platform.harness.execute(config.execution, task, messages, controller?.signal);
+        return platform.harness.execute(execution, task, messages, controller?.signal);
       }
       const base = { model: config.model, messages, temperature: 0, stream: false };
       if (maxTokens) { base.max_tokens = maxTokens; }

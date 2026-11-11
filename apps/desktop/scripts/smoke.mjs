@@ -1179,8 +1179,41 @@ async function main() {
     await stop(runtime); runtime = undefined;
     runtime = await launch(executable, profile, proxyPort);
     const memoryRestart = runtime;
-    await check('CodeBuddy CLI 登录在重启后重新核验', () => codebuddyCliAfterRestart(memoryRestart.page));
-    await check('CodeBuddy CLI 过期引导、重启复用与退出跨重启验证', () => codebuddyCliPersistenceSmoke(memoryRestart.page, profile, async () => {
+    await check('CodeBuddy CLI 登录在重启后重新核验', () => codebuddyCliAfterRestart(memoryRestart.page, () => practiceImportedBank(memoryRestart.page, bankName)));
+    await check('Codex 重启后无需进入设置即可生成单题解析', async () => {
+      assert(runtime);
+      await runtime.page.locator('#ai-harness-adapter').selectOption('codex');
+      await runtime.page.waitForFunction(() => Reflect.get(window, 'ShirohaPlatform')?.harness?.status().ready);
+      await stop(runtime); runtime = undefined;
+      runtime = await launch(executable, profile, proxyPort);
+      const restartedPage = runtime.page;
+      await restartedPage.waitForFunction(() => {
+        const status = Reflect.get(window, 'ShirohaPlatform')?.harness?.status();
+        return status?.adapter === 'codex' && status.ready;
+      });
+      assert.equal(await restartedPage.locator('#ai-settings').evaluate((element) => element.classList.contains('active')), false);
+      await restartedPage.locator('.nav[data-view="practice"]').click();
+      await restartedPage.locator('#practice-submit-mode').selectOption('total');
+      await practiceImportedBank(restartedPage, bankName);
+      await restartedPage.locator('#practice-card .option[data-key="B"]').click();
+      await restartedPage.locator('[data-ai-single-open-v613]').click();
+      await restartedPage.locator('[data-ai-single-analysis-v613]').click();
+      await restartedPage.waitForFunction(() => document.querySelector('.practice-ai-text-v613')?.textContent?.includes('隔离 Harness 测试解析。'));
+      await restartedPage.locator('#p-exit').click();
+      await restartedPage.locator('#app-dialog [data-dialog-accept]').click();
+      await restartedPage.waitForFunction(() => !document.body.classList.contains('practice-focus'));
+      await restartedPage.locator('#practice-submit-mode').selectOption('single');
+      await restartedPage.locator('.nav[data-view="ai-settings"]').click();
+      await restartedPage.locator('#ai-harness-adapter').selectOption('codebuddy');
+      await restartedPage.waitForFunction(() => {
+        const status = Reflect.get(window, 'ShirohaPlatform')?.harness?.status();
+        return status?.adapter === 'codebuddy' && status.ready;
+      });
+      return { coldStartReady: true, practiceBeforeSettings: true };
+    });
+    assert(runtime);
+    const codebuddyRestart = runtime;
+    await check('CodeBuddy CLI 过期引导、重启复用与退出跨重启验证', () => codebuddyCliPersistenceSmoke(codebuddyRestart.page, profile, async () => {
       assert(runtime);
       await stop(runtime); runtime = undefined;
       runtime = await launch(executable, profile, proxyPort);
@@ -1249,6 +1282,26 @@ async function main() {
       if ((await harnessStatus()).ready) { throw new Error('恢复点恢复未要求重新检测 Harness'); }
       return { restored: true, snapshotRetained: true, harnessRequiresInspect: true };
     }));
+    await check('恢复后页面重载仍须主动确认 Codex', async () => {
+      await restarted.page.reload();
+      await restarted.page.locator('body[data-storage-state="ready"]').waitFor();
+      await restarted.page.waitForFunction(() => {
+        const status = Reflect.get(window, 'ShirohaPlatform')?.harness?.status();
+        return status?.mode === 'api' && status.restoreRequired;
+      });
+      return restarted.page.evaluate(async () => {
+        const host = (/** @type {NativeTestWindow} */ (window)).ShirohaDesktopHost;
+        const { harness } = /** @type {{harness: import('../../web/platform/runtime.d.ts').HarnessApi}} */ (Reflect.get(window, 'ShirohaPlatform'));
+        if (!host) { throw new Error('本地桥接缺失'); }
+        const state = /** @type {import('../../web/platform/runtime.d.ts').HarnessStatus} */ (await host.invoke('harness_control', { request: { kind: 'status' } }));
+        if (!state.restoreRequired || state.ready) { throw new Error('页面重载绕过了恢复确认'); }
+        await harness.saveMode('harness');
+        if (harness.status().readiness !== 'blocked' || harness.status().ready) { throw new Error('切回 Codex 绕过了恢复确认'); }
+        await harness.retryReadiness();
+        if (!harness.status().ready) { throw new Error('主动确认后假订阅未恢复就绪'); }
+        return { reloadBlocked: true, modeSwitchBlocked: true, explicitRetryReady: true };
+      });
+    });
     await stop(runtime); runtime = undefined;
     const migrationProfile = await mkdtemp(path.join(tempRoot, PROFILE_PREFIX));
     profiles.push(migrationProfile); await markNativeIsolation(migrationProfile);

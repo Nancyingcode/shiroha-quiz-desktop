@@ -1282,6 +1282,59 @@ test('错题本显示完整题干、全部选项和已保存的错选标记', as
   assert.equal(await card.locator('input').count(), 0);
 });
 
+test('启动检查完成后已打开的错题和训练复盘原地启用 AI', async (t) => {
+  const initial = webState();
+  const question = initial.banks[0].questions[0]; question.analysis = '';
+  initial.wrongBook = { 'bank-a': [{ id: question.id, status: '未掌握', lastAnswer: ['B'], wrongCount: 1 }] };
+  const injection = `
+    let notifyReadiness = () => {};
+    const execution = { mode: 'harness', adapter: 'codex', model: 'fixture-model', timeoutSeconds: 120,
+      credentialStatus: 'subscription', runtimePath: 'fixture.exe', runtimeVersion: 'fixture', runtimeSource: 'custom',
+      runtimeState: 'ready', runtimeReceivedBytes: 0, runtimeTotalBytes: 0, revision: 1, busy: false,
+      ready: false, readiness: 'checking', reason: '正在检查 AI 状态…' };
+    globalThis.__readinessChecks = 0; globalThis.__readinessRetries = 0; globalThis.__modelCalls = 0;
+    globalThis.ShirohaPlatform.harness = {
+      initialize: async () => {}, snapshot: () => Object.freeze({ ...execution }), status: () => ({ ...execution }),
+      ensureReady: async () => { globalThis.__readinessChecks += 1; }, bind: (changed) => { notifyReadiness = changed; },
+      render: () => {}, formMode: () => 'harness', formAdapter: () => 'codex',
+      retryReadiness: async () => { globalThis.__readinessRetries += 1; execution.ready = true; delete execution.readiness; execution.reason = ''; notifyReadiness(); },
+      execute: async () => { globalThis.__modelCalls += 1; throw new Error('不应自动请求模型'); },
+    };
+    globalThis.__finishReadiness = () => { execution.ready = true; delete execution.readiness; execution.reason = ''; notifyReadiness(); };
+    globalThis.__failReadiness = () => { execution.ready = false; execution.readiness = 'error'; execution.reason = '隔离检查失败'; notifyReadiness(); };
+  `;
+  const page = await pageFor(t, JSON.stringify(initial), injection);
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.locator('.nav[data-view="wrongbook"]').click();
+  const wrong = page.locator('#wrongbook-list [data-review-analysis]').first();
+  await wrong.getByText('正在检查 AI 状态…').waitFor();
+  assert.equal(await wrong.locator('[data-review-ai="generate"]').isDisabled(), true);
+  assert.equal(await wrong.getByText('前往 AI 设置').count(), 0);
+  await page.locator('.nav[data-view="records"]').click();
+  await page.locator('#records [data-training-review]').first().click();
+  const review = page.locator('#training-question [data-review-analysis]');
+  await review.getByText('正在检查 AI 状态…').waitFor();
+  await page.evaluate(() => globalThis.__finishReadiness());
+  await review.locator('[data-review-ai="generate"]').waitFor({ state: 'visible' });
+  assert.equal(await review.locator('[data-review-ai="generate"]').isEnabled(), true);
+  await page.locator('#training-review-back').click();
+  await page.locator('.nav[data-view="wrongbook"]').click();
+  assert.equal(await wrong.locator('[data-review-ai="generate"]').isEnabled(), true);
+  await page.evaluate(() => globalThis.__failReadiness());
+  await page.locator('.nav[data-view="import"]').click();
+  await page.locator('#import-text').fill('1. 隔离样本题目');
+  await page.locator('#ai-organize-import-btn-v99').click();
+  const retry = page.locator('#ai-import-settings-btn-v99');
+  assert.equal(await retry.innerText(), '重试检查');
+  assert.match(await page.locator('#ai-import-privacy-v99').innerText(), /隔离检查失败/);
+  await retry.click();
+  assert.equal(await page.locator('#ai-import-start-btn-v99').isEnabled(), true);
+  assert.equal(await page.locator('#ai-import-privacy-v99').getAttribute('aria-busy'), 'false');
+  assert.equal(await page.evaluate(() => globalThis.__readinessRetries), 1);
+  assert.equal(await page.evaluate(() => globalThis.__readinessChecks), 1);
+  assert.equal(await page.evaluate(() => globalThis.__modelCalls), 0);
+});
+
 test('题库预览的题型、分类、分值与操作在宽窄窗口均保持单行', async (t) => {
   const initial = webState();
   initial.banks[0].questions[0].category = '较长的分类名称：综合基础知识';

@@ -1,6 +1,11 @@
 (() => {
   'use strict';
 
+  function unavailableReason(config) {
+    if (config.execution?.mode === 'harness' && config.execution.reason) { return config.execution.reason; }
+    return '尚未配置 AI 服务，请先在“AI 设置”中选择并配置执行方式。';
+  }
+
   function createPractice({ practice, question, request, result, view, maxFollowUps }) {
     // 草稿和控制器属于当前练习轮次；重置或来源题变化后释放。
     const sessions = new Map();
@@ -60,22 +65,24 @@
       const { fingerprint } = session;
       const { configured, requestConfig } = request.config();
       if (!configured) {
-        session.error = requestConfig.execution?.reason || '尚未配置 AI 服务，请先在“AI 设置”中选择并配置执行方式。';
+        session.error = unavailableReason(requestConfig);
         session.notice = '';
         view.render();
         return;
       }
       const chosen = question.answer(key).chosen || [];
+      const chosenSnapshot = JSON.stringify(chosen);
       session.loading = 'analysis';
       session.error = '';
       session.notice = '';
       session.expanded = true;
       view.render();
       const isCurrentAnalysis = () => isCurrentRequest(owner, key, session, requestId, item, fingerprint);
+      const isCurrentBeforeSend = () => isCurrentAnalysis() && JSON.stringify(question.answer(key).chosen || []) === chosenSnapshot;
       try {
         const response = await request.timeout(requestConfig.timeoutSeconds, (controller) => {
           session.controller = controller;
-          return request.chat(requestConfig, request.analysisMessages(item, chosen), { controller, task: 'question_analysis' });
+          return request.chat(requestConfig, request.analysisMessages(item, chosen), { controller, task: 'question_analysis', isCurrent: isCurrentBeforeSend });
         });
         if (!isCurrentAnalysis()) { return; }
         const parsed = result.analysis(response.content);
@@ -121,12 +128,13 @@
       }
       const { configured, requestConfig } = request.config();
       if (!configured) {
-        session.error = requestConfig.execution?.reason || '尚未配置 AI 服务，请先在“AI 设置”中选择并配置执行方式。';
+        session.error = unavailableReason(requestConfig);
         view.render();
         return;
       }
       const chosen = question.answer(key).chosen || [];
       const history = session.messages || [];
+      const followUpSnapshot = JSON.stringify([chosen, history, session.analysis, text]);
       const pending = [...history, { role: 'user', content: text }];
       session.loading = 'followUp';
       session.error = '';
@@ -134,11 +142,13 @@
       session.followUpOpen = true;
       view.render();
       const isCurrentFollowUp = () => isCurrentRequest(owner, key, session, requestId, item, fingerprint);
+      const isCurrentBeforeSend = () => isCurrentFollowUp() && String(session.draft || '').trim() === text
+        && JSON.stringify([question.answer(key).chosen || [], session.messages, session.analysis, text]) === followUpSnapshot;
       try {
         const response = await request.timeout(requestConfig.timeoutSeconds, (controller) => {
           session.controller = controller;
           const draft = { analysis: session.analysis, initialAnalysis: session.initialAnalysis, messages: history };
-          return request.chat(requestConfig, request.followUpMessages(item, chosen, draft, text), { controller, task: 'question_followup' });
+          return request.chat(requestConfig, request.followUpMessages(item, chosen, draft, text), { controller, task: 'question_followup', isCurrent: isCurrentBeforeSend });
         });
         if (!isCurrentFollowUp()) { return; }
         const parsed = result.followUp(response.content);
@@ -211,7 +221,7 @@
       if (session.loading || session.saving) { return; }
       const { configured, requestConfig } = request.config();
       if (!configured) {
-        session.error = '尚未配置 AI 服务，请先完成设置。';
+        session.error = unavailableReason(requestConfig);
         view.render();
         return;
       }
@@ -221,6 +231,12 @@
       const sourceQuestion = source.bank?.questions[source.index];
       const sourceFingerprint = sourceQuestion ? question.fingerprint(sourceQuestion) : null;
       const isCurrentReviewRequest = () => sessions.get(session.key) === session && session.requestId === requestId;
+      const isCurrentBeforeSend = () => {
+        const current = question.source(session.item);
+        const currentQuestion = current.bank?.questions[current.index];
+        return isCurrentReviewRequest() && question.fingerprint(session.item) === session.fingerprint
+          && (sourceFingerprint === null || (!!currentQuestion && question.fingerprint(currentQuestion) === sourceFingerprint));
+      };
       session.loading = 'analysis';
       session.error = '';
       session.notice = '';
@@ -228,7 +244,7 @@
       try {
         const response = await request.timeout(requestConfig.timeoutSeconds, (controller) => {
           session.controller = controller;
-          return request.chat(requestConfig, request.analysisMessages(session.item, session.chosen), { controller, task: 'question_analysis' });
+          return request.chat(requestConfig, request.analysisMessages(session.item, session.chosen), { controller, task: 'question_analysis', isCurrent: isCurrentBeforeSend });
         });
         if (!isCurrentReviewRequest()) { return; }
         const current = question.source(session.item);
