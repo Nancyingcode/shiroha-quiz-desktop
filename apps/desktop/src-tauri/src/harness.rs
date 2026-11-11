@@ -617,11 +617,23 @@ impl Harness {
         let timed_out = Arc::new(AtomicBool::new(false));
         let timeout_flag = timed_out.clone();
         let timeout_cancel = operation.cancel.clone();
+        #[cfg(test)]
+        let timeout = if operation
+            .root
+            .join("fake-short-readiness-timeout")
+            .is_file()
+        {
+            Duration::from_millis(20)
+        } else {
+            READINESS_TIMEOUT
+        };
+        #[cfg(not(test))]
+        let timeout = READINESS_TIMEOUT;
         let (finished, wait) = std::sync::mpsc::sync_channel::<()>(1);
         let watchdog = std::thread::Builder::new()
             .name("harness-readiness-timeout".into())
             .spawn(move || {
-                if wait.recv_timeout(READINESS_TIMEOUT).is_err() {
+                if wait.recv_timeout(timeout).is_err() {
                     timeout_flag.store(true, Ordering::Release);
                     timeout_cancel.store(true, Ordering::Release);
                 }
@@ -633,6 +645,7 @@ impl Harness {
                 |_, result: Result<()>| result.and_then(|()| Err(failure("harness_unavailable"))),
             );
         }
+        let mut checked_codebuddy_path = None;
         let result = if operation.config.adapter == "codex" {
             codex::inspect_cancellable(&operation.config.runtime_path, &operation.cancel)
                 .and_then(|()| {
@@ -645,6 +658,7 @@ impl Harness {
                 .map(|subscribed| (operation.config.runtime_path.clone(), Some(subscribed)))
         } else {
             check_existing_codebuddy(&operation).and_then(|path| {
+                checked_codebuddy_path = Some(path.clone());
                 tauri::async_runtime::block_on(
                     operation
                         .codebuddy_login
@@ -657,7 +671,15 @@ impl Harness {
         if let Ok(watchdog) = watchdog {
             let _ = watchdog.join();
         }
-        let result = if timed_out.load(Ordering::Acquire) {
+        let stop_unconfirmed = result.as_ref().is_err_and(|error| {
+            matches!(
+                error.code,
+                "harness_stop_failed"
+                    | "codebuddy_cleanup_failed"
+                    | "codebuddy_profile_cleanup_failed"
+            )
+        });
+        let result = if timed_out.load(Ordering::Acquire) && !stop_unconfirmed {
             Err(failure("timeout"))
         } else {
             result
@@ -668,7 +690,25 @@ impl Harness {
                 Err(error) => {
                     if !matches!(error.code, "cancelled" | "harness_stale") {
                         if operation.config.adapter == "codex" {
+                            if matches!(error.code, "harness_runtime" | "harness_runtime_integrity")
+                            {
+                                let mut config = state.config.clone();
+                                if config.verified {
+                                    config.verified = false;
+                                    config.revision = config
+                                        .revision
+                                        .checked_add(1)
+                                        .ok_or_else(|| failure("harness_unavailable"))?;
+                                    state.persist(config)?;
+                                }
+                                state.runtime_state = RuntimeState::Unprepared;
+                                state.notice = failure(error.code).message.into();
+                            }
                             state.update_subscription(false)?;
+                        } else if let Some(path) = checked_codebuddy_path {
+                            state.codebuddy_runtime.path = path;
+                            state.codebuddy_runtime.verified = true;
+                            state.codebuddy_runtime.state = RuntimeState::Ready;
                         } else {
                             state.codebuddy_runtime.verified = false;
                             state.codebuddy_runtime.state = RuntimeState::Unprepared;
@@ -2772,6 +2812,99 @@ mod tests {
                 expected
             );
         }
+    }
+
+    #[test]
+    fn readiness_timeout_cannot_hide_an_unconfirmed_process_stop() {
+        let fixture = Fixture::new();
+        let root = fixture.root.join("ai-execution");
+        std::fs::write(root.join("fake-short-readiness-timeout"), b"fixture").unwrap();
+        std::fs::write(root.join("fake-status-stop-after-cancel"), b"fixture").unwrap();
+        let before = fixture.service.control(Control::Status).unwrap();
+        let error = fixture
+            .service
+            .control(Control::CheckReadiness {
+                id: uuid::Uuid::new_v4().to_string(),
+                revision: before.revision,
+                confirmed_after_restore: false,
+            })
+            .err()
+            .unwrap();
+        assert_eq!(error.code, "harness_stopping");
+        assert_eq!(
+            fixture
+                .service
+                .control(Control::Inspect)
+                .err()
+                .unwrap()
+                .code,
+            "harness_stopping"
+        );
+    }
+
+    #[test]
+    fn missing_codex_component_invalidates_previous_verified_state() {
+        let fixture = Fixture::new();
+        fixture
+            .service
+            .with(|state| {
+                let mut config = state.config.clone();
+                config.runtime_path = PathBuf::from("missing-fixture.exe");
+                state.persist(config)
+            })
+            .unwrap();
+        let before = fixture.service.control(Control::Status).unwrap();
+        assert_eq!(before.runtime_state, RuntimeState::Ready);
+        assert_eq!(
+            fixture
+                .service
+                .control(Control::CheckReadiness {
+                    id: uuid::Uuid::new_v4().to_string(),
+                    revision: before.revision,
+                    confirmed_after_restore: false,
+                })
+                .err()
+                .unwrap()
+                .code,
+            "harness_runtime"
+        );
+        let after = fixture.service.control(Control::Status).unwrap();
+        assert_eq!(after.runtime_state, RuntimeState::Unprepared);
+        assert!(!fixture
+            .service
+            .with(|state| Ok(state.config.verified))
+            .unwrap());
+    }
+
+    #[test]
+    fn codebuddy_account_failure_preserves_verified_component() {
+        let (fixture, login, _) = codebuddy_fixture();
+        login
+            .control(crate::harness_codebuddy_login::Control::Logout {})
+            .unwrap();
+        fixture
+            .service
+            .with(|state| {
+                state.codebuddy_runtime = CodeBuddyRuntime::default();
+                Ok(())
+            })
+            .unwrap();
+        let before = fixture.service.control(Control::Status).unwrap();
+        assert!(fixture
+            .service
+            .control(Control::CheckReadiness {
+                id: uuid::Uuid::new_v4().to_string(),
+                revision: before.revision,
+                confirmed_after_restore: false,
+            })
+            .is_err());
+        let after = fixture.service.control(Control::Status).unwrap();
+        assert_eq!(after.runtime_state, RuntimeState::Ready);
+        assert!(!after.ready);
+        assert!(fixture
+            .service
+            .with(|state| Ok(state.codebuddy_runtime.verified))
+            .unwrap());
     }
 
     #[test]

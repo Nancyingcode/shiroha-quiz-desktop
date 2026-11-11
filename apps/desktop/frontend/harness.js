@@ -2,6 +2,7 @@
 (function () {
   'use strict';
   /** @typedef {import('../../web/platform/runtime').HarnessStatus} HarnessStatus */
+  /** @typedef {import('../../web/platform/runtime').NativeHarnessStatus} NativeHarnessStatus */
   /** @typedef {import('../../web/platform/runtime').HarnessApi} HarnessApi */
   const scope = /** @type {typeof globalThis & import('../../web/platform/runtime').BrowserGlobals & {ShirohaDesktopHost?:{invoke<T>(command:string,args?:Record<string,unknown>):Promise<T>}}} */ (globalThis);
   if (!scope.ShirohaDesktopHost || !scope.ShirohaPlatform) { return; }
@@ -29,9 +30,14 @@
   let readinessReason = '';
   let readinessRetryable = true;
   /** @type {Promise<void>|undefined} */ let readinessPromise;
+  let readinessPromiseEpoch = -1;
   /** @type {Promise<void>|undefined} */ let readinessRetry;
+  let readinessRetryEpoch = -1;
   let readinessId = '';
   let readinessRequested = false;
+  let readinessDeferred = false;
+  // 只记录当前窗口内一次成功检查的修订变化，用于区分核验与用户改配置。
+  /** @type {{epoch:number,before:HarnessStatus,after:HarnessStatus}|undefined} */ let readinessReceipt;
   let restoreAccountRevision = -1;
   let settingsLoading = true;
   let settingsFailure = '';
@@ -66,6 +72,7 @@
   const input = (id) => /** @type {HTMLInputElement|null} */ (element(id));
   const adapters = ['codex', 'codebuddy', 'deepseek'];
   const codebuddyModels = ['deepseek-v4.1-flash', 'hy4-preview', 'hy3', 'default'];
+  const stopUnconfirmedCodes = new Set(['harness_stopping', 'harness_stop_failed', 'codebuddy_cleanup_failed', 'codebuddy_profile_cleanup_failed']);
   // 只有原生已定义的固定标识可进入文案，未知代码不能成为动态诊断输出。
   const codebuddyDiagnosticCodes = new Set([
     'codebuddy_account_stale', 'codebuddy_auth_cancelled', 'codebuddy_auth_challenge', 'codebuddy_auth_expired',
@@ -86,6 +93,7 @@
     'codebuddy_worker_environment', 'codebuddy_worker_failed', 'codebuddy_worker_path',
   ]);
   function operationBusy() { return current.operationBusy ?? current.busy; }
+  function readinessFailed() { return readiness === 'error' || readiness === 'blocked'; }
   function selectedAdapter() { return draftAdapter ?? current.adapter; }
   function codexSelected() { return current.adapter === 'codex' && selectedAdapter() === 'codex' && draftAdapter === undefined && !selectingAdapter; }
   function modelSelectionPending() { return current.adapter === 'codebuddy' && draftModel !== undefined; }
@@ -134,12 +142,12 @@
     const query = request.kind === 'status';
     const observing = query || request.kind === 'inspect';
     if (!observing) { observationEpoch += 1; pendingMutations += 1; }
-    /** @type {HarnessStatus} */ let next;
+    /** @type {NativeHarnessStatus} */ let next;
     /** @type {ReturnType<typeof setTimeout>|undefined} */ let timeout;
     try {
       const pending = invoke('harness_control', request);
       const response = observing ? await Promise.race([pending, new Promise((_, reject) => { timeout = setTimeout(() => reject(new Error('状态读取超时，请重新读取。')), statusTimeoutMs); })]) : await pending;
-      next = /** @type {HarnessStatus} */ (response);
+      next = /** @type {NativeHarnessStatus} */ (response);
     } finally { clearTimeout(timeout); if (!observing) { pendingMutations -= 1; observationEpoch += 1; } }
     if (epoch !== generation) { return current; }
     if (query && (observation !== observationEpoch || pendingMutations)) { return current; }
@@ -241,17 +249,38 @@
       if (isCurrentCodexRead(epoch, sequence)) { codexReading = false; render(false); changed(); }
     }
   }
-  /** @param {boolean} retry */
+  function finishDeferredReadiness() {
+    const wasDeferred = readinessDeferred;
+    readinessDeferred = false; observeAuthorization();
+    if (wasDeferred) { render(false); changed(); }
+  }
+  /** @param {boolean} retry @returns {Promise<void>} */
   function checkReadiness(retry) {
-    if (readinessPromise) { return readinessPromise; }
-    if (settingsLoading || settingsFailure || current.mode !== 'harness' || !['codex', 'codebuddy'].includes(current.adapter)) { return Promise.resolve(); }
-    if (!retry && (readiness === 'error' || readiness === 'blocked' || current.ready)) { return Promise.resolve(); }
-    if (readiness === 'blocked' && !readinessRetryable) { return Promise.resolve(); }
-    if (pendingMutations || current.busy || active.size || businessBusy()) { return Promise.resolve(); }
+    if (readinessPromise) {
+      if (readinessPromiseEpoch === generation) { return readinessPromise; }
+      const epoch = generation;
+      return readinessPromise.then(() => (epoch === generation ? checkReadiness(retry) : undefined));
+    }
+    if (settingsLoading) { readinessDeferred = true; return Promise.resolve(); }
+    const unsupported = settingsFailure || current.mode !== 'harness' || !['codex', 'codebuddy'].includes(current.adapter);
+    const alreadyResolved = !retry && (readinessFailed() || current.ready);
+    const blockedWithoutRetry = readiness === 'blocked' && !readinessRetryable;
+    if (unsupported || alreadyResolved || blockedWithoutRetry) {
+      finishDeferredReadiness(); return Promise.resolve();
+    }
+    if (pendingMutations || current.busy || active.size || businessBusy()) {
+      const notifyWaiting = !readinessDeferred;
+      readinessDeferred = true; observeAuthorization();
+      if (notifyWaiting) { render(false); changed(); }
+      return Promise.resolve();
+    }
+    readinessDeferred = false; observeAuthorization();
     const epoch = generation;
     const id = scope.crypto.randomUUID();
     readinessId = id;
     const { revision } = current;
+    const before = { ...current };
+    readinessReceipt = undefined;
     readiness = 'checking'; readinessReason = ''; readinessRetryable = true; render(false); changed();
     /** @type {ReturnType<typeof setTimeout>|undefined} */ let timer;
     const operation = (async () => {
@@ -272,37 +301,53 @@
           ]);
           clearTimeout(timer);
           const settled = stopped && await Promise.race([
-            checked.then(() => true),
+            checked,
             new Promise((resolve) => { timer = setTimeout(() => resolve(false), statusTimeoutMs); }),
           ]);
           if (!settled) {
             if (epoch === generation) { readiness = 'blocked'; readinessRetryable = false; readinessReason = '无法确认检查是否停止，请重新启动应用。'; current = { ...current, ready: false }; }
             return;
           }
+          const { error: stopError } = /** @type {{error?:unknown}} */ (settled);
+          if (stopError && stopUnconfirmedCodes.has(failure(stopError).code)) { throw stopError; }
           throw new Error('AI 状态检查超时，请重试。');
         }
         const { error } = /** @type {{error?:unknown}} */ (result);
         if (error) { throw error; }
-        if (epoch === generation) { readiness = 'idle'; }
+        if (epoch === generation) {
+          readiness = 'idle';
+          if (current.ready) { readinessReceipt = { epoch, before, after: { ...current } }; }
+        }
       } catch (error) {
         if (epoch === generation) {
           const cause = failure(error);
+          const invalidCodexComponent = current.adapter === 'codex' && ['harness_runtime', 'harness_runtime_integrity'].includes(cause.code);
+          if (invalidCodexComponent) {
+            // 原生撤销组件验证可能增加修订，后续设置操作需要读取新的快照。
+            await control({ kind: 'status' }).catch(() => undefined);
+            if (epoch !== generation || current.adapter !== 'codex') { return; }
+          }
           const requiresConfirmation = ['harness_restore_required', 'codebuddy_restore_required'].includes(cause.code);
-          const requiresSettings = ['harness_runtime', 'harness_runtime_integrity', 'codebuddy_runtime_unavailable', 'codebuddy_runtime_integrity', 'harness_auth_cleanup'].includes(cause.code);
-          readiness = 'error';
-          if (requiresConfirmation) { readiness = 'blocked'; } else if (requiresSettings) { readiness = 'idle'; }
-          readinessReason = cause.message;
-          current = { ...current, ready: false, reason: cause.message };
+          const requiresSettings = ['harness_runtime', 'harness_runtime_integrity', 'codebuddy_runtime_unavailable', 'codebuddy_runtime_integrity', 'harness_auth_cleanup', 'codebuddy_auth_expired', 'codebuddy_auth_required', 'codebuddy_login_not_ready', 'codebuddy_auth_personal_required'].includes(cause.code);
+          const requiresRestart = stopUnconfirmedCodes.has(cause.code);
+          if (requiresRestart || requiresConfirmation) { readiness = 'blocked'; } else if (requiresSettings) { readiness = 'idle'; } else { readiness = 'error'; }
+          if (requiresRestart) { readinessRetryable = false; }
+          readinessReason = requiresRestart ? '无法确认 AI 任务是否停止，请重新启动应用。' : cause.message;
+          current = { ...current, ready: false, reason: readinessReason };
+          if (invalidCodexComponent) {
+            current = { ...current, runtimeState: 'unprepared', runtimeVersion: '' };
+          }
         }
       } finally {
         clearTimeout(timer);
       }
     })();
     const pending = operation.finally(() => {
-      if (readinessPromise === pending) { readinessPromise = undefined; readinessId = ''; }
+      if (readinessPromise === pending) { readinessPromise = undefined; readinessPromiseEpoch = -1; readinessId = ''; }
       if (epoch === generation) { render(false); changed(); }
     });
     readinessPromise = pending;
+    readinessPromiseEpoch = epoch;
     return pending;
   }
   async function loginSubscription() {
@@ -355,7 +400,7 @@
     authTimer = undefined;
   }
   function observeAuthorization() {
-    const observing = !!current.componentTasks?.length || (current.busy && current.operationBusy === false) || (supportedSelection() && ((codexSelected() && current.credentialStatus === 'authenticating') || current.runtimeState === 'preparing' || !!(preparationCheck && current.busy)));
+    const observing = (readinessDeferred && readinessRequested && readiness === 'idle') || !!current.componentTasks?.length || (current.busy && current.operationBusy === false) || (supportedSelection() && ((codexSelected() && current.credentialStatus === 'authenticating') || current.runtimeState === 'preparing' || !!(preparationCheck && current.busy)));
     if (!observing) { clearAuthorizationTimer(); return; }
     if (authTimer !== undefined) { return; }
     const epoch = generation;
@@ -364,9 +409,16 @@
       if (epoch !== generation) { return; }
       try {
         await control({ kind: 'status' }); render(false); changed();
-        if (readinessRequested && !current.busy && readiness === 'idle') { void checkReadiness(false); }
+        if (readinessRequested && readinessDeferred && !current.busy && readiness === 'idle') { void checkReadiness(false); }
         if (element('ai-settings')?.classList.contains('active')) { activateRuntime(); }
-      } catch (error) { preparationCheck?.(failure(error)); notice(failure(error).message, true); }
+      } catch (error) {
+        const cause = failure(error);
+        if (readinessDeferred && readinessRequested && readiness === 'idle') {
+          readinessDeferred = false; readiness = 'error'; readinessReason = cause.message;
+          current = { ...current, ready: false, reason: cause.message }; render(false); changed();
+        }
+        preparationCheck?.(cause); notice(cause.message, true);
+      }
     }, 1000);
   }
   /** @param {string} message @param {boolean} [error] */
@@ -571,7 +623,7 @@
     if (adapter === 'deepseek') { reason = unavailableReason(adapter); }
     if (draftAdapter !== undefined) { reason = selectionReason(); } else if (modelSelectionPending()) { reason = modelSelectionReason(); }
     if (adapter === 'codebuddy' && current.runtimeState === 'ready' && !current.ready && !current.busy && !selectionFailure && !modelSelectionFailure) { reason = '组件与账户就绪后可测试连接。'; }
-    if (readiness === 'checking') { reason = '正在检查 AI 状态…'; } else if (readiness === 'error' || readiness === 'blocked') { reason = readinessReason; }
+    if (readiness === 'checking') { reason = '正在检查 AI 状态…'; } else if (readinessFailed()) { reason = readinessReason; }
     notice(reason + (mode !== current.mode && draftAdapter === undefined ? ' 执行方式尚未保存。' : ''));
     if (adapter === 'codebuddy') {
       const modelModeUnsaved = current.mode !== 'harness';
@@ -614,39 +666,60 @@
       readinessReason = needsExplicitRefresh ? '数据恢复后请主动重新检查 AI 状态。' : '';
       readinessRetryable = true;
       readinessRequested = false;
+      readinessDeferred = false;
       settingsLoading = true; settingsFailure = ''; codexAccountConfirmed = false; codexReadFailure = ''; codexReading = false; render(false);
       generation += 1; const epoch = generation;
       clearAuthorizationTimer();
-      try { await control({ kind: 'status' }); } catch (error) { if (epoch === generation) { settingsFailure = '暂时无法读取 AI 设置，请重新读取。'; current = { ...current, mode: 'harness', ready: false, reason: failure(error).message }; } } finally { if (epoch === generation) { settingsLoading = false; render(false); changed(); } }
+      try { await control({ kind: 'status' }); } catch (error) { if (epoch === generation) { settingsFailure = '暂时无法读取 AI 设置，请重新读取。'; current = { ...current, mode: 'harness', ready: false, reason: failure(error).message }; } } finally { if (epoch === generation) { settingsLoading = false; render(false); changed(); if (readinessRequested && readinessDeferred && !settingsFailure) { observeAuthorization(); } } }
     },
     status() {
       const hasActiveWork = active.size > 0 || pendingMutations > 0;
       const isSelectingRoute = selectingAdapter || selectingModel;
       const isHarnessBusy = operationBusy() || hasActiveWork || isSelectingRoute;
       const result = { ...current, busy: isHarnessBusy };
+      if (settingsLoading) { return { ...result, mode: 'harness', ready: false, readiness: 'checking', reason: '正在读取 AI 设置…' }; }
+      if (settingsFailure) { return { ...result, mode: 'harness', ready: false, readiness: 'error', readinessRetryable: true, reason: current.reason || settingsFailure }; }
+      if (current.mode === 'harness' && current.adapter === 'codex' && authorizationBlock) {
+        return { ...result, ready: false, readiness: 'blocked', readinessRetryable: false, reason: authorizationBlock };
+      }
       if (current.mode === 'harness' && ['codex', 'codebuddy'].includes(current.adapter) && readiness !== 'idle') {
         const canRetry = readinessRetryable && !(readiness === 'blocked' && current.adapter === 'codebuddy');
         return { ...result, ready: false, readiness, readinessRetryable: canRetry, reason: readiness === 'checking' ? '正在检查 AI 状态…' : readinessReason };
       }
-      if (settingsLoading) { return { ...result, mode: 'harness', ready: false, readiness: 'checking', reason: '正在读取 AI 设置…' }; }
-      if (settingsFailure) { return { ...result, mode: 'harness', ready: false, readiness: 'error', readinessRetryable: true, reason: current.reason || settingsFailure }; }
+      if (current.mode === 'harness' && ['codex', 'codebuddy'].includes(current.adapter) && readinessDeferred && readinessRequested) {
+        return { ...result, ready: false, readiness: 'checking', reason: '正在等待当前任务结束后检查 AI 状态…' };
+      }
       if (current.adapter === 'codex' && (codexReading || codexReadFailure)) { return { ...result, ready: false }; }
       if (draftAdapter !== undefined) { return { ...result, mode: 'harness', adapter: draftAdapter, ready: false, reason: selectionReason() }; }
       if (modelSelectionPending()) { return { ...result, model: draftModel ?? current.model, ready: false, reason: modelSelectionReason() }; }
       return result;
     },
     snapshot() { return Object.freeze(api.status()); },
-    ensureReady() { readinessRequested = true; return readinessRetry || checkReadiness(false); },
+    isReadinessTransition(before, after) {
+      const receipt = readinessReceipt;
+      if (!receipt || receipt.epoch !== generation || !after.ready) { return false; }
+      /** @param {Readonly<HarnessStatus>} left @param {Readonly<HarnessStatus>} right */
+      const sameRoute = (left, right) => left.mode === right.mode && left.adapter === right.adapter
+        && left.model === right.model && left.timeoutSeconds === right.timeoutSeconds;
+      if (!sameRoute(before, receipt.before) || !sameRoute(after, receipt.after) || !sameRoute(before, after)) { return false; }
+      if (before.revision !== receipt.before.revision || before.accountRevision !== receipt.before.accountRevision
+        || after.revision !== receipt.after.revision || after.accountRevision !== receipt.after.accountRevision) { return false; }
+      // 已确认的账户发生变化时必须重新发起任务，不能把换号当成就绪检查。
+      return before.credentialStatus !== 'subscription' || before.accountRevision === after.accountRevision;
+    },
+    ensureReady() { readinessRequested = true; return readinessRetry && readinessRetryEpoch === generation ? readinessRetry : checkReadiness(false); },
     retryReadiness() {
-      if (readinessPromise) { return readinessPromise; }
-      if (readinessRetry) { return readinessRetry; }
+      if (readinessPromise && readinessPromiseEpoch === generation) { return readinessPromise; }
+      if (readinessRetry && readinessRetryEpoch === generation) { return readinessRetry; }
       if (readiness === 'blocked' && (!readinessRetryable || current.adapter === 'codebuddy')) { return Promise.resolve(); }
       const epoch = generation;
+      const previous = readinessPromise;
       const operation = (async () => {
+        if (previous) { await previous; if (epoch !== generation) { return; } }
         if (settingsFailure) {
           await api.initialize();
           if (generation !== epoch + 1 || settingsFailure) { return; }
-        } else if (readiness === 'error' || readiness === 'blocked') {
+        } else if (readinessFailed()) {
           readiness = 'checking'; readinessReason = ''; render(false); changed();
           try { await control({ kind: 'status' }); } catch (error) {
             if (epoch === generation) { readiness = 'error'; readinessReason = failure(error).message; current = { ...current, ready: false }; render(false); changed(); }
@@ -658,8 +731,9 @@
         readinessRequested = true;
         await checkReadiness(true);
       })();
-      const pending = operation.finally(() => { if (readinessRetry === pending) { readinessRetry = undefined; } });
+      const pending = operation.finally(() => { if (readinessRetry === pending) { readinessRetry = undefined; readinessRetryEpoch = -1; } });
       readinessRetry = pending;
+      readinessRetryEpoch = epoch;
       return pending;
     },
     codebuddyAccountChanged(account) {
@@ -683,7 +757,11 @@
           const resumesAfterRestore = mayResumeAfterRestore && current.accountRevision === account.revision && current.credentialStatus === 'subscription';
           if (resumesAfterRestore) { readiness = 'idle'; readinessReason = ''; restoreAccountRevision = -1; }
           const shouldCheckAccount = account.phase === 'signed_in' && (invalidatesExecution || firstConfirmedAccount || resumesAfterRestore);
-          if (shouldCheckAccount && !readinessRetry) { await checkReadiness(false); }
+          if (shouldCheckAccount && !readinessRetry) {
+            const confirmedAfterError = readiness === 'error' && invalidatesExecution
+              && current.accountRevision === account.revision && current.credentialStatus === 'subscription';
+            if (confirmedAfterError) { await api.retryReadiness(); } else { await checkReadiness(false); }
+          }
         });
       }
     },
@@ -733,7 +811,7 @@
         throw error;
       } finally { signal?.removeEventListener('abort', abort); active.delete(id); finished(); render(false); changed(); }
     },
-    async cancelAll() { invalidateSetup(); generation += 1; readiness = 'idle'; readinessReason = ''; readinessRequested = false; clearAuthorizationTimer(); if (!['codex', 'codebuddy'].includes(current.adapter)) { return; } const pending = [...active.values()]; await control({ kind: 'cancel_all' }); await Promise.all(pending); },
+    async cancelAll() { invalidateSetup(); generation += 1; readiness = 'idle'; readinessReason = ''; readinessRequested = false; readinessDeferred = false; clearAuthorizationTimer(); if (!['codex', 'codebuddy'].includes(current.adapter)) { return; } const pending = [...active.values()]; await control({ kind: 'cancel_all' }); await Promise.all(pending); },
     // 表单执行方式是待保存的选择；业务使用状态快照，未确认的选择保持不可执行。
     formMode() { return input('ai-execution-harness')?.checked ? 'harness' : 'api'; },
     formAdapter() { return selectedAdapter(); },

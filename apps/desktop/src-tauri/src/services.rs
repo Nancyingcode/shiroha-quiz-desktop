@@ -270,8 +270,12 @@ pub async fn service_credential(
             let execution = harness.inner().clone();
             let services = state.inner().clone();
             // 覆盖导入通过现有凭据失效入口撤销授权；界面在整个数据事务期间保持冻结。
+            let restore = tauri::async_runtime::spawn_blocking(move || execution.begin_restore())
+                .await
+                .map_err(|_| Error::new("harness_unavailable"))??;
+            harness.invalidate_codebuddy_for_restore().await?;
             tauri::async_runtime::spawn_blocking(move || {
-                let _restore = execution.begin_restore()?;
+                let _restore = restore;
                 services.invalidate()
             })
             .await

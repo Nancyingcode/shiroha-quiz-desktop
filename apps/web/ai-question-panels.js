@@ -69,7 +69,7 @@
       box.className = 'practice-ai-panel-v613';
       const { configured, config } = aiSingleConfigV613();
       const availability = aiAvailabilityV99(config, 'question_analysis');
-      const retryable = (availability.state === 'error' || availability.state === 'blocked') && availability.retryable;
+      const { retryable } = availability;
       const needsSettings = !configured && availability.state !== 'checking' && !retryable;
       const isHarness = isAiHarnessExecutionV99(config.execution);
       const generationDisabled = !configured || busy;
@@ -106,7 +106,7 @@
         blocks.push('<p class="practice-ai-hint-v613">只把当前这道题的题干、选项、答案和你的作答发给 AI，生成一段简短解析；结果先作为草稿，确认后再写入题库。</p>');
         blocks.push(`<div class="actions practice-ai-actions-v613"><button class="primary mini-btn" type="button" data-ai-single-analysis-v613="1" ${generationDisabled ? 'disabled' : ''}>${busy ? '生成中……' : 'AI 解析'}</button>${needsSettings ? '<button class="ghost mini-btn" type="button" data-ai-single-settings-v613="1">前往 AI 设置</button>' : ''}${retryable ? '<button class="ghost mini-btn" type="button" data-ai-single-retry-v613="1">重试检查</button>' : ''}</div>`);
       }
-      if (result && !configured) {
+      if (result && (needsSettings || retryable)) {
         blocks.push(`<div class="actions practice-ai-actions-v613">${needsSettings ? '<button class="ghost mini-btn" type="button" data-ai-single-settings-v613="1">前往 AI 设置</button>' : ''}${retryable ? '<button class="ghost mini-btn" type="button" data-ai-single-retry-v613="1">重试检查</button>' : ''}</div>`);
       }
       if (session.error) {
@@ -218,7 +218,7 @@
       const config = aiExecutionConfigV99();
       const configured = !isApplicationReady() || aiConfiguredV99(config, 'question_analysis');
       const availability = aiAvailabilityV99(config, 'question_analysis');
-      const retryable = (availability.state === 'error' || availability.state === 'blocked') && availability.retryable;
+      const { retryable } = availability;
       const title = '<b class="review-analysis-title">解析</b>';
       const button = (action, label, primary = false, disabled = false) => `<button type="button" class="${primary ? 'primary' : 'ghost'} mini-btn" data-review-ai="${action}" ${disabled ? 'disabled' : ''}>${label}</button>`;
       const error = session.error ? `<p class="review-analysis-warning" role="alert">${esc(session.error)}</p>` : '';

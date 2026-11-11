@@ -1183,6 +1183,11 @@ async function main() {
     await check('Codex 重启后无需进入设置即可生成单题解析', async () => {
       assert(runtime);
       await runtime.page.locator('#ai-harness-adapter').selectOption('codex');
+      await runtime.page.waitForFunction(() => {
+        const status = Reflect.get(window, 'ShirohaPlatform')?.harness?.status();
+        return status?.adapter === 'codex' && status.restoreRequired && status.readiness === 'blocked';
+      });
+      await runtime.page.locator('#ai-harness-auth-refresh').click();
       await runtime.page.waitForFunction(() => Reflect.get(window, 'ShirohaPlatform')?.harness?.status().ready);
       await stop(runtime); runtime = undefined;
       runtime = await launch(executable, profile, proxyPort);

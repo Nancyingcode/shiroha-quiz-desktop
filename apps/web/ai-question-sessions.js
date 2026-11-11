@@ -53,6 +53,11 @@
         && session.requestId === requestId && question.fingerprint(item) === fingerprint;
     }
 
+    function isSelectedQuestion(key) {
+      const selected = question.current();
+      return !!selected && question.key(selected) === key;
+    }
+
     async function runAnalysis() {
       const item = question.current();
       if (!question.allowed(item)) { return; }
@@ -78,7 +83,8 @@
       session.expanded = true;
       view.render();
       const isCurrentAnalysis = () => isCurrentRequest(owner, key, session, requestId, item, fingerprint);
-      const isCurrentBeforeSend = () => isCurrentAnalysis() && JSON.stringify(question.answer(key).chosen || []) === chosenSnapshot;
+      const isCurrentBeforeSend = () => isCurrentAnalysis() && isSelectedQuestion(key)
+        && JSON.stringify(question.answer(key).chosen || []) === chosenSnapshot;
       try {
         const response = await request.timeout(requestConfig.timeoutSeconds, (controller) => {
           session.controller = controller;
@@ -142,7 +148,8 @@
       session.followUpOpen = true;
       view.render();
       const isCurrentFollowUp = () => isCurrentRequest(owner, key, session, requestId, item, fingerprint);
-      const isCurrentBeforeSend = () => isCurrentFollowUp() && String(session.draft || '').trim() === text
+      const isCurrentBeforeSend = () => isCurrentFollowUp() && isSelectedQuestion(key)
+        && String(session.draft || '').trim() === text
         && JSON.stringify([question.answer(key).chosen || [], session.messages, session.analysis, text]) === followUpSnapshot;
       try {
         const response = await request.timeout(requestConfig.timeoutSeconds, (controller) => {

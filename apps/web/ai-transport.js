@@ -8,14 +8,18 @@
         const unavailable = harness.taskReason(config, task);
         if (unavailable) { throw new Error(unavailable); }
         let { execution } = config;
-        if (platform.harness.status?.().readiness === 'checking') {
+        if (execution.readiness === 'checking' || platform.harness.status?.().readiness === 'checking') {
           await platform.harness.ensureReady();
           if (controller?.signal?.aborted) { const error = new Error('AI 请求已取消。');error.name = 'AbortError';throw error; }
           const current = platform.harness.snapshot();
           const configurationChanged = current.adapter !== execution.adapter || current.mode !== execution.mode
-            || current.model !== execution.model || current.timeoutSeconds !== execution.timeoutSeconds
-            || current.revision !== execution.revision || current.accountRevision !== execution.accountRevision;
-          if (configurationChanged || typeof isCurrent !== 'function' || !isCurrent()) { throw new Error('题目或 AI 配置已变化，请重新发起请求。'); }
+            || current.model !== execution.model || current.timeoutSeconds !== execution.timeoutSeconds;
+          const revisionChanged = current.revision !== execution.revision || current.accountRevision !== execution.accountRevision;
+          const verifiesTransition = typeof platform.harness.isReadinessTransition === 'function';
+          const confirmedTransition = verifiesTransition && platform.harness.isReadinessTransition(execution, current);
+          const lifecycleChanged = verifiesTransition && current.ready && !confirmedTransition;
+          if (typeof isCurrent !== 'function') { throw new Error('当前任务缺少上下文确认，无法在检查后继续。'); }
+          if (configurationChanged || lifecycleChanged || (revisionChanged && !confirmedTransition) || !isCurrent()) { throw new Error('题目或 AI 配置已变化，请重新发起请求。'); }
           if (!current.ready) { throw new Error(current.reason || 'AI 状态尚未就绪，请重试。'); }
           execution = current;
         }

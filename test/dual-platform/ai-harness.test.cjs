@@ -72,6 +72,101 @@ test('启动时已有只读检查在收尾，会在其结束后继续确认状�
   assert.equal(api.snapshot().ready, true);
 });
 
+test('启动检查遇到业务占用时等待结束后继续，不丢失检查请求', async () => {
+  const clock = pollingClock(); const calls = []; let busy = true;
+  const api = client(async (_command, { request }) => {
+    calls.push(request.kind);
+    return request.kind === 'check_readiness' ? { ...status } : { ...status, ready: false, credentialStatus: 'missing' };
+  }, {}, clock);
+  await api.initialize(); api.bind(() => {}, () => busy); await api.ensureReady();
+  assert.equal(api.snapshot().readiness, 'checking');
+  assert.match(api.snapshot().reason, /等待/);
+  assert.equal(clock.timers.size > 0, true, '等待业务结束时须保留检查机会');
+  busy = false; await clock.tick(); await settleUi();
+  assert.equal(calls.filter((kind) => kind === 'check_readiness').length, 1);
+  assert.equal(api.snapshot().ready, true);
+});
+
+test('启动时原生任务忙碌，结束后重新读取并检查', async () => {
+  const clock = pollingClock(); const calls = []; let busy = true;
+  const api = client(async (_command, { request }) => {
+    calls.push(request.kind);
+    if (request.kind === 'check_readiness') { return { ...status }; }
+    return { ...status, ready: false, credentialStatus: 'missing', busy, operationBusy: busy };
+  }, {}, clock);
+  await api.initialize(); await api.ensureReady();
+  busy = false; await clock.tick(); await settleUi();
+  assert.deepEqual(calls, ['status', 'status', 'check_readiness']);
+  assert.equal(api.snapshot().ready, true);
+});
+
+test('等待期间已有状态变为就绪时结束等待，不重复检查', async () => {
+  const clock = pollingClock(); const calls = []; const updates = []; let busy = true;
+  const api = client(async (_command, { request }) => {
+    calls.push(request.kind);
+    return busy ? { ...status, ready: false, credentialStatus: 'missing', busy: true } : { ...status };
+  }, {}, clock);
+  await api.initialize(); api.bind(() => { updates.push(api.snapshot().ready); }, () => false); await api.ensureReady();
+  busy = false; await clock.tick(); await settleUi();
+  assert.equal(api.snapshot().ready, true);
+  assert.equal(updates.at(-1), true);
+  assert.equal(clock.timers.size, 0);
+  assert.deepEqual(calls, ['status', 'status']);
+});
+
+test('等待业务结束时状态读取失败，显示可重试错误而非无限等待', async () => {
+  const clock = pollingClock(); let reads = 0;
+  const api = client(async () => {
+    reads += 1;
+    if (reads > 1) { throw { code: 'harness_unavailable', message: '状态读取失败。' }; }
+    return { ...status, ready: false, credentialStatus: 'missing' };
+  }, {}, clock);
+  await api.initialize(); api.bind(() => {}, () => true); await api.ensureReady();
+  await clock.tick(); await settleUi();
+  assert.equal(api.snapshot().readiness, 'error');
+  assert.match(api.snapshot().reason, /状态读取失败/);
+  assert.equal(clock.timers.size, 0);
+});
+
+test('等待占用结束后的组件失败不会再次自动重试', async () => {
+  const clock = pollingClock(); let busy = true; let checks = 0;
+  const api = client(async (_command, { request }) => {
+    if (request.kind === 'check_readiness') { checks += 1; throw { code: 'harness_runtime', message: '组件不存在。' }; }
+    return { ...status, ready: false, credentialStatus: 'missing' };
+  }, {}, clock);
+  await api.initialize(); api.bind(() => {}, () => busy); await api.ensureReady();
+  busy = false; await clock.tick(); await settleUi();
+  assert.equal(checks, 1);
+  assert.equal(clock.timers.size, 0);
+});
+
+test('等待检查期间切换到 API 后停止等待轮询', async () => {
+  const clock = pollingClock(); let busy = true;
+  let native = { ...status, ready: false, credentialStatus: 'missing' };
+  const api = client(async (_command, { request }) => {
+    if (request.kind === 'save') { native = { ...native, mode: request.mode, revision: native.revision + 1 }; }
+    return { ...native };
+  }, {}, clock);
+  await api.initialize(); api.bind(() => {}, () => busy); await api.ensureReady();
+  busy = false; await api.saveMode('api');
+  await clock.tick(); await settleUi();
+  assert.equal(api.snapshot().mode, 'api');
+  assert.equal(clock.timers.size, 0);
+});
+
+test('等待检查期间选择未接入的提供方后停止等待轮询', async () => {
+  const clock = pollingClock(); let busy = true;
+  let native = { ...status, ready: false, credentialStatus: 'missing', runtimeState: 'ready' };
+  const api = client(async (_command, { request }) => {
+    if (request.kind === 'select_adapter') { native = { ...native, adapter: request.adapter, revision: native.revision + 1 }; }
+    return { ...native };
+  }, {}, clock);
+  await api.initialize(); api.bind(() => {}, () => busy); await api.ensureReady();
+  busy = false; await api.selectAdapter('deepseek'); await settleUi();
+  assert.equal(api.snapshot().adapter, 'deepseek');
+  assert.equal(clock.timers.size, 0);
+});
+
 test('AI 设置读取缓慢时题库先可用，核验完成后再启动后台检查', async () => {
   const pending = deferred(); let unlocked = false; let checks = 0;
   const context = vm.createContext({
@@ -137,8 +232,10 @@ test('业务入口区分检查中、检查失败和不支持的任务', () => {
   installAiSettings(context);
   const config = { execution: { ...status, ready: false, readiness: 'checking', reason: '正在检查 AI 状态…' } };
   assert.equal(context.aiAvailabilityV99(config, 'question_analysis').state, 'checking');
+  assert.equal(context.aiAvailabilityV99(config, 'question_analysis').retryable, false);
   config.execution = { ...config.execution, readiness: 'error', reason: '检查失败，请重试。' };
   assert.equal(context.aiAvailabilityV99(config, 'question_analysis').state, 'error');
+  assert.equal(context.aiAvailabilityV99(config, 'question_analysis').retryable, true);
   config.execution = { ...config.execution, adapter: 'codebuddy', readiness: 'checking' };
   assert.equal(context.aiAvailabilityV99(config, 'import_organize').state, 'unsupported');
   config.execution = { ...config.execution, mode: 'api', reason: 'Codex 未登录' };
@@ -160,6 +257,68 @@ test('就绪检查失败后等待用户重试，不自动重复核验', async ()
   fail = false; await api.retryReadiness();
   assert.equal(api.snapshot().ready, true);
   assert.equal(calls.filter((kind) => kind === 'check_readiness').length, 2);
+});
+
+test('未确认停止时不把原生阻塞状态展示为可重试错误', async () => {
+  const api = client(async (_command, { request }) => {
+    if (request.kind === 'check_readiness') { throw { code: 'harness_stopping', message: '停止尚未确认。' }; }
+    return { ...status, ready: false, credentialStatus: 'missing' };
+  });
+  await api.initialize(); await api.ensureReady();
+  assert.equal(api.snapshot().readiness, 'blocked');
+  assert.equal(api.snapshot().readinessRetryable, false);
+  assert.match(api.snapshot().reason, /重新启动/);
+});
+
+test('前端超时后原生报告停止失败时，仍保持不可重试的阻塞', async () => {
+  const clock = pollingClock(); const pending = deferred();
+  const api = client(async (_command, { request }) => {
+    if (request.kind === 'check_readiness') { return pending.promise; }
+    if (request.kind === 'cancel') { pending.reject({ code: 'harness_stopping', message: '停止尚未确认。' }); }
+    return { ...status, ready: false, credentialStatus: 'missing' };
+  }, {}, clock);
+  await api.initialize(); const checking = api.ensureReady();
+  await clock.tick(); await checking;
+  assert.equal(api.snapshot().readiness, 'blocked');
+  assert.equal(api.snapshot().readinessRetryable, false);
+  assert.match(api.snapshot().reason, /重新启动/);
+});
+
+test('检查失败按组件、登录、忙碌和超时分别提供正确入口', async () => {
+  const cases = [
+    ['codex', 'harness_runtime', 'idle'], ['codex', 'harness_runtime_integrity', 'idle'],
+    ['codebuddy', 'codebuddy_runtime_unavailable', 'idle'], ['codebuddy', 'codebuddy_runtime_integrity', 'idle'],
+    ['codex', 'harness_auth_cleanup', 'idle'], ['codebuddy', 'codebuddy_auth_expired', 'idle'],
+    ['codex', 'harness_busy', 'error'], ['codex', 'timeout', 'error'], ['codex', 'invalid_input', 'error'],
+  ];
+  for (const [adapter, code, expected] of cases) {
+    const initial = { ...status, adapter, accountRevision: adapter === 'codebuddy' ? 1 : undefined, ready: false, credentialStatus: 'missing' };
+    const api = client(async (_command, { request }) => {
+      if (request.kind === 'check_readiness') { throw { code, message: `fixture ${code}` }; }
+      return { ...initial };
+    });
+    await api.initialize(); await api.ensureReady();
+    assert.equal(api.snapshot().readiness || 'idle', expected, code);
+    assert.match(api.snapshot().reason, new RegExp(code));
+  }
+});
+
+test('读取设置和退出清理状态优先于旧检查错误', async () => {
+  const loading = deferred();
+  const reading = client(async () => loading.promise);
+  const initialization = reading.initialize({ restored: true });
+  try { assert.equal(reading.snapshot().readiness, 'checking'); } finally { loading.resolve({ ...status, ready: false }); await initialization; }
+
+  const api = client(async (_command, { request }) => {
+    if (request.kind === 'check_readiness') { throw { code: 'network_unavailable', message: '旧网络错误。' }; }
+    if (request.kind === 'clear') { throw { code: 'harness_logout', message: '清理失败。' }; }
+    return { ...status, ready: false, credentialStatus: 'missing' };
+  });
+  await api.initialize(); await api.ensureReady();
+  await assert.rejects(api.clear());
+  assert.equal(api.snapshot().readiness, 'blocked');
+  assert.equal(api.snapshot().readinessRetryable, false);
+  assert.match(api.snapshot().reason, /退出登录尚未完成/);
 });
 
 test('配置修订过期后重试先读取最新配置，并合并重复点击', async () => {
@@ -197,6 +356,44 @@ test('取消期间迟到的就绪结果不能恢复旧执行状态', async () =>
   await api.cancelAll(); pending.resolve({ ...status }); await checking;
   assert.equal(api.snapshot().revision, 5);
   assert.equal(api.snapshot().ready, false);
+});
+
+test('取消后的新检查等待旧检查收敛，再使用当前修订', async () => {
+  const old = deferred(); const calls = []; let native = { ...status, ready: false, credentialStatus: 'missing' };
+  const api = client(async (_command, { request }) => {
+    calls.push({ ...request });
+    if (request.kind === 'check_readiness' && request.revision === 4) { return old.promise; }
+    if (request.kind === 'cancel_all') { native = { ...native, revision: 5 }; return { ...native }; }
+    if (request.kind === 'check_readiness') { native = { ...status, revision: 5 }; }
+    return { ...native };
+  });
+  await api.initialize(); const first = api.ensureReady(); await api.cancelAll();
+  const second = api.retryReadiness();
+  assert.equal(calls.filter((call) => call.kind === 'check_readiness').length, 1);
+  old.resolve({ ...status }); await first; await second;
+  assert.deepEqual(calls.filter((call) => call.kind === 'check_readiness').map((call) => call.revision), [4, 5]);
+  assert.equal(api.snapshot().ready, true);
+});
+
+test('恢复重读后显式重试等待旧检查，不借用失效结果', async () => {
+  const old = deferred(); const calls = []; let restored = false;
+  const api = client(async (_command, { request }) => {
+    calls.push({ ...request });
+    if (request.kind === 'check_readiness' && !request.confirmedAfterRestore) { return old.promise; }
+    if (request.kind === 'check_readiness') { return { ...status, revision: 6, restoreRequired: false }; }
+    return restored ? { ...status, revision: 5, ready: false, restoreRequired: true, reason: '恢复后需确认。' }
+      : { ...status, ready: false, credentialStatus: 'missing' };
+  });
+  await api.initialize(); const first = api.ensureReady();
+  restored = true; await api.initialize({ restored: true });
+  const retry = api.retryReadiness();
+  assert.equal(calls.filter((call) => call.kind === 'check_readiness').length, 1);
+  old.resolve({ ...status }); await first; await retry;
+  const checks = calls.filter((call) => call.kind === 'check_readiness');
+  assert.equal(checks.length, 2);
+  assert.equal(checks[1].revision, 5);
+  assert.equal(checks[1].confirmedAfterRestore, true);
+  assert.equal(api.snapshot().ready, true);
 });
 
 test('切换提供方先停止检查，停止期间旧路由不能重新执行', async () => {
@@ -274,6 +471,49 @@ test('数据恢复后 CodeBuddy 需要显式刷新账户，再检查已有组件
   assert.equal(calls.filter((kind) => kind === 'check_readiness').length, 1);
 });
 
+test('CodeBuddy 检查失败后主动刷新账户成功，可重新检查组件', async () => {
+  const calls = []; let signedIn = false;
+  const initial = { ...status, adapter: 'codebuddy', model: 'default', accountRevision: 1, credentialStatus: 'missing', runtimeState: 'unprepared', ready: false };
+  const api = client(async (_command, { request }) => {
+    calls.push(request.kind);
+    if (request.kind === 'check_readiness' && !signedIn) { throw { code: 'codebuddy_auth_network', message: '网络失败。' }; }
+    if (request.kind === 'check_readiness') { return { ...initial, accountRevision: 2, credentialStatus: 'subscription', runtimeState: 'ready', ready: true }; }
+    return signedIn ? { ...initial, accountRevision: 2, credentialStatus: 'subscription' } : { ...initial };
+  });
+  await api.initialize(); await api.ensureReady();
+  assert.equal(api.snapshot().readiness, 'error');
+  signedIn = true; api.codebuddyAccountChanged({ revision: 2, phase: 'signed_in', blocked: false });
+  await settleUi(); await settleUi();
+  assert.equal(calls.filter((kind) => kind === 'check_readiness').length, 2);
+  assert.equal(api.snapshot().ready, true);
+});
+
+test('Codex 组件校验失败后显示可重新准备的状态', async () => {
+  const initial = { ...status, credentialStatus: 'missing', ready: false, runtimeSource: 'managed', runtimeState: 'ready' };
+  const api = client(async (_command, { request }) => {
+    if (request.kind === 'check_readiness') { throw { code: 'harness_runtime', message: '组件未通过校验。' }; }
+    return { ...initial };
+  });
+  await api.initialize(); await api.ensureReady();
+  assert.equal(api.snapshot().ready, false);
+  assert.equal(api.snapshot().runtimeState, 'unprepared');
+});
+
+test('Codex 组件校验失败后同步撤销验证产生的新配置修订', async () => {
+  let native = { ...status, credentialStatus: 'missing', ready: false, runtimeSource: 'managed', runtimeState: 'ready' };
+  const api = client(async (_command, { request }) => {
+    if (request.kind === 'check_readiness') {
+      native = { ...native, revision: native.revision + 1, runtimeState: 'unprepared' };
+      throw { code: 'harness_runtime_integrity', message: '组件未通过校验。' };
+    }
+    return { ...native };
+  });
+  await api.initialize(); await api.ensureReady();
+  assert.equal(api.snapshot().revision, native.revision);
+  assert.equal(api.snapshot().runtimeState, 'unprepared');
+  assert.match(api.snapshot().reason, /组件未通过校验/);
+});
+
 test('恢复后页面重载只显示阻塞状态，用户重试才确认 Codex', async () => {
   const calls = []; const elements = settingsElements();
   let native = { ...status, ready: false, runtimeState: 'unprepared', restoreRequired: true, reason: '数据恢复后请主动重新检查 Codex 状态。' };
@@ -329,6 +569,104 @@ test('请求撞上就绪检查时等待，输入变化后不发送旧题目', as
   platform.harness.snapshot = () => ({ ...status, revision: status.revision + 1 });
   await assert.rejects(context.requestAiChatV99({ execution: { ...status } }, [], options), /变化/);
   assert.equal(calls, 1);
+});
+
+test('本次就绪检查推进修订后可使用新快照，不误报配置变化', async () => {
+  const pending = deferred(); const executions = []; let native = { ...status, ready: false, credentialStatus: 'missing' };
+  const api = client(async (command, { request }) => {
+    if (command === 'harness_execute') { executions.push(request.revision); return { content: 'fixture' }; }
+    if (request.kind === 'check_readiness') { await pending.promise; native = { ...status, revision: 5 }; }
+    return { ...native };
+  });
+  await api.initialize(); const checking = api.ensureReady();
+  const context = vm.createContext({ ShirohaPlatform: { harness: api }, URL });
+  installAiSettings(context); installAiTransport(context);
+  const request = context.requestAiChatV99({ execution: { ...status } }, [], { task: 'question_analysis', isCurrent: () => true });
+  pending.resolve(); await checking;
+  assert.equal((await request).content, 'fixture');
+  assert.deepEqual(executions, [5]);
+});
+
+test('生成前捕获检查中快照，即使检查已结束也使用核验后的修订', async () => {
+  const pending = deferred(); const executions = []; let native = { ...status, ready: false, credentialStatus: 'missing' };
+  const api = client(async (command, { request }) => {
+    if (command === 'harness_execute') { executions.push(request.revision); return { content: 'fixture' }; }
+    if (request.kind === 'check_readiness') { await pending.promise; native = { ...status, revision: 5 }; }
+    return { ...native };
+  });
+  await api.initialize(); const checking = api.ensureReady();
+  const captured = api.snapshot();
+  pending.resolve(); await checking;
+  const context = vm.createContext({ ShirohaPlatform: { harness: api }, URL });
+  installAiSettings(context); installAiTransport(context);
+  const result = await context.requestAiChatV99({ execution: captured }, [], { task: 'question_analysis', isCurrent: () => true });
+  assert.equal(result.content, 'fixture');
+  assert.deepEqual(executions, [5]);
+});
+
+test('检查完成后发生取消，即使修订未变化也不能发送旧请求', async () => {
+  const pending = deferred(); let executions = 0;
+  const initial = { ...status, ready: false, credentialStatus: 'missing' };
+  const api = client(async (command, { request }) => {
+    if (command === 'harness_execute') { executions += 1; return { content: 'fixture' }; }
+    if (request.kind === 'check_readiness') { await pending.promise; return { ...status }; }
+    return request.kind === 'cancel_all' ? { ...status } : { ...initial };
+  });
+  await api.initialize(); const checking = api.ensureReady();
+  const captured = api.snapshot();
+  pending.resolve(); await checking; await api.cancelAll();
+  const context = vm.createContext({ ShirohaPlatform: { harness: api }, URL });
+  installAiSettings(context); installAiTransport(context);
+  await assert.rejects(context.requestAiChatV99({ execution: captured }, [], { task: 'question_analysis', isCurrent: () => true }), /变化|取消/);
+  assert.equal(executions, 0);
+});
+
+test('检查成功且修订未变化时，同一生命周期的请求可以继续', async () => {
+  const pending = deferred(); let executions = 0; let native = { ...status, ready: false, credentialStatus: 'missing' };
+  const api = client(async (command, { request }) => {
+    if (command === 'harness_execute') { executions += 1; return { content: 'fixture' }; }
+    if (request.kind === 'check_readiness') { await pending.promise; native = { ...status }; }
+    return { ...native };
+  });
+  await api.initialize(); const checking = api.ensureReady();
+  const captured = api.snapshot();
+  pending.resolve(); await checking;
+  const context = vm.createContext({ ShirohaPlatform: { harness: api }, URL });
+  installAiSettings(context); installAiTransport(context);
+  assert.equal((await context.requestAiChatV99({ execution: captured }, [], { task: 'question_analysis', isCurrent: () => true })).content, 'fixture');
+  assert.equal(executions, 1);
+});
+
+test('就绪检查不能把已确认的 CodeBuddy 换号当成普通修订变化', async () => {
+  const original = { ...status, adapter: 'codebuddy', model: 'default', accountRevision: 1, ready: false };
+  const api = client(async (_command, { request }) => (request.kind === 'check_readiness'
+    ? { ...original, revision: 5, accountRevision: 2, ready: true }
+    : { ...original }));
+  await api.initialize(); await api.ensureReady();
+  assert.equal(api.isReadinessTransition({ ...original, ready: true }, api.snapshot()), false);
+});
+
+test('等待检查的任务缺少上下文验证时给出明确错误', async () => {
+  const platform = { harness: { status: () => ({ ...status, readiness: 'checking' }), ensureReady: async () => {}, snapshot: () => ({ ...status }) } };
+  const context = vm.createContext({ ShirohaPlatform: platform, URL });
+  installAiSettings(context); installAiTransport(context);
+  await assert.rejects(context.requestAiChatV99({ execution: { ...status } }, [], { task: 'question_analysis' }), /缺少上下文确认/);
+});
+
+test('单题请求等待期间切题，不发送原题内容', async () => {
+  const pending = deferred(); const items = [{ id: 'first' }, { id: 'second' }];
+  const owner = { items, idx: 0 }; let sends = 0;
+  const context = vm.createContext({ AbortController });
+  vm.runInContext(readFileSync(require.resolve('../../apps/web/ai-question-sessions.js'), 'utf8'), context);
+  const sessions = context.ShirohaAiQuestionSessions.createPractice({
+    practice: { current: () => owner },
+    question: { current: () => items[owner.idx], allowed: () => true, key: (item) => item?.id, fingerprint: (item) => item?.id, answer: () => ({ chosen: ['A'] }), hasImages: () => false },
+    request: { config: () => ({ configured: true, requestConfig: { timeoutSeconds: 120 } }), timeout: (_seconds, run) => run(new AbortController()),
+      chat: async (_config, _messages, options) => { await pending.promise; if (!options.isCurrent()) { throw new Error('题目已变化'); } sends += 1; return { content: 'fixture' }; }, analysisMessages: () => [] },
+    result: { analysis: () => ({ analysis: 'fixture' }) }, view: { render() {}, sanitize: (message) => message, notice() {} },
+  });
+  const running = sessions.runAnalysis(); owner.idx = 1; pending.resolve(); await running;
+  assert.equal(sends, 0);
 });
 
 test('复制登录信息的回调读取绑定后更新的状态', async () => {

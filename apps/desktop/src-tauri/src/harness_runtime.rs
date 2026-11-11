@@ -805,6 +805,38 @@ mod tests {
     }
 
     #[test]
+    fn checking_existing_codebuddy_validates_the_fixed_component_without_repair() {
+        let fixture = Fixture::new();
+        let target = crate::harness_codebuddy_runtime::managed_path(&fixture.0);
+        fs::create_dir_all(target.parent().unwrap()).unwrap();
+        fs::write(&target, BODY).unwrap();
+        let manifest = Manifest {
+            url: String::new(),
+            bytes: BODY.len() as u64,
+            sha256: format!("{:x}", Sha256::digest(BODY)),
+        };
+        let cancel = AtomicBool::new(false);
+        let checked = run(check_existing_with(
+            &fixture.0,
+            Component::CodeBuddy,
+            &cancel,
+            &manifest,
+        ))
+        .unwrap();
+        assert_eq!(checked, fs::canonicalize(&target).unwrap());
+        fs::write(&target, vec![b'x'; BODY.len()]).unwrap();
+        let error = run(check_existing_with(
+            &fixture.0,
+            Component::CodeBuddy,
+            &cancel,
+            &manifest,
+        ))
+        .unwrap_err();
+        assert_eq!(error.code, "harness_runtime_integrity");
+        assert_eq!(fs::read(&target).unwrap(), vec![b'x'; BODY.len()]);
+    }
+
+    #[test]
     fn codebuddy_cache_and_lock_are_independent_of_codex() {
         let fixture = Fixture::new();
         let codex = fixture.write_cache(b"keep Codex runtime");

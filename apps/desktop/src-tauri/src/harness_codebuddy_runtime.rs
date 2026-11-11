@@ -53,6 +53,7 @@ pub(crate) async fn prepare(
 
 pub(crate) fn preparation_error(error: crate::error::Error) -> crate::error::Error {
     let code = match error.code {
+        "harness_runtime" => "codebuddy_runtime_unavailable",
         "harness_runtime_storage" => "codebuddy_runtime_storage",
         "harness_runtime_busy" => "codebuddy_runtime_busy",
         "harness_runtime_download" => "codebuddy_runtime_download",
@@ -207,6 +208,13 @@ mod tests {
     use sha2::{Digest, Sha256};
     use std::io::Cursor;
     use std::sync::atomic::Ordering;
+
+    #[test]
+    fn missing_cached_component_uses_codebuddy_diagnostic() {
+        let error = preparation_error(crate::harness::failure("harness_runtime"));
+        assert_eq!(error.code, "codebuddy_runtime_unavailable");
+        assert!(error.message.contains("CodeBuddy"));
+    }
 
     struct Fixture {
         archive: Vec<u8>,

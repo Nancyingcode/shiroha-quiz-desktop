@@ -59,6 +59,8 @@ export async function codebuddyCliSmoke(page, profile, startPractice) {
   });
   assert.equal(denied, 4);
   await loginFixture(profile);
+  await waitForPhase(page, 'signed_out');
+  await page.locator('#ai-codebuddy-refresh').click();
   const signedIn = await waitForPhase(page, 'signed_in');
   await page.locator('#ai-codebuddy-cli-guide').waitFor({ state: 'hidden' });
   assert.equal(signedIn.rememberLogin, false);
@@ -104,9 +106,24 @@ export async function codebuddyCliAfterRestart(page, startPractice) {
   await page.locator('#app-dialog [data-dialog-accept]').click();
   await page.waitForFunction(() => !document.body.classList.contains('practice-focus'));
   await page.locator('#practice-submit-mode').selectOption('single');
+  const stopped = await page.evaluate(async () => {
+    const platform = /** @type {import('../../web/platform/runtime.d.ts').BrowserGlobals['ShirohaPlatform']} */ (Reflect.get(window, 'ShirohaPlatform'));
+    await platform.credentials.reset();
+    const host = /** @type {{invoke(command:string,args:Record<string,unknown>):Promise<unknown>}} */ (Reflect.get(window, 'ShirohaDesktopHost'));
+    const account = /** @type {{phase:string,cliLoginAvailable:boolean}} */ (await host.invoke('codebuddy_control', { request: { kind: 'status' } }));
+    return { ready: platform.harness?.status().ready, phase: account.phase, available: account.cliLoginAvailable };
+  });
+  assert.deepEqual(stopped, { ready: false, phase: 'signed_out', available: false });
+  await page.reload();
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.waitForFunction(() => Reflect.get(window, 'ShirohaPlatform')?.harness?.status().readiness === 'blocked');
+  assert.equal((await executionStatus(page)).ready, false);
   await page.locator('.nav[data-view="ai-settings"]').click();
+  await page.locator('#ai-codebuddy-refresh').click();
+  await waitForPhase(page, 'signed_in');
+  await page.waitForFunction(() => Reflect.get(window, 'ShirohaPlatform')?.harness?.status().ready);
   await page.locator('#ai-codebuddy-cli-guide').waitFor({ state: 'hidden' });
-  return { cliReverifiedAfterRestart: true, modelPreserved: true, practiceBeforeSettings: true };
+  return { cliReverifiedAfterRestart: true, modelPreserved: true, practiceBeforeSettings: true, restoreRequiresRefresh: true };
 }
 
 /** @param {Page} initialPage @param {string} profile @param {()=>Promise<Page>} restart */

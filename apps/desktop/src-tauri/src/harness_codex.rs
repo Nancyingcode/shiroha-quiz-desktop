@@ -182,6 +182,15 @@ mod implementation {
     }
     #[cfg(test)]
     fn auth_fixture(root: &Path, operation: &str, cancel: &AtomicBool) -> Result<()> {
+        if root
+            .join(format!("fake-{operation}-stop-after-cancel"))
+            .is_file()
+        {
+            while !cancel.load(Ordering::Acquire) {
+                thread::sleep(Duration::from_millis(1));
+            }
+            return Err(failure("harness_stop_failed"));
+        }
         if root.join(format!("fake-{operation}-stop-failed")).is_file() {
             return Err(failure("harness_stop_failed"));
         }

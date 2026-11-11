@@ -108,7 +108,7 @@
       if (isAiHarnessExecutionV99(config.execution)) {
         const { readiness } = config.execution;
         if (readiness === 'checking' || readiness === 'error' || readiness === 'blocked') {
-          return { state: readiness, reason: config.execution.reason || 'AI 状态尚未确认。', retryable: config.execution.readinessRetryable !== false };
+          return { state: readiness, reason: config.execution.reason || 'AI 状态尚未确认。', retryable: readiness !== 'checking' && config.execution.readinessRetryable !== false };
         }
         if (!aiConfiguredV99(config, task)) { return { state: 'action_required', reason: aiUnavailableReasonV99(config, task) }; }
       } else if (!aiConfiguredV99(config, task)) {

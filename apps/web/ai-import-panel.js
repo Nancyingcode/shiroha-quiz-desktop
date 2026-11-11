@@ -172,7 +172,7 @@
     }
     async function openSettingsOrRetry(task) {
       const availability = aiAvailabilityV99(aiExecutionConfigV99(), task);
-      if ((availability.state === 'error' || availability.state === 'blocked') && availability.retryable) {
+      if (availability.retryable) {
         await ShirohaPlatform.harness?.retryReadiness();
       } else {
         await switchViewV45('ai-settings');
@@ -305,7 +305,7 @@
       }
       if (settings) {
         settings.classList.toggle('ai-hidden-v99', configured || checking);
-        settings.textContent = (availability.state === 'error' || availability.state === 'blocked') && availability.retryable ? '重试检查' : '前往 AI 设置';
+        settings.textContent = availability.retryable ? '重试检查' : '前往 AI 设置';
       }
       if (privacy) {
         privacy.setAttribute?.('role', 'status'); privacy.setAttribute?.('aria-live', 'polite'); privacy.setAttribute?.('aria-busy', String(checking));
@@ -536,7 +536,7 @@
       }
       if (settings) {
         settings.classList.toggle('ai-hidden-v99', configured || checking);
-        settings.textContent = (availability.state === 'error' || availability.state === 'blocked') && availability.retryable ? '重试检查' : '前往 AI 设置';
+        settings.textContent = availability.retryable ? '重试检查' : '前往 AI 设置';
       }
       if (start) {
         start.classList.toggle('ai-hidden-v99', !configured && !checking);

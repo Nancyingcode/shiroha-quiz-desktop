@@ -68,7 +68,7 @@ export interface CodeBuddyCliAccountStatus {
   persistenceErrorCode:'codebuddy_store_unavailable'|null;
 }
 export type CodeBuddyCliControl = {kind:'status'}|{kind:'refresh';revision:number};
-export interface HarnessStatus {
+export interface NativeHarnessStatus {
   mode:'api'|'harness'; adapter:string; model:string; timeoutSeconds:number;
   credentialStatus:string; runtimePath:string; runtimeVersion:string; ready:boolean; reason:string; revision:number; busy:boolean;
   restoreRequired?:boolean;
@@ -77,6 +77,8 @@ export interface HarnessStatus {
   accountRevision?:number;
   operationBusy?:boolean;
   componentTasks?:HarnessComponentTask[];
+}
+export interface HarnessStatus extends NativeHarnessStatus {
   readiness?:'checking'|'error'|'blocked';
   readinessRetryable?:boolean;
 }
@@ -86,6 +88,7 @@ export interface HarnessApi {
   retryReadiness():Promise<void>;
   status():HarnessStatus;
   snapshot():Readonly<HarnessStatus>;
+  isReadinessTransition(before:Readonly<HarnessStatus>,after:Readonly<HarnessStatus>):boolean;
   execute(snapshot:Readonly<HarnessStatus>,task:AiTaskKind,messages:{role:'system'|'user'|'assistant';content:string}[],signal?:AbortSignal):Promise<{content:string}>;
   cancelAll():Promise<void>;
   formMode():'api'|'harness';
