@@ -1,7 +1,7 @@
 (() => {
   'use strict';
   function create({ state, select: $, selectAll: $$, escape: esc, label, short, formatDate: fmt, toast,
-    platform: ShirohaPlatform, training: ShirohaTraining, paging, content, review, navigation, practice }) {
+    platform: ShirohaPlatform, training: ShirohaTraining, paging, content, review, navigation, practice, actions = {} }) {
     const { visible: nativeViewVisible, begin: beginNativeRender, page: nativePage, versions: nativeRenderVersions,
       pages: nativePages, openRecords: nativeOpenRecords, loadItems: loadNativeItems, read: readNative } = paging;
     const { blankAnswers: blankAnswersFromDetailV58914, blankUserAnswers: blankUserAnswersFromDetailV58914,
@@ -15,8 +15,11 @@
       setGroup: setPracticeGroupScopeV8916, baseItems: practiceBaseItemsV58916, scope: practiceScopeV8916,
       itemBankId: practiceItemBankIdV8916, question: practiceQuestionV8916, exactNumbers: formatExactPracticeNumbersV58916,
       renderScope: renderPracticeScopeUiV8916, syncMode: syncPracticeStartModeFieldsV58916 } = practice;
+    const { transaction: runMutation, save: saveSilent, renderAll } = actions;
     // 复盘快照和请求序号仅属于当前页面；离开时释放引用并使迟到读取失效。
     let trainingReview = null; let trainingReviewRequest = 0; let bound = false;
+    // 同一页面只处理一个删除确认；弹窗关闭或事务结束后释放。
+    let recordDeletionPending = false;
     function leaveTrainingReview() {
       releaseTrainingReviewAnalysis();
       trainingReviewRequest += 1;
@@ -29,11 +32,77 @@
       }
       bound = true;
       document.addEventListener('click', (event) => {
+        const deleteButton = event.target.closest?.('[data-training-delete]');
+        if (deleteButton && !deleteButton.disabled) {
+          deleteTrainingRecord(deleteButton.dataset.trainingDelete);
+          return;
+        }
         const button = event.target.closest?.('[data-training-review]');
         if (button && !button.disabled) {
           openTrainingReview(button.dataset.trainingReview);
         }
       });
+    }
+    function recordDeletionTarget(id) {
+      if (typeof id !== 'string' || !id.trim()) {
+        toast('记录 ID 缺失，无法安全删除。请先导出备份并检查记录。', 'warn');
+        return null;
+      }
+      const matches = state.records.filter((record) => record && record.id === id);
+      if (matches.length > 1) {
+        toast('记录 ID 重复，无法安全删除。请先导出备份并检查记录。', 'warn');
+        return null;
+      }
+      if (!matches.length) {
+        toast('记录不存在，请刷新后重试。', 'warn');
+        return null;
+      }
+      return matches[0];
+    }
+    function recordDeletionContext(record) {
+      return [trainingTitle(record), record.bankName, fmt(record.date)].filter(Boolean).join(' · ');
+    }
+    async function deleteTrainingRecord(id) {
+      if (recordDeletionPending) {
+        return;
+      }
+      const target = recordDeletionTarget(id);
+      if (!target) {
+        return;
+      }
+      const context = recordDeletionContext(target);
+      recordDeletionPending = true;
+      try {
+        const confirmed = await globalThis.ShirohaDialogs.confirm(
+          '确定删除这条训练记录吗？删除后将无法查看该次训练复盘。\n\n题库、错题本和收藏不会被删除。',
+          { title: '删除训练记录？', acceptLabel: '删除记录', context, danger: true },
+        );
+        if (!confirmed) {
+          return;
+        }
+        await runMutation(async () => {
+          const current = recordDeletionTarget(id);
+          if (!current) {
+            return false;
+          }
+          if (recordDeletionContext(current) !== context) {
+            toast('记录已发生变化，请重新确认后删除。', 'warn');
+            return false;
+          }
+          state.records = state.records.filter((record) => record.id !== id);
+          await saveSilent();
+          nativeOpenRecords.delete(id);
+          renderAll();
+          toast('训练记录已删除。', 'ok');
+          window.requestAnimationFrame(() => {
+            if ($('.view.active')?.id === 'records') {
+              $('#record-mode-filter')?.focus({ preventScroll: true });
+            }
+          });
+        });
+      } finally {
+        recordDeletionPending = false;
+      }
     }
     function renderRecordAnswerCellV58914(detail, kind) {
       const groups = blankAnswersFromDetailV58914(detail);
@@ -87,7 +156,7 @@
         } else if (wrongOnly) {
           detailSummary = `查看错题明细（前8题 / 共${filteredDetails.length}道错题）`;
         }
-        return `<div class="record-item"><div class="training-history-row"><b>${esc(trainingTitle(r))}｜${esc(r.bankName)}｜${fmt(r.date)}</b><span>${trainingCompletion(r)}</span><button type="button" class="ghost mini-btn" data-training-review="${esc(r.id)}">查看复盘</button></div><p class="muted">${summary}</p>${detail || ShirohaPlatform.storage.lazy ? `<details data-native-record="${esc(r.id)}" ${nativeOpenRecords.has(r.id) ? 'open' : ''}><summary>${detailSummary}</summary><div class="table-wrap"><table><thead><tr><th>#</th><th>题干</th><th>你的答案</th><th>正确答案</th><th>结果</th></tr></thead><tbody>${detail}</tbody></table></div></details>` : ''}</div>`;
+        return `<div class="record-item"><div class="training-history-row"><b>${esc(trainingTitle(r))}｜${esc(r.bankName)}｜${fmt(r.date)}</b><span>${trainingCompletion(r)}</span><span class="training-record-actions"><button type="button" class="ghost mini-btn" data-training-review="${esc(r.id)}">查看复盘</button><button type="button" class="ghost danger mini-btn" data-training-delete="${esc(r.id)}" aria-label="删除训练记录：${esc(recordDeletionContext(r))}">删除</button></span></div><p class="muted">${summary}</p>${detail || ShirohaPlatform.storage.lazy ? `<details data-native-record="${esc(r.id)}" ${nativeOpenRecords.has(r.id) ? 'open' : ''}><summary>${detailSummary}</summary><div class="table-wrap"><table><thead><tr><th>#</th><th>题干</th><th>你的答案</th><th>正确答案</th><th>结果</th></tr></thead><tbody>${detail}</tbody></table></div></details>` : ''}</div>`;
       }).join('') : emptyMessage;
       if (ShirohaPlatform.storage.lazy) {
         list.querySelectorAll('[data-native-record]').forEach((element) => element.ontoggle = () => {

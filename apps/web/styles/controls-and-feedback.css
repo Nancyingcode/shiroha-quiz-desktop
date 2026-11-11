@@ -53,6 +53,7 @@
 #app-dialog .app-dialog-form{margin:0;display:block}
 #app-dialog .app-dialog-icon{display:flex;align-items:center;justify-content:center;width:46px;height:46px;border-radius:14px;background:#eaf2ff;color:#2563eb;margin-bottom:18px;font:600 25px Georgia,serif}
 #app-dialog #app-dialog-title{font-size:20px;line-height:1.4;margin:0 30px 12px 0;font-weight:600;color:#183451}
+#app-dialog #app-dialog-context:not([hidden]){display:inline-block;max-width:100%;box-sizing:border-box;margin:0 0 14px;padding:7px 10px;border-radius:10px;background:#eaf2ff;color:#234461;font-size:14px;font-weight:600;overflow-wrap:anywhere}
 #app-dialog #app-dialog-message{font-size:14px;line-height:1.7;margin:0;color:#61738b;white-space:pre-wrap;overflow-wrap:anywhere}
 #app-dialog #app-dialog-input{box-sizing:border-box;width:100%;margin-top:18px;padding:11px 12px;border:1px solid #cbdcf0;border-radius:var(--field-radius);background:#fff;color:#193553;font:inherit}
 #app-dialog .app-dialog-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:28px;flex-wrap:wrap}
@@ -60,10 +61,14 @@
 #app-dialog button:hover{background:#eaf2fc}
 #app-dialog [data-dialog-accept]{background:#2563eb;color:#fff;border-color:#2563eb}
 #app-dialog [data-dialog-accept]:hover{background:#1d4ed8}
+#app-dialog[data-variant="danger"] .app-dialog-icon{position:absolute;top:27px;left:28px;width:32px;height:32px;margin:0;background:#fff3dc;color:#d97706;font:600 21px "Segoe UI Symbol",sans-serif}
+#app-dialog[data-variant="danger"] #app-dialog-title{display:flex;align-items:center;min-height:32px;margin-left:44px}
+#app-dialog[data-variant="danger"] [data-dialog-accept]{background:#dc2626;border-color:#dc2626}
+#app-dialog[data-variant="danger"] [data-dialog-accept]:hover{background:#b91c1c}
 #app-dialog [data-dialog-close]{position:absolute;right:14px;top:12px;background:transparent;border:0;padding:4px;width:36px;min-height:36px;font-size:24px;color:#718299}
 #app-dialog :is(button,input):focus-visible{outline:3px solid #83b5ff;outline-offset:3px}
 #app-dialog [hidden]{display:none}
-@media(max-width:480px){#app-dialog{padding:24px 20px}#app-dialog button{padding:10px 14px}}
+@media(max-width:480px){#app-dialog{padding:24px 20px}#app-dialog button{padding:10px 14px}#app-dialog[data-variant="danger"] .app-dialog-icon{top:23px;left:20px}}
 
 .list-pagination{
   container-type:inline-size;
@@ -382,6 +387,8 @@ body.practice-focus .practice-focus-head{flex-wrap:wrap}
 .training-history-row:last-child{border-bottom:0}
 .training-history-row>div{min-width:0;flex:1}
 .training-history-row p{margin:5px 0;font-size:13px}
+.training-history-row>b{min-width:0;overflow-wrap:anywhere}
+.training-record-actions{display:inline-flex;align-items:center;flex-wrap:wrap;gap:8px}
 .training-result-summary{margin:16px 0;font-variant-numeric:tabular-nums}
 /* 复盘按钮所在 .actions 只有 margin-top，紧跟在后面的 .notice 没有上间距，按钮会贴在提示条上。 */
 .training-result-actions{margin-top:0;margin-bottom:16px}

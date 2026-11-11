@@ -1293,7 +1293,9 @@ async function main() {
         const current = /** @type {{revision:number}} */ (await host.invoke('local_initialize'));
         const banks = ['lazy-a', 'lazy-b'].map((id) => ({ id, name: id, groupName: 'C8', questions: Array.from({ length: 65 }, (_, i) => ({ id: `q${i}`, number: i + 1, type: 'single', question: `${id} 正文 ${i}`, options: [{ key: 'A', text: '正确' }, { key: 'B', text: '错误' }], answer: ['A'], extension: { preserved: true } })) }));
         Object.assign(banks[0].questions[0], { category: '较长的分类名称：综合基础知识', score: 12.5 });
-        await host.invoke('local_replace', { operationId: 'lazy-fixture', expectedRevision: current.revision, snapshot: { schemaVersion: 1, banks, activeBankId: 'lazy-a', wrongBook: {}, favorites: { 'lazy-a': ['q64', 'q0'] }, records: [{ id: 'old-record', mode: 'practice', name: '历史记录', bankName: '已删除题库', date: '2026-10-23T00:00:00Z', total: 1, answered: 1, correct: 0, wrong: 1, accuracy: 0, duration: 1, details: [{ question: '已删除题目的历史正文', type: 'single', chosen: ['B'], answer: ['A'], correct: false }] }], settings: {}, crossPlatformMeta: {} } });
+        const oldRecord = { id: 'old-record', mode: 'practice', name: '历史记录', bankName: '已删除题库', date: '2026-10-23T00:00:00Z', total: 1, answered: 1, correct: 0, wrong: 1, accuracy: 0, duration: 1, details: [{ question: '已删除题目的历史正文', type: 'single', chosen: ['B'], answer: ['A'], correct: false }] };
+        const records = [oldRecord, { ...oldRecord, id: 'delete-record', name: '待删除历史', date: '2026-10-22T00:00:00Z' }];
+        await host.invoke('local_replace', { operationId: 'lazy-fixture', expectedRevision: current.revision, snapshot: { schemaVersion: 1, banks, activeBankId: 'lazy-a', wrongBook: {}, favorites: { 'lazy-a': ['q64', 'q0'] }, records, settings: {}, crossPlatformMeta: {} } });
       });
       await migratedRestart.page.addInitScript(() => {
         const calls = /** @type {string[]} */ ([]);
@@ -1339,9 +1341,9 @@ async function main() {
       assert.equal(await migratedRestart.page.locator('#bank-question-detail').count(), 0);
       assert.equal(await migratedRestart.page.locator('#bank-preview tbody tr').count(), 15);
       await migratedRestart.page.locator('.nav[data-view="records"]').click();
-      await migratedRestart.page.locator('#records-list details').waitFor();
+      await migratedRestart.page.locator('#records-list details').first().waitFor();
       assert.equal(await migratedRestart.page.locator('#records-list tbody tr').count(), 0);
-      await migratedRestart.page.locator('#records-list summary').click();
+      await migratedRestart.page.locator('#records-list .record-item').filter({ has: migratedRestart.page.locator('[data-training-delete="old-record"]') }).locator('summary').click();
       await migratedRestart.page.locator('#records-list').getByText('已删除题目的历史正文', { exact: true }).waitFor();
       await migratedRestart.page.locator('.nav[data-view="favorites"]').click();
       const favorites = migratedRestart.page.locator('#favorites-list-v596');
@@ -1520,6 +1522,38 @@ async function main() {
         if (!data.records.some((record) => record.id === 'old-record')) { throw new Error('历史记录丢失'); }
       });
       return { deleted: 16, remaining: 49, otherBank: 65, reloaded: true };
+    });
+    await check('单条训练记录删除保留其他数据并在重载后生效', async () => {
+      const { page } = migratedRestart;
+      const read = () => page.evaluate(async () => {
+        const host = (/** @type {NativeTestWindow} */(window)).ShirohaDesktopHost;
+        if (!host) { throw new Error('bridge'); }
+        return /** @type {import('../../web/platform/contracts.d.ts').Snapshot} */ (await host.invoke('local_read'));
+      });
+      const before = await read();
+      await page.reload();await page.locator('body[data-storage-state="ready"]').waitFor();
+      await page.locator('.nav[data-view="records"]').click();
+      const remove = page.locator('[data-training-delete="delete-record"]');
+      await remove.waitFor();
+      const detailCalls = await page.evaluate(() => /** @type {string[]} */ (Reflect.get(window, '__nativeCalls')).filter((call) => call === 'local_query:details').length);
+      await remove.click();
+      await page.locator('#app-dialog [data-dialog-cancel]').click();
+      assert.equal(await remove.count(), 1);
+      await remove.click();
+      await page.locator('#app-dialog').evaluate((element) => Promise.all(element.getAnimations().map((animation) => animation.finished)));
+      await page.screenshot({ path: path.join(path.dirname(SCREENSHOT_PATH), 'record-deletion-confirm.png') });
+      await page.locator('#app-dialog [data-dialog-accept]').click();
+      await remove.waitFor({ state: 'detached' });
+      const detailCallsAfter = await page.evaluate(() => /** @type {string[]} */ (Reflect.get(window, '__nativeCalls')).filter((call) => call === 'local_query:details').length);
+      assert.equal(detailCallsAfter, detailCalls, '删除未展开记录时不应读取记录正文');
+      const after = await read();
+      assert.deepEqual(after.records, before.records.filter((record) => record.id !== 'delete-record'));
+      for (const key of /** @type {const} */ (['banks', 'wrongBook', 'favorites', 'crossPlatformMeta'])) { assert.deepEqual(after[key], before[key]); }
+      await page.reload();await page.locator('body[data-storage-state="ready"]').waitFor();
+      await page.locator('.nav[data-view="records"]').click();
+      await page.locator('[data-training-delete="old-record"]').waitFor();
+      assert.equal(await page.locator('[data-training-delete="delete-record"]').count(), 0);
+      return { deleted: 1, otherDataPreserved: true, lazy: true, reloaded: true };
     });
     const repairCheckpoint = /** @type {{snapshotId:string}} */ (await migratedRestart.page.evaluate(async () => {
       const host = (/** @type {NativeTestWindow} */(window)).ShirohaDesktopHost;if (!host) { throw new Error('bridge'); } return host.invoke('local_checkpoint');

@@ -40,6 +40,130 @@ async function pageFor(t, raw, injection = '', appTransform = null) {
 }
 const saved = (page) => page.evaluate((key) => globalThis.localStorage.getItem(key), KEY);
 
+function recordDeletionState() {
+  const initial = webState();
+  const sample = initial.records[0];
+  initial.records = [
+    { ...sample, id: 'delete-target', name: '顺序练习 <img src=x>', mode: '练习', date: '2026-11-10T06:30:00.000Z' },
+    { ...sample, id: 'keep-record', name: '保留记录', mode: '练习', date: '2026-11-09T06:30:00.000Z' },
+  ];
+  return initial;
+}
+
+test('训练记录删除：取消保留数据，确认只删除目标并刷新首页', async (t) => {
+  const page = await pageFor(t, JSON.stringify(recordDeletionState()));
+  page.setDefaultTimeout(3000);page.removeAllListeners('app-dialog');
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.locator('#save-all-btn').click();
+  const before = JSON.parse(await saved(page));
+  await page.locator('.nav[data-view="records"]').click();
+  const button = page.locator('[data-training-delete="delete-target"]');
+  assert.match(await button.getAttribute('aria-label'), /顺序练习/);
+  await button.click();
+  assert.equal(await page.locator('#app-dialog-title').innerText(), '删除训练记录？');
+  assert.match(await page.locator('#app-dialog').innerText(), /删除后将无法查看该次训练复盘/);
+  assert.match(await page.locator('#app-dialog').innerText(), /题库、错题本和收藏不会被删除/);
+  assert.equal(await page.locator('#app-dialog img').count(), 0);
+  assert.equal(await page.locator('#app-dialog [data-dialog-cancel]').evaluate((element) => element === globalThis.document.activeElement), true);
+  await page.keyboard.press('Escape');
+  assert.deepEqual(JSON.parse(await saved(page)), before);
+  assert.equal(await button.evaluate((element) => element === globalThis.document.activeElement), true);
+  await button.click();
+  await page.locator('#app-dialog [data-dialog-accept]').click();
+  await page.waitForFunction((key) => JSON.parse(globalThis.localStorage.getItem(key)).records.length === 1, KEY);
+  await page.waitForFunction(() => globalThis.document.activeElement === globalThis.document.querySelector('#record-mode-filter'));
+  const after = JSON.parse(await saved(page));
+  assert.deepEqual(after.records, before.records.filter((record) => record.id === 'keep-record'));
+  for (const key of ['banks', 'wrongBook', 'favorites', 'crossPlatformMeta']) { assert.deepEqual(after[key], before[key]); }
+  assert.equal(await page.locator('[data-training-delete="delete-target"]').count(), 0);
+  await page.locator('.nav[data-view="dashboard"]').click();
+  assert.equal(await page.locator('#stat-records').innerText(), '1');
+  assert.equal(await page.locator('#recent-training').getByText('保留记录', { exact: true }).count(), 1);
+  await page.reload();
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  assert.deepEqual(JSON.parse(await saved(page)).records, after.records);
+  await page.locator('.nav[data-view="records"]').click();
+  await page.locator('[data-training-delete="keep-record"]').click();
+  await page.locator('#app-dialog [data-dialog-accept]').click();
+  await page.locator('#records-list').getByText('暂无练习或考试记录。', { exact: true }).waitFor();
+  assert.equal(await page.locator('#records-list-pager .list-pagination-status').innerText(), '共 0 项');
+  await page.locator('.nav[data-view="dashboard"]').click();
+  assert.equal(await page.locator('#stat-records').innerText(), '0');
+});
+
+test('训练记录删除：保存失败回滚，重试只删除原目标', async (t) => {
+  const page = await pageFor(t, JSON.stringify(recordDeletionState()));
+  page.setDefaultTimeout(3000);
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  const before = JSON.parse(await saved(page));
+  await page.evaluate(() => {
+    const original = globalThis.ShirohaPlatform.storage.write;
+    globalThis.__restoreRecordWrite = () => { globalThis.ShirohaPlatform.storage.write = original; };
+    globalThis.ShirohaPlatform.storage.write = async () => { throw new Error('模拟记录保存失败'); };
+  });
+  await page.locator('.nav[data-view="records"]').click();
+  await page.locator('[data-training-delete="delete-target"]').click();
+  await page.locator('#platform-status.failed').waitFor();
+  assert.deepEqual(JSON.parse(await saved(page)), before);
+  assert.equal(await page.locator('#records-list .record-item').count(), 2);
+  await page.evaluate(() => globalThis.__restoreRecordWrite());
+  await page.locator('#platform-status').getByRole('button', { name: '重试', exact: true }).click();
+  await page.waitForFunction((key) => JSON.parse(globalThis.localStorage.getItem(key)).records.length === 1, KEY);
+  assert.equal(JSON.parse(await saved(page)).records[0].id, 'keep-record');
+});
+
+test('训练记录删除：重复 ID 不允许删除，避免误删多条记录', async (t) => {
+  const initial = recordDeletionState();
+  initial.records[1].id = initial.records[0].id;
+  const page = await pageFor(t, JSON.stringify(initial));
+  page.setDefaultTimeout(3000);page.removeAllListeners('app-dialog');
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  const before = await saved(page);
+  await page.locator('.nav[data-view="records"]').click();
+  await page.locator('[data-training-delete="delete-target"]').first().click();
+  await page.locator('.toast-item').filter({ hasText: '记录 ID 重复' }).waitFor();
+  assert.equal(await page.locator('#app-dialog').count(), 0);
+  assert.equal(await saved(page), before);
+});
+
+test('训练记录删除：缺失 ID 的历史记录不能删除', async (t) => {
+  const initial = recordDeletionState();
+  initial.records[0].id = '';
+  const page = await pageFor(t, JSON.stringify(initial));
+  page.setDefaultTimeout(5000);page.removeAllListeners('app-dialog');
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  const before = await saved(page);
+  await page.locator('.nav[data-view="records"]').click();
+  await page.locator('[data-training-delete=""]').click();
+  await page.locator('.toast-item').filter({ hasText: '记录 ID 缺失' }).waitFor();
+  assert.equal(await page.locator('#app-dialog').count(), 0);
+  assert.equal(await saved(page), before);
+});
+
+test('训练记录删除：末页删除后回到有效分页，窄屏操作不重叠', async (t) => {
+  const initial = recordDeletionState();
+  const sample = initial.records[0];
+  initial.records = Array.from({ length: 11 }, (_, index) => ({ ...sample, id: `page-record-${index}`, name: `分页记录 ${index}`, date: new Date(Date.parse('2026-11-10T06:30:00.000Z') - (index * 60000)).toISOString() }));
+  const page = await pageFor(t, JSON.stringify(initial));
+  page.setDefaultTimeout(3000);
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.locator('.nav[data-view="records"]').click();
+  await page.locator('#records-list-pager').getByRole('button', { name: '第 2 页', exact: true }).click();
+  await page.setViewportSize({ width: 360, height: 760 });
+  const card = page.locator('#records-list .record-item');
+  const layout = await card.evaluate((element) => {
+    const bounds = element.getBoundingClientRect();
+    const review = element.querySelector('[data-training-review]').getBoundingClientRect();
+    const remove = element.querySelector('[data-training-delete]').getBoundingClientRect();
+    return { fits: remove.left >= bounds.left && remove.right <= bounds.right, separate: review.right <= remove.left || remove.right <= review.left || review.bottom <= remove.top || remove.bottom <= review.top };
+  });
+  assert.deepEqual(layout, { fits: true, separate: true });
+  await page.locator('[data-training-delete="page-record-10"]').click();
+  await page.waitForFunction((key) => JSON.parse(globalThis.localStorage.getItem(key)).records.length === 10, KEY);
+  await page.locator('#records-list-pager .list-pagination-status').filter({ hasText: '第 1 / 1 页' }).waitFor();
+  assert.equal(await page.locator('#records-list .record-item').count(), 10);
+});
+
 test('子路径入口加载全部共享样式且关键控件样式生效', async (t) => {
   const context = await browser.newContext({ reducedMotion: 'reduce' }); t.after(() => context.close());
   const responses = new Map();

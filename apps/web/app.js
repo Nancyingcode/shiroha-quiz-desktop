@@ -259,6 +259,7 @@
       setGroup: setPracticeGroupScopeV8916, baseItems: practiceBaseItemsV58916, scope: practiceScopeV8916,
       itemBankId: practiceItemBankIdV8916, question: practiceQuestionV8916, exactNumbers: formatExactPracticeNumbersV58916,
       renderScope: renderPracticeScopeUiV8916, syncMode: syncPracticeStartModeFieldsV58916 },
+    actions: { transaction: runMutation, save: saveSilent, renderAll },
   });
   const { renderRecords, trainingCompletion, renderRecentTraining, openTrainingReview,
     leaveTrainingReview, bindTrainingReviewEvents } = trainingReviewPage;

@@ -1,7 +1,7 @@
 // @ts-check
 (() => {
   'use strict';
-  /** @typedef {{title?: string, acceptLabel?: string, cancelLabel?: string}} DialogOptions */
+  /** @typedef {{title?: string, acceptLabel?: string, cancelLabel?: string, context?: string, danger?: boolean}} DialogOptions */
   /** @typedef {'alert' | 'confirm' | 'prompt'} DialogKind */
   // 队列属于当前页面；关闭后释放节点与回调，避免并发提示互相覆盖或重复提交。
   let pending = Promise.resolve();
@@ -13,11 +13,13 @@
       const dialog = document.createElement('dialog');
       dialog.id = 'app-dialog';
       dialog.setAttribute('aria-labelledby', 'app-dialog-title');
-      dialog.setAttribute('aria-describedby', 'app-dialog-message');
+      dialog.setAttribute('aria-describedby', options.context ? 'app-dialog-context app-dialog-message' : 'app-dialog-message');
+      if (options.danger) { dialog.dataset.variant = 'danger'; }
       dialog.innerHTML = `<form method="dialog" class="app-dialog-form">
         <button type="button" data-dialog-close aria-label="关闭">×</button>
         <div class="app-dialog-icon" aria-hidden="true">i</div>
         <h2 id="app-dialog-title"></h2>
+        <p id="app-dialog-context" hidden></p>
         <p id="app-dialog-message"></p>
         <input id="app-dialog-input" type="text" autocomplete="off" aria-labelledby="app-dialog-message">
         <div class="app-dialog-actions">
@@ -31,9 +33,14 @@
       const accept = /** @type {HTMLButtonElement} */ (dialog.querySelector('[data-dialog-accept]'));
       const close = /** @type {HTMLButtonElement} */ (dialog.querySelector('[data-dialog-close]'));
       const title = /** @type {HTMLElement} */ (dialog.querySelector('h2'));
-      const description = /** @type {HTMLElement} */ (dialog.querySelector('p'));
+      const context = /** @type {HTMLElement} */ (dialog.querySelector('#app-dialog-context'));
+      const messageElement = /** @type {HTMLElement} */ (dialog.querySelector('#app-dialog-message'));
+      const icon = /** @type {HTMLElement} */ (dialog.querySelector('.app-dialog-icon'));
       title.textContent = options.title || ({ alert: '提示', confirm: '请确认', prompt: '请输入' })[kind];
-      description.textContent = message;
+      context.hidden = !options.context;
+      context.textContent = options.context || '';
+      messageElement.textContent = message;
+      icon.textContent = options.danger ? '⚠' : 'i';
       input.hidden = kind !== 'prompt';
       input.value = initial;
       cancel.hidden = kind === 'alert';

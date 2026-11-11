@@ -71,6 +71,21 @@ test('确认框居中、取消无副作用、焦点循环恢复且按键不泄�
   assert.deepEqual(await page.evaluate(() => globalThis.keys), []);
   assert.equal(await page.locator('#trigger').evaluate((el) => el === globalThis.document.activeElement), true);
 });
+test('危险确认显示安全的记录摘要，普通确认不显示摘要', async (t) => {
+  const page = await component(t);
+  await page.evaluate(() => {
+    globalThis.ShirohaDialogs.confirm('删除后无法复盘。', { title: '删除训练记录？', context: '<img src=x> · 测试记录', acceptLabel: '删除记录', danger: true });
+  });
+  assert.equal(await page.locator('#app-dialog-context').innerText(), '<img src=x> · 测试记录');
+  assert.equal(await page.locator('#app-dialog img').count(), 0);
+  assert.equal(await page.locator('#app-dialog').getAttribute('aria-describedby'), 'app-dialog-context app-dialog-message');
+  assert.equal(await page.locator('#app-dialog [data-dialog-accept]').innerText(), '删除记录');
+  await page.locator('#app-dialog [data-dialog-cancel]').click();
+  await page.evaluate(() => { globalThis.ShirohaDialogs.confirm('普通确认'); });
+  assert.equal(await page.locator('#app-dialog-context').isVisible(), false);
+  assert.equal(await page.locator('#app-dialog').getAttribute('data-variant'), null);
+  await page.locator('#app-dialog [data-dialog-cancel]').click();
+});
 test('输入保留默认值、空字符串和取消的区别，消息不执行 HTML', async (t) => {
   const page = await component(t);
   await page.evaluate(() => { globalThis.ShirohaDialogs.prompt('<img src=x onerror=alert(1)>', '默认题库').then((value) => { globalThis.result = value; }); });
