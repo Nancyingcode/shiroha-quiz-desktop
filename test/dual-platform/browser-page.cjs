@@ -16,7 +16,7 @@ test.before(async () => {
   browser = await chromium.launch({ headless: true, ...(process.env.SHIROHA_BROWSER_EXECUTABLE ? { executablePath: process.env.SHIROHA_BROWSER_EXECUTABLE } : { channel: 'msedge' }) });
 });
 test.after(async () => { await browser?.close(); await server?.close(); });
-async function pageFor(t, raw, injection = '', appTransform = null) {
+async function pageFor(t, raw, injection = '', appTransform = null, sourceTransforms = {}) {
   const context = await browser.newContext(); t.after(() => context.close());
   await context.addInitScript(({ raw, key }) => { if (!globalThis.sessionStorage.getItem('__stage_b_seed')) { if (raw !== null) { globalThis.localStorage.setItem(key, raw); }globalThis.sessionStorage.setItem('__stage_b_seed', '1'); } }, { raw, key: KEY });
   await context.route('**/*', async (route) => {
@@ -27,6 +27,10 @@ async function pageFor(t, raw, injection = '', appTransform = null) {
     }
     if (url.pathname === '/app.js' && appTransform) {
       const response = await route.fetch(); return route.fulfill({ response, body: appTransform(await response.text()) });
+    }
+    if (sourceTransforms[url.pathname]) {
+      const response = await route.fetch();
+      return route.fulfill({ response, body: sourceTransforms[url.pathname](await response.text()) });
     }
     return route.continue();
   });
@@ -1930,7 +1934,14 @@ test('延迟初始化不允许编辑，失败原值保留并提供恢复出口',
   assert.equal(await page.locator('.app').getAttribute('inert'), '');
   await page.locator('body[data-storage-state="recovery_required"]').waitFor();
   assert.equal(await saved(page), '{broken');
-  assert.equal(await page.getByRole('button', { name: '导出原始数据', exact: true }).count(), 1);
+  const exportButton = page.getByRole('button', { name: '导出原始数据', exact: true });
+  assert.equal(await exportButton.count(), 1);
+  const downloadEvent = page.waitForEvent('download');
+  await exportButton.click();
+  const download = await downloadEvent;
+  assert.equal(download.suggestedFilename(), 'shiroha-recovery.json');
+  assert.equal(require('node:fs').readFileSync(await download.path(), 'utf8'), '{broken');
+  assert.equal(await saved(page), '{broken');
 });
 test('明确空库重启保持为空；全量重置重新初始化默认题库', async (t) => {
   const initial = { ...webState(), banks: [], activeBankId: '' };
@@ -2302,4 +2313,1633 @@ test('AI 导入与批量建议在页面核对后才写入题库', async (t) => {
   assert.equal(bank.questions[0].question, '模拟整理题目');
   assert.equal(bank.questions[0].analysis, '答案：A。模拟解析草稿');
   assert.deepEqual(await page.evaluate(() => globalThis.__aiTasks), ['refactor_questions', 'batch_analysis']);
+});
+
+async function configureMockImportAi(page) {
+  await page.evaluate(() => {
+    globalThis.__batchRequests = [];
+    globalThis.ShirohaPlatform.network.ai = async (_config, payload) => {
+      const input = JSON.parse(payload.messages[1].content);
+      return new Promise((resolve) => {
+        globalThis.__batchRequests.push({ input, resolve: (content) => resolve({
+          ok: true, status: 200, text: async () => JSON.stringify({ choices: [{ message: { content: JSON.stringify(content) } }] }),
+        }) });
+      });
+    };
+  });
+  await page.locator('.nav[data-view="ai-settings"]').click();
+  await page.locator('#ai-provider-v99').selectOption('custom');
+  await page.locator('#ai-endpoint-v99').fill('https://mock-ai.invalid/v1/chat/completions');
+  await page.locator('#ai-model-v99').fill('fixture');
+  await page.locator('#ai-save-settings-v99').click();
+  await page.locator('#ai-settings-status-v99').filter({ hasText: '设置已保存' }).waitFor();
+  await page.locator('.nav[data-view="import"]').click();
+}
+
+async function seedImportQuestions(page, count) {
+  const questions = Array.from({ length: count }, (_, index) => ({
+    id: `fixture-${index}`, type: 'short', question: `测试题目 ${index + 1}`, options: [], answer: [],
+  }));
+  await page.locator('#import-mode').selectOption('json');
+  await page.locator('#import-text').fill(JSON.stringify({ questions }));
+  await page.locator('#parse-import-btn').click();
+  await page.locator('#import-summary').filter({ hasText: `识别到 ${count} 道题` }).waitFor();
+}
+
+test('AI 面板批量输入、预计次数与双任务互斥', async (t) => {
+  const page = await pageFor(t, JSON.stringify(webState()));
+  page.setDefaultTimeout(5000);
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await configureMockImportAi(page);
+  await seedImportQuestions(page, 31);
+  await page.locator('#ai-organize-import-btn-v99').click();
+  for (const [button, defaultValue] of [['#ai-review-import-btn-v991', '20'], ['#ai-analysis-import-btn-v991', '10']]) {
+    await page.locator(button).click();
+    const batch = page.locator('#ai-preview-batch-v991');
+    assert.equal(await batch.inputValue(), defaultValue);
+    await page.locator('#ai-preview-scope-v991').selectOption('all');
+    for (const value of ['', '0', '-1', '1.5', '31']) {
+      await batch.fill(value);
+      assert.equal(await batch.inputValue(), value);
+      assert.equal(await page.locator('#ai-preview-start-btn-v991').isDisabled(), true);
+      assert.match(await page.locator('#ai-preview-request-count-v992').innerText(), /—/);
+    }
+    await batch.fill('1');
+    assert.equal(await page.locator('#ai-preview-start-btn-v991').isEnabled(), true);
+    await batch.fill('30');
+    assert.equal(await page.locator('#ai-preview-request-count-v992').innerText(), '2 次');
+    assert.equal(await batch.inputValue(), '30');
+  }
+  await page.locator('#ai-preview-start-btn-v991').click();
+  await page.waitForFunction(() => globalThis.__batchRequests.length === 1);
+  assert.equal(await page.locator('#ai-import-start-btn-v99').isDisabled(), true);
+  assert.equal(await page.locator('#ai-preview-start-btn-v991').isDisabled(), true);
+  assert.equal(await page.evaluate(() => globalThis.__batchRequests[0].input.questions.length), 30);
+  await page.evaluate(() => globalThis.__batchRequests[0].resolve({ results: [] }));
+  await page.waitForFunction(() => globalThis.__batchRequests.length === 2);
+  assert.equal(await page.evaluate(() => globalThis.__batchRequests[1].input.questions.length), 1);
+  await page.evaluate(() => globalThis.__batchRequests[1].resolve({ results: [] }));
+  await page.locator('#ai-preview-status-v991').filter({ hasText: '处理 31 道题' }).waitFor();
+  assert.equal(await page.evaluate(() => globalThis.__batchRequests.length), 2);
+
+  await page.locator('#ai-preview-start-btn-v991').click();
+  await page.waitForFunction(() => globalThis.__batchRequests.length === 3);
+  await page.locator('#ai-preview-cancel-btn-v991').click();
+  assert.equal(await page.locator('#ai-import-start-btn-v99').isEnabled(), true);
+  await page.locator('#ai-import-start-btn-v99').click();
+  await page.waitForFunction(() => globalThis.__batchRequests.length === 4);
+  assert.equal(await page.locator('#ai-import-start-btn-v99').isDisabled(), true);
+  assert.equal(await page.locator('#ai-preview-start-btn-v991').isDisabled(), true);
+  await page.locator('#ai-import-cancel-btn-v99').click();
+  await page.evaluate(() => globalThis.__batchRequests.slice(2).forEach((request) => request.resolve({ results: [] })));
+});
+
+test('AI 整理期间选区变更后复原仍令旧请求失效', async (t) => {
+  const page = await pageFor(t, JSON.stringify(webState()));
+  page.setDefaultTimeout(5000);
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await configureMockImportAi(page);
+  await seedImportQuestions(page, 1);
+  const input = page.locator('#import-text');
+  await input.fill('相同 x 相同');
+  await input.evaluate((element) => { element.setSelectionRange(0, 2);element.dispatchEvent(new globalThis.Event('select')); });
+  await page.locator('#ai-organize-import-btn-v99').click();
+  await page.locator('#ai-import-scope-selection-v992').check();
+  await page.locator('#ai-import-start-btn-v99').click();
+  await page.waitForFunction(() => globalThis.__batchRequests.length === 1);
+  await input.evaluate((element) => { element.setSelectionRange(5, 7);element.dispatchEvent(new globalThis.Event('select')); });
+  await input.evaluate((element) => { element.setSelectionRange(0, 2);element.dispatchEvent(new globalThis.Event('select')); });
+  assert.equal(await page.locator('#ai-import-start-btn-v99').isEnabled(), true);
+  assert.match(await page.locator('#ai-import-status-v99').innerText(), /变化.*停止/);
+  const before = await page.locator('#import-summary').innerText();
+  await page.evaluate(() => globalThis.__batchRequests[0].resolve({
+    mode: 'direct_questions', questions: [{ type: 'short', question: '迟到旧题', options: [], answer: [] }],
+  }));
+  await page.waitForTimeout(100);
+  assert.equal(await page.locator('#import-summary').innerText(), before);
+  assert.equal(await page.locator('#import-summary').innerText().then((text) => text.includes('迟到旧题')), false);
+});
+
+test('AI 全文整理期间仅移动光标或高亮不取消请求', async (t) => {
+  const page = await pageFor(t, JSON.stringify(webState()));
+  page.setDefaultTimeout(5000);
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await configureMockImportAi(page);
+  await seedImportQuestions(page, 1);
+  const input = page.locator('#import-text');
+  await input.fill('完整原文');
+  await page.locator('#ai-organize-import-btn-v99').click();
+  await page.locator('#ai-import-start-btn-v99').click();
+  await page.waitForFunction(() => globalThis.__batchRequests.length === 1);
+  await input.evaluate((element) => { element.setSelectionRange(0, 2);element.dispatchEvent(new globalThis.Event('select')); });
+  await page.evaluate(() => globalThis.__batchRequests[0].resolve({
+    mode: 'direct_questions', questions: [{ type: 'short', question: '全文整理结果', options: [], answer: [] }],
+  }));
+  await page.locator('#ai-import-status-v99').filter({ hasText: '整理完成' }).waitFor();
+  assert.match(await page.locator('#import-summary').innerText(), /识别到 1 道题/);
+  assert.equal(await page.locator('#import-preview').innerText().then((text) => text.includes('全文整理结果')), true);
+});
+
+for (const change of ['重新识别', '编辑后复原']) {
+  test(`AI 整理期间${change}立即使旧请求失效`, async (t) => {
+    const page = await pageFor(t, JSON.stringify(webState()));
+    page.setDefaultTimeout(5000);
+    await page.locator('body[data-storage-state="ready"]').waitFor();
+    await configureMockImportAi(page);
+    await seedImportQuestions(page, 1);
+    await page.locator('#ai-organize-import-btn-v99').click();
+    await page.locator('#ai-import-start-btn-v99').click();
+    await page.waitForFunction(() => globalThis.__batchRequests.length === 1);
+    if (change === '重新识别') {
+      await page.locator('#parse-import-btn').click();
+    } else {
+      await page.locator('[data-edit-import="0"]').click();
+      await page.locator('#edit-question').fill('新内容');
+      await page.locator('#edit-save-btn').click();
+      await page.locator('#edit-question').fill('测试题目 1');
+      await page.locator('#edit-save-btn').click();
+      await page.locator('#edit-close-btn').click();
+    }
+    assert.equal(await page.locator('#ai-import-start-btn-v99').isEnabled(), true);
+    assert.match(await page.locator('#ai-import-status-v99').innerText(), /变化.*停止/);
+    const before = await page.locator('#import-preview').innerText();
+    await page.evaluate(() => globalThis.__batchRequests[0].resolve({
+      mode: 'direct_questions', questions: [{ type: 'short', question: '迟到旧题', options: [], answer: [] }],
+    }));
+    await page.waitForTimeout(100);
+    assert.equal(await page.locator('#import-preview').innerText(), before);
+  });
+}
+
+test('AI 批量建议在无关题删除后仍归属原题并经人工采纳或编辑', async (t) => {
+  const page = await pageFor(t, JSON.stringify(webState()));
+  page.setDefaultTimeout(5000);
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await configureMockImportAi(page);
+  await seedImportQuestions(page, 5);
+  const persisted = await saved(page);
+  await page.locator('[data-select-import="1"]').check();
+  await page.locator('[data-select-import="3"]').check();
+  await page.locator('#ai-analysis-import-btn-v991').click();
+  await page.locator('#ai-preview-scope-v991').selectOption('selected');
+  await page.locator('#ai-preview-batch-v991').fill('1');
+  await page.locator('#ai-preview-start-btn-v991').click();
+  await page.waitForFunction(() => globalThis.__batchRequests.length === 1);
+  assert.equal(await page.evaluate(() => globalThis.__batchRequests[0].input.questions[0].question), '测试题目 2');
+  await page.locator('[data-delete-import="0"]').click();
+  await page.locator('#import-summary').filter({ hasText: '识别到 4 道题' }).waitFor();
+  assert.equal(await page.locator('[data-select-import="0"]').isChecked(), true);
+  assert.equal(await page.locator('[data-select-import="2"]').isChecked(), true);
+  await page.evaluate(() => {
+    const first = globalThis.__batchRequests[0];
+    first.resolve({ results: [{ id: first.input.questions[0].id, analysis: '第二题建议' }] });
+  });
+  await page.waitForFunction(() => globalThis.__batchRequests.length === 2);
+  assert.equal(await page.evaluate(() => globalThis.__batchRequests[1].input.questions[0].question), '测试题目 4');
+  await page.evaluate(() => {
+    const second = globalThis.__batchRequests[1];
+    second.resolve({ results: [{ id: second.input.questions[0].id, analysis: '第四题建议' }] });
+  });
+  await page.locator('#ai-preview-status-v991').filter({ hasText: '生成 2 条建议' }).waitFor();
+  const keys = await page.evaluate(() => globalThis.__batchRequests.map((request) => request.input.questions[0].id));
+  await page.locator(`[data-ai-analysis-apply-v991="${keys[0]}"]`).click();
+  await page.locator('[data-edit-import="0"]').click();
+  assert.match(await page.locator('#edit-analysis').inputValue(), /第二题建议/);
+  await page.locator('#edit-close-btn').click();
+  await page.locator(`[data-ai-analysis-edit-v991="${keys[1]}"]`).click();
+  assert.match(await page.locator('#edit-question').inputValue(), /测试题目 4/);
+  assert.equal(await page.locator('#edit-analysis').inputValue(), '第四题建议');
+  await page.locator('#edit-analysis').fill('第四题人工编辑');
+  await page.locator('#edit-save-btn').click();
+  await page.locator('#edit-close-btn').click();
+  await page.locator('[data-edit-import="2"]').click();
+  assert.match(await page.locator('#edit-question').inputValue(), /测试题目 4/);
+  assert.match(await page.locator('#edit-analysis').inputValue(), /第四题人工编辑/);
+  assert.equal(await saved(page), persisted);
+});
+
+test('编辑弹窗删除无关题后保留其他题目的勾选', async (t) => {
+  const page = await pageFor(t, JSON.stringify(webState()));
+  page.setDefaultTimeout(5000);
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.locator('.nav[data-view="import"]').click();
+  await seedImportQuestions(page, 3);
+  await page.locator('[data-select-import="1"]').check();
+  await page.locator('[data-select-import="2"]').check();
+  await page.locator('[data-edit-import="0"]').click();
+  await page.locator('#edit-delete-btn').click();
+  await page.locator('#import-summary').filter({ hasText: '识别到 2 道题' }).waitFor();
+  assert.equal(await page.locator('[data-select-import="0"]').isChecked(), true);
+  assert.equal(await page.locator('[data-select-import="1"]').isChecked(), true);
+});
+
+test('AI 整理期间表格替换草稿后丢弃迟到结果', async (t) => {
+  const page = await pageFor(t, JSON.stringify(webState()));
+  page.setDefaultTimeout(5000);
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await configureMockImportAi(page);
+  await seedImportQuestions(page, 1);
+  await page.locator('#ai-organize-import-btn-v99').click();
+  await page.locator('#ai-import-start-btn-v99').click();
+  await page.waitForFunction(() => globalThis.__batchRequests.length === 1);
+  const csv = '题号,题干,A,B,答案\n1,表格新题,甲,乙,A';
+  await page.locator('#import-file').setInputFiles({ name: '自建.csv', mimeType: 'text/csv', buffer: Buffer.from(csv) });
+  await page.locator('#import-preview').getByText('表格新题', { exact: true }).waitFor();
+  assert.equal(await page.locator('#ai-import-start-btn-v99').isEnabled(), true);
+  assert.match(await page.locator('#ai-import-status-v99').innerText(), /变化.*停止/);
+  const before = await page.locator('#import-preview').innerText();
+  await page.evaluate(() => globalThis.__batchRequests[0].resolve({
+    mode: 'direct_questions', questions: [{ type: 'short', question: '迟到旧题', options: [], answer: [] }],
+  }));
+  await page.waitForTimeout(100);
+  assert.equal(await page.locator('#import-preview').innerText(), before);
+});
+
+test('批量期间目标题编辑后复原仍停止余批并保留先前建议', async (t) => {
+  const page = await pageFor(t, JSON.stringify(webState()));
+  page.setDefaultTimeout(5000);
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await configureMockImportAi(page);
+  await seedImportQuestions(page, 5);
+  await page.locator('[data-select-import="1"]').check();
+  await page.locator('[data-select-import="3"]').check();
+  await page.locator('#ai-analysis-import-btn-v991').click();
+  await page.locator('#ai-preview-scope-v991').selectOption('selected');
+  await page.locator('#ai-preview-batch-v991').fill('1');
+  await page.locator('#ai-preview-start-btn-v991').click();
+  await page.waitForFunction(() => globalThis.__batchRequests.length === 1);
+  await page.locator('[data-edit-import="3"]').click();
+  await page.locator('#edit-question').fill('临时编辑');
+  await page.locator('#edit-save-btn').click();
+  await page.locator('#edit-question').fill('测试题目 4');
+  await page.locator('#edit-save-btn').click();
+  await page.locator('#edit-close-btn').click();
+  await page.evaluate(() => {
+    const first = globalThis.__batchRequests[0];
+    first.resolve({ results: [{ id: first.input.questions[0].id, analysis: 'B 建议' }] });
+  });
+  await page.locator('#ai-preview-status-v991').filter({ hasText: '目标题目已变化' }).waitFor();
+  assert.equal(await page.evaluate(() => globalThis.__batchRequests.length), 1);
+  assert.match(await page.locator('#import-preview').innerText(), /B 建议/);
+});
+
+test('AI 整理输入先清除旧选区，隐藏面板也立即回到全文', async (t) => {
+  const page = await pageFor(t, JSON.stringify(webState()));
+  page.setDefaultTimeout(5000);
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await configureMockImportAi(page);
+  const input = page.locator('#import-text');
+  await input.fill('原始题库文本');
+  await input.evaluate((element) => { element.setSelectionRange(0, 2);element.dispatchEvent(new globalThis.Event('select')); });
+  await page.locator('#ai-organize-import-btn-v99').click();
+  await page.locator('#ai-import-scope-selection-v992').check();
+  await page.evaluate(() => {
+    globalThis.__batch2PanelWrites = 0;
+    const provider = globalThis.document.querySelector('#ai-import-provider-v99');
+    globalThis.__batch2PanelObserver = new globalThis.MutationObserver((records) => { globalThis.__batch2PanelWrites += records.length; });
+    globalThis.document.querySelector('#import-text').addEventListener('input', () => {
+      globalThis.__batch2PanelObserver.observe(provider, { childList: true, subtree: true, characterData: true });
+    }, { capture: true, once: true });
+  });
+  await input.evaluate((element) => { element.value = '更新后的完整文本';element.dispatchEvent(new globalThis.Event('input', { bubbles: true })); });
+  assert.equal(await page.locator('#ai-import-scope-all-v992').isChecked(), true);
+  assert.match(await page.locator('#ai-import-range-hint-v992').innerText(), /全部原始文本/);
+  assert.equal(await page.evaluate(() => globalThis.__batch2PanelWrites), 1);
+  await page.evaluate(() => globalThis.__batch2PanelObserver.disconnect());
+  await input.evaluate((element) => { element.setSelectionRange(0, 2);element.dispatchEvent(new globalThis.Event('select')); });
+  await page.locator('#ai-import-scope-selection-v992').check();
+  await page.locator('#ai-import-cancel-btn-v99').click();
+  await input.fill('隐藏时替换的新全文');
+  assert.equal(await page.locator('#ai-import-scope-all-v992').isChecked(), true);
+  await page.locator('#ai-organize-import-btn-v99').click();
+  assert.equal(await page.locator('#ai-import-scope-all-v992').isChecked(), true);
+  assert.match(await page.locator('#ai-import-range-hint-v992').innerText(), /全部原始文本/);
+  await input.evaluate((element) => { element.setSelectionRange(0, 2);element.dispatchEvent(new globalThis.Event('select')); });
+  await page.locator('#ai-import-scope-selection-v992').check();
+  await page.locator('#ai-import-cancel-btn-v99').click();
+  await input.evaluate((element) => { element.setSelectionRange(1, 1);element.dispatchEvent(new globalThis.Event('select')); });
+  assert.equal(await page.locator('#ai-import-scope-all-v992').isChecked(), true);
+  await page.locator('#ai-organize-import-btn-v99').click();
+  assert.equal(await page.locator('#ai-import-scope-all-v992').isChecked(), true);
+});
+
+test('AI 成功结束只同步一次，中间批次仍立即展示建议', async (t) => {
+  const page = await pageFor(t, JSON.stringify(webState()));
+  page.setDefaultTimeout(5000);
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await configureMockImportAi(page);await seedImportQuestions(page, 2);
+  await page.locator('#ai-organize-import-btn-v99').click();
+  await page.locator('#ai-analysis-import-btn-v991').click();
+  await page.locator('#ai-preview-scope-v991').selectOption('all');
+  await page.locator('#ai-preview-batch-v991').fill('1');
+  await page.locator('#ai-preview-start-btn-v991').click();
+  await page.waitForFunction(() => globalThis.__batchRequests.length === 1);
+  await page.evaluate(() => {
+    globalThis.__batch2Refreshes = { import: 0, preview: 0 };
+    const text = Object.getOwnPropertyDescriptor(globalThis.Node.prototype, 'textContent');
+    for (const [selector, key] of [['#ai-import-provider-v99', 'import'], ['#ai-preview-title-v991', 'preview']]) {
+      const node = globalThis.document.querySelector(selector);
+      Object.defineProperty(node, 'textContent', { configurable: true,
+        get() { return text.get.call(this); },
+        set(value) { globalThis.__batch2Refreshes[key] += 1;text.set.call(this, value); } });
+    }
+  });
+  await page.evaluate(() => { const request = globalThis.__batchRequests[0];request.resolve({ results: [{ id: request.input.questions[0].id, analysis: '第一批建议', needsReview: false }] }); });
+  await page.waitForFunction(() => globalThis.__batchRequests.length === 2);
+  assert.equal(await page.locator('[data-ai-analysis-apply-v991]').count(), 1);
+  assert.equal(await page.locator('#ai-preview-start-btn-v991').isDisabled(), true);
+  assert.deepEqual(await page.evaluate(() => globalThis.__batch2Refreshes), { import: 0, preview: 1 });
+  await page.evaluate(() => { globalThis.__batch2Refreshes = { import: 0, preview: 0 };const request = globalThis.__batchRequests[1];request.resolve({ results: [{ id: request.input.questions[0].id, analysis: '第二批建议', needsReview: false }] }); });
+  await page.locator('#ai-preview-status-v991').filter({ hasText: '处理 2 道题' }).waitFor();
+  assert.equal(await page.locator('[data-ai-analysis-apply-v991]').count(), 2);
+  assert.equal(await page.locator('#ai-preview-start-btn-v991').isEnabled(), true);
+  const previewEnd = await page.evaluate(() => globalThis.__batch2Refreshes);
+  await page.locator('#import-text').fill('待整理的原文');
+  await page.locator('#ai-import-start-btn-v99').click();
+  await page.waitForFunction(() => globalThis.__batchRequests.length === 3);
+  await page.evaluate(() => { globalThis.__batch2Refreshes = { import: 0, preview: 0 };globalThis.__batchRequests[2].resolve({ mode: 'direct_questions', questions: [{ type: 'short', question: '整理后的题', options: [], answer: [] }] }); });
+  await page.locator('#ai-import-status-v99').filter({ hasText: '整理完成' }).waitFor();
+  assert.equal(await page.locator('#ai-import-start-btn-v99').isEnabled(), true);
+  const importEnd = await page.evaluate(() => globalThis.__batch2Refreshes);
+  console.log(`successful completion refreshes: ${JSON.stringify({ previewEnd, importEnd })}`);
+  assert.deepEqual(previewEnd, { import: 1, preview: 1 });
+  assert.deepEqual(importEnd, { import: 1, preview: 1 });
+});
+
+function examInstrumentation(source) {
+  return `(() => {
+    const create = globalThis.ShirohaExamPage.create;
+    globalThis.__examCounts = { keys: 0, answers: 0, cardWrites: 0 };
+    globalThis.ShirohaExamPage.create = (args) => {
+      const key = args.question.key;
+      const hasAnswer = args.question.hasAnswer;
+      args.question.key = (...values) => { globalThis.__examCounts.keys += 1; return key(...values); };
+      args.question.hasAnswer = (...values) => { globalThis.__examCounts.answers += 1; return hasAnswer(...values); };
+      const controller = create(args);
+      globalThis.__examFixture = { controller, session: args.session };
+      return controller;
+    };
+    const descriptor = Object.getOwnPropertyDescriptor(Element.prototype, 'outerHTML');
+    Object.defineProperty(Element.prototype, 'outerHTML', {
+      ...descriptor,
+      set(value) {
+        if (this.id === 'exam-answer-card-v30') { globalThis.__examCounts.cardWrites += 1; }
+        descriptor.set.call(this, value);
+      },
+    });
+  })();\n${source}`;
+}
+
+function exposeExamRender(source) {
+  const from = 'return { exitExamFocus, startExam, startExamTicker, submitExam, examQuestionV113 };';
+  assert(source.includes(from));
+  return source.replace(from, 'return { exitExamFocus, startExam, startExamTicker, submitExam, examQuestionV113, renderExamPaper };');
+}
+
+test('第三批考试：局部更新计数、焦点与同卷重绘后的迟到事件', async (t) => {
+  const initial = webState();
+  const single = initial.banks[0].questions[0];
+  const short = initial.banks[0].questions.find((question) => question.type === 'short');
+  initial.banks = [initial.banks[0]];
+  initial.banks[0].questions = [single, short, ...Array.from({ length: 38 }, (_, index) => ({ ...single, id: `exam-extra-${index}` }))];
+  initial.records = [];
+  const page = await pageFor(t, JSON.stringify(initial), '', examInstrumentation, { '/exam-page.js': exposeExamRender });
+  page.setDefaultTimeout(5000);
+  await page.locator('.nav[data-view="exam"]').click();
+  await page.locator('#exam-order').selectOption('sequence');
+  await page.locator('#exam-count').fill('40');
+  await page.locator('#exam-minutes').fill('0');
+  await page.locator('#start-exam-btn').click();
+  await page.evaluate(() => {
+    globalThis.__examCard = globalThis.document.querySelector('#exam-answer-card-v30');
+    globalThis.__examOtherJump = globalThis.document.querySelector('[data-exam-jump="2"]');
+  });
+  const reset = () => page.evaluate(() => { Object.assign(globalThis.__examCounts, { keys: 0, answers: 0, cardWrites: 0 }); });
+  const check = async (answered) => {
+    assert.match(await page.locator('#exam-answer-card-v30').innerText(), new RegExp(`已答 ${answered} / 40，未答 ${40 - answered}`));
+    const observed = await page.evaluate(() => ({
+      ...globalThis.__examCounts,
+      cardSame: globalThis.__examCard === globalThis.document.querySelector('#exam-answer-card-v30'),
+      otherSame: globalThis.__examOtherJump === globalThis.document.querySelector('[data-exam-jump="2"]'),
+    }));
+    console.log(`exam answer update: ${JSON.stringify(observed)}`);
+    assert.equal(observed.cardWrites, 0, JSON.stringify(observed));
+    assert.equal(observed.cardSame, true);
+    assert.equal(observed.otherSame, true);
+    assert.ok(observed.keys <= 2, JSON.stringify(observed));
+    assert.ok(observed.answers <= 2, JSON.stringify(observed));
+  };
+  await reset();
+  await page.locator('#exam-card .exam-q').first().locator('.option[data-key="A"]').click();
+  await check(1);
+  const input = page.locator('#exam-card .exam-q').nth(1).locator('textarea');
+  for (const [value, answered] of [['第一版', 2], ['修改后的答案', 2], ['', 1]]) {
+    await reset();await input.fill(value);await check(answered);
+    assert.equal(await input.evaluate((node) => node === globalThis.document.activeElement), true);
+  }
+  await page.evaluate(() => {
+    globalThis.__oldExamText = globalThis.document.querySelector('#exam-card textarea');
+    globalThis.__oldExamOption = globalThis.document.querySelector('#exam-card .option[data-key="A"] input');
+    globalThis.__examFixture.controller.renderExamPaper();
+  });
+  const before = await page.evaluate(() => JSON.stringify(globalThis.__examFixture.session.current.answers));
+  await page.evaluate(() => {
+    globalThis.__oldExamText.value = '迟到答案';
+    globalThis.__oldExamText.dispatchEvent(new globalThis.Event('input', { bubbles: true }));
+    globalThis.__oldExamOption.checked = false;
+    globalThis.__oldExamOption.dispatchEvent(new globalThis.Event('input', { bubbles: true }));
+  });
+  assert.equal(await page.evaluate(() => JSON.stringify(globalThis.__examFixture.session.current.answers)), before);
+  assert.match(await page.locator('#exam-answer-card-v30').innerText(), /已答 1 \/ 40，未答 39/);
+  await page.evaluate(() => globalThis.__examFixture.controller.startExam());
+  const next = await page.evaluate(() => JSON.stringify(globalThis.__examFixture.session.current.answers));
+  await page.evaluate(() => {
+    globalThis.__oldExamText.dispatchEvent(new globalThis.Event('input', { bubbles: true }));
+    globalThis.__oldExamOption.dispatchEvent(new globalThis.Event('input', { bubbles: true }));
+  });
+  assert.equal(await page.evaluate(() => JSON.stringify(globalThis.__examFixture.session.current.answers)), next);
+});
+
+test('第三批考试：保存失败后继续编辑、重试与重复提交保持最新答案', async (t) => {
+  const initial = webState();
+  initial.banks = [initial.banks[0]];
+  initial.banks[0].questions = [initial.banks[0].questions[0], initial.banks[0].questions.find((question) => question.type === 'short')];
+  initial.records = [];
+  const page = await pageFor(t, JSON.stringify(initial));
+  page.setDefaultTimeout(5000);
+  await page.locator('.nav[data-view="exam"]').click();
+  await page.locator('#exam-order').selectOption('sequence');
+  await page.locator('#exam-minutes').fill('0');
+  await page.locator('#start-exam-btn').click();
+  await page.locator('#exam-card .option[data-key="A"]').first().click();
+  await page.locator('#exam-card textarea').fill('原答案');
+  await page.evaluate(() => {
+    const { write } = globalThis.ShirohaPlatform.storage;
+    globalThis.__restoreThirdExamWrite = () => { globalThis.ShirohaPlatform.storage.write = write; };
+    globalThis.ShirohaPlatform.storage.write = async () => { throw new Error('模拟考试保存失败'); };
+  });
+  await page.locator('#exam-submit-focus').click();
+  await page.locator('#platform-status.failed').waitFor();
+  assert.equal(JSON.parse(await saved(page)).records.length, 0);
+  await page.locator('[data-clear-answer-options]').first().click();
+  await page.locator('#exam-card textarea').fill('重试前的新答案');
+  assert.match(await page.locator('#exam-answer-card-v30').innerText(), /已答 1 \/ 2，未答 1/);
+  await page.evaluate(() => globalThis.__restoreThirdExamWrite());
+  await page.locator('#platform-status button').click();
+  await page.locator('#exam-back-setup').waitFor();
+  await page.locator('#submit-exam-btn').evaluate((button) => { button.click();button.click(); });
+  const { records } = JSON.parse(await saved(page));
+  assert.equal(records.length, 1);
+  assert.equal(records[0].answered, 1);
+  assert.deepEqual(records[0].details.map((detail) => detail.chosen), [[], ['重试前的新答案']]);
+});
+
+test('第三批题库：局部勾选保留节点、跨页选择并拒绝迟到事件', async (t) => {
+  const initial = webState();
+  initial.banks.push(...Array.from({ length: 11 }, (_, index) => ({
+    ...initial.banks[1], id: `bulk-${index}`, name: `批量题库 ${index}`,
+  })));
+  const page = await pageFor(t, JSON.stringify(initial));
+  page.setDefaultTimeout(5000);
+  await page.locator('.nav[data-view="banks"]').click();
+  await page.locator('#export-bank-all-v23').uncheck();
+  const first = page.locator('#bank-list [data-bank-bulk-v23]').first();
+  await first.evaluate((node) => {
+    globalThis.__oldBankCheckbox = node;
+    globalThis.__oldBankListFirst = globalThis.document.querySelector('#bank-list .bank-item');
+    globalThis.__bankWrites = 0;
+    globalThis.__bankObserver = new globalThis.MutationObserver((records) => {
+      globalThis.__bankWrites += records.filter((record) => record.target.id === 'bank-list' && record.type === 'childList').length;
+    });
+    globalThis.__bankObserver.observe(globalThis.document.querySelector('#bank-list'), { childList: true });
+  });
+  await first.focus();
+  await page.keyboard.press('Space');
+  assert.equal(await first.evaluate((node) => node === globalThis.document.activeElement), true);
+  assert.equal(await page.evaluate(() => globalThis.__bankWrites), 0);
+  assert.equal(await page.evaluate(() => globalThis.__oldBankListFirst === globalThis.document.querySelector('#bank-list .bank-item')), true);
+  assert.match(await page.locator('#export-bank-summary-v23').innerText(), /已选择 1 个题库/);
+  await page.locator('#bank-list-pager').getByRole('button', { name: '第 2 页', exact: true }).click();
+  const selectedBefore = await page.locator('#export-bank-summary-v23').innerText();
+  await page.evaluate(() => {
+    globalThis.__oldBankCheckbox.checked = false;
+    globalThis.__oldBankCheckbox.dispatchEvent(new globalThis.Event('change', { bubbles: true }));
+  });
+  assert.equal(await page.locator('#export-bank-summary-v23').innerText(), selectedBefore);
+  await page.locator('#bank-list [data-bank-bulk-v23]').first().check();
+  assert.match(await page.locator('#export-bank-summary-v23').innerText(), /已选择 2 个题库/);
+  await page.locator('#export-bank-all-v23').check();
+  assert.match(await page.locator('#export-bank-summary-v23').innerText(), /已选择 13 个题库/);
+  await page.locator('#export-bank-invert-v23').click();
+  assert.match(await page.locator('#export-bank-summary-v23').innerText(), /请至少选择一个题库/);
+  await page.evaluate(() => {
+    const { write } = globalThis.ShirohaPlatform.storage;
+    globalThis.__releaseBulkWrite = null;
+    globalThis.ShirohaPlatform.storage.write = (...args) => new Promise((resolve, reject) => {
+      globalThis.__releaseBulkWrite = () => { globalThis.ShirohaPlatform.storage.write = write;write(...args).then(resolve, reject); };
+    });
+  });
+  await page.locator('#bank-list [data-openbank]').first().evaluate((node) => node.click());
+  await page.locator('body[data-storage-state="pending"]').waitFor();
+  await page.locator('#bank-list [data-bank-bulk-v23]').first().evaluate((node) => {
+    node.checked = true;node.dispatchEvent(new globalThis.Event('change', { bubbles: true }));
+  });
+  assert.match(await page.locator('#export-bank-summary-v23').innerText(), /请至少选择一个题库/);
+  assert(await page.locator('#export-selected-banks-v23').isDisabled());
+  assert(await page.locator('#delete-selected-banks-v32').isDisabled());
+  await page.waitForFunction(() => !!globalThis.__releaseBulkWrite);
+  await page.evaluate(() => globalThis.__releaseBulkWrite());
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+});
+
+test('第三批装配：启动和恢复各一次题库选择器渲染并同步默认全选', async (t) => {
+  const initial = webState();
+  const transform = (source) => {
+    const instrument = `(() => {
+      const create = globalThis.ShirohaBankPage.create;
+      globalThis.__bankSelectRenders = 0;
+      globalThis.ShirohaBankPage.create = (...args) => {
+        const controller = create(...args);
+        const render = controller.renderBankSelect;
+        controller.renderBankSelect = (...values) => { globalThis.__bankSelectRenders += 1;return render(...values); };
+        return controller;
+      };
+    })();\n`;
+    const entry = '  startApplication();';
+    assert(source.includes(entry));
+    const exposed = ['  globalThis.__restartApplicationForTest = startApplication;', entry].join('\n');
+    return `${instrument}${source.replace(entry, exposed)}`;
+  };
+  const page = await pageFor(t, JSON.stringify(initial), '', transform);
+  page.setDefaultTimeout(5000);
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  assert.equal(await page.evaluate(() => globalThis.__bankSelectRenders), 1);
+  await page.locator('.nav[data-view="banks"]').click();
+  assert(await page.locator('#export-bank-all-v23').isChecked());
+  assert.equal(await page.locator('#bank-list [data-bank-bulk-v23]:checked').count(), 2);
+  assert.match(await page.locator('#export-bank-summary-v23').innerText(), /已选择 2 个题库/);
+  await page.evaluate(async () => { globalThis.__bankSelectRenders = 0;await globalThis.__restartApplicationForTest(); });
+  assert.equal(await page.evaluate(() => globalThis.__bankSelectRenders), 1);
+  assert.equal(await page.locator('#bank-list [data-bank-bulk-v23]:checked').count(), 2);
+  await page.locator('#export-bank-all-v23').uncheck();
+  await page.locator('#bank-list [data-bank-bulk-v23]').first().check();
+  assert.match(await page.locator('#export-bank-summary-v23').innerText(), /已选择 1 个题库/);
+});
+
+test('第三批装配：覆盖恢复后题库默认勾选与摘要一致', async (t) => {
+  const initial = webState();
+  const page = await pageFor(t, JSON.stringify(initial));
+  page.setDefaultTimeout(5000);
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  const backup = importBackupFixture();
+  backup.banks = [backup.banks.find((bank) => bank.id === 'bank-c')];
+  backup.activeBankId = 'bank-c';
+  backup.records = [];
+  await page.locator('.nav[data-view="settings"]').click();
+  await page.locator('#settings-backup-mode-v23').selectOption('overwrite');
+  await page.locator('#settings-import-backup-v23').click();
+  await page.locator('#backup-json-file-v23').setInputFiles({
+    name: 'third-batch-restore.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(backup)),
+  });
+  await page.waitForFunction((key) => JSON.parse(globalThis.localStorage.getItem(key)).banks.length === 1, KEY);
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.locator('.nav[data-view="banks"]').click();
+  assert.match(await page.locator('#export-bank-summary-v23').innerText(), /已选择 1 个题库/);
+  assert.equal(await page.locator('#bank-list [data-bank-bulk-v23]:checked').count(), 1);
+  assert.equal(await page.locator('#bank-list [data-bank-bulk-v23]:checked').getAttribute('data-bank-bulk-v23'), 'bank-c');
+});
+
+for (const scenario of ['离页', '离页后返回', '切库事务等待']) {
+  test(`第三批收藏：${scenario}时迟到读取不能跳转或选错同 ID 题目`, async (t) => {
+    const initial = webState();
+    initial.favorites['bank-a'] = ['same-id'];
+    initial.favorites['bank-b'] = ['same-id'];
+    const page = await pageFor(t, JSON.stringify(initial));
+    page.setDefaultTimeout(5000);
+    await page.locator('.nav[data-view="favorites"]').click();
+    await page.locator('[data-practice-one-fav-v596="same-id"]').waitFor();
+    await page.evaluate(() => {
+      const { storage } = globalThis.ShirohaPlatform;
+      const original = storage.ensureQuestions;
+      storage.ensureQuestions = () => new Promise((resolve) => {
+        globalThis.__finishFavoriteRead = () => {
+          if (original) { storage.ensureQuestions = original; } else { delete storage.ensureQuestions; }
+          resolve();
+        };
+      });
+    });
+    await page.locator('[data-practice-one-fav-v596="same-id"]').click();
+    await page.waitForFunction(() => typeof globalThis.__finishFavoriteRead === 'function');
+    if (scenario === '离页' || scenario === '离页后返回') {
+      await page.locator('.nav[data-view="dashboard"]').click();
+      if (scenario === '离页后返回') { await page.locator('.nav[data-view="favorites"]').click(); }
+    } else {
+      await page.locator('#active-bank-select').evaluate((node) => {
+        node.value = 'bank-b';node.dispatchEvent(new globalThis.Event('change', { bubbles: true }));
+      });
+      await page.locator('body[data-storage-state="pending"]').waitFor();
+    }
+    await page.evaluate(() => globalThis.__finishFavoriteRead());
+    if (scenario === '切库事务等待') {
+      await page.locator('body[data-storage-state="ready"]').waitFor();
+      assert.equal(JSON.parse(await saved(page)).activeBankId, 'bank-b');
+    } else {
+      await page.waitForTimeout(100);
+    }
+    const expected = scenario === '离页' ? 'dashboard' : 'favorites';
+    assert.equal(await page.locator(`#${expected}.active`).count(), 1);
+  });
+}
+
+test('第三批收藏：两道题的后发读取先返回时只进入最后选择', async (t) => {
+  const initial = webState();
+  initial.favorites['bank-a'] = ['multiple', 'judge'];
+  const page = await pageFor(t, JSON.stringify(initial));
+  page.setDefaultTimeout(5000);
+  await page.locator('.nav[data-view="favorites"]').click();
+  await page.locator('[data-practice-one-fav-v596="judge"]').waitFor();
+  await page.evaluate(() => {
+    const { storage } = globalThis.ShirohaPlatform;
+    const original = storage.ensureQuestions;
+    globalThis.__favoriteReads = [];
+    storage.ensureQuestions = (_state, refs) => new Promise((resolve) => {
+      globalThis.__favoriteReads.push({ refs, resolve });
+    });
+    globalThis.__restoreFavoriteReads = () => {
+      if (original) { storage.ensureQuestions = original; } else { delete storage.ensureQuestions; }
+    };
+  });
+  await page.locator('[data-practice-one-fav-v596="multiple"]').click();
+  await page.locator('[data-practice-one-fav-v596="judge"]').click();
+  await page.waitForFunction(() => globalThis.__favoriteReads.length === 2);
+  assert.deepEqual(await page.evaluate(() => globalThis.__favoriteReads.map((read) => read.refs.map((ref) => [ref.bankId, ref.questionId]))), [[['bank-a', 'multiple']], [['bank-a', 'judge']]]);
+  await page.evaluate(() => { globalThis.__restoreFavoriteReads();globalThis.__favoriteReads[1].resolve(); });
+  await page.locator('#practice.active').waitFor();
+  assert.equal(await page.locator('#practice-number-range-v58916').inputValue(), '2-2');
+  await page.evaluate(() => globalThis.__favoriteReads[0].resolve());
+  await page.waitForTimeout(100);
+  assert.equal(await page.locator('#practice-number-range-v58916').inputValue(), '2-2');
+});
+
+for (const leave of [false, true]) {
+  test(`第三批收藏：${leave ? '离页后' : '当前页面'}读取失败的提示归属`, async (t) => {
+    const initial = webState();
+    initial.favorites['bank-a'] = ['same-id'];
+    const page = await pageFor(t, JSON.stringify(initial));
+    page.setDefaultTimeout(5000);
+    await page.locator('.nav[data-view="favorites"]').click();
+    await page.locator('[data-practice-one-fav-v596="same-id"]').waitFor();
+    await page.evaluate(() => {
+      const { storage } = globalThis.ShirohaPlatform;
+      storage.ensureQuestions = () => new Promise((_resolve, reject) => {
+        globalThis.__failFavoriteRead = () => reject(new Error('模拟收藏旧读取失败'));
+      });
+    });
+    await page.locator('[data-practice-one-fav-v596="same-id"]').click();
+    await page.waitForFunction(() => typeof globalThis.__failFavoriteRead === 'function');
+    if (leave) { await page.locator('.nav[data-view="dashboard"]').click(); }
+    await page.evaluate(() => globalThis.__failFavoriteRead());
+    if (leave) {
+      await page.waitForTimeout(100);
+      assert.doesNotMatch(await page.locator('#platform-status').innerText(), /模拟收藏旧读取失败/);
+      assert.equal(await page.locator('#dashboard.active').count(), 1);
+    } else {
+      await page.locator('#platform-status.failed').filter({ hasText: '模拟收藏旧读取失败' }).waitFor();
+      assert.equal(await page.locator('#favorites.active').count(), 1);
+    }
+  });
+}
+
+test('第三批入口：五处导航、图片出错与折叠按钮保持原行为', async (t) => {
+  const page = await pageFor(t, JSON.stringify(webState()));
+  page.setDefaultTimeout(5000);
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  const links = [
+    ['.dashboard-action-card.blue', 'practice'],
+    ['.dashboard-action-card.green', 'import'],
+    ['.dashboard-action-card.violet', 'banks'],
+    ['.dashboard-action-card.amber', 'settings'],
+    ['.dashboard-card-actions button', 'settings'],
+  ];
+  for (const [selector, view] of links) {
+    await page.locator(selector).click();
+    assert.equal(await page.locator(`#${view}.active`).count(), 1);
+    await page.locator('.nav[data-view="dashboard"]').click();
+  }
+  const icon = page.locator('img[onerror]');
+  assert.equal(await icon.count(), 1);
+  await icon.dispatchEvent('error');
+  assert.equal(await icon.evaluate((node) => node.style.display), 'none');
+  await page.setViewportSize({ width: 1600, height: 900 });
+  const toggle = page.locator('.web-peeking-toggle');
+  await toggle.focus();
+  await page.keyboard.press('Enter');
+  assert.equal(await toggle.getAttribute('aria-pressed'), 'true');
+  assert.equal(await toggle.innerText(), '显示');
+  assert(await toggle.evaluate((node) => node.parentElement.classList.contains('collapsed')));
+  await page.keyboard.press('Space');
+  assert.equal(await toggle.getAttribute('aria-pressed'), 'false');
+  assert.equal(await toggle.innerText(), '隐藏');
+});
+
+test('第三批复盘：跨库同 ID 只重练错误来源并保持返回焦点', async (t) => {
+  const initial = webState();
+  initial.banks[0].questions = [initial.banks[0].questions[0]];
+  initial.settings.practiceScope = { type: 'group', value: '自建样本' };
+  initial.records = [];
+  const page = await pageFor(t, JSON.stringify(initial));
+  page.setDefaultTimeout(5000);
+  await page.locator('.nav[data-view="practice"]').click();
+  await page.locator('#practice-submit-mode').selectOption('total');
+  await page.locator('#practice-limit').selectOption('all');
+  await page.locator('#start-practice-btn').click();
+  await page.locator('#practice-card .option[data-key="A"]').click();
+  await page.locator('[data-practice-jump="1"]').click();
+  await page.locator('#practice-card .option[data-key="A"]').click();
+  await page.locator('#p-submit-all').click();
+  await page.locator('#practice-review-result').click();
+  await page.locator('#training-review-back').click();
+  await page.waitForFunction(() => globalThis.document.activeElement?.id === 'practice-review-result');
+  await page.locator('#practice-review-result').click();
+  await page.locator('#training-retry').click();
+  assert.equal(await page.locator('#practice-number-range-v58916').inputValue(), '1-1');
+  await page.locator('#start-practice-btn').click();
+  assert.equal(await page.locator('[data-practice-jump]').count(), 1);
+  assert.match(await page.locator('#practice-card .question-title').innerText(), /第二题库同 ID/);
+});
+
+test('第三批题库：跨页选择导出内容及取消、确认删除保留未选库', async (t) => {
+  const initial = webState();
+  initial.banks.push(...Array.from({ length: 11 }, (_, index) => ({
+    ...initial.banks[1], id: `export-bulk-${index}`, name: `导出样本 ${index}`,
+  })));
+  const page = await pageFor(t, JSON.stringify(initial));
+  page.setDefaultTimeout(5000);
+  await page.locator('#save-all-btn').click();
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  page.removeAllListeners('app-dialog');
+  await page.locator('.nav[data-view="banks"]').click();
+  await page.locator('#export-bank-all-v23').uncheck();
+  const first = page.locator('#bank-list [data-bank-bulk-v23]').first();
+  const firstId = await first.getAttribute('data-bank-bulk-v23');
+  await first.check();
+  await page.locator('#bank-list-pager').getByRole('button', { name: '第 2 页', exact: true }).click();
+  const second = page.locator('#bank-list [data-bank-bulk-v23]').first();
+  const secondId = await second.getAttribute('data-bank-bulk-v23');
+  await second.check();
+  const before = JSON.parse(await saved(page));
+  const download = page.waitForEvent('download');
+  await page.locator('#export-selected-banks-v23').click();
+  const file = await download;
+  const payload = JSON.parse(require('node:fs').readFileSync(await file.path(), 'utf8'));
+  assert.equal(payload.exportType, 'question_banks');
+  assert.deepEqual(payload.banks.map((bank) => bank.id).sort(), [firstId, secondId].sort());
+  for (const bank of payload.banks) {
+    assert.deepEqual(bank.questions.map((question) => question.id), before.banks.find((value) => value.id === bank.id).questions.map((question) => question.id));
+  }
+  await page.locator('#delete-selected-banks-v32').click();
+  await page.locator('#app-dialog [data-dialog-cancel]').click();
+  assert.deepEqual(JSON.parse(await saved(page)), before);
+  assert.match(await page.locator('#export-bank-summary-v23').innerText(), /已选择 2 个题库/);
+  await page.locator('#delete-selected-banks-v32').click();
+  await page.locator('#app-dialog [data-dialog-accept]').click();
+  await page.waitForFunction((key) => JSON.parse(globalThis.localStorage.getItem(key)).banks.length === 11, KEY);
+  const after = JSON.parse(await saved(page));
+  assert.deepEqual(after.banks, before.banks.filter((bank) => ![firstId, secondId].includes(bank.id)));
+});
+
+for (const mode of ['single', 'total']) {
+  test(`第三批练习：${mode} 切题后旧文本输入不能覆盖原草稿`, async (t) => {
+    const initial = webState();
+    const short = initial.banks[0].questions.find((question) => question.type === 'short');
+    initial.banks = [initial.banks[0]];
+    initial.banks[0].questions = [short, { ...short, id: 'short-second', question: '第二道简答题' }];
+    const page = await pageFor(t, JSON.stringify(initial));
+    page.setDefaultTimeout(5000);
+    await page.locator('.nav[data-view="practice"]').click();
+    await page.locator('#practice-submit-mode').selectOption(mode);
+    await page.locator('#practice-limit').selectOption('all');
+    await page.locator('#start-practice-btn').click();
+    await page.locator('#practice-card textarea').fill('第一题原答案');
+    await page.locator('#practice-card textarea').evaluate((node) => { globalThis.__oldPracticeText = node; });
+    await page.locator('#p-next').click();
+    await page.locator('#practice-card textarea').fill('第二题答案');
+    await page.evaluate(() => {
+      globalThis.__oldPracticeText.dispatchEvent(new globalThis.Event('input', { bubbles: true }));
+    });
+    await page.locator('#p-prev').click();
+    assert.equal(await page.locator('#practice-card textarea').inputValue(), '第一题原答案');
+  });
+
+  test(`第三批练习：${mode} 同题重绘后旧清空按钮不能清除新节点`, async (t) => {
+    const initial = webState();
+    initial.banks = [initial.banks[0]];
+    initial.banks[0].questions = [initial.banks[0].questions[0]];
+    const page = await pageFor(t, JSON.stringify(initial));
+    page.setDefaultTimeout(5000);
+    await page.locator('.nav[data-view="practice"]').click();
+    await page.locator('#practice-submit-mode').selectOption(mode);
+    await page.locator('#start-practice-btn').click();
+    await page.locator('#practice-card .option[data-key="A"]').click();
+    await page.locator('[data-clear-answer-options]').evaluate((node) => { globalThis.__oldPracticeClear = node; });
+    await page.locator('#p-favorite').click();
+    await page.locator('body[data-storage-state="ready"]').waitFor();
+    await page.locator('#practice-card .option[data-key="B"]').click();
+    await page.evaluate(() => globalThis.__oldPracticeClear.click());
+    assert(await page.locator('#practice-card .option[data-key="B"] input').isChecked());
+  });
+}
+
+for (const mode of ['practice', 'exam', 'bank-edit']) {
+  for (const returnToPage of [false, true]) {
+    test(`第三批入口迟到：${mode} 离页${returnToPage ? '后返回' : ''}不能继续旧操作`, async (t) => {
+      const initial = webState();
+      const page = await pageFor(t, JSON.stringify(initial));
+      page.setDefaultTimeout(5000);
+      const view = mode === 'bank-edit' ? 'banks' : mode;
+      await page.locator(`.nav[data-view="${view}"]`).click();
+      await page.evaluate(() => {
+        const { storage } = globalThis.ShirohaPlatform;
+        const original = storage.ensureQuestions;
+        storage.ensureQuestions = () => new Promise((resolve) => {
+          globalThis.__finishEntryRead = () => {
+            if (original) { storage.ensureQuestions = original; } else { delete storage.ensureQuestions; }
+            resolve();
+          };
+        });
+      });
+      if (mode === 'bank-edit') {
+        await page.locator('[data-editbank-v45="bank-a"]').locator('..').locator('..').locator('summary').click();
+        await page.locator('[data-editbank-v45="bank-a"]').click();
+      } else {
+        await page.locator(`#start-${mode}-btn`).click();
+      }
+      await page.waitForFunction(() => typeof globalThis.__finishEntryRead === 'function');
+      await page.locator('.nav[data-view="dashboard"]').click();
+      if (returnToPage) { await page.locator(`.nav[data-view="${view}"]`).click(); }
+      await page.evaluate(() => globalThis.__finishEntryRead());
+      await page.waitForTimeout(100);
+      assert.equal(await page.locator(`#${returnToPage ? view : 'dashboard'}.active`).count(), 1);
+      assert.equal(await page.locator('body').evaluate((body) => body.classList.contains('practice-focus') || body.classList.contains('exam-focus')), false);
+      assert.equal(await page.locator('#bank-edit-panel-v45:not(.hidden)').count(), 0);
+    });
+  }
+}
+
+test('第三批题库编辑：当前按钮目标不存在时保留原提示', async (t) => {
+  const page = await pageFor(t, JSON.stringify(webState()));
+  page.setDefaultTimeout(5000);
+  await page.locator('.nav[data-view="banks"]').click();
+  const button = page.locator('[data-editbank-v45="bank-a"]');
+  await button.locator('..').locator('..').locator('summary').click();
+  await button.evaluate((node) => { node.dataset.editbankV45 = 'missing-bank';node.click(); });
+  await page.locator('.toast-item').filter({ hasText: '没有找到该题库' }).waitFor();
+  assert.equal(await page.locator('#banks.active').count(), 1);
+});
+
+for (const mode of ['practice', 'exam', 'bank-edit']) {
+  for (const leave of [false, true]) {
+    test(`第三批入口失败：${mode} ${leave ? '离页后' : '当前页面'}的读取提示归属`, async (t) => {
+      const page = await pageFor(t, JSON.stringify(webState()));
+      page.setDefaultTimeout(5000);
+      const view = mode === 'bank-edit' ? 'banks' : mode;
+      await page.locator(`.nav[data-view="${view}"]`).click();
+      await page.evaluate(() => {
+        const { storage } = globalThis.ShirohaPlatform;
+        storage.ensureQuestions = () => new Promise((_resolve, reject) => {
+          globalThis.__failEntryRead = () => reject(new Error('模拟入口读取失败'));
+        });
+      });
+      if (mode === 'bank-edit') {
+        await page.locator('[data-editbank-v45="bank-a"]').locator('..').locator('..').locator('summary').click();
+        await page.locator('[data-editbank-v45="bank-a"]').click();
+      } else {
+        await page.locator(`#start-${mode}-btn`).click();
+      }
+      await page.waitForFunction(() => typeof globalThis.__failEntryRead === 'function');
+      if (leave) { await page.locator('.nav[data-view="dashboard"]').click(); }
+      await page.evaluate(() => globalThis.__failEntryRead());
+      if (leave) {
+        await page.waitForTimeout(100);
+        assert.doesNotMatch(await page.locator('#platform-status').innerText(), /模拟入口读取失败/);
+        assert.equal(await page.locator('#dashboard.active').count(), 1);
+      } else {
+        await page.locator('#platform-status.failed').filter({ hasText: '模拟入口读取失败' }).waitFor();
+        assert.equal(await page.locator(`#${view}.active`).count(), 1);
+      }
+    });
+  }
+}
+
+test('第三批收藏：快捷练习直接切页后返回不能恢复旧读取跳转', async (t) => {
+  const initial = webState();
+  initial.favorites['bank-a'] = ['same-id'];
+  const page = await pageFor(t, JSON.stringify(initial));
+  page.setDefaultTimeout(5000);
+  await page.locator('.nav[data-view="favorites"]').click();
+  await page.locator('[data-practice-one-fav-v596="same-id"]').waitFor();
+  await page.evaluate(() => {
+    const { storage } = globalThis.ShirohaPlatform;
+    const original = storage.ensureQuestions;
+    storage.ensureQuestions = () => new Promise((resolve) => {
+      globalThis.__finishDirectFavoriteRead = () => {
+        if (original) { storage.ensureQuestions = original; } else { delete storage.ensureQuestions; }
+        resolve();
+      };
+    });
+  });
+  await page.locator('[data-practice-one-fav-v596="same-id"]').click();
+  await page.waitForFunction(() => typeof globalThis.__finishDirectFavoriteRead === 'function');
+  await page.locator('#practice-favorites-btn-v596').click();
+  await page.locator('#practice.active').waitFor();
+  await page.locator('.nav[data-view="favorites"]').click();
+  await page.evaluate(() => globalThis.__finishDirectFavoriteRead());
+  await page.waitForTimeout(100);
+  assert.equal(await page.locator('#favorites.active').count(), 1);
+});
+
+test('第三批错题：快捷入口保留错题范围并正常开始', async (t) => {
+  const initial = webState();
+  initial.wrongBook['bank-a'] = [{ id: 'same-id', status: '未掌握', wrongCount: 1 }];
+  const page = await pageFor(t, JSON.stringify(initial));
+  page.setDefaultTimeout(5000);
+  await page.locator('.nav[data-view="wrongbook"]').click();
+  await page.locator('#practice-wrong-btn').click();
+  assert.equal(await page.locator('#practice.active').count(), 1);
+  assert.equal(await page.locator('#practice-source').inputValue(), 'wrong');
+  await page.locator('#start-practice-btn').click();
+  assert.match(await page.locator('#practice-card .question-title').innerText(), /一加一等于多少/);
+  assert.equal(await page.locator('[data-practice-jump]').count(), 1);
+});
+
+for (const scenario of ['当前页', '翻页后', '离页后返回']) {
+  test(`第三批分页失败：${scenario}读取的提示与重试归属`, async (t) => {
+    const initial = webState();
+    initial.banks[0].questions = Array.from({ length: 31 }, (_, index) => ({
+      ...initial.banks[0].questions[0], id: `failure-page-${index}`, question: `失败分页 ${index}`,
+    }));
+    const page = await pageFor(t, JSON.stringify(initial));
+    page.setDefaultTimeout(5000);
+    await page.locator('.nav[data-view="banks"]').click();
+    await page.locator('[data-select-bank-question="failure-page-0"]').waitFor();
+    await page.evaluate(() => {
+      const { storage } = globalThis.ShirohaPlatform;
+      let calls = 0;
+      storage.ensureQuestions = () => {
+        calls += 1;
+        if (calls > 1) { return Promise.resolve(); }
+        return new Promise((_resolve, reject) => {
+          globalThis.__failPagedRead = () => { delete storage.ensureQuestions;reject(new Error('模拟分页旧读取失败')); };
+        });
+      };
+    });
+    const pager = page.locator('#bank-preview-pager');
+    await pager.getByRole('button', { name: '下一页', exact: true }).click();
+    await page.waitForFunction(() => typeof globalThis.__failPagedRead === 'function');
+    if (scenario === '翻页后') {
+      await pager.getByRole('button', { name: '下一页', exact: true }).click();
+      await page.locator('[data-select-bank-question="failure-page-20"]').waitFor();
+    } else if (scenario === '离页后返回') {
+      await page.locator('.nav[data-view="dashboard"]').click();
+      await page.locator('.nav[data-view="banks"]').click();
+    }
+    await page.evaluate(() => globalThis.__failPagedRead());
+    if (scenario === '当前页') {
+      await page.locator('#platform-status.failed').filter({ hasText: '模拟分页旧读取失败' }).waitFor();
+      await page.locator('#retry-bank-preview').click();
+      await page.locator('[data-select-bank-question="failure-page-10"]').waitFor();
+    } else {
+      await page.waitForTimeout(100);
+      assert.doesNotMatch(await page.locator('#platform-status').innerText(), /模拟分页旧读取失败/);
+      assert.equal(await page.locator('#retry-bank-preview').count(), 0);
+      if (scenario === '翻页后') { assert.equal(await page.locator('[data-select-bank-question="failure-page-20"]').count(), 1); }
+    }
+  });
+}
+
+for (const leave of [false, true]) {
+  test(`第三批记录详情失败：${leave ? '离页后返回' : '当前页'}的提示归属`, async (t) => {
+    const page = await pageFor(t, JSON.stringify(webState()));
+    page.setDefaultTimeout(5000);
+    await page.locator('.nav[data-view="records"]').click();
+    await page.evaluate(() => {
+      const { storage } = globalThis.ShirohaPlatform;
+      storage.ensureRecords = () => new Promise((_resolve, reject) => {
+        globalThis.__failRecordDetails = () => { delete storage.ensureRecords;reject(new Error('模拟记录详情旧读取失败')); };
+      });
+    });
+    await page.locator('#records [data-training-review]').first().click();
+    await page.waitForFunction(() => typeof globalThis.__failRecordDetails === 'function');
+    if (leave) {
+      await page.locator('.nav[data-view="dashboard"]').click();
+      await page.locator('.nav[data-view="records"]').click();
+    }
+    await page.evaluate(() => globalThis.__failRecordDetails());
+    if (leave) {
+      await page.waitForTimeout(100);
+      assert.doesNotMatch(await page.locator('#platform-status').innerText(), /复盘加载失败|模拟记录详情旧读取失败/);
+    } else {
+      await page.locator('#platform-status.failed').filter({ hasText: '复盘加载失败' }).waitFor();
+      await page.locator('#records [data-training-review]').first().click();
+      await page.locator('#training-review-back').waitFor();
+    }
+  });
+}
+
+for (const leave of [false, true]) {
+  test(`第三批复盘详情失败：${leave ? '离页后返回' : '当前页'}的提示归属`, async (t) => {
+    const initial = webState();
+    const question = { ...initial.banks[0].questions[0], analysis: '' };
+    initial.banks[0].questions = [question];
+    initial.records = [{ ...initial.records[0], details: [{ questionId: question.id, sourceBankId: 'bank-a', nativeQuestion: question, chosen: ['B'], correct: false }] }];
+    const page = await pageFor(t, JSON.stringify(initial));
+    page.setDefaultTimeout(5000);
+    await page.locator('.nav[data-view="records"]').click();
+    await page.evaluate(() => {
+      const { storage } = globalThis.ShirohaPlatform;
+      let calls = 0;
+      storage.ensureQuestions = () => {
+        calls += 1;
+        if (calls > 1) { return Promise.resolve(); }
+        return new Promise((_resolve, reject) => {
+          globalThis.__failReviewDetails = () => { delete storage.ensureQuestions;reject(new Error('模拟复盘详情旧读取失败')); };
+        });
+      };
+    });
+    await page.locator('#records [data-training-review]').first().click();
+    await page.waitForFunction(() => typeof globalThis.__failReviewDetails === 'function');
+    if (leave) {
+      await page.locator('.nav[data-view="dashboard"]').click();
+      await page.locator('.nav[data-view="records"]').click();
+      await page.locator('#records [data-training-review]').first().click();
+      await page.locator('#training-review-back').waitFor();
+    }
+    await page.evaluate(() => globalThis.__failReviewDetails());
+    if (leave) {
+      await page.waitForTimeout(100);
+      assert.doesNotMatch(await page.locator('#platform-status').innerText(), /模拟复盘详情旧读取失败/);
+      assert.equal(await page.locator('#training-review.active').count(), 1);
+    } else {
+      await page.locator('#platform-status.failed').filter({ hasText: '模拟复盘详情旧读取失败' }).waitFor();
+      await page.locator('.nav[data-view="records"]').click();
+      await page.locator('#records [data-training-review]').first().click();
+      await page.locator('#training-review-back').waitFor();
+    }
+  });
+}
+
+for (const view of ['favorites', 'wrongbook']) {
+  for (const leave of [false, true]) {
+    test(`第三批收藏错题失败：${view} ${leave ? '离页后返回' : '当前页'}的提示归属`, async (t) => {
+      const initial = webState();
+      initial.banks[0].questions = Array.from({ length: 21 }, (_, index) => ({
+        ...initial.banks[0].questions[0], id: `saved-failure-${index}`, question: `收藏错题 ${index}`,
+      }));
+      initial.favorites['bank-a'] = initial.banks[0].questions.map((question) => question.id);
+      initial.wrongBook['bank-a'] = initial.banks[0].questions.map((question) => ({ id: question.id, status: '未掌握', wrongCount: 1 }));
+      const page = await pageFor(t, JSON.stringify(initial));
+      page.setDefaultTimeout(5000);
+      await page.locator(`.nav[data-view="${view}"]`).click();
+      await page.locator(view === 'favorites' ? '.favorite-question-row' : '#wrongbook-list .wrong-item').first().waitFor();
+      await page.evaluate(() => {
+        const { storage } = globalThis.ShirohaPlatform;
+        storage.ensureQuestions = () => new Promise((_resolve, reject) => {
+          globalThis.__failSavedRead = () => { delete storage.ensureQuestions;reject(new Error('模拟收藏错题旧读取失败')); };
+        });
+      });
+      if (view === 'favorites') {
+        await page.locator('#favorites-list-v596-pager').getByRole('button', { name: '下一页', exact: true }).click();
+      } else {
+        await page.locator('#wrong-sort-mode').selectOption('wrongCount');
+      }
+      await page.waitForFunction(() => typeof globalThis.__failSavedRead === 'function');
+      if (leave) {
+        await page.locator('.nav[data-view="dashboard"]').click();
+        await page.locator(`.nav[data-view="${view}"]`).click();
+      }
+      await page.evaluate(() => globalThis.__failSavedRead());
+      if (leave) {
+        await page.waitForTimeout(100);
+        assert.doesNotMatch(await page.locator('#platform-status').innerText(), /模拟收藏错题旧读取失败/);
+        if (view === 'favorites') { assert.equal(await page.locator('#retry-favorites').count(), 0); }
+      } else {
+        await page.locator('#platform-status.failed').filter({ hasText: '模拟收藏错题旧读取失败' }).waitFor();
+        if (view === 'favorites') {
+          await page.locator('#retry-favorites').click();
+          await page.locator('[data-practice-one-fav-v596="saved-failure-10"]').waitFor();
+        } else {
+          await page.locator('#wrong-sort-mode').selectOption('lastWrong');
+          await page.locator('#wrongbook-list .wrong-item').first().waitFor();
+        }
+      }
+    });
+  }
+}
+
+for (const scenario of ['当前失败', '关闭后成功', '关闭后失败', '离页返回后成功', '离页返回后失败']) {
+  test(`第三批记录列表明细：${scenario}的读取归属`, async (t) => {
+    const page = await pageFor(t, JSON.stringify(webState()));
+    page.setDefaultTimeout(5000);
+    await page.evaluate(() => {
+      const { storage } = globalThis.ShirohaPlatform;
+      storage.lazy = true;
+      let requested = false;
+      storage.ensureRecords = (_snapshot, ids) => {
+        if (!ids.length || requested) { return Promise.resolve(); }
+        requested = true;
+        return new Promise((resolve, reject) => {
+          globalThis.__finishRecordListRead = (fail) => {
+            delete storage.ensureRecords;
+            if (fail) { reject(new Error('模拟记录列表旧读取失败')); } else { resolve(); }
+          };
+        });
+      };
+    });
+    await page.locator('.nav[data-view="records"]').click();
+    const details = page.locator('#records-list [data-native-record]').first();
+    await details.locator('summary').click();
+    await page.waitForFunction(() => typeof globalThis.__finishRecordListRead === 'function');
+    if (scenario.startsWith('关闭')) {
+      await details.locator('summary').click();
+      await page.waitForFunction(() => !globalThis.document.querySelector('#records-list [data-native-record]')?.open);
+    } else if (scenario.startsWith('离页')) {
+      await page.locator('.nav[data-view="dashboard"]').click();
+      await page.locator('.nav[data-view="records"]').click();
+      await page.waitForFunction(() => globalThis.document.querySelector('#records-list [data-native-record]')?.open);
+    }
+    await page.evaluate((fail) => globalThis.__finishRecordListRead(fail), scenario.endsWith('失败'));
+    if (scenario === '当前失败') {
+      await page.locator('#platform-status.failed').filter({ hasText: '模拟记录列表旧读取失败' }).waitFor();
+      await details.locator('summary').click();
+      await details.locator('summary').click();
+      await page.waitForFunction(() => globalThis.document.querySelector('#records-list [data-native-record]')?.open);
+    } else {
+      await page.waitForTimeout(100);
+      assert.doesNotMatch(await page.locator('#platform-status').innerText(), /模拟记录列表旧读取失败/);
+      assert.equal(await page.locator('#records.active').count(), 1);
+      assert.equal(await page.locator('#records-list [data-native-record]').first().evaluate((node) => node.open), scenario.startsWith('离页'));
+    }
+  });
+}
+
+test('第三批记录列表明细：关闭一项后其余展开明细继续补读', async (t) => {
+  const initial = webState();
+  initial.records.push({ ...initial.records[0], id: 'record-two', date: '2026-10-22T00:00:00.000Z' });
+  const page = await pageFor(t, JSON.stringify(initial));
+  page.setDefaultTimeout(5000);
+  await page.evaluate(() => {
+    const { storage } = globalThis.ShirohaPlatform;
+    storage.lazy = true;
+    globalThis.__recordBatchReads = [];
+    storage.ensureRecords = (_snapshot, ids) => {
+      globalThis.__recordBatchReads.push(ids);
+      if (ids.length !== 2) { return Promise.resolve(); }
+      return new Promise((resolve) => { globalThis.__finishRecordBatch = resolve; });
+    };
+  });
+  await page.locator('.nav[data-view="records"]').click();
+  await page.locator('[data-native-record="record-1"] summary').click();
+  await page.waitForFunction(() => globalThis.document.querySelector('[data-native-record="record-1"]')?.open);
+  await page.locator('[data-native-record="record-two"] summary').click();
+  await page.waitForFunction(() => typeof globalThis.__finishRecordBatch === 'function');
+  await page.locator('[data-native-record="record-1"] summary').click();
+  await page.evaluate(() => globalThis.__finishRecordBatch());
+  await page.waitForFunction(() => globalThis.__recordBatchReads.some((ids) => ids.length === 1 && ids[0] === 'record-two'));
+  await page.waitForFunction(() => {
+    const first = globalThis.document.querySelector('[data-native-record="record-1"]');
+    const second = globalThis.document.querySelector('[data-native-record="record-two"]');
+    return first && !first.open && second?.open && second.querySelector('tbody tr');
+  });
+});
+
+test('第三批记录列表明细：无展开记录时初始化、分页与筛选保持正常', async (t) => {
+  const initial = webState();
+  initial.records = Array.from({ length: 12 }, (_, index) => ({
+    ...initial.records[0], id: `record-list-${index}`, mode: index % 2 ? '练习' : '考试',
+  }));
+  const page = await pageFor(t, JSON.stringify(initial));
+  page.setDefaultTimeout(5000);
+  await page.evaluate(() => {
+    const { storage } = globalThis.ShirohaPlatform;
+    storage.lazy = true;
+    globalThis.__emptyRecordReads = [];
+    storage.ensureRecords = async (_snapshot, ids) => { globalThis.__emptyRecordReads.push(ids); };
+  });
+  await page.locator('.nav[data-view="records"]').click();
+  await page.locator('#records-list-pager').getByRole('button', { name: '第 2 页', exact: true }).click();
+  assert.equal(await page.locator('#records-list .record-item').count(), 2);
+  await page.locator('#record-mode-filter').selectOption('考试');
+  assert.equal(await page.locator('#records-list .record-item').count(), 6);
+  assert.equal(await page.locator('#records-list [data-native-record][open]').count(), 0);
+  assert(await page.evaluate(() => globalThis.__emptyRecordReads.length >= 3 && globalThis.__emptyRecordReads.every((ids) => ids.length === 0)));
+});
+
+const batch4DelayedFileInjection = `
+  globalThis.__batch4Reads = {};
+  globalThis.ShirohaPlatform.files = { ...globalThis.ShirohaPlatform.files,
+    readText(file) { return new Promise((resolve, reject) => { globalThis.__batch4Reads[file.name] = { resolve, reject }; }); } };
+`;
+
+async function batch4SelectDelayed(page, selector, name) {
+  await page.locator(selector).setInputFiles({ name, mimeType: 'text/plain', buffer: Buffer.from('模拟文件') });
+  await page.waitForFunction((fileName) => !!globalThis.__batch4Reads[fileName], name);
+}
+
+test('第四批导入：单文件重选、清空、手动编辑复原和程序替换后拒绝迟到读取', async (t) => {
+  const page = await pageFor(t, JSON.stringify(webState()), batch4DelayedFileInjection);
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.locator('.nav[data-view="import"]').click();
+  const text = page.locator('#import-text');
+  await text.fill('原文本');
+  await batch4SelectDelayed(page, '#import-file', '旧.txt');
+  await text.fill('编辑后');
+  await text.fill('原文本');
+  await page.evaluate(() => globalThis.__batch4Reads['旧.txt'].resolve('迟到文本'));
+  await page.waitForTimeout(50);
+  assert.equal(await text.inputValue(), '原文本');
+
+  await batch4SelectDelayed(page, '#import-file', '样例前.txt');
+  await page.locator('#load-sample-btn').click();
+  const sample = await text.inputValue();
+  await page.evaluate(() => globalThis.__batch4Reads['样例前.txt'].resolve('迟到覆盖'));
+  await page.waitForTimeout(50);
+  assert.equal(await text.inputValue(), sample);
+
+  await batch4SelectDelayed(page, '#import-file', 'OCR前.txt');
+  await page.locator('#ocr-result').evaluate((field) => { field.value = '人工核对过的 OCR 文本'; });
+  await page.locator('#ocr-use-text-btn').evaluate((button) => { button.disabled = false;button.click(); });
+  await page.evaluate(() => globalThis.__batch4Reads['OCR前.txt'].resolve('旧文件覆盖 OCR'));
+  await page.waitForTimeout(50);
+  assert.equal(await text.inputValue(), '人工核对过的 OCR 文本');
+
+  await batch4SelectDelayed(page, '#import-file', '清空前.txt');
+  await page.locator('#clear-import-btn').click();
+  await page.evaluate(() => globalThis.__batch4Reads['清空前.txt'].resolve('旧文件覆盖清空'));
+  await page.waitForTimeout(50);
+  assert.equal(await text.inputValue(), '');
+});
+
+test('第四批导入：双文件各槽位并行，手动复原、示例和清空不被旧读取覆盖', async (t) => {
+  const page = await pageFor(t, JSON.stringify(webState()), batch4DelayedFileInjection);
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.locator('.nav[data-view="import"]').click();
+  const question = page.locator('#dual-question-text');
+  const answer = page.locator('#dual-answer-text');
+  await batch4SelectDelayed(page, '#dual-question-file', '旧题.txt');
+  await batch4SelectDelayed(page, '#dual-question-file', '新题.txt');
+  await batch4SelectDelayed(page, '#dual-answer-file', '答案.txt');
+  await page.evaluate(() => {
+    globalThis.__batch4Reads['答案.txt'].resolve('并行答案');
+    globalThis.__batch4Reads['新题.txt'].resolve('新题目');
+  });
+  await page.waitForFunction(() => globalThis.document.querySelector('#dual-question-text').value === '新题目'
+    && globalThis.document.querySelector('#dual-answer-text').value === '并行答案');
+  await page.evaluate(() => globalThis.__batch4Reads['旧题.txt'].resolve('旧题迟到'));
+  await page.waitForTimeout(50);
+  assert.equal(await question.inputValue(), '新题目');
+  assert.equal(await answer.inputValue(), '并行答案');
+
+  await batch4SelectDelayed(page, '#dual-answer-file', '编辑答案.txt');
+  await answer.fill('临时改动');
+  await answer.fill('并行答案');
+  await page.evaluate(() => globalThis.__batch4Reads['编辑答案.txt'].resolve('旧答案迟到'));
+  await page.waitForTimeout(50);
+  assert.equal(await answer.inputValue(), '并行答案');
+
+  await batch4SelectDelayed(page, '#dual-question-file', '示例前题目.txt');
+  await batch4SelectDelayed(page, '#dual-answer-file', '示例前答案.txt');
+  await page.locator('#dual-load-sample-btn').click();
+  const sampleQuestion = await question.inputValue();
+  const sampleAnswer = await answer.inputValue();
+  await page.evaluate(() => {
+    globalThis.__batch4Reads['示例前题目.txt'].resolve('迟到题目');
+    globalThis.__batch4Reads['示例前答案.txt'].resolve('迟到答案');
+  });
+  await page.waitForTimeout(50);
+  assert.equal(await question.inputValue(), sampleQuestion);
+  assert.equal(await answer.inputValue(), sampleAnswer);
+
+  await batch4SelectDelayed(page, '#dual-question-file', '清空前题目.txt');
+  await batch4SelectDelayed(page, '#dual-answer-file', '清空前答案.txt');
+  await page.locator('#clear-dual-import-btn').click();
+  await page.evaluate(() => {
+    globalThis.__batch4Reads['清空前题目.txt'].resolve('迟到题目');
+    globalThis.__batch4Reads['清空前答案.txt'].reject(new Error('迟到错误'));
+  });
+  await page.waitForTimeout(50);
+  assert.equal(await question.inputValue(), '');
+  assert.equal(await answer.inputValue(), '');
+  assert.equal(await page.locator('.toast-item').filter({ hasText: '迟到错误' }).count(), 0);
+});
+
+test('第四批导入：读取中空文本误点识别后结果仍可使用', async (t) => {
+  const page = await pageFor(t, JSON.stringify(webState()), batch4DelayedFileInjection);
+  page.setDefaultTimeout(3000);
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.locator('.nav[data-view="import"]').click();
+  await batch4SelectDelayed(page, '#import-file', '尚在读取.txt');
+  await page.locator('#parse-import-btn').click();
+  await page.evaluate(() => globalThis.__batch4Reads['尚在读取.txt'].resolve('1. 等待读取题目？\nA. 是\nB. 否\n答案：A'));
+  await page.waitForFunction(() => globalThis.document.querySelector('#import-text').value.includes('等待读取题目'));
+  await page.locator('#parse-import-btn').click();
+  await page.locator('#import-preview tbody').getByText('等待读取题目？').waitFor();
+
+  await batch4SelectDelayed(page, '#dual-question-file', '等待读取题.txt');
+  await batch4SelectDelayed(page, '#dual-answer-file', '等待读取答.txt');
+  await page.locator('#parse-dual-import-btn').click();
+  await page.evaluate(() => {
+    globalThis.__batch4Reads['等待读取题.txt'].resolve('1. 双文件等待读取？\nA. 是\nB. 否');
+    globalThis.__batch4Reads['等待读取答.txt'].resolve('1. A');
+  });
+  await page.waitForFunction(() => globalThis.document.querySelector('#dual-question-text').value.includes('双文件等待读取')
+    && globalThis.document.querySelector('#dual-answer-text').value === '1. A');
+  await page.locator('#parse-dual-import-btn').click();
+  await page.locator('#import-preview tbody').getByText('双文件等待读取？').waitFor();
+});
+
+test('第四批导入：双文件清空和识别不会废弃独立的单文件文本读取', async (t) => {
+  const page = await pageFor(t, JSON.stringify(webState()), batch4DelayedFileInjection);
+  page.setDefaultTimeout(3000);
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.locator('.nav[data-view="import"]').click();
+  await batch4SelectDelayed(page, '#import-file', '并行文本.txt');
+  await page.locator('#clear-dual-import-btn').click();
+  await page.evaluate(() => globalThis.__batch4Reads['并行文本.txt'].resolve('双文件清空后的单文件文本'));
+  await page.waitForFunction(() => globalThis.document.querySelector('#import-text').value === '双文件清空后的单文件文本');
+
+  await batch4SelectDelayed(page, '#import-file', '并行识别.txt');
+  await page.locator('#dual-load-sample-btn').click();
+  await page.locator('#parse-dual-import-btn').click();
+  await page.evaluate(() => globalThis.__batch4Reads['并行识别.txt'].resolve('双文件识别后的单文件文本'));
+  await page.waitForFunction(() => globalThis.document.querySelector('#import-text').value === '双文件识别后的单文件文本');
+  assert.notEqual(await page.locator('#import-preview tbody tr').count(), 0);
+});
+
+for (const change of ['编辑', '删除']) {
+  test(`第四批导入：表格读取期间${change}预览后旧表格不覆盖草稿`, async (t) => {
+    const page = await pageFor(t, JSON.stringify(webState()), batch4DelayedFileInjection);
+    page.setDefaultTimeout(3000);
+    await page.setViewportSize({ width: 1600, height: 900 });
+    await page.locator('body[data-storage-state="ready"]').waitFor();
+    await page.locator('.nav[data-view="import"]').click();
+    await page.locator('#load-sample-btn').click();
+    await page.locator('#parse-import-btn').click();
+    await page.locator('[data-edit-import="0"]').waitFor();
+    const before = await page.locator('[data-edit-import]').count();
+    await batch4SelectDelayed(page, '#import-file', `旧表格-${change}.csv`);
+    if (change === '编辑') {
+      await page.locator('[data-edit-import="0"]').click();
+      await page.locator('#edit-question').fill('人工修改后的预览题目');
+      await page.locator('#edit-save-btn').click();
+      await page.locator('#edit-close-btn').focus();
+      await page.keyboard.press('Enter');
+    } else {
+      await page.locator('[data-delete-import="0"]').click();
+      await page.waitForFunction((count) => globalThis.document.querySelectorAll('[data-edit-import]').length === count, before - 1);
+    }
+    const html = await page.locator('#import-preview tbody').innerHTML();
+    await page.evaluate((name) => globalThis.__batch4Reads[name].resolve('题干,选项A,选项B,答案\n旧表格题,甲,乙,A'), `旧表格-${change}.csv`);
+    await page.waitForTimeout(80);
+    assert.equal(await page.locator('#import-preview tbody').innerHTML(), html);
+    assert.equal(await page.locator('[data-edit-import]').count(), change === '编辑' ? before : before - 1);
+    if (change === '编辑') { assert.match(await page.locator('#import-preview tbody').innerText(), /人工修改后的预览题目/); }
+  });
+}
+
+test('第四批导入：旧表格不覆盖进入题库二次编辑后的草稿', async (t) => {
+  const page = await pageFor(t, JSON.stringify(webState()), batch4DelayedFileInjection);
+  page.setDefaultTimeout(5000);
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.locator('.nav[data-view="import"]').click();
+  await batch4SelectDelayed(page, '#import-file', '二次编辑前.csv');
+  await page.locator('.nav[data-view="banks"]').click();
+  const button = page.locator('[data-editbank-v45="bank-a"]');
+  await button.locator('..').locator('..').locator('summary').click();
+  await button.click();
+  await page.locator('#bank-edit-panel-v45').waitFor({ state: 'visible' });
+  const before = await page.locator('#import-preview tbody').innerHTML();
+  assert.notEqual(before, '');
+  await page.evaluate(() => globalThis.__batch4Reads['二次编辑前.csv'].resolve('题干,选项A,选项B,答案\n旧表格题,甲,乙,A'));
+  await page.waitForTimeout(80);
+  assert.equal(await page.locator('#import-preview tbody').innerHTML(), before);
+  assert.equal(await page.locator('#bank-edit-panel-v45').isVisible(), true);
+});
+
+test('第四批导入：旧表格不覆盖人工采纳的 AI 解析', async (t) => {
+  const page = await pageFor(t, JSON.stringify(webState()), batch4DelayedFileInjection);
+  page.setDefaultTimeout(5000);
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await configureMockImportAi(page);
+  await seedImportQuestions(page, 1);
+  await page.locator('#ai-analysis-import-btn-v991').click();
+  await page.locator('#ai-preview-start-btn-v991').click();
+  await page.waitForFunction(() => globalThis.__batchRequests.length === 1);
+  await page.evaluate(() => {
+    const request = globalThis.__batchRequests[0];
+    request.resolve({ results: [{ id: request.input.questions[0].id, analysis: '人工采纳的模拟解析' }] });
+  });
+  await page.locator('#ai-preview-status-v991').filter({ hasText: '生成 1 条建议' }).waitFor();
+  await batch4SelectDelayed(page, '#import-file', '采纳前.csv');
+  await page.locator('[data-ai-analysis-apply-v991]').click();
+  const before = await page.locator('#import-preview tbody').innerHTML();
+  await page.evaluate(() => globalThis.__batch4Reads['采纳前.csv'].resolve('题干,选项A,选项B,答案\n旧表格题,甲,乙,A'));
+  await page.waitForTimeout(80);
+  assert.equal(await page.locator('#import-preview tbody').innerHTML(), before);
+  await page.locator('[data-edit-import="0"]').click();
+  assert.match(await page.locator('#edit-analysis').inputValue(), /人工采纳的模拟解析/);
+});
+
+const batch4DavInjection = `
+  globalThis.__davRows = [{ name: 'shiroha-web-backup-20261111-010101-aabbccdd.json', size: 10, etag: 'v1' }];
+  globalThis.__davLatest = globalThis.__davRows[0].name;
+  globalThis.__davPending = [];
+  globalThis.__davCancels = 0;
+  globalThis.__davRenders = 0;
+  globalThis.ShirohaPlatform.network.webdav = (_config, _password, relativePath, options = {}) => {
+    if (options.method === 'PROPFIND' && options.headers?.Depth === '1') {
+      const body = '<multistatus xmlns="DAV:">' + globalThis.__davRows.map((item) =>
+        '<response><href>/' + item.name + '</href><getcontentlength>' + item.size
+        + '</getcontentlength><getetag>' + item.etag + '</getetag></response>').join('') + '</multistatus>';
+      return Promise.resolve({ status: 207, text: async () => body });
+    }
+    if (options.method === 'GET' && relativePath.endsWith('latest.json')) {
+      return Promise.resolve({ status: 200, text: async () => JSON.stringify({ fileName: globalThis.__davLatest }) });
+    }
+    return new Promise((resolve, reject) => globalThis.__davPending.push({ relativePath, resolve, reject }));
+  };
+  globalThis.ShirohaPlatform.network.cancelAll = async () => { globalThis.__davCancels += 1; };
+`;
+const batch4DavTransform = (source) => {
+  const marker = '    function renderWebdavPanelV378(forceForm = false) {';
+  assert.equal(source.split(marker).length, 2);
+  return source.replace(marker, `${marker}\n      globalThis.__davRenders += 1;`);
+};
+
+async function batch4DavPage(t) {
+  const page = await pageFor(t, JSON.stringify(webState()), batch4DavInjection, null, { '/webdav-panel.js': batch4DavTransform });
+  page.setDefaultTimeout(5000);
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.locator('.nav[data-view="settings"]').click();
+  await page.locator('#webdav-endpoint-v378').fill('https://dav.example.invalid');
+  await page.locator('#webdav-refresh-v378').click();
+  await page.locator('#webdav-status-v378').filter({ hasText: '远程列表已刷新' }).waitFor();
+  await page.waitForFunction(() => !globalThis.document.querySelector('#webdav-refresh-v378').disabled);
+  return page;
+}
+
+test('第四批 WebDAV：开始只同步一次，保留列表节点并同步停止、迟到成功失败和重试', async (t) => {
+  const page = await batch4DavPage(t);
+  await page.evaluate(() => {
+    globalThis.__davNode = globalThis.document.querySelector('[data-webdav-restore-v378]');
+    globalThis.__davRenders = 0;
+  });
+  await page.locator('#webdav-test-v378').click();
+  await page.waitForFunction(() => globalThis.__davPending.length === 1);
+  assert.equal(await page.evaluate(() => globalThis.__davRenders), 1);
+  assert.equal(await page.evaluate(() => globalThis.document.querySelector('[data-webdav-restore-v378]') === globalThis.__davNode), true);
+  assert.equal(await page.locator('[data-webdav-restore-v378]').isDisabled(), true);
+  await page.locator('#webdav-stop-native').click();
+  assert.match(await page.locator('#webdav-status-v378').innerText(), /已请求取消/);
+  await page.evaluate(() => globalThis.__davPending[0].resolve({ status: 207 }));
+  await page.locator('#webdav-status-v378').filter({ hasText: '连接成功' }).waitFor();
+  await page.waitForFunction(() => !globalThis.document.querySelector('#webdav-test-v378').disabled);
+  assert.equal(await page.locator('[data-webdav-restore-v378]').isEnabled(), true);
+  assert.equal(await page.evaluate(() => globalThis.document.querySelector('[data-webdav-restore-v378]') === globalThis.__davNode), true);
+
+  await page.locator('#webdav-test-v378').click();
+  await page.waitForFunction(() => globalThis.__davPending.length === 2);
+  await page.locator('#webdav-stop-native').click();
+  await page.evaluate(() => globalThis.__davPending[1].reject(Object.assign(new Error('模拟取消失败'), { code: 'cancelled' })));
+  await page.locator('#webdav-status-v378').filter({ hasText: '测试连接失败' }).waitFor();
+  await page.waitForFunction(() => !globalThis.document.querySelector('#webdav-test-v378').disabled);
+  assert.equal(await page.locator('[data-webdav-restore-v378]').isEnabled(), true);
+  await page.locator('#webdav-test-v378').click();
+  await page.waitForFunction(() => globalThis.__davPending.length === 3);
+  await page.evaluate(() => globalThis.__davPending[2].resolve({ status: 207 }));
+  await page.locator('#webdav-status-v378').filter({ hasText: '连接成功' }).waitFor();
+  assert.equal(await page.evaluate(() => globalThis.__davCancels), 2);
+  assert.equal(await page.evaluate(() => globalThis.document.querySelector('[data-webdav-restore-v378]') === globalThis.__davNode), true);
+});
+
+test('第四批 WebDAV：列表内容变化和节点替换后重绘并保持恢复入口', async (t) => {
+  const page = await batch4DavPage(t);
+  await page.evaluate(() => { globalThis.__davNode = globalThis.document.querySelector('[data-webdav-restore-v378]'); });
+  await page.locator('#webdav-refresh-v378').click();
+  await page.waitForFunction(() => !globalThis.document.querySelector('#webdav-refresh-v378').disabled);
+  assert.equal(await page.evaluate(() => globalThis.document.querySelector('[data-webdav-restore-v378]') === globalThis.__davNode), true);
+
+  await page.evaluate(() => {
+    globalThis.__davRows = [
+      { name: 'shiroha-web-backup-20261111-010101-aabbccdd.json', size: 20, etag: 'v2' },
+      { name: 'shiroha-web-backup-20261111-020202-aabbccdd.json', size: 40, etag: 'v3' },
+    ];
+    globalThis.__davLatest = globalThis.__davRows[1].name;
+  });
+  await page.locator('#webdav-refresh-v378').click();
+  await page.waitForFunction(() => !globalThis.document.querySelector('#webdav-refresh-v378').disabled);
+  const rows = page.locator('#webdav-list-v378 .webdav-row-v378');
+  assert.equal(await rows.count(), 2);
+  assert.match(await rows.nth(0).innerText(), /020202/);
+  assert.match(await rows.nth(0).innerText(), /latest/);
+  assert.match(await rows.nth(1).innerText(), /v2/);
+  assert.notEqual(await page.evaluate(() => globalThis.document.querySelector('[data-webdav-restore-v378]') === globalThis.__davNode), true);
+
+  for (const field of ['latest', 'size', 'etag']) {
+    await page.evaluate((kind) => {
+      globalThis.__davNode = globalThis.document.querySelector('[data-webdav-restore-v378]');
+      if (kind === 'latest') { globalThis.__davLatest = globalThis.__davRows[0].name; }
+      if (kind === 'size') { globalThis.__davRows[0].size = 21; }
+      if (kind === 'etag') { globalThis.__davRows[0].etag = '独立变化'; }
+    }, field);
+    await page.locator('#webdav-refresh-v378').click();
+    await page.waitForFunction(() => !globalThis.document.querySelector('#webdav-refresh-v378').disabled);
+    assert.notEqual(await page.evaluate(() => globalThis.document.querySelector('[data-webdav-restore-v378]') === globalThis.__davNode), true);
+    if (field === 'latest') { assert.match(await rows.nth(1).innerText(), /latest/); }
+    if (field === 'size') { assert.match(await rows.nth(1).innerText(), /21/); }
+    if (field === 'etag') { assert.match(await rows.nth(1).innerText(), /独立变化/); }
+  }
+
+  await page.evaluate(() => {
+    const old = globalThis.document.querySelector('#webdav-list-v378');
+    old.replaceWith(old.cloneNode(false));
+  });
+  await page.locator('#webdav-test-v378').click();
+  await page.waitForFunction(() => globalThis.__davPending.length === 1);
+  assert.equal(await page.locator('#webdav-list-v378 [data-webdav-restore-v378]').count(), 2);
+  assert.equal(await page.evaluate(() => typeof globalThis.document.querySelector('#webdav-list-v378').onclick), 'function');
+  await page.evaluate(() => globalThis.__davPending[0].resolve({ status: 207 }));
+  await page.waitForFunction(() => !globalThis.document.querySelector('#webdav-test-v378').disabled);
+  await page.locator('#webdav-list-v378 [data-webdav-restore-v378]').first().click();
+  await page.waitForFunction(() => globalThis.__davPending.length === 2);
+});
+
+test('第四批导入：表格读取期间修改预览勾选后不丢失选择，普通重新校验仍允许读取完成', async (t) => {
+  const page = await pageFor(t, JSON.stringify(webState()), batch4DelayedFileInjection);
+  page.setDefaultTimeout(5000);
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.locator('.nav[data-view="import"]').click();
+  await page.locator('#load-sample-btn').click();
+  await page.locator('#parse-import-btn').click();
+  await page.locator('[data-select-import="0"]').waitFor();
+  await batch4SelectDelayed(page, '#import-file', '勾选前.csv');
+  await page.locator('[data-select-import="0"]').check();
+  await page.evaluate(() => globalThis.__batch4Reads['勾选前.csv'].resolve('题干,选项A,选项B,答案\n旧表格题,甲,乙,A'));
+  await page.waitForTimeout(80);
+  assert.equal(await page.locator('[data-select-import="0"]').isChecked(), true);
+  assert.equal(await page.locator('[data-edit-import]').count(), 3);
+
+  await batch4SelectDelayed(page, '#import-file', '重校验前.csv');
+  await page.locator('#revalidate-import-btn').click();
+  await page.evaluate(() => globalThis.__batch4Reads['重校验前.csv'].resolve('题干,选项A,选项B,答案\n新表格题,甲,乙,A'));
+  await page.locator('#import-preview tbody').getByText('新表格题').waitFor();
+});
+
+test('第四批导入：AI 整理完成后旧表格不能覆盖整理草稿', async (t) => {
+  const page = await pageFor(t, JSON.stringify(webState()), batch4DelayedFileInjection);
+  page.setDefaultTimeout(5000);
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await configureMockImportAi(page);
+  await page.locator('#import-text').fill('待整理的自建原文');
+  await batch4SelectDelayed(page, '#import-file', '整理前.csv');
+  await page.locator('#ai-organize-import-btn-v99').click();
+  await page.locator('#ai-import-start-btn-v99').click();
+  await page.waitForFunction(() => globalThis.__batchRequests.length === 1);
+  await page.evaluate(() => globalThis.__batchRequests[0].resolve({
+    mode: 'direct_questions', questions: [{ type: 'single', question: 'AI 已整理题目', options: [{ key: 'A', text: '甲' }, { key: 'B', text: '乙' }], answer: ['A'] }],
+  }));
+  await page.locator('#ai-import-status-v99').filter({ hasText: '整理完成' }).waitFor();
+  await page.locator('#import-preview tbody').getByText('AI 已整理题目').waitFor();
+  await page.evaluate(() => globalThis.__batch4Reads['整理前.csv'].resolve('题干,选项A,选项B,答案\n旧表格题,甲,乙,A'));
+  await page.waitForTimeout(80);
+  await page.locator('#import-preview tbody').getByText('AI 已整理题目').waitFor();
+});
+
+test('第四批导入：跨入口题库名称与双文件识别不被旧读取覆盖', async (t) => {
+  const page = await pageFor(t, JSON.stringify(webState()), batch4DelayedFileInjection);
+  page.setDefaultTimeout(5000);
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.locator('.nav[data-view="import"]').click();
+  await batch4SelectDelayed(page, '#dual-question-file', '旧题目名称.txt');
+  await batch4SelectDelayed(page, '#import-file', '新单文件名称.txt');
+  await page.evaluate(() => globalThis.__batch4Reads['新单文件名称.txt'].resolve('新单文件正文'));
+  await page.waitForFunction(() => globalThis.document.querySelector('#import-text').value === '新单文件正文');
+  const name = await page.locator('#import-bank-name').inputValue();
+  await page.evaluate(() => globalThis.__batch4Reads['旧题目名称.txt'].resolve('旧双文件正文'));
+  await page.waitForFunction(() => globalThis.document.querySelector('#dual-question-text').value === '旧双文件正文');
+  assert.equal(await page.locator('#import-bank-name').inputValue(), name);
+
+  await batch4SelectDelayed(page, '#dual-question-file', '示例前名称.txt');
+  await page.locator('#load-sample-btn').click();
+  const sampleName = await page.locator('#import-bank-name').inputValue();
+  await page.evaluate(() => globalThis.__batch4Reads['示例前名称.txt'].resolve('示例前旧题目'));
+  await page.waitForFunction(() => globalThis.document.querySelector('#dual-question-text').value === '示例前旧题目');
+  assert.equal(await page.locator('#import-bank-name').inputValue(), sampleName);
+
+  await batch4SelectDelayed(page, '#import-file', '双文件识别前.csv');
+  await page.locator('#dual-load-sample-btn').click();
+  await page.locator('#parse-dual-import-btn').click();
+  const before = await page.locator('#import-preview tbody').innerHTML();
+  await page.evaluate(() => globalThis.__batch4Reads['双文件识别前.csv'].resolve('题干,选项A,选项B,答案\n旧表格题,甲,乙,A'));
+  await page.waitForTimeout(80);
+  assert.equal(await page.locator('#import-preview tbody').innerHTML(), before);
 });

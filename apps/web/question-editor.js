@@ -9,7 +9,7 @@
       normalizeType: normalizeWebQuestionType, normalizeQuestion, cleanQuestion: cleanImportedQuestion,
       validate: validateQuestion } = parser;
     const { renderRow: renderAiSuggestionRowV991, remove: removeAiSuggestionsForQuestionV991,
-      bind: bindAiSuggestionActionsV991, sync: syncAiPreviewToolsV991 } = suggestions;
+      invalidateImport: invalidateAiImportRequestV99, bind: bindAiSuggestionActionsV991, sync: syncAiPreviewToolsV991 } = suggestions;
     const { updateBankUi: updateBankEditUiV45, syncAppend: syncImportAppendUiV59 } = editor;
     const { currentItem: currentPracticeItemV8916, question: practiceQuestionV8916, bankId: practiceItemBankIdV8916,
       key: practiceItemKeyV8916, renderScope: renderPracticeScopeUiV8916, render: renderPracticeQuestion } = practice;
@@ -18,7 +18,7 @@
     const { transaction: runMutation, save: saveSilent } = storage;
     // 编辑弹窗与多空输入只属于当前页面；打开新题或关闭弹窗时丢弃旧编辑会话。
     let practiceEditSessionV120 = null; let editBlankGroupsV58914 = []; let editMultiBlankEnabledV58914 = false;
-    function renderImportReportPanel(arr) {
+    function renderImportReportPanel(arr, statusList) {
       const el = $('#import-report-panel');
       if (!el) {
         return;
@@ -34,7 +34,6 @@
       const expTotal = Number(expected.total || 0);
       const diff = expTotal ? arr.length - expTotal : 0;
       const diffClass = !expTotal ? '' : ` ${Math.abs(diff) <= Math.max(2, Math.ceil(expTotal * 0.05)) ? 'ok' : 'warn'}`;
-      const statusList = (arr || []).map((q) => importIssueStatus(q, d.profile || {}));
       const hardCount = statusList.filter((x) => importStatusSeverity(x) === 'error').length;
       const riskCount = statusList.filter((x) => importStatusSeverity(x) === 'warn').length;
       const repairedSegments = (d.candidates || []).flatMap((c) => c.segments || []);
@@ -80,7 +79,7 @@
       }
       return 'error';
     }
-    function renderImportPreview(arr) {
+    function renderImportPreview(arr, { syncPreviewTools = true } = {}) {
       importDraft.selected = new Set([...importDraft.selected].filter((i) => i >= 0 && i < (arr || []).length));
       const warnings = [...importDraft.warnings];
       const rows = (arr || []).map((q, i) => {
@@ -112,7 +111,7 @@
       }).join('');
       const filterLabel = { priority: '异常优先', problem: '仅异常', normal: '仅正常', all: '全部' }[importDraft.filter] || '异常优先';
       const report = importDraft.report ? `<div class="import-report">${esc(importDraft.report)}</div>` : '';
-      renderImportReportPanel(arr);
+      renderImportReportPanel(arr, rows.map((row) => row.status));
       $('#import-summary').innerHTML = arr.length ? `${report}<b>识别到 ${arr.length} 道题，当前显示 ${shown.length} 道（${filterLabel}），已选择 ${importDraft.selected.size} 道。</b>${warnings.length ? `<br>警告 ${warnings.length} 条：<br>${warnings.slice(0, 12).map(esc).join('<br>')}${warnings.length > 12 ? '<br>……' : ''}` : '<br>未发现明显异常。'}` : '尚未识别到题目。';
       $('#import-summary').className = `notice ${warnings.length ? 'warn' : 'ok'}`;
       const pf = $('#import-preview-filter');
@@ -140,6 +139,8 @@
         all.checked = shownIdx.length > 0 && selectedVisible === shownIdx.length;
         all.indeterminate = selectedVisible > 0 && selectedVisible < shownIdx.length;
         all.onchange = () => {
+          invalidateAiImportRequestV99?.();
+          if (shownIdx.some((i) => importDraft.selected.has(i) !== all.checked)) { importDraft.invalidatePreview?.(); }
           if (all.checked) {
             shownIdx.forEach((i) => importDraft.selected.add(i));
           } else {
@@ -149,7 +150,9 @@
         };
       }
       $$('[data-select-import]').forEach((cb) => cb.onchange = () => {
+        invalidateAiImportRequestV99?.();
         const i = Number(cb.dataset.selectImport);
+        if (importDraft.selected.has(i) !== cb.checked) { importDraft.invalidatePreview?.(); }
         if (cb.checked) {
           importDraft.selected.add(i);
         } else {
@@ -161,14 +164,16 @@
       $$('[data-delete-import]').forEach((btn) => btn.onclick = async () => {
         const i = Number(btn.dataset.deleteImport);
         if (await globalThis.ShirohaDialogs.confirm('删除这道识别结果？')) {
+          invalidateAiImportRequestV99?.();
+          importDraft.invalidatePreview?.();
           removeAiSuggestionsForQuestionV991(importDraft.questions[i], i);
           importDraft.questions.splice(i, 1);
-          importDraft.selected = new Set([...importDraft.selected].map((x) => (x > i ? x - 1 : x)).filter((x) => x !== i));
+          importDraft.selected = new Set([...importDraft.selected].filter((x) => x !== i).map((x) => (x > i ? x - 1 : x)));
           renderImportPreview(importDraft.questions);
         }
       });
       bindAiSuggestionActionsV991();
-      syncAiPreviewToolsV991();
+      if (syncPreviewTools) { syncAiPreviewToolsV991(); }
     }
     async function batchDeleteImportSelected() {
       const ids = [...importDraft.selected].filter((i) => i >= 0 && i < importDraft.questions.length).sort((a, b) => b - a);
@@ -179,6 +184,8 @@
       if (!await globalThis.ShirohaDialogs.confirm(`确定批量删除选中的 ${ids.length} 道识别结果？`)) {
         return;
       }
+      invalidateAiImportRequestV99?.();
+      importDraft.invalidatePreview?.();
       ids.forEach((i) => {
         removeAiSuggestionsForQuestionV991(importDraft.questions[i], i);
         importDraft.questions.splice(i, 1);
@@ -429,8 +436,10 @@
         $('#edit-status').className = 'notice warn';
         return;
       }
+      invalidateAiImportRequestV99?.();
       const oldQuestion = importDraft.questions[i];
       const q = normalizeQuestion(read.raw, i);
+      importDraft.invalidatePreview?.();
       removeAiSuggestionsForQuestionV991(oldQuestion, i);
       importDraft.questions[i] = q;
       const status = validateQuestion(q);
@@ -448,9 +457,11 @@
         return;
       }
       if (await globalThis.ShirohaDialogs.confirm('删除这道题？')) {
+        invalidateAiImportRequestV99?.();
+        importDraft.invalidatePreview?.();
         removeAiSuggestionsForQuestionV991(importDraft.questions[i], i);
         importDraft.questions.splice(i, 1);
-        importDraft.selected = new Set([...importDraft.selected].map((x) => (x > i ? x - 1 : x)).filter((x) => x !== i));
+        importDraft.selected = new Set([...importDraft.selected].filter((x) => x !== i).map((x) => (x > i ? x - 1 : x)));
         closeEditModal();
         renderImportPreview(importDraft.questions);
       }

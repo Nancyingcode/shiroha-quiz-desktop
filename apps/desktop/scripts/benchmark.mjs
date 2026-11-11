@@ -47,8 +47,8 @@ function fixtureMetadata(fixture) {
     bytes: Buffer.byteLength(fixture.text), expectedQuestions: fixture.questions };
 }
 
-/** @param {import('playwright-core').Page} page @param {Fixture} fixture @param {string} _storageKey */
-async function measureFixture(page, fixture, _storageKey) {
+/** @param {import('playwright-core').Page} page @param {Fixture} fixture */
+async function measureFixture(page, fixture) {
   const bankName = `阶段A性能-${fixture.id}`;
   await page.locator('.nav[data-view="import"]').click();
   await page.locator('#import-mode').selectOption(fixture.mode);
@@ -181,8 +181,8 @@ async function stopOwned(owned) {
   assert(!running(owned.child), '测试进程仍在运行，保留临时目录');
 }
 
-/** @param {string} executable @param {string} profile @param {number} index @param {Fixture | undefined} [fixture] @param {string} [storageKey] */
-async function measure(executable, profile, index, fixture, storageKey = '') {
+/** @param {string} executable @param {string} profile @param {number} index @param {Fixture | undefined} [fixture] */
+async function measure(executable, profile, index, fixture) {
   const port = await availablePort();
   const earliest = new Date().toISOString();
   const start = performance.now();
@@ -236,7 +236,7 @@ async function measure(executable, profile, index, fixture, storageKey = '') {
     await session.detach();
     let fixtureResult;
     if (fixture) {
-      const timings = await measureFixture(page, fixture, storageKey);
+      const timings = await measureFixture(page, fixture);
       await delay(IDLE_MS);
       const afterProcesses = await sampleMemory(owned);
       fixtureResult = { ...timings,
@@ -267,8 +267,6 @@ assert((await stat(executable)).isFile() && path.extname(executable).toLowerCase
 const output = path.resolve(positional[1] ?? fileURLToPath(new URL(fixturesMode ? '../.reports/performance-fixtures.json' : '../.reports/performance.json', import.meta.url)));
 const fixtures = fixturesMode ? await fixedFixtures() : [];
 const appSource = fixturesMode ? await readFile(new URL('../../web/app.js', import.meta.url), 'utf8') : '';
-const storageKey = appSource.match(/const KEY='([^']+)'/)?.[1] ?? '';
-assert(!fixturesMode || storageKey, '找不到基线主状态键，拒绝猜测读取位置');
 const temporaryRoot = await realpath(tmpdir());
 const profile = await mkdtemp(path.join(temporaryRoot, PROFILE_PREFIX));
 await markNativeIsolation(profile);
@@ -284,7 +282,7 @@ try {
         await markNativeIsolation(runProfile);
         profiles.push(runProfile);
       }
-      const result = await measure(executable, runProfile, index, fixture, storageKey);
+      const result = await measure(executable, runProfile, index, fixture);
       results.push(result);
       console.log(JSON.stringify(result));
     }

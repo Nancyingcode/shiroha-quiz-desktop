@@ -267,10 +267,7 @@
     function findBatchQuestionV991(raw, batchItems) {
       const id = String(raw?.id ?? raw?.questionId ?? '');
       if (id) {
-        const found = batchItems.find((x) => x.id === id);
-        if (found) {
-          return found;
-        }
+        return batchItems.find((x) => x.id === id) || null;
       }
       const value = Number(raw?.index ?? raw?.number ?? 0);
       const absolute = value - 1;

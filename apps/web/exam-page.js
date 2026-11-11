@@ -13,8 +13,10 @@
     const { restoreSidebar: restoreSidebarAfterFocusV47, collapseSidebar: autoCollapseSidebarForFocusV47,
       shell: updateShellLayoutByView, prewarmMath: prewarmMathJaxV56, bindRail: bindFocusRailToggleV34,
       renderAll, renderReviewAnalysis, updateReviewPanels: updateReviewAnalysisPanels, openReview: openTrainingReview } = view;
-    const { loadItems: loadNativeItems, isBusy: isMutationBusy, saveFailed: hasMutationSaveError,
+    const { loadItems: loadNativeItems, isBusy: isMutationBusy, isReady: isApplicationReady, saveFailed: hasMutationSaveError,
       transaction: runMutation, save: saveSilent } = storage;
+    // 答题卡缓存只归当前试卷 DOM；重绘时从会话答案重建，交卷和回滚不修改缓存。
+    let examAnswerCard = null;
     function examQuestionV113(item) {
       return practiceQuestionV8916(item);
     }
@@ -24,9 +26,6 @@
     function examRenderQuestionV113(item) {
       const q = examQuestionV113(item);
       return { ...q, id: examItemKeyV113(item) };
-    }
-    function examItemByKeyV113(key) {
-      return (examSession.current.items || []).find((item) => String(examItemKeyV113(item)) === String(key)) || null;
     }
     function filteredExamItemsV113(type, order, count) {
       return filteredPracticeItemsV8916('all', type, order, count);
@@ -65,6 +64,11 @@
     async function startExam() {
       // eslint-disable-next-line no-plusplus -- setter 仍接受字符串和 BigInt；限定类型后才能移除此例外。
       const request = ++examSession.request;
+      const isCurrentStart = () => request === examSession.request && isApplicationReady() && !isMutationBusy()
+        && $('#exam')?.classList.contains('active');
+      if (!isCurrentStart()) {
+        return;
+      }
       const count = Number($('#exam-count').value) || 50;
       const scope = practiceScopeV8916();
       const scopeLabel = practiceScopeLabelV8916(scope);
@@ -86,7 +90,7 @@
         $('#exam-card').innerHTML = '<div class="empty">当前考试范围下没有题目。</div>';
         return;
       }
-      if (!await loadNativeItems(selected.items) || request !== examSession.request || isMutationBusy()) {
+      if (!await loadNativeItems(selected.items, isCurrentStart) || !isCurrentStart()) {
         return;
       }
       globalThis.clearInterval(examSession.current.timer);
@@ -155,6 +159,7 @@
         }
         globalThis.clearInterval(examSession.current.timer);
         examSession.current = { items: [], answers: {}, start: 0, timer: null, deadline: 0, submitted: false };
+        examAnswerCard = null;
         $('#exam-card').innerHTML = '<div class="empty">考试已退出，可重新配置后开始。</div>';
         $('#submit-exam-btn').disabled = true;
         $('#exam-timer').textContent = '未开始';
@@ -163,26 +168,23 @@
       bindExamAnswerCardV30();
       bindFocusRailToggleV34();
       const session = examSession.current;
-      const canEditExamOptions = () => examSession.current === session && !session.submitted && !isMutationBusy();
-      examSession.current.items.forEach((item, index) => {
+      session.items.forEach((item, index) => {
         const q = examQuestionV113(item); const key = examItemKeyV113(item); const root = `#exam-card [data-qid="${globalThis.CSS.escape(key)}"]`;
-        applyAnswerStateV26(root, q, examSession.current.answers[key] || []);
-        bindAnswerOptionControls(root, q, index + 1, canEditExamOptions, () => {
-          session.answers[key] = collectAnswer(root, q);
-          refreshExamAnswerCardV30();
+        const box = $(root);
+        const canEdit = () => examSession.current === session && !session.submitted && !isMutationBusy()
+          && box?.isConnected && $('#exam-card')?.contains(box);
+        applyAnswerStateV26(root, q, session.answers[key] || []);
+        bindAnswerOptionControls(root, q, index + 1, canEdit, () => {
+          updateExamAnswerV30(session, key, collectAnswer(root, q));
         });
-      });
-      $$('#exam-card .text-answer').forEach((el) => {
-        el.oninput = () => {
-          const box = el.closest('.exam-q');
-          if (box) {
-            const item = examItemByKeyV113(box.dataset.qid);
-            if (item) {
-              examSession.current.answers[box.dataset.qid] = collectTextAnswerFromElementV58914(box, examQuestionV113(item));
+        box?.querySelectorAll('.text-answer').forEach((el) => {
+          el.oninput = () => {
+            if (!canEdit()) {
+              return;
             }
-            refreshExamAnswerCardV30();
-          }
-        };
+            updateExamAnswerV30(session, key, collectTextAnswerFromElementV58914(box, q));
+          };
+        });
       });
     }
     function examAnsweredCountV30() {
@@ -192,22 +194,45 @@
       const total = (examSession.current.items || []).length;
       const answered = examAnsweredCountV30();
       const remain = Math.max(0, total - answered);
+      const indexes = new Map();
       const buttons = (examSession.current.items || []).map((item, i) => {
-        const done = hasAnswerValueV58914((examSession.current.answers || {})[examItemKeyV113(item)] || []);
+        const key = examItemKeyV113(item);
+        if (!indexes.has(key)) {
+          indexes.set(key, []);
+        }
+        indexes.get(key).push(i);
+        const done = hasAnswerValueV58914((examSession.current.answers || {})[key] || []);
         return `<button type="button" class="${done ? 'answered' : ''}" data-exam-jump="${i}" title="第${i + 1}题">${i + 1}</button>`;
       }).join('');
-      return `<div id="exam-answer-card-v30" class="exam-answer-card-v30"><div class="exam-answer-card-head-v30"><div><b>答题卡</b><span>已答 ${answered} / ${total}，未答 ${remain}</span></div><div class="exam-answer-mini-stats-v30"><span>进度</span><b>${total ? Math.round(answered / total * 100) : 0}%</b></div><button class="rail-hide-btn-v34" data-rail-toggle-v34="exam" type="button" title="隐藏答题卡">隐藏</button></div><div class="exam-nav-grid-v30">${buttons}</div><button class="rail-show-btn-v34" data-rail-toggle-v34="exam" type="button" title="显示答题卡">答题卡</button></div>`;
+      examAnswerCard = { owner: examSession.current, answered, total, indexes, box: null, buttons: [] };
+      return `<div id="exam-answer-card-v30" class="exam-answer-card-v30"><div class="exam-answer-card-head-v30"><div><b>答题卡</b><span data-exam-answer-summary>已答 ${answered} / ${total}，未答 ${remain}</span></div><div class="exam-answer-mini-stats-v30"><span>进度</span><b data-exam-answer-progress>${total ? Math.round(answered / total * 100) : 0}%</b></div><button class="rail-hide-btn-v34" data-rail-toggle-v34="exam" type="button" title="隐藏答题卡">隐藏</button></div><div class="exam-nav-grid-v30">${buttons}</div><button class="rail-show-btn-v34" data-rail-toggle-v34="exam" type="button" title="显示答题卡">答题卡</button></div>`;
     }
-    function refreshExamAnswerCardV30() {
-      const box = $('#exam-answer-card-v30');
-      if (box) {
-        box.outerHTML = renderExamAnswerCardV30();
-        bindExamAnswerCardV30();
-        bindFocusRailToggleV34();
+    function updateExamAnswerV30(session, key, answer) {
+      const wasAnswered = hasAnswerValueV58914(session.answers[key] || []);
+      const isAnswered = hasAnswerValueV58914(answer);
+      session.answers[key] = answer;
+      const card = examAnswerCard;
+      if (!card || card.owner !== session || !card.box?.isConnected) {
+        return;
       }
+      const indexes = card.indexes.get(key) || [];
+      if (wasAnswered !== isAnswered) {
+        card.answered += isAnswered ? indexes.length : -indexes.length;
+      }
+      indexes.forEach((index) => card.buttons[index]?.classList.toggle('answered', isAnswered));
+      card.summary.textContent = `已答 ${card.answered} / ${card.total}，未答 ${Math.max(0, card.total - card.answered)}`;
+      card.progress.textContent = `${card.total ? Math.round(card.answered / card.total * 100) : 0}%`;
     }
     function bindExamAnswerCardV30() {
-      $$('#exam-card [data-exam-jump]').forEach((btn) => btn.onclick = () => {
+      const box = $('#exam-answer-card-v30');
+      const buttons = $$('#exam-card [data-exam-jump]');
+      if (examAnswerCard && examAnswerCard.owner === examSession.current && box) {
+        examAnswerCard.box = box;
+        examAnswerCard.buttons = buttons;
+        examAnswerCard.summary = box.querySelector('[data-exam-answer-summary]');
+        examAnswerCard.progress = box.querySelector('[data-exam-answer-progress]');
+      }
+      buttons.forEach((btn) => btn.onclick = () => {
         const i = Number(btn.dataset.examJump);
         const target = $(`#exam-q-${i + 1}`) || $$('#exam-card .exam-q')[i];
         if (target) {
@@ -292,6 +317,7 @@
       });
     }
     function renderExamResult(rec) {
+      examAnswerCard = null;
       const typeRows = Object.entries(rec.byType || {}).map(([t, v]) => `<tr><td>${label(t)}</td><td>${v.correct}/${v.total}</td><td>${Number(v.score.toFixed ? v.score.toFixed(1) : v.score)}/${v.fullScore}</td></tr>`).join('');
       let html = `<div class="exam-focus-head"><div><b>考试结果</b><span>${esc(rec.name || '模拟考试')}</span></div><div class="exam-head-actions"><button class="primary focus-mini-btn" id="exam-back-setup" type="button">返回考试设置</button></div></div><div class="score-card"><div class="metric"><span>得分</span><b>${rec.score}/${rec.totalScore}</b></div><div class="metric"><span>结果</span><b>${rec.passed ? '合格' : '未合格'}</b></div><div class="metric"><span>正确率</span><b>${rec.accuracy}%</b></div><div class="metric"><span>用时</span><b>${rec.duration}秒</b></div></div><div class="notice ${rec.passed ? 'ok' : 'warn'}">${esc(rec.name || '模拟考试')}：及格线 ${rec.passScore} 分，${rec.autoSubmitted ? '系统已自动交卷。' : '已交卷。'}</div>${typeRows ? `<div class="table-wrap"><table><thead><tr><th>题型</th><th>正确</th><th>得分</th></tr></thead><tbody>${typeRows}</tbody></table></div>` : ''}`;
       examSession.current.items.forEach((item, i) => {

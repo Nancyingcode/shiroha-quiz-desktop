@@ -3,6 +3,23 @@ import { createServer } from 'node:http';
 import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
+/** 启动失败且监听器未确认关闭时，不得删除可能仍被使用的隔离目录。 */
+export class NativeMockStartupCleanupError extends AggregateError {
+  /** @param {unknown} startupError @param {unknown} cleanupError @param {string} root */
+  constructor(startupError, cleanupError, root) {
+    const describe = (/** @type {unknown} */ error) => {
+      if (!(error instanceof Error)) { return String(error); }
+      const code = 'code' in error ? ` (${String(error.code)})` : '';
+      return `${error.message}${code}`;
+    };
+    super(
+      [startupError, cleanupError],
+      `模拟网络服务启动失败：${describe(startupError)}；关闭未确认：${describe(cleanupError)}；隔离目录保留：${root}`,
+      { cause: startupError },
+    );
+  }
+}
+
 /** @param {string} root */
 export async function createNativeMock(root) {
   /** @type {{method:string|undefined,url:string|undefined,authenticated:boolean}[]} */ const requests = [];
@@ -27,12 +44,27 @@ export async function createNativeMock(root) {
       response.writeHead(404); response.end();
     });
   });
-  await new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve(undefined)));
-  const address = server.address();
-  assert(address && typeof address === 'object');
-  const origin = `http://127.0.0.1:${address.port}`;
-  await writeFile(path.join(root, 'network-mock-origin'), origin, { flag: 'wx' });
-  return { origin, requests, close: () => { server.closeAllConnections(); server.close(); } };
+  try {
+    await new Promise((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(0, '127.0.0.1', () => { server.off('error', reject); resolve(undefined); });
+    });
+    const address = server.address();
+    assert(address && typeof address === 'object');
+    const origin = `http://127.0.0.1:${address.port}`;
+    await writeFile(path.join(root, 'network-mock-origin'), origin, { flag: 'wx' });
+    return { origin, requests, close: () => { server.closeAllConnections(); server.close(); } };
+  } catch (error) {
+    if (server.listening) {
+      try {
+        server.closeAllConnections();
+        await new Promise((resolve, reject) => server.close((failure) => (failure ? reject(failure) : resolve(undefined))));
+      } catch (cleanupError) {
+        throw new NativeMockStartupCleanupError(error, cleanupError, root);
+      }
+    }
+    throw error;
+  }
 }
 
 /** @param {import('playwright-core').Page} page @param {string} origin */

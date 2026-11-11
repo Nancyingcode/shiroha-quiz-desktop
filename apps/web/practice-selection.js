@@ -62,20 +62,7 @@
       return qs.slice(0, count);
     }
     function filteredPracticeItemsV8916(source, type, order, limit, customCount, scopeOverride) {
-      const banks = practiceScopeBanksV8916(scopeOverride);
-      let items = practiceSessionItemsForBanksV8916(banks);
-      if (source === 'wrong') {
-        const byBank = new Map(banks.map((b) => [b.id, new Set(getWrongEntries(b.id).filter((e) => e.status !== '已掌握').map((e) => e.id))]));
-        items = items.filter((item) => byBank.get(item.bankId)?.has(item.question.id));
-      }
-      if (source === 'favorite') {
-        const byBank = new Map(banks.map((b) => [b.id, new Set(getFavoriteIdsV27(b.id))]));
-        items = items.filter((item) => byBank.get(item.bankId)?.has(item.question.id));
-      }
-      if (type && type !== 'all') {
-        const t = type === 'multi' ? 'multiple' : type;
-        items = items.filter((item) => item.question.type === t);
-      }
+      let items = practiceBaseItemsV58916(source, type, scopeOverride);
       if (order === 'random') {
         items = shuffle(items);
       }
@@ -148,11 +135,14 @@
         return;
       }
       const order = $('#practice-order')?.value || 'sequence';
-      const source = $('#practice-source')?.value || 'all';
-      const type = $('#practice-type')?.value || 'all';
-      const scope = practiceScopeV8916();
-      const baseItems = practiceBaseItemsV58916(source, type, scope);
-      const progress = order === 'sequence' ? resolvePracticeProgressV58916(scope, source, type, baseItems) : null;
+      let progress = null;
+      if (order === 'sequence') {
+        const source = $('#practice-source')?.value || 'all';
+        const type = $('#practice-type')?.value || 'all';
+        const scope = practiceScopeV8916();
+        const baseItems = practiceBaseItemsV58916(source, type, scope);
+        progress = resolvePracticeProgressV58916(scope, source, type, baseItems);
+      }
       const fromOption = select.querySelector(`option[value="${PRACTICE_START_FROM_V58916}"]`);
       const continueOption = select.querySelector(`option[value="${PRACTICE_START_CONTINUE_V58916}"]`);
       if (fromOption) {

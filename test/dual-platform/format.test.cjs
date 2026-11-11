@@ -373,3 +373,87 @@ test('各备份版本字段独立拒绝未来值且不改写已有状态', () =>
   const legacy = api.normalizeBackupPayloadV23({ kind: 'shiroha_quiz_full_backup', version: 3, schemaVersion: 3, banks: [] }, 'legacy.json');
   assert.deepEqual(plain(legacy.banks), []);
 });
+
+for (const format of ['json', 'zip']) {
+  test(`旧 Android 无图 ${format} 经 Web JSON 和空资产 ZIP 独立往返`, async () => {
+    const source = JSON.parse(JSON.stringify(androidBackup()));
+    const removeImages = (value) => {
+      if (!value || typeof value !== 'object') { return; }
+      if (Array.isArray(value)) { value.forEach(removeImages);return; }
+      if (Array.isArray(value.images)) { value.images = []; }
+      Object.values(value).forEach(removeImages);
+    };
+    removeImages(source);
+    const untouched = JSON.stringify(source);
+    const firstApi = loadWeb({ deterministicIds: true }).api;
+    const blob = format === 'json'
+      ? new Blob([untouched], { type: 'application/json' })
+      : firstApi.zipStoreFiles([{ name: 'backup.json', text: untouched }]);
+    const firstRead = await firstApi.readBackupFileV24({ name: `empty.${format}`, arrayBuffer: () => blob.arrayBuffer() });
+    assert.deepEqual(plain(firstRead.assets), {});
+    const firstPayload = JSON.parse(firstRead.text);
+    assert.equal(firstApi.countUnresolvedBackupImagesV24(firstPayload), 0);
+    const initial = plain(firstApi.normalizeBackupPayloadV23(firstPayload, `empty.${format}`));
+
+    const webApi = loadWeb({ state: initial, deterministicIds: true }).api;
+    const webPayload = webApi.buildBackupPayloadV23(webApi.snapshot().banks, 'all_data', true);
+    const webBlob = new Blob([JSON.stringify(webPayload)], { type: 'application/json' });
+    const webRead = await webApi.readBackupFileV24({ name: 'web-empty.json', arrayBuffer: () => webBlob.arrayBuffer() });
+    assert.deepEqual(plain(webRead.assets), {});
+    const webData = JSON.parse(webRead.text);
+    assert.equal(webApi.countUnresolvedBackupImagesV24(webData), 0);
+    const fromWeb = plain(webApi.normalizeBackupPayloadV23(webData, 'web-empty.json'));
+    for (const key of ['wrongBook', 'favorites', 'records', 'crossPlatformMeta']) {
+      assert.deepEqual(fromWeb[key], initial[key], key);
+    }
+    const withoutUpdatedAt = (banks) => banks.map(({ updatedAt, ...bank }) => ({ ...bank, updatedAtValid: Number.isFinite(Date.parse(updatedAt)) }));
+    assert.deepEqual(withoutUpdatedAt(fromWeb.banks), withoutUpdatedAt(initial.banks));
+
+    const nativeApi = loadWeb({ state: fromWeb, deterministicIds: true }).api;
+    const archive = nativeApi.buildNativeCompatibleBackupZipV611();
+    assert.equal(archive.assetCount, 0);
+    const zip = await readZip(nativeApi, archive.blob);
+    assert.deepEqual(Array.from(zip.entries, (entry) => entry.name), ['backup.json']);
+    const nativeRead = await nativeApi.readBackupFileV24({ name: 'empty-roundtrip.zip', arrayBuffer: () => archive.blob.arrayBuffer() });
+    assert.deepEqual(plain(nativeRead.assets), {});
+    const nativePayload = JSON.parse(nativeRead.text);
+    assert.equal(nativeApi.countUnresolvedBackupImagesV24(nativePayload), 0);
+    const final = plain(nativeApi.normalizeBackupPayloadV23(nativePayload, 'empty-roundtrip.zip'));
+    assert.deepEqual(withoutUpdatedAt(final.banks), withoutUpdatedAt(initial.banks));
+    const expectedOriginalQuestion = {
+      id: 'native-blank', number: '1', type: 'BLANK', question: '首都___，简称___。', options: [],
+      answer: ['北京；京'], blankAnswers: [['北京', '北京市'], ['京']], analysis: '', images: [], score: 4, version: 1,
+    };
+    const expectedCurrentQuestion = {
+      ...expectedOriginalQuestion, volume: '', group: '', category: '', subject: '', grade: '', difficulty: '',
+      knowledgePoints: [], tags: [], source: '', sourceFileId: '', reviewStatus: 'approved', aiConfidence: null,
+      warnings: [], normalized: '首都___简称___',
+    };
+    const expectedWrongEntry = {
+      id: 'native-blank', wrongCount: 2, rightCount: 1, reviewRightCount: 1, streakCorrectCount: 1,
+      lastWrongAt: TIME, lastCorrectAt: TIME, lastReviewedAt: '', nextReviewAt: '', reviewLevel: 0,
+      lastAnswer: ['南京', '宁'], source: 'native', timestamp: MILLIS, nativeQuestion: expectedOriginalQuestion, status: '复习中',
+    };
+    const expectedFavoriteMeta = (question) => ({
+      favoriteQuestions: { 'native-bank': { 'native-blank': { favoritedAt: MILLIS, question } } },
+    });
+    assert.deepEqual(initial.wrongBook, { 'native-bank': [expectedWrongEntry] });
+    assert.deepEqual(final.wrongBook, { 'native-bank': [{ ...expectedWrongEntry, nativeQuestion: expectedCurrentQuestion }] });
+    assert.deepEqual(initial.crossPlatformMeta, expectedFavoriteMeta(expectedOriginalQuestion));
+    assert.deepEqual(final.crossPlatformMeta, expectedFavoriteMeta(expectedCurrentQuestion));
+    assert.deepEqual(initial.favorites, { 'native-bank': ['native-blank'] });
+    assert.deepEqual(final.favorites, { 'native-bank': ['native-blank'] });
+    assert.deepEqual(final.records, initial.records);
+    assert.equal(final.banks[0].id, 'native-bank');
+    assert.equal(final.banks[0].questions[0].id, 'native-blank');
+    assert.equal(final.banks[0].questions[0].question, initial.banks[0].questions[0].question);
+    assert.deepEqual(final.banks[0].questions[0].answer, initial.banks[0].questions[0].answer);
+    assert.deepEqual(final.banks[0].questions[0].blankAnswers, initial.banks[0].questions[0].blankAnswers);
+    assert.deepEqual(final.banks[0].questions[0].images, []);
+    assert.deepEqual(final.favorites, initial.favorites);
+    assert.equal(final.wrongBook['native-bank'][0].wrongCount, initial.wrongBook['native-bank'][0].wrongCount);
+    assert.equal(final.records[0].id, initial.records[0].id);
+    assert.deepEqual(final.records[0].details[0].userBlankAnswers, initial.records[0].details[0].userBlankAnswers);
+    assert.equal(JSON.stringify(source), untouched);
+  });
+}

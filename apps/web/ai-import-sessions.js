@@ -1,13 +1,21 @@
 (() => {
   'use strict';
 
+  const PREVIEW_BATCH_ERROR = '单批提交题数须为 1～30 的整数。';
+
+  function previewBatchSize(value) {
+    const raw = String(value ?? '').trim();
+    const size = Number(raw);
+    return raw && Number.isInteger(size) && size >= 1 && size <= 30 ? size : null;
+  }
+
   function create({ draft: importDraft, configuration, organizer, preview, view, transport, limits }) {
     const { isEditing, current: aiExecutionConfigV99, configured: aiConfiguredV99, unavailable: aiUnavailableReasonV99, request: aiRequestConfigV99, label: aiExecutionLabelV99 } = configuration;
     const { range: aiImportRangeV992, context: aiRefactorContextV384, messages: buildAiMessagesV99, parse: parseAiRefactorPayloadV384, parseText: parseTextQuestions, risk: largeImportRiskMessageV376 } = organizer;
     const { mode: getPreviewMode, collectTargets: collectAiPreviewTargetDetailsV992, key: aiQuestionKeyV991, fingerprint: aiQuestionFingerprintV991, payload: aiQuestionPayloadV991, issueStatus: importIssueStatus, label: aiPreviewModeLabelV991, analysisMessages: buildAiAnalysisMessagesV991, reviewMessages: buildAiReviewMessagesV991, resultArray, normalizeReview, normalizeAnalysis, findIndex } = preview;
-    const { select: $, sync: syncAiImportActionV99, refreshImport: refreshAiImportPanelV99, refreshPreview: refreshAiPreviewPanelV991, importStatus: setAiImportStatusV99, previewStatus: setAiPreviewStatusV991, notice: showNotice, render: renderImportPreview } = view;
+    const { select: $, sync: syncAiImportActionV99, refreshImport: refreshAiImportPanelV99, importStatus: setAiImportStatusV99, previewStatus: setAiPreviewStatusV991, notice: showNotice, render: renderImportPreview } = view;
     const { request: requestAiChatV99, timeout: withAiTimeoutV99 } = transport;
-    const { importChars: AI_IMPORT_MAX_CHARS_V99, previewItems: AI_PREVIEW_MAX_ITEMS_V991, analysisBatch: AI_ANALYSIS_DEFAULT_BATCH_V991, reviewBatch: AI_REVIEW_DEFAULT_BATCH_V991 } = limits;
+    const { importChars: AI_IMPORT_MAX_CHARS_V99, previewItems: AI_PREVIEW_MAX_ITEMS_V991 } = limits;
     // 请求状态属于本页导入会话；取消或完成时替换身份，迟到操作不得修改新轮次。
     let aiImportRequestV99 = { running: false, controller: null };
     let aiPreviewRequestV991 = { running: false, mode: '', cancelled: false, controller: null };
@@ -19,10 +27,35 @@
       analysisSuggestions.clear();
     }
 
+    // 编辑后即使内容被改回原值，也不能让本轮旧批次继续使用该目标。
+    function invalidateAiPreviewTargetV991(question, index) {
+      if (aiPreviewRequestV991.running) {
+        aiPreviewRequestV991.invalidatedIds.add(aiQuestionKeyV991(question, index));
+      }
+    }
+
     function removeAiSuggestionsForQuestionV991(question, index) {
+      invalidateAiPreviewTargetV991(question, index);
       const key = aiQuestionKeyV991(question, index);
       reviewSuggestions.delete(key);
       analysisSuggestions.delete(key);
+    }
+
+    function currentAiTargetIndexV991(target) {
+      const index = findIndex(target.id, -1);
+      const question = importDraft.questions[index];
+      return question && aiQuestionKeyV991(question, index) === target.id
+        && aiQuestionFingerprintV991(question) === target.fingerprint ? index : -1;
+    }
+
+    function isAiPreviewTargetCurrentV991(target, owner) {
+      return !owner.invalidatedIds.has(target.id) && currentAiTargetIndexV991(target) >= 0;
+    }
+
+    function currentAiSuggestionV991(suggestions, key) {
+      const suggestion = suggestions.get(key);
+      return suggestion && currentAiTargetIndexV991({ id: key, fingerprint: suggestion.fingerprint }) >= 0
+        ? suggestion : undefined;
     }
 
     function storeAiBatchResultsV991(mode, content, batchItems) {
@@ -32,9 +65,8 @@
         const item = mode === 'analysis' ? normalizeAnalysis(raw, batchItems) : normalizeReview(raw, batchItems);
         if (!item) { continue; }
         const target = batchItems.find((value) => value.id === item.questionId);
-        const currentIndex = findIndex(item.questionId, item.index);
-        const current = importDraft.questions[currentIndex];
-        if (!target || !current || aiQuestionFingerprintV991(current) !== target.fingerprint) { continue; }
+        if (!target || currentAiTargetIndexV991(target) < 0) { continue; }
+        item.fingerprint = target.fingerprint;
         if (mode === 'analysis') {
           if (item.analysis || item.note) { analysisSuggestions.set(item.questionId, item);stored += 1; }
         } else if (item.issues.length || item.note || item.canApply) {
@@ -64,11 +96,16 @@
       aiImportRequestV99 = { running: false, controller: null };
 
       syncAiImportActionV99();
-      refreshAiImportPanelV99();
 
       if (!silent) {
         setAiImportStatusV99('已请求取消，停止接收本次整理结果；现有识别结果未被修改。', 'warn');
       }
+    }
+
+    function invalidateAiImportRequestV99() {
+      if (!aiImportRequestV99.running) { return; }
+      cancelAiImportRequestV99(true);
+      setAiImportStatusV99('原文或识别预览已变化，本次整理结果已失效；已请求停止，请重新开始。', 'warn');
     }
 
     function cancelAiPreviewRequestV991(silent) {
@@ -89,14 +126,13 @@
       aiPreviewRequestV991 = { running: false, mode: '', cancelled: false, controller: null };
 
       syncAiImportActionV99();
-      refreshAiPreviewPanelV991();
 
       if (!silent) {
         setAiPreviewStatusV991('已请求取消，停止接收本次结果；已生成的建议会保留。', 'warn');
       }
     }
 
-    async function requestAiPreviewBatchV991(mode, requestConfig, batchItems, owner) {
+    async function requestAiPreviewBatchV991(mode, requestConfig, batchItems, remainingTargets, owner) {
       const controller = new AbortController();
       owner.controller = controller;
       let timedOut = false;
@@ -107,10 +143,7 @@
 
       try {
         const isCurrent = () => aiPreviewRequestV991 === owner && !owner.cancelled && getPreviewMode() === mode
-          && batchItems.every((item) => {
-            const index = findIndex(item.id, item.index); const question = importDraft.questions[index];
-            return !!question && aiQuestionFingerprintV991(question) === item.fingerprint;
-          });
+          && remainingTargets.every((item) => isAiPreviewTargetCurrentV991(item, owner));
         const result = await requestAiChatV99(requestConfig, mode === 'analysis' ? buildAiAnalysisMessagesV991(batchItems.map((x) => x.payload)) : buildAiReviewMessagesV991(batchItems.map((x) => x.payload)), { controller, task: mode === 'analysis' ? 'batch_analysis' : 'batch_review', isCurrent });
         if (timedOut) { throw new Error(`当前批次请求超过 ${requestConfig.timeoutSeconds} 秒，已自动停止。`); }
         return result;
@@ -166,10 +199,24 @@
         return;
       }
 
-      const batchSize = Math.min(30, Math.max(1, Number($('#ai-preview-batch-v991')?.value || (mode === 'analysis' ? AI_ANALYSIS_DEFAULT_BATCH_V991 : AI_REVIEW_DEFAULT_BATCH_V991)) || 1));
+      const batchSize = previewBatchSize($('#ai-preview-batch-v991')?.value);
+      if (batchSize === null) {
+        setAiPreviewStatusV991(PREVIEW_BATCH_ERROR, 'warn');
+        return;
+      }
       const requestConfig = aiRequestConfigV99(config);
+      const targets = indexes.map((index) => {
+        const question = importDraft.questions[index];
+        const id = aiQuestionKeyV991(question, index);
+        return { id, index, question, fingerprint: aiQuestionFingerprintV991(question),
+          payload: aiQuestionPayloadV991(question, index, importIssueStatus(question, importDraft.diagnostics?.profile || {})) };
+      });
+      if (targets.some((target) => !target.id || findIndex(target.id, -1) !== target.index)) {
+        setAiPreviewStatusV991('目标题目身份不唯一或缺失，请重新识别并选择后再试。', 'warn');
+        return;
+      }
 
-      const owner = { running: true, mode, cancelled: false, controller: null };
+      const owner = { running: true, mode, cancelled: false, controller: null, invalidatedIds: new Set() };
       aiPreviewRequestV991 = owner;
       syncAiImportActionV99();
       let processed = 0; let stored = 0;
@@ -181,21 +228,33 @@
           if (!isCurrentPreviewRequest()) {
             return;
           }
-          const part = indexes.slice(offset, offset + batchSize);
-          const batchItems = part.map((index) => {
-            const q = importDraft.questions[index];
-            return { id: aiQuestionKeyV991(q, index), index, question: q, fingerprint: aiQuestionFingerprintV991(q), payload: aiQuestionPayloadV991(q, index, importIssueStatus(q, importDraft.diagnostics?.profile || {})) };
-          });
+          const batchItems = targets.slice(offset, offset + batchSize);
+          const remainingTargets = targets.slice(offset);
+          if (remainingTargets.some((item) => !isAiPreviewTargetCurrentV991(item, owner))) {
+            throw new Error('目标题目已变化或身份不唯一，请重新选择后再试。');
+          }
 
           setAiPreviewStatusV991(`正在${aiPreviewModeLabelV991(mode)}：第 ${Math.floor(offset / batchSize) + 1}/${Math.ceil(indexes.length / batchSize)} 批，已处理 ${processed}/${indexes.length} 题。`);
 
-          const result = await requestAiPreviewBatchV991(mode, requestConfig, batchItems, owner);
+          let result;
+          try {
+            result = await requestAiPreviewBatchV991(mode, requestConfig, batchItems, remainingTargets, owner);
+          } catch (error) {
+            if (isCurrentPreviewRequest() && remainingTargets.some((item) => !isAiPreviewTargetCurrentV991(item, owner))) {
+              throw new Error('目标题目已变化或身份不唯一，请重新选择后再试。', { cause: error });
+            }
+            throw error;
+          }
           if (!isCurrentPreviewRequest()) {
             return;
           }
+          if (batchItems.some((item) => !isAiPreviewTargetCurrentV991(item, owner))) {
+            throw new Error('目标题目已变化或身份不唯一，请重新选择后再试。');
+          }
           stored += storeAiBatchResultsV991(mode, result.content, batchItems);
           processed += batchItems.length;
-          renderImportPreview(importDraft.questions);
+          // 最后一批与结束状态一起同步；中间批次仍立即展示建议。
+          renderImportPreview(importDraft.questions, { syncPreviewTools: processed < indexes.length });
         }
 
         if (!isCurrentPreviewRequest()) { return; }
@@ -211,7 +270,6 @@
         if (isCurrentPreviewRequest()) {
           aiPreviewRequestV991 = { running: false, mode: '', cancelled: false, controller: null };
           syncAiImportActionV99();
-          refreshAiPreviewPanelV991();
         }
       }
     }
@@ -256,6 +314,12 @@
       const beforeCount = importDraft.questions.length;
       const context = aiRefactorContextV384(range);
       const contextSnapshot = JSON.stringify(context);
+      const rangeSnapshot = JSON.stringify(range);
+      const previous = importDraft.snapshot();
+      const { tableResult, sourceMeta } = importDraft;
+      const draftSnapshot = JSON.stringify({ questions: importDraft.questions, selected: [...importDraft.selected],
+        warnings: importDraft.warnings, report: importDraft.report, diagnostics: importDraft.diagnostics,
+        filter: importDraft.filter, tableResult, sourceMeta });
 
       const owner = { running: true, controller: null, cancelled: false };
       aiImportRequestV99 = owner;
@@ -265,11 +329,15 @@
       const isCurrentImportRequest = () => aiImportRequestV99 === owner && !owner.cancelled;
       const isCurrentBeforeSend = () => {
         const currentRange = aiImportRangeV992();
-        return isCurrentImportRequest() && currentRange.scope === range.scope && currentRange.text === text
+        const sameDraft = importDraft.questions === previous.cache
+          && importDraft.warnings === previous.warnings && importDraft.diagnostics === previous.diagnostics
+          && importDraft.tableResult === tableResult && importDraft.sourceMeta === sourceMeta
+          && JSON.stringify({ questions: importDraft.questions, selected: [...importDraft.selected],
+            warnings: importDraft.warnings, report: importDraft.report, diagnostics: importDraft.diagnostics,
+            filter: importDraft.filter, tableResult: importDraft.tableResult, sourceMeta: importDraft.sourceMeta }) === draftSnapshot;
+        return isCurrentImportRequest() && sameDraft && JSON.stringify(currentRange) === rangeSnapshot
           && JSON.stringify(aiRefactorContextV384(currentRange)) === contextSnapshot;
       };
-
-      const previous = importDraft.snapshot();
 
       const requestPass = async (mode, fallbackReason = '') => withAiTimeoutV99(config.timeoutSeconds, (controller) => {
         owner.controller = controller;
@@ -282,7 +350,7 @@
 
         // 只有已收到内容后的业务结构失败才允许兜底，避免传输失败或结果未知时重复执行任务。
         const primaryResult = await requestPass('direct_questions');
-        if (!isCurrentImportRequest()) {
+        if (!isCurrentBeforeSend()) {
           return;
         }
 
@@ -308,7 +376,7 @@
           setAiImportStatusV99(`结构化结果不可用，正在自动切换文本清洗兜底：${fallbackReason.slice(0, 160)}`, 'warn');
 
           const fallbackResult = await requestPass('clean_text', fallbackReason);
-          if (!isCurrentImportRequest()) {
+          if (!isCurrentBeforeSend()) {
             return;
           }
           payload = parseAiRefactorPayloadV384(fallbackResult.content);
@@ -347,10 +415,14 @@
           modeLabel = usedFallback ? 'AI 文本兜底 → 本地解析器' : 'AI 清洗文本 → 本地解析器';
 
           if (!questions.length) {
+            importDraft.warnings = previous.warnings;
+            importDraft.report = previous.report;
+            importDraft.diagnostics = previous.diagnostics;
             throw new Error('AI 已返回清洗文本，但本地解析器没有识别到有效题目。原有预览未被修改。');
           }
         }
 
+        importDraft.invalidatePreview?.();
         importDraft.questions = questions;
         importDraft.selected.clear();
         resetAiSuggestionsV991();
@@ -365,14 +437,14 @@
         importDraft.diagnostics = { ...(importDraft.diagnostics || {}), strategy: modeLabel, mode: aiExecutionLabelV99(config), aiMode: payload.mode, aiStructuredFirstV384: true, aiUsedCleanTextFallbackV384: usedFallback, expected: importDraft.diagnostics?.expected || {}, profile: importDraft.diagnostics?.profile || {}, candidates: importDraft.diagnostics?.candidates || [] };
         importDraft.filter = 'priority';
 
-        renderImportPreview(importDraft.questions);
+        renderImportPreview(importDraft.questions, { syncPreviewTools: false });
         setAiImportStatusV99(`整理完成：${modeLabel}，得到 ${importDraft.questions.length} 道题。请核对题量、题干、选项、答案和解析后再确认导入。`, 'ok');
         {
           const risk = largeImportRiskMessageV376(importDraft.questions);
           showNotice('AI 整理完成', `${modeLabel}得到 ${importDraft.questions.length} 道题，必须人工核对后再导入。${risk ? ` ${risk}` : ''}`, risk ? 'warn' : 'ok');
         }
       } catch (error) {
-        if (!isCurrentImportRequest()) {
+        if (!isCurrentBeforeSend()) {
           return;
         }
 
@@ -387,7 +459,6 @@
         if (isCurrentImportRequest()) {
           aiImportRequestV99 = { running: false, controller: null };
           syncAiImportActionV99();
-          refreshAiImportPanelV99();
         }
       }
     }
@@ -399,12 +470,14 @@
       get previewRequest() {
         return aiPreviewRequestV991;
       },
-      cancelAiImportRequestV99, cancelAiPreviewRequestV991, startAiPreviewTaskV991, startAiImportV99,
-      resetAiSuggestionsV991, removeAiSuggestionsForQuestionV991,
-      getReview: (key) => reviewSuggestions.get(key), getAnalysis: (key) => analysisSuggestions.get(key),
+      cancelAiImportRequestV99, invalidateAiImportRequestV99, cancelAiPreviewRequestV991,
+      startAiPreviewTaskV991, startAiImportV99,
+      resetAiSuggestionsV991, removeAiSuggestionsForQuestionV991, invalidateAiPreviewTargetV991,
+      getReview: (key) => currentAiSuggestionV991(reviewSuggestions, key),
+      getAnalysis: (key) => currentAiSuggestionV991(analysisSuggestions, key),
       deleteReview: (key) => reviewSuggestions.delete(key), deleteAnalysis: (key) => analysisSuggestions.delete(key),
     };
   }
 
-  globalThis.ShirohaAiImportSessions = Object.freeze({ create });
+  globalThis.ShirohaAiImportSessions = Object.freeze({ create, previewBatchSize, previewBatchError: PREVIEW_BATCH_ERROR });
 })();

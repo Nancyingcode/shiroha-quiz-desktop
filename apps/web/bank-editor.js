@@ -10,9 +10,14 @@
     const { cancelAi: cancelAiPreviewRequestV991, resetAi: resetAiSuggestionsV991, closeAi: closeAiPreviewPanelV991,
       render: renderImportPreview, resetSelection: resetBankQuestionSelection } = preview;
     const { switchView: switchViewV45 } = navigation;
-    const { transaction: runMutation, save: saveSilent, renderAll } = actions;
+    const { transaction: runMutation, save: saveSilent, renderAll, canStartEdit } = actions;
     // 二次编辑会话仅在打开编辑器后存在；成功保存或确认退出时释放。
     let bankEditSessionV45 = null;
+    // 待读取的编辑入口属于发起时的题库页；离页或新入口使旧请求失效。
+    let bankEditRequest = 0;
+    function cancelPendingBankEdit() {
+      bankEditRequest += 1;
+    }
     function ensureBankEditPanelV45() {
       let panel = $('#bank-edit-panel-v45');
       const summary = $('#import-summary');
@@ -63,18 +68,28 @@
       // 桌面分页释放、重载正文会改变属性插入顺序；冲突判断只比较实际内容与题目顺序。
       return JSON.stringify(questions, (_key, value) => (value && typeof value === 'object' && !Array.isArray(value) ? Object.fromEntries(Object.keys(value).sort().map((key) => [key, value[key]])) : value));
     }
-    async function editBankByIdV45(id) {
-      if (!await loadNativeBanks([id])) {
+    async function editBankByIdV45(id, button) {
+      const isCurrentPage = () => canStartEdit() && button?.isConnected && $('#bank-list')?.contains(button)
+        && $('#banks')?.classList.contains('active');
+      if (!isCurrentPage()) {
+        return;
+      }
+      const bank = state.banks.find((value) => value.id === id);
+      if (!bank) {
+        toast('没有找到该题库。', 'warn');
+        return;
+      }
+      bankEditRequest += 1;
+      const request = bankEditRequest;
+      const isCurrentRequest = () => request === bankEditRequest && isCurrentPage() && state.banks.includes(bank);
+      if (!isCurrentRequest() || !await loadNativeBanks([id], isCurrentRequest) || !isCurrentRequest()) {
         return;
       }
       cancelAiPreviewRequestV991(true);
       resetAiSuggestionsV991();
       closeAiPreviewPanelV991();
-      const bank = state.banks.find((b) => b.id === id);
-      if (!bank) {
-        toast('没有找到该题库。', 'warn');
-        return;
-      }
+      importDraft.invalidatePreview?.();
+      importDraft.invalidateBankName?.();
       bankEditSessionV45 = { bankId: id, name: bank.name || '题库', startedAt: now(), sourceQuestions: bankEditQuestionSnapshot(bank.questions) };
       importDraft.questions = (bank.questions || []).map((q, i) => ({ ...q, ...normalizeQuestion(JSON.parse(JSON.stringify(q)), i), number: q.number }));
       // 预览需要归一化字段；未实际编辑的题目保存时使用原对象，避免删除顺带改变题意和元数据。
@@ -159,6 +174,7 @@
         return;
       }
       bankEditSessionV45 = null;
+      importDraft.invalidatePreview?.();
       importDraft.questions = [];
       importDraft.selected.clear();
       importDraft.warnings = [];
@@ -167,7 +183,7 @@
       renderImportPreview([]);
       await switchViewV45('banks');
     }
-    return { updateBankEditUiV45, editBankByIdV45, saveBankEditSessionV45, current: () => bankEditSessionV45 };
+    return { updateBankEditUiV45, editBankByIdV45, saveBankEditSessionV45, cancelPendingBankEdit, current: () => bankEditSessionV45 };
   }
   globalThis.ShirohaBankEditor = { create };
 })();

@@ -11,13 +11,19 @@
     const { all: renderAll, exportSummary: renderExportBankSummaryV23, toast } = rendering;
     const { get: getExportSelection, set: setExportSelection } = selection;
     const { activeBank, transaction: runMutation, save: saveSilent, edit: editBankByIdV45, duplicate: duplicateBankById,
-      exportBank: exportBankById, deleteBanks: deleteBanksV32, deleteQuestions: deleteBankQuestions } = actions;
+      exportBank: exportBankById, deleteBanks: deleteBanksV32, deleteQuestions: deleteBankQuestions,
+      canSelectExportBanks } = actions;
     const { stripUnsafe: stripUnsafeImageDataUrisV83, optionText: pickRichOptionTextV57,
       repair: repairCircledCombinationQuestion, parseTable: parseDocxMarkdownTableBlockV55,
       normalizeImages: normalizeQuestionImagesForWebV83, normalizeType: normalizeWebQuestionType,
       questionBody: renderQuestionBodyV83, questionContent: renderQuestionContent, answerDisplay } = content;
     // 选择仅归当前题库页面会话；切库或题目集合被替换后重置，不写入备份。
     let bankQuestionSelection = { bank: null, idsKey: '', selected: new Set() };
+    // 可见预览的读取只属于发起时的题库页；离页后即使返回也不能显示旧失败。
+    let bankPreviewOwner = 0;
+    function cancelPendingBankPreview() {
+      bankPreviewOwner += 1;
+    }
     function resetBankQuestionSelection() {
       bankQuestionSelection = { bank: null, idsKey: '', selected: new Set() };
     }
@@ -115,12 +121,18 @@
         return `<section class="bank-group-section-v58 ${groupActive ? 'practice-group-active-v8916' : ''}"><div class="bank-group-head-v58"><div><b>${esc(groupName)}</b><span class="bank-group-badge-v58">一级分组</span>${groupActive ? '<span class="practice-scope-badge-v8916">当前练习范围</span>' : ''}</div><div class="bank-group-actions-v8916"><span class="muted">${groupBanks.length} 个题库｜${total} 题</span><button class="ghost mini-btn" data-practice-group-v8916="${esc(groupName)}" type="button">${groupActive ? '已设为练习范围' : '设为练习范围'}</button></div></div><div class="bank-group-list-v58">${body}</div></section>`;
       }).join('');
       $$('[data-bank-bulk-v23]').forEach((x) => x.onchange = () => {
-        if (x.checked) {
-          getExportSelection().add(x.dataset.bankBulkV23);
-        } else {
-          getExportSelection().delete(x.dataset.bankBulkV23);
+        const id = x.dataset.bankBulkV23;
+        if (!canSelectExportBanks() || !box.contains(x) || !state.banks.some((bank) => bank.id === id)) {
+          x.checked = getExportSelection().has(id);
+          return;
         }
-        renderBankList();
+        if (x.checked) {
+          getExportSelection().add(id);
+        } else {
+          getExportSelection().delete(id);
+        }
+        x.closest('.bank-item')?.classList.toggle('selected-bank-v28', x.checked);
+        renderExportBankSummaryV23();
       });
       $$('[data-openbank]').forEach((x) => x.onclick = async () => runMutation(async () => {
         setPracticeBankScopeV8916(x.dataset.openbank, true);
@@ -134,7 +146,7 @@
           toast(`已将“${x.dataset.practiceGroupV8916}”设为当前练习范围。`, 'ok');
         }
       }));
-      $$('[data-editbank-v45]').forEach((x) => x.onclick = () => editBankByIdV45(x.dataset.editbankV45));
+      $$('[data-editbank-v45]').forEach((x) => x.onclick = () => editBankByIdV45(x.dataset.editbankV45, x));
       $$('[data-copybank]').forEach((x) => x.onclick = () => duplicateBankById(x.dataset.copybank));
       $$('[data-exportbank]').forEach((x) => x.onclick = () => exportBankById(x.dataset.exportbank));
       $$('[data-delbank]').forEach((x) => x.onclick = () => deleteBanksV32([x.dataset.delbank]));
@@ -160,21 +172,25 @@
       }
       closeBankQuestionDetail();
       const renderVersion = beginNativeRender('banks');
+      const owner = bankPreviewOwner;
+      const startedVisible = !!$('#banks')?.classList.contains('active');
+      const isCurrentRead = () => renderVersion === nativeRenderVersions.get('banks') && activeBank().id === bank.id
+        && (!startedVisible || (owner === bankPreviewOwner && $('#banks')?.classList.contains('active')));
       // eslint-disable-next-line prefer-template -- 历史数据字段可能是对象，保留 + 的默认转换；字段类型受约束后移除此例外。
       const qs = nativePage(bank.questions, 'preview:' + bank.id, document.getElementById('bank-preview'), renderBankPreview);
       $('#bank-preview tbody').innerHTML = '<tr><td colspan="8" role="status">正在加载题目……</td></tr>';
       for (const id of ['select-bank-question-page', 'clear-bank-question-selection', 'delete-selected-questions']) {
         document.getElementById(id).disabled = true;
       }
-      if (!await loadNativeItems(practiceSessionItemsForBanksV8916([{ ...bank, questions: qs }]))) {
-        if (renderVersion !== nativeRenderVersions.get('banks') || activeBank().id !== bank.id) {
+      if (!await loadNativeItems(practiceSessionItemsForBanksV8916([{ ...bank, questions: qs }]), isCurrentRead)) {
+        if (!isCurrentRead()) {
           return;
         }
         $('#bank-preview tbody').innerHTML = '<tr><td colspan="8" role="status">题目加载失败，请重试。 <button type="button" id="retry-bank-preview">重试</button></td></tr>';
         $('#retry-bank-preview').onclick = renderBankPreview;
         return;
       }
-      if (renderVersion !== nativeRenderVersions.get('banks') || !nativeViewVisible('banks') || activeBank().id !== bank.id) {
+      if (!isCurrentRead() || !nativeViewVisible('banks')) {
         return;
       }
       const { selected } = bankQuestionSelection;
@@ -364,7 +380,7 @@
         detail.querySelector('h3').scrollIntoView({ block: 'nearest' });
       }
     }
-    return { closeBankQuestionDetail, renderBankSelect, renderMergeSelect, renderBankInputs, renderBankList, renderBankToolbarV28, renderBankPreview, bankQuestionCopyText, openBankQuestionDetail, resetBankQuestionSelection };
+    return { closeBankQuestionDetail, renderBankSelect, renderMergeSelect, renderBankInputs, renderBankList, renderBankToolbarV28, renderBankPreview, bankQuestionCopyText, openBankQuestionDetail, resetBankQuestionSelection, cancelPendingBankPreview };
   }
   globalThis.ShirohaBankPage = { create };
 })();

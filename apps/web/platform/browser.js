@@ -23,15 +23,23 @@
         ready = false;
         try {
           raw = storage.getItem(key);
-          const parsed = raw === null ? null : JSON.parse(raw);
-          if (raw !== null && (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.banks))) { throw failure('corrupt_data', '本地数据损坏，原数据已保留。请重试或导出原始数据恢复。'); }
-          if (parsed && Number(parsed.schemaVersion || 0) > 1) { throw failure('unsupported_version', '数据版本较新，请使用支持此版本的应用打开。'); }
-          snapshot = parsed; ready = true; externallyChanged = false;
-          return { state: 'ready', revision, hasData: raw !== null };
         } catch (error) {
-          const known = error instanceof Error && 'code' in error ? error : storageError(error);
-          return { state: 'recovery_required', error: known };
+          return { state: 'recovery_required', error: storageError(error) };
         }
+        let parsed;
+        try {
+          parsed = raw === null ? null : JSON.parse(raw);
+        } catch {
+          return { state: 'recovery_required', error: failure('corrupt_data', '本地数据损坏，原数据已保留。请重试或导出原始数据恢复。') };
+        }
+        if (raw !== null && (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.banks))) {
+          return { state: 'recovery_required', error: failure('corrupt_data', '本地数据损坏，原数据已保留。请重试或导出原始数据恢复。') };
+        }
+        if (parsed && Number(parsed.schemaVersion || 0) > 1) {
+          return { state: 'recovery_required', error: failure('unsupported_version', '数据版本较新，请使用支持此版本的应用打开。') };
+        }
+        snapshot = parsed; ready = true; externallyChanged = false;
+        return { state: 'ready', revision, hasData: raw !== null };
       },
       async read() { if (!ready) { throw failure('not_ready', '数据尚未加载。'); } return structuredClone(snapshot); },
       /** @param {Snapshot} next @param {string} operationId @param {number} expectedRevision */
@@ -46,11 +54,17 @@
         const checked = scope.ShirohaPlatformValidation.validateCommit({ contractVersion: 1, operationId, expectedRevision, changes: [{ kind: 'replace_snapshot', snapshot: next }] }, { initialization: 'ready', currentRevision: revision, knownOperationIds: [] });
         if (!checked.ok) { throw failure(checked.error.code, checked.error.message); }
         if (revision !== expectedRevision) { throw failure('revision_conflict', '保存版本已变化，请重新加载。'); }
+        if (externallyChanged) { throw failure('revision_conflict', '其他页面已修改数据，请先导出当前内容，再重新加载。'); }
+        let currentRaw;
         try {
-          if (externallyChanged || storage.getItem(key) !== raw) { throw failure('revision_conflict', '其他页面已修改数据，请先导出当前内容，再重新加载。'); }
+          currentRaw = storage.getItem(key);
+        } catch (error) {
+          throw storageError(error);
+        }
+        if (currentRaw !== raw) { throw failure('revision_conflict', '其他页面已修改数据，请先导出当前内容，再重新加载。'); }
+        try {
           storage.setItem(key, encoded);
         } catch (error) {
-          if (error instanceof Error && 'code' in error) { throw error; }
           throw storageError(error);
         }
         raw = encoded; snapshot = structuredClone(next); revision += 1;

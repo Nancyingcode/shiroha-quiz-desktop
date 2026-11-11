@@ -1513,3 +1513,33 @@ test('自定义来源恢复自动管理时展示受管下载进度，失败后�
   assert.match(elements['ai-harness-runtime-status'].textContent, /自定义程序.*失败/);
   assert.equal(elements['ai-harness-runtime-progress'].hidden, true);
 });
+
+for (const code of [400, 422]) {
+  test(`API ${code} 的格式兼容重试前重新检查上下文`, async () => {
+    for (const remainsCurrent of [true, false]) {
+      const pending = deferred();
+      const calls = [];
+      let current = true;
+      const platform = { credentials: { native: false }, network: { ai: async (_config, payload) => {
+        calls.push(payload);
+        if (calls.length === 1) { return pending.promise; }
+        return { ok: true, status: 200, text: async () => '{"choices":[{"message":{"content":"ok"}}]}' };
+      } } };
+      const context = vm.createContext({ ShirohaPlatform: platform });
+      installAiSettings(context);
+      installAiTransport(context);
+      const request = context.requestAiChatV99({ model: 'fixture', execution: { mode: 'api' } }, [], { isCurrent: () => current });
+      current = remainsCurrent;
+      pending.resolve({ ok: false, status: code, text: async () => '不支持响应格式' });
+      if (remainsCurrent) {
+        assert.equal((await request).content, 'ok');
+        assert.equal(calls.length, 2);
+        assert.equal(calls[0].response_format.type, 'json_object');
+        assert.equal('response_format' in calls[1], false);
+      } else {
+        await assert.rejects(request, /变化/);
+        assert.equal(calls.length, 1);
+      }
+    }
+  });
+}

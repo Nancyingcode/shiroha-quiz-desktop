@@ -72,9 +72,9 @@
 
   function beginNativeRender(view) { const version = (nativeRenderVersions.get(view) || 0) + 1;nativeRenderVersions.set(view, version);return version; }
 
-  async function readNative(action) { const task = Promise.resolve().then(action);nativeReads.add(task);try { await task;return true; } catch (error) { platformStatus(error.message || '读取本地数据失败，请重试。', true);return false; } finally { nativeReads.delete(task); } }
-  async function loadNativeItems(items) { if (!ShirohaPlatform.storage.ensureQuestions) { return true; } return readNative(() => ShirohaPlatform.storage.ensureQuestions(state, items.map((item) => ({ bankId: practiceItemBankIdV8916(item), questionId: practiceQuestionV8916(item).id })))); }
-  async function loadNativeBanks(ids) { return loadNativeItems(practiceSessionItemsForBanksV8916(state.banks.filter((bank) => ids.includes(bank.id)))); }
+  async function readNative(action, shouldReport = () => true) { const task = Promise.resolve().then(action);nativeReads.add(task);try { await task;return true; } catch (error) { if (shouldReport()) { platformStatus(error.message || '读取本地数据失败，请重试。', true); } return false; } finally { nativeReads.delete(task); } }
+  async function loadNativeItems(items, shouldReport) { if (!ShirohaPlatform.storage.ensureQuestions) { return true; } return readNative(() => ShirohaPlatform.storage.ensureQuestions(state, items.map((item) => ({ bankId: practiceItemBankIdV8916(item), questionId: practiceQuestionV8916(item).id }))), shouldReport); }
+  async function loadNativeBanks(ids, shouldReport) { return loadNativeItems(practiceSessionItemsForBanksV8916(state.banks.filter((bank) => ids.includes(bank.id))), shouldReport); }
   async function loadNativeAll() { if (!ShirohaPlatform.storage.ensureAll) { return true; } return readNative(() => ShirohaPlatform.storage.ensureAll(state)); }
   function nativeViewVisible(id) { return !ShirohaPlatform.storage.lazy || (!mutationBusy && document.getElementById(id)?.classList.contains('active')); }
   const {
@@ -139,7 +139,7 @@
   const {
     closeBankQuestionDetail, renderBankSelect, renderMergeSelect, renderBankInputs, renderBankList,
     renderBankToolbarV28, renderBankPreview, bankQuestionCopyText, openBankQuestionDetail,
-    resetBankQuestionSelection,
+    resetBankQuestionSelection, cancelPendingBankPreview,
   } = globalThis.ShirohaBankPage.create({
     state, select: $, selectAll: $$, escape: esc, label, short, formatDate: fmt, now, countTypes,
     scope: { ensureGroupUi: ensureBankGroupUiV58, ensure: ensurePracticeScopeV8916, current: practiceScopeV8916,
@@ -151,7 +151,8 @@
     rendering: { all: renderAll, exportSummary: renderExportBankSummaryV23, toast },
     selection: { get: () => exportBankSelectedV23, set: (value) => { exportBankSelectedV23 = value; } },
     actions: { activeBank, transaction: runMutation, save: saveSilent, edit: (...args) => editBankByIdV45(...args), duplicate: duplicateBankById,
-      exportBank: exportBankById, deleteBanks: deleteBanksV32, deleteQuestions: deleteBankQuestions },
+      exportBank: exportBankById, deleteBanks: deleteBanksV32, deleteQuestions: deleteBankQuestions,
+      canSelectExportBanks: () => applicationReady && !mutationBusy },
     content: { stripUnsafe: stripUnsafeImageDataUrisV83, optionText: pickRichOptionTextV57,
       repair: repairCircledCombinationQuestion, parseTable: parseDocxMarkdownTableBlockV55,
       normalizeImages: normalizeQuestionImagesForWebV83, normalizeType: normalizeWebQuestionType,
@@ -211,7 +212,7 @@
     transport: { request: requestAiChatV99, timeout: withAiTimeoutV99 },
     limits: { importChars: AI_IMPORT_MAX_CHARS_V99, previewItems: AI_PREVIEW_MAX_ITEMS_V991, analysisBatch: AI_ANALYSIS_DEFAULT_BATCH_V991, reviewBatch: AI_REVIEW_DEFAULT_BATCH_V991 },
   });
-  const { cancelAiImportRequestV99, cancelAiPreviewRequestV991, startAiPreviewTaskV991, startAiImportV99, resetAiSuggestionsV991, removeAiSuggestionsForQuestionV991 } = aiImportSessions;
+  const { cancelAiImportRequestV99, invalidateAiImportRequestV99, cancelAiPreviewRequestV991, startAiPreviewTaskV991, startAiImportV99, resetAiSuggestionsV991, removeAiSuggestionsForQuestionV991 } = aiImportSessions;
   const practiceAiSessions = globalThis.ShirohaAiQuestionSessions.createPractice({
     practice: { current: () => practiceSession.current },
     question: { current: currentPracticeItemV8916, allowed: (...args) => aiSingleAllowedV613(...args), key: practiceItemKeyV8916, fingerprint: aiSingleFingerprintV613, answer: (...args) => getPracticeAnswerStateV26(...args), hasImages: aiSingleHasImagesV613 },
@@ -229,7 +230,7 @@
     view: { render: (...args) => updateReviewAnalysisPanels(...args), sanitize: sanitizeAiDiagnosticDetailV375 },
   });
   const { run: runReviewAnalysis, save: saveReviewAnalysis } = reviewAiSessions;
-  const { renderFavoritesPageV596, renderWrongBook } = globalThis.ShirohaSavedQuestionsPage.create({
+  const { renderFavoritesPageV596, renderWrongBook, cancelFavoritePractice, cancelPendingSavedReads } = globalThis.ShirohaSavedQuestionsPage.create({
     select: $, selectAll: $$, escape: esc, label, short, formatDate: fmt, now, toast,
     paging: { visible: nativeViewVisible, begin: beginNativeRender, page: nativePage, versions: nativeRenderVersions,
       loadItems: loadNativeItems, itemsForBanks: practiceSessionItemsForBanksV8916 },
@@ -241,7 +242,9 @@
     practice: { resetAi: resetAiSinglePracticeV613, setup: (...args) => openQuickPracticeSetup(...args), baseItems: practiceBaseItemsV58916,
       question: practiceQuestionV8916, customMode: PRACTICE_START_CUSTOM_V58916,
       exactNumbers: formatExactPracticeNumbersV58916, syncMode: syncPracticeStartModeFieldsV58916 },
-    actions: { transaction: runMutation, save: saveSilent, renderAll },
+    actions: { transaction: runMutation, save: saveSilent, renderAll,
+      canStartPractice: () => applicationReady && !mutationBusy,
+      preparePracticeNavigation: () => cancelPendingViewActions('practice') },
   });
   const trainingReviewPage = globalThis.ShirohaTrainingReviewPage.create({
     state, select: $, selectAll: $$, escape: esc, label, short, formatDate: fmt, toast,
@@ -273,9 +276,10 @@
     preview: { cancelAi: cancelAiPreviewRequestV991, resetAi: resetAiSuggestionsV991, closeAi: (...args) => closeAiPreviewPanelV991(...args),
       render: (...args) => renderImportPreview(...args), resetSelection: resetBankQuestionSelection },
     navigation: { switchView: switchViewV45 },
-    actions: { transaction: runMutation, save: saveSilent, renderAll },
+    actions: { transaction: runMutation, save: saveSilent, renderAll,
+      canStartEdit: () => applicationReady && !mutationBusy },
   });
-  const { updateBankEditUiV45, editBankByIdV45, saveBankEditSessionV45 } = bankEditor;
+  const { updateBankEditUiV45, editBankByIdV45, saveBankEditSessionV45, cancelPendingBankEdit } = bankEditor;
   const { exitExamFocus, startExam, startExamTicker, submitExam, examQuestionV113 } = globalThis.ShirohaExamPage.create({
     session: examSession, state, select: $, selectAll: $$, escape: esc, label, now, makeId,
     question: { current: practiceQuestionV8916, key: practiceItemKeyV8916, bankId: practiceItemBankIdV8916,
@@ -289,7 +293,7 @@
     view: { restoreSidebar: restoreSidebarAfterFocusV47, collapseSidebar: autoCollapseSidebarForFocusV47,
       shell: updateShellLayoutByView, prewarmMath: prewarmMathJaxV56, bindRail: bindFocusRailToggleV34,
       renderAll, renderReviewAnalysis: (...args) => renderReviewAnalysis(...args), updateReviewPanels: (...args) => updateReviewAnalysisPanels(...args), openReview: openTrainingReview },
-    storage: { loadItems: loadNativeItems, isBusy: () => mutationBusy, saveFailed: () => mutationSaveError,
+    storage: { loadItems: loadNativeItems, isBusy: () => mutationBusy, isReady: () => applicationReady, saveFailed: () => mutationSaveError,
       transaction: runMutation, save: saveSilent },
   });
   const practicePage = globalThis.ShirohaPracticePage.create({
@@ -317,7 +321,7 @@
     shell: { collapse: autoCollapseSidebarForFocusV47, restore: restoreSidebarAfterFocusV47, update: updateShellLayoutByView,
       bindRail: bindFocusRailToggleV34, prewarmMath: prewarmMathJaxV56, editQuestion: (...args) => openPracticeEditQuestionV120(...args),
       closeBankDetail: closeBankQuestionDetail, renderAll, renderStats },
-    storage: { loadItems: loadNativeItems, isBusy: () => mutationBusy, transaction: runMutation, save: saveSilent },
+    storage: { loadItems: loadNativeItems, isBusy: () => mutationBusy, isReady: () => applicationReady, transaction: runMutation, save: saveSilent },
   });
   const {
     startPracticeClockTicker, startWrongPractice,
@@ -333,6 +337,7 @@
       toggleDiagnostic: toggleAiDiagnosticV375, copyDiagnostic: copyAiDiagnosticV375, copyCors: copyAiOllamaCorsCommandV375,
       save: saveAiSettingsV99, test: testAiConnectionV99, clear: clearAiSettingsV99 },
     requests: { busy: aiTasksBusyV99, startImport: startAiImportV99, cancelImport: cancelAiImportRequestV99,
+      invalidateImport: invalidateAiImportRequestV99,
       startPreview: startAiPreviewTaskV991, cancelPreview: cancelAiPreviewRequestV991 },
     editor: { isEditing: () => !!bankEditor.current(), openQuestion: (...args) => openEditQuestion(...args), normalizeQuestion },
     preview: { status: importIssueStatus, key: aiQuestionKeyV991, findIndex: findImportIndexByAiKeyV991,
@@ -370,7 +375,7 @@
       primaryBlank: primaryBlankAnswerV58914, explicitBlankCount: explicitBlankCountV58914,
       normalizeType: normalizeWebQuestionType, normalizeQuestion, cleanQuestion: cleanImportedQuestion, validate: validateQuestion },
     suggestions: { renderRow: renderAiSuggestionRowV991, remove: removeAiSuggestionsForQuestionV991,
-      bind: bindAiSuggestionActionsV991, sync: syncAiPreviewToolsV991 },
+      invalidateImport: invalidateAiImportRequestV99, bind: bindAiSuggestionActionsV991, sync: syncAiPreviewToolsV991 },
     editor: { updateBankUi: updateBankEditUiV45, syncAppend: syncImportAppendUiV59 },
     practice: { currentItem: currentPracticeItemV8916, question: practiceQuestionV8916, bankId: practiceItemBankIdV8916,
       key: practiceItemKeyV8916, renderScope: renderPracticeScopeUiV8916, render: renderPracticeQuestion },
@@ -527,12 +532,20 @@
       topbar.classList.toggle('is-hidden-by-view', hideTopbar);
     }
   }
+  function cancelPendingViewActions(target) {
+    cancelPendingSavedReads(target);
+    if (target !== 'favorites') { cancelFavoritePractice(); }
+    if (target !== 'practice') { practiceSession.invalidatePending(); }
+    if (target !== 'exam') { examSession.invalidatePending(); }
+    if (target !== 'banks') { cancelPendingBankEdit();cancelPendingBankPreview(); }
+  }
   function bindNav() {
     $$('.nav').forEach((btn) => btn.onclick = async () => {
       const target = btn.dataset.view;
       const view = target && $(`#${target}`);
       if (!view || view.classList.contains('active')) { return; }
       if (target !== 'practice' && !await canLeaveTotalPractice(target)) { return; }
+      cancelPendingViewActions(target);
       leaveTrainingReview();
       if (document.body.classList.contains('practice-focus') && target !== 'practice') { exitPracticeFocus(); }
       if (document.body.classList.contains('exam-focus') && target !== 'exam') { exitExamFocus(); }
@@ -572,13 +585,20 @@
     bindReviewAnalysisEvents();
     bindTrainingReviewEvents();
     bindPracticeClockLifecycle();
-    $('#active-bank-select').onchange = async (e) => runMutation(async () => { setPracticeBankScopeV8916(e.target.value, true);await saveSilent();renderAll(); });const importNameInput = $('#import-bank-name');if (importNameInput && !importNameInput.dataset.autoNameBound) { importNameInput.dataset.autoNameBound = '1';importNameInput.addEventListener('input', () => { importNameInput.dataset.autoName = '0'; }); };$('#save-all-btn').onclick = saveState;
-    $('#load-sample-btn').onclick = loadSample;$('#import-file').onchange = readImportFile;$('#parse-import-btn').onclick = parseImport;$('#confirm-import-btn').onclick = confirmImport;const findReplaceBtnV51 = $('#find-replace-import-btn');if (findReplaceBtnV51) { findReplaceBtnV51.onclick = openImportFindReplaceV51; } const dualConfirmBtn = $('#dual-confirm-import-btn');if (dualConfirmBtn) { dualConfirmBtn.onclick = confirmImport; } const importTextAreaV49 = $('#import-text');if (importTextAreaV49 && !importTextAreaV49.dataset.sourceBoundV49) { importTextAreaV49.dataset.sourceBoundV49 = '1';importTextAreaV49.addEventListener('input', () => { if (importTextAreaV49.dataset.tableImportV49 === '1') { importDraft.tableResult = null;delete importTextAreaV49.dataset.tableImportV49; }importDraft.sourceMeta = { name: '手动文本', size: new Blob([importTextAreaV49.value || '']).size, type: 'text' };syncAiImportActionV99(); }); };const ocrStartBtn = $('#ocr-start-btn');if (ocrStartBtn) { ocrStartBtn.onclick = startPdfOcrImport; } const ocrUseBtn = $('#ocr-use-text-btn');if (ocrUseBtn) { ocrUseBtn.onclick = applyOcrTextToImport; } const ocrCopyBtn = $('#ocr-copy-btn');if (ocrCopyBtn) { ocrCopyBtn.onclick = copyOcrText; } const ocrDocxBtn = $('#ocr-download-docx-btn');if (ocrDocxBtn) { ocrDocxBtn.onclick = downloadOcrDocx; }$('#clear-import-btn').onclick = () => { cancelAiImportRequestV99(true);cancelAiPreviewRequestV991(true);closeAiImportPanelV99();closeAiPreviewPanelV991();resetAiSuggestionsV991();$('#import-text').value = '';if ($('#import-text')) { delete $('#import-text').dataset.tableImportV49; }importDraft.clearSingle();resetOcrImportState();renderImportPreview([]);syncAiImportActionV99(); };
-    $('#dual-question-file').onchange = (e) => readDualFile(e, 'question');$('#dual-answer-file').onchange = (e) => readDualFile(e, 'answer');$('#parse-dual-import-btn').onclick = parseDualImport;$('#clear-dual-import-btn').onclick = () => { cancelAiPreviewRequestV991(true);resetAiSuggestionsV991();$('#dual-question-text').value = '';$('#dual-answer-text').value = '';importDraft.clearDual();renderImportPreview([]); };$('#dual-load-sample-btn').onclick = loadDualSample;$('#revalidate-import-btn').onclick = () => renderImportPreview(importDraft.questions);
-    $('#edit-close-btn').onclick = closeEditModal;$('#edit-save-btn').onclick = saveEditQuestion;$('#edit-delete-btn').onclick = deleteEditQuestion;const pf = $('#import-preview-filter');if (pf) { pf.onchange = (e) => { importDraft.filter = e.target.value;renderImportPreview(importDraft.questions); }; } const bid = $('#batch-delete-import-btn');if (bid) { bid.onclick = batchDeleteImportSelected; } const cis = $('#clear-import-selection-btn');if (cis) { cis.onclick = () => { importDraft.selected.clear();renderImportPreview(importDraft.questions); }; }
+    $('#active-bank-select').onchange = async (e) => runMutation(async () => { setPracticeBankScopeV8916(e.target.value, true);await saveSilent();renderAll(); });const importNameInput = $('#import-bank-name');if (importNameInput && !importNameInput.dataset.autoNameBound) { importNameInput.dataset.autoNameBound = '1';importNameInput.addEventListener('input', () => { importDraft.invalidateBankName();importNameInput.dataset.autoName = '0'; }); };$('#save-all-btn').onclick = saveState;
+    $('#load-sample-btn').onclick = loadSample;$('#import-file').onchange = readImportFile;$('#parse-import-btn').onclick = parseImport;$('#confirm-import-btn').onclick = confirmImport;const findReplaceBtnV51 = $('#find-replace-import-btn');if (findReplaceBtnV51) { findReplaceBtnV51.onclick = openImportFindReplaceV51; } const dualConfirmBtn = $('#dual-confirm-import-btn');if (dualConfirmBtn) { dualConfirmBtn.onclick = confirmImport; } const importTextAreaV49 = $('#import-text');if (importTextAreaV49 && !importTextAreaV49.dataset.sourceBoundV49) { importTextAreaV49.dataset.sourceBoundV49 = '1';importTextAreaV49.addEventListener('input', () => { importDraft.invalidateRead('single');if (importTextAreaV49.dataset.tableImportV49 === '1') { importDraft.tableResult = null;delete importTextAreaV49.dataset.tableImportV49; }importDraft.sourceMeta = { name: '手动文本', size: new Blob([importTextAreaV49.value || '']).size, type: 'text' }; }); };const ocrStartBtn = $('#ocr-start-btn');if (ocrStartBtn) { ocrStartBtn.onclick = startPdfOcrImport; } const ocrUseBtn = $('#ocr-use-text-btn');if (ocrUseBtn) { ocrUseBtn.onclick = applyOcrTextToImport; } const ocrCopyBtn = $('#ocr-copy-btn');if (ocrCopyBtn) { ocrCopyBtn.onclick = copyOcrText; } const ocrDocxBtn = $('#ocr-download-docx-btn');if (ocrDocxBtn) { ocrDocxBtn.onclick = downloadOcrDocx; }$('#clear-import-btn').onclick = () => { cancelAiImportRequestV99(true);cancelAiPreviewRequestV991(true);closeAiImportPanelV99();closeAiPreviewPanelV991();resetAiSuggestionsV991();$('#import-text').value = '';if ($('#import-text')) { delete $('#import-text').dataset.tableImportV49; }importDraft.clearSingle();resetOcrImportState();renderImportPreview([]);syncAiImportActionV99(); };
+    $('#dual-question-file').onchange = (e) => readDualFile(e, 'question');$('#dual-answer-file').onchange = (e) => readDualFile(e, 'answer');
+    [['#dual-question-text', 'question'], ['#dual-answer-text', 'answer']].forEach(([selector, slot]) => {
+      const field = $(selector);
+      if (field && !field.dataset.readBoundV4) {
+        field.dataset.readBoundV4 = '1';
+        field.addEventListener('input', () => importDraft.invalidateRead(slot));
+      }
+    });$('#parse-dual-import-btn').onclick = parseDualImport;$('#clear-dual-import-btn').onclick = () => { invalidateAiImportRequestV99();cancelAiPreviewRequestV991(true);resetAiSuggestionsV991();$('#dual-question-text').value = '';$('#dual-answer-text').value = '';importDraft.clearDual();renderImportPreview([]); };$('#dual-load-sample-btn').onclick = loadDualSample;$('#revalidate-import-btn').onclick = () => renderImportPreview(importDraft.questions);
+    $('#edit-close-btn').onclick = closeEditModal;$('#edit-save-btn').onclick = saveEditQuestion;$('#edit-delete-btn').onclick = deleteEditQuestion;const pf = $('#import-preview-filter');if (pf) { pf.onchange = (e) => { invalidateAiImportRequestV99();if (importDraft.filter !== e.target.value) { importDraft.invalidatePreview(); }importDraft.filter = e.target.value;renderImportPreview(importDraft.questions); }; } const bid = $('#batch-delete-import-btn');if (bid) { bid.onclick = batchDeleteImportSelected; } const cis = $('#clear-import-selection-btn');if (cis) { cis.onclick = () => { invalidateAiImportRequestV99();if (importDraft.selected.size) { importDraft.invalidatePreview(); }importDraft.selected.clear();renderImportPreview(importDraft.questions); }; }
     $('#dedupe-btn').onclick = dedupeActiveBank;$('#rename-bank-btn').onclick = renameActiveBank;$('#duplicate-bank-btn').onclick = duplicateActiveBank;$('#new-empty-bank-btn').onclick = newEmptyBank;$('#merge-bank-btn').onclick = mergeBankIntoActive;$('#bank-sort-mode').onchange = renderBankList;$('#start-practice-btn').onclick = startPractice;$('#reset-practice-btn').onclick = resetPractice;
     $('#start-exam-btn').onclick = startExam;$('#submit-exam-btn').onclick = () => submitExam(false);$('#clear-wrong-btn').onclick = async () => runMutation(async () => { if (await ShirohaDialogs.confirm('确定清空当前题库错题本？')) { state.wrongBook[activeBank().id] = [];await saveSilent();renderAll(); } });
-    $('#clear-records-btn').onclick = async () => runMutation(async () => { if (await ShirohaDialogs.confirm('确定清空全部练习与考试记录？')) { state.records = [];await saveSilent();renderAll(); } });$('#export-records-btn').onclick = exportRecords;$('#record-mode-filter').onchange = renderRecords;const recordDetailFilterV385 = $('#record-detail-filter-v385');if (recordDetailFilterV385) { recordDetailFilterV385.onchange = renderRecords; }$('#record-limit').onchange = renderRecords;$('#record-refresh-btn').onclick = renderRecords;$('#wrong-status-filter').onchange = renderWrongBook;$('#wrong-sort-mode').onchange = renderWrongBook;$('#practice-wrong-btn').onclick = startWrongPractice;const practiceFavBtnV596 = $('#practice-favorites-btn-v596');if (practiceFavBtnV596) { practiceFavBtnV596.onclick = () => switchPracticeSourceV27('favorite'); } const clearFavBtnV596 = $('#clear-favorites-btn-v596');if (clearFavBtnV596) { clearFavBtnV596.onclick = clearCurrentFavoritesV596; } const exportJsonBtn = $('#export-json-btn');if (exportJsonBtn) { exportJsonBtn.onclick = exportCurrentBank; } const exportAllBtn = $('#export-all-btn');if (exportAllBtn) { exportAllBtn.onclick = exportAll; } const importBackupQuickBtnV598 = $('#import-backup-quick-btn-v598');if (importBackupQuickBtnV598) { importBackupQuickBtnV598.onclick = () => { backupImportModeV23 = $('#settings-backup-mode-v23')?.value || 'overwrite';$('#backup-json-file-v23')?.click(); }; }$('#reset-data-btn').onclick = resetData;bindLimitControlsV60();bindPracticeStartControlsV58916();bindAiImportEventsV99();
+    $('#clear-records-btn').onclick = async () => runMutation(async () => { if (await ShirohaDialogs.confirm('确定清空全部练习与考试记录？')) { state.records = [];await saveSilent();renderAll(); } });$('#export-records-btn').onclick = exportRecords;$('#record-mode-filter').onchange = renderRecords;const recordDetailFilterV385 = $('#record-detail-filter-v385');if (recordDetailFilterV385) { recordDetailFilterV385.onchange = renderRecords; }$('#record-limit').onchange = renderRecords;$('#record-refresh-btn').onclick = renderRecords;$('#wrong-status-filter').onchange = renderWrongBook;$('#wrong-sort-mode').onchange = renderWrongBook;$('#practice-wrong-btn').onclick = () => { cancelPendingViewActions('practice');startWrongPractice(); };const practiceFavBtnV596 = $('#practice-favorites-btn-v596');if (practiceFavBtnV596) { practiceFavBtnV596.onclick = () => { cancelPendingViewActions('practice');switchPracticeSourceV27('favorite'); }; } const clearFavBtnV596 = $('#clear-favorites-btn-v596');if (clearFavBtnV596) { clearFavBtnV596.onclick = clearCurrentFavoritesV596; } const exportJsonBtn = $('#export-json-btn');if (exportJsonBtn) { exportJsonBtn.onclick = exportCurrentBank; } const exportAllBtn = $('#export-all-btn');if (exportAllBtn) { exportAllBtn.onclick = exportAll; } const importBackupQuickBtnV598 = $('#import-backup-quick-btn-v598');if (importBackupQuickBtnV598) { importBackupQuickBtnV598.onclick = () => { backupImportModeV23 = $('#settings-backup-mode-v23')?.value || 'overwrite';$('#backup-json-file-v23')?.click(); }; }$('#reset-data-btn').onclick = resetData;bindLimitControlsV60();bindPracticeStartControlsV58916();bindAiImportEventsV99();
   }
 
   function cleanImportBankNameFromFile(fileName) {
@@ -698,11 +718,32 @@
     } finally { if (btn) { btn.removeAttribute?.('aria-busy');btn.disabled = false;btn.textContent = '测试连接'; } }
   }
 
-  function aiQuestionKeyV991(q, index) { return String(q?.id || `import-${index}`); }
+  // 无 ID 题目的临时身份仅属于当前页面；弱引用随草稿释放，不写入题库或备份。
+  const aiImportAnonymousKeysV991 = new WeakMap();
+  let aiImportAnonymousSequenceV991 = 0;
+  function aiQuestionKeyV991(q) {
+    if (!q || typeof q !== 'object') { return ''; }
+    const id = String(q.id ?? '');
+    if (id) { return id; }
+    let key = aiImportAnonymousKeysV991.get(q);
+    if (!key) {
+      aiImportAnonymousSequenceV991 += 1;
+      key = `import-anonymous-${aiImportAnonymousSequenceV991}`;
+      aiImportAnonymousKeysV991.set(q, key);
+    }
+    return key;
+  }
 
-  function aiQuestionFingerprintV991(q) { return JSON.stringify({ number: q?.number ?? '', type: q?.type || '', question: q?.question || '', options: q?.options || [], answer: q?.answer || [], blankAnswers: q?.blankAnswers || [], analysis: q?.analysis || '', category: q?.category || q?.group || '' }); }
+  function aiQuestionFingerprintV991(q) { return JSON.stringify(q); }
 
-  function findImportIndexByAiKeyV991(key, fallback = -1) { const index = importDraft.questions.findIndex((q, i) => aiQuestionKeyV991(q, i) === key);return index >= 0 ? index : fallback; }
+  function findImportIndexByAiKeyV991(key) {
+    if (!key) { return -1; }
+    const matches = importDraft.questions.reduce((indexes, question, index) => {
+      if (aiQuestionKeyV991(question) === key) { indexes.push(index); }
+      return indexes;
+    }, []);
+    return matches.length === 1 ? matches[0] : -1;
+  }
 
   /* SHIROHA_WEB_ISSUE_99_AI_IMPORT_END */
 
@@ -906,7 +947,8 @@
     const media = exportQuestionImagesForCrossExportV83(out);
     out.type = toNativeQuestionType(out.type || out.questionType || out.kind);
     out.question = media.question;
-    if (media.images.length) { out.images = media.images; } else { delete out.images; }
+    // 显式空数组属于原有跨端数据；缺失字段和无效媒体继续按原规则处理。
+    if (media.images.length) { out.images = media.images; } else if (!Array.isArray(out.images) || out.images.length) { delete out.images; }
     const rich = buildQuestionRichContentV57(out);
     if (rich) { out.richContent = rich; } else { delete out.richContent; }
     return out;
@@ -1123,6 +1165,8 @@
     } catch (err) { setFindStatusV51(err.message || String(err), 'danger'); }
   }
   function loadSample() {
+    importDraft.invalidateRead('single');
+    importDraft.invalidateBankName();
     $('#import-bank-name').value = 'C1导入示例题库';$('#import-text').value = `1. 机动车驾驶人初次申领驾驶证后的实习期是多长时间？
 A. 6个月
 B. 12个月
@@ -1143,6 +1187,7 @@ D、高速通过积水路段`;
   }
   async function readPlainTextFileV49(file) { return ShirohaPlatform.files.readText(file); }
   function applyTableImportResultV49(result, fileName) {
+    invalidateAiImportRequestV99();
     cancelAiPreviewRequestV991(true);
     resetAiSuggestionsV991();
     importDraft.tableResult = result;
@@ -1165,6 +1210,8 @@ D、高速通过积水路段`;
   function applyOcrTextToImport() {
     const text = currentOcrText();
     if (!text) { setOcrStatus('没有可填入的 OCR 文本。', 'warn');return; }
+    importDraft.invalidateRead('single');
+    invalidateAiImportRequestV99();
     const textEl = $('#import-text');
     if (textEl) { textEl.value = text;delete textEl.dataset.tableImportV49; }
     importDraft.tableResult = null;
@@ -1195,6 +1242,7 @@ D、高速通过积水路段`;
     } catch { return null; }
   }
   async function parseImport() {
+    invalidateAiImportRequestV99();
     cancelAiPreviewRequestV991(true);
     resetAiSuggestionsV991();
     closeAiPreviewPanelV991();
@@ -1202,10 +1250,12 @@ D、高速通过积水路段`;
     const text = textEl.value.trim();
     const strategy = $('#import-strategy')?.value || 'auto';
     if (importDraft.tableResult && textEl?.dataset.tableImportV49 === '1') {
+      importDraft.invalidateRead('single');
       applyTableImportResultV49(importDraft.tableResult, $('#import-bank-name')?.value || '表格题库');
       return;
     }
     if (!text) { toast('请先粘贴或上传题库文本。', 'warn', '导入未开始');return; }
+    importDraft.invalidateRead('single');
     try {
       importDraft.warnings = [];importDraft.report = '';importDraft.diagnostics = null;
       const explicitJson = $('#import-mode').value === 'json';
@@ -1237,6 +1287,9 @@ D、高速通过积水路段`;
     } catch (e) { toast('识别失败：' + e.message, 'danger', '识别失败'); }
   }
   function loadDualSample() {
+    importDraft.invalidateBankName();
+    importDraft.invalidateRead('question');
+    importDraft.invalidateRead('answer');
     $('#import-bank-name').value = 'C1双文件导入示例题库';
     $('#dual-question-text').value = `一、单选题
 1. 机动车驾驶人初次申领驾驶证后的实习期是多长时间？
@@ -1268,12 +1321,16 @@ D. 高速通过积水路段`;
     toast('已填入C1双文件示例，请点击“识别并合并双文件”。', 'ok');
   }
   function parseDualImport() {
+    invalidateAiImportRequestV99();
     cancelAiPreviewRequestV991(true);
     resetAiSuggestionsV991();
     closeAiPreviewPanelV991();
     const qText = $('#dual-question-text').value.trim();
     const aText = $('#dual-answer-text').value.trim();
     if (!qText || !aText) { toast('请先提供题目文本和答案文本。', 'warn', '双文件导入未开始');return; }
+    importDraft.invalidateRead('question');
+    importDraft.invalidateRead('answer');
+    importDraft.invalidatePreview();
     try {
       importDraft.warnings = [];importDraft.report = '';
       const qStrategy = $('#import-strategy')?.value || 'auto';
@@ -1737,7 +1794,9 @@ D. 高速通过积水路段`;
     ensureBackupFileInputV23();
     ensureBankManageExportPanelV23();
     ensureSettingsBackupPanelV23();
-    if (!exportBankSelectedV23.size) { exportBankSelectedV23 = new Set(state.banks.map((b) => b.id)); }
+    const validIds = new Set(state.banks.map((bank) => bank.id));
+    exportBankSelectedV23 = new Set([...exportBankSelectedV23].filter((id) => validIds.has(id)));
+    if (!exportBankSelectedV23.size) { exportBankSelectedV23 = new Set(validIds); }
     renderExportBankSummaryV23();
   }
   function ensureBackupFileInputV23() {
@@ -1935,7 +1994,7 @@ D. 高速通过积水路段`;
       });
     } catch { /* 版本提示同步失败不应阻断页面启动。 */ }
   }
-  function init() { upgradeState();ensureAiImportStateV99();ensureDefaultBank();ensureBankGroupUiV58();bindNav();bindEvents();bindMultiBlankEditorV58914();bindV25ToV28Events();ensureV25ToV28Panels();setupSidebarCollapse();renderBankSelect();renderAll();setupEnhancedDataToolsV23();updateShellLayoutByView();syncHomeVersionPromptV586();setTimeout(syncHomeVersionPromptV586, 80);setTimeout(syncHomeVersionPromptV586, 300); }
+  function init() { upgradeState();ensureAiImportStateV99();ensureDefaultBank();ensureBankGroupUiV58();bindNav();bindEvents();bindMultiBlankEditorV58914();bindV25ToV28Events();ensureV25ToV28Panels();setupSidebarCollapse();setupEnhancedDataToolsV23();renderAll();updateShellLayoutByView();syncHomeVersionPromptV586();setTimeout(syncHomeVersionPromptV586, 80);setTimeout(syncHomeVersionPromptV586, 300); }
   function defaultBank() {
     const qb = window.questionBank || { meta: { title: '内置题库（按需加载）' }, questions: [] };
     const qs = Array.isArray(qb.questions) ? qb.questions : [];
@@ -1968,7 +2027,7 @@ D. 高速通过积水路段`;
     ensurePracticeScopeV8916();
   }
   function serializeState() { return JSON.stringify({ ...state, schemaVersion: CURRENT_SCHEMA_VERSION, favorites: state.favorites || {} }); }
-  function renderAll() { ensureBankGroupUiV58();ensurePracticeScopeV8916();updateAiConnectionPillV99();syncAiImportActionV99();syncAiPreviewToolsV991();renderStats();renderBankSelect();renderMergeSelect();renderBankList();renderBankPreview();renderWrongBook();renderFavoritesPageV596();renderRecords();renderRecentTraining();renderBankInputs();renderBuiltInPanelV252();renderPracticeScopeUiV8916();if (typeof renderExportBankSelectorV23 === 'function') { renderExportBankSelectorV23(); }renderImportTargetBankOptionsV59();syncImportAppendUiV59();syncHomeVersionPromptV586();syncPracticeStartUiV58916(true); }
+  function renderAll() { ensureBankGroupUiV58();ensurePracticeScopeV8916();updateAiConnectionPillV99();syncAiImportActionV99();renderStats();renderBankSelect();renderMergeSelect();renderBankList();renderBankPreview();renderWrongBook();renderFavoritesPageV596();renderRecords();renderRecentTraining();renderBankInputs();renderBuiltInPanelV252();renderPracticeScopeUiV8916();if (typeof renderExportBankSelectorV23 === 'function') { renderExportBankSelectorV23(); }renderImportTargetBankOptionsV59();syncImportAppendUiV59();syncHomeVersionPromptV586();syncPracticeStartUiV58916(true); }
   function bindV25ToV28Events() {
     ['#load-built-in-bank-btn', '#load-built-in-bank-btn-banks'].forEach((sel) => { const btn = $(sel);if (btn) { btn.onclick = () => loadBuiltInBankV252(); } });
   }
@@ -2152,7 +2211,7 @@ D. 高速通过积水路段`;
     }
     upgradeState();ensureDefaultBank();
     try { await saveSilent(); } catch { const previous = JSON.parse(previousStateJson);Object.keys(state).forEach((k) => delete state[k]);Object.assign(state, previous);upgradeState();throw new Error('导入内容超过浏览器本地存储容量，已恢复导入前数据。可减少图片后重试，或只导入部分题库。'); }
-    renderAll();setupEnhancedDataToolsV23();
+    setupEnhancedDataToolsV23();renderAll();
     const total = normalized.banks.reduce((n, b) => n + (b.questions || []).length, 0);
     toast(`导入完成：${normalized.banks.length} 个题库，${total} 道题。${unresolvedImageCount ? ` 另有 ${unresolvedImageCount} 张图片未包含在备份文件中，Web 端无法显示。` : ''}`, unresolvedImageCount ? 'warn' : 'ok');
   }
@@ -2162,7 +2221,9 @@ D. 高速通过积水路段`;
       try {
         const loaded = await readBackupFileV24(file);const { text } = loaded;
         setBackupPreviewV23(text);
-        const data = JSON.parse(text);applyBackupAssetsV24(data, loaded.assets || {});const unresolvedImageCount = countUnresolvedBackupImagesV24(data);const normalized = normalizeBackupPayloadV23(data, file.name);
+        const data = JSON.parse(text);const assets = loaded.assets || {};
+        if (Object.keys(assets).length) { applyBackupAssetsV24(data, assets); }
+        const unresolvedImageCount = countUnresolvedBackupImagesV24(data);const normalized = normalizeBackupPayloadV23(data, file.name);
         await applyBackupImportV23(normalized, backupImportModeV23 || 'merge', unresolvedImageCount);
       // eslint-disable-next-line prefer-template -- 异常信息可能是对象，保留 + 的默认转换；统一异常类型后移除此例外。
       } catch (err) { toast('导入备份失败：' + err.message, 'danger'); } finally { if (!mutationSaveError) { e.target.value = ''; } }
@@ -2315,6 +2376,7 @@ D. 高速通过积水路段`;
     const view = viewId && $(`#${viewId}`);
     if (!view) { return; }
     if (viewId !== 'practice' && !await canLeaveTotalPractice(viewId)) { return; }
+    cancelPendingViewActions(viewId);
     if (viewId !== 'practice') { exitPracticeFocus(); }
     if (viewId !== 'exam') { exitExamFocus(); }
     if (viewId !== 'training-review') { leaveTrainingReview(); }
@@ -2393,7 +2455,8 @@ D. 高速通过积水路段`;
     const backup = document.createElement('input');backup.type = 'file';backup.accept = '.json,.zip';backup.setAttribute('aria-label', '选择兼容备份修复数据');
     backup.onchange = async () => {
       const file = backup.files?.[0];if (!file) { return; }backup.disabled = true;try {
-        const loaded = await readBackupFileV24(file);const data = JSON.parse(loaded.text);applyBackupAssetsV24(data, loaded.assets || {});
+        const loaded = await readBackupFileV24(file);const data = JSON.parse(loaded.text);const assets = loaded.assets || {};
+        if (Object.keys(assets).length) { applyBackupAssetsV24(data, assets); }
         if (countUnresolvedBackupImagesV24(data)) { throw new Error('备份缺少图片，未切换本地数据。'); }
         const normalized = normalizeBackupPayloadV23(data, file.name);
         const snapshot = { schemaVersion: CURRENT_SCHEMA_VERSION, banks: normalized.banks, activeBankId: normalized.activeBankId || normalized.banks[0]?.id || '', wrongBook: normalized.wrongBook || {}, favorites: normalized.favorites || {}, records: normalized.records || [], settings: normalized.settings || {}, crossPlatformMeta: normalized.crossPlatformMeta || {} };

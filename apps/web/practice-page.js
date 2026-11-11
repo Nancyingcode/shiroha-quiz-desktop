@@ -24,7 +24,8 @@
     const { collapse: autoCollapseSidebarForFocusV47, restore: restoreSidebarAfterFocusV47, update: updateShellLayoutByView,
       bindRail: bindFocusRailToggleV34, prewarmMath: prewarmMathJaxV56, editQuestion: openPracticeEditQuestionV120,
       closeBankDetail: closeBankQuestionDetail, renderAll, renderStats } = shell;
-    const { loadItems: loadNativeItems, isBusy: isMutationBusy, transaction: runMutation, save: saveSilent } = storage;
+    const { loadItems: loadNativeItems, isBusy: isMutationBusy, isReady: isApplicationReady,
+      transaction: runMutation, save: saveSilent } = storage;
     // 运行计时器和复盘视图仅归当前页面；换轮/重置释放计时器，离开复盘后释放快照引用。
     const PRACTICE_CLOCK_REFRESH_MS = 250;
     let lifecycleBound = false;
@@ -308,6 +309,11 @@
     async function startPractice(scopeOverrideV8916) {
       // eslint-disable-next-line no-plusplus -- setter 仍接受字符串和 BigInt；限定类型后才能移除此例外。
       const request = ++practiceSession.request;
+      const isCurrentStart = () => request === practiceSession.request && isApplicationReady() && !isMutationBusy()
+        && $('#practice')?.classList.contains('active');
+      if (!isCurrentStart()) {
+        return;
+      }
       const overrideType = String((scopeOverrideV8916 && scopeOverrideV8916.type) || '').toLowerCase();
       const override = [PRACTICE_SCOPE_BANK_V8916, PRACTICE_SCOPE_GROUP_V8916].includes(overrideType) ? normalizePracticeScopeV8916(scopeOverrideV8916) : null;
       const limit = $('#practice-limit')?.value || 'custom';
@@ -323,7 +329,7 @@
         showNotice('无法开始练习', selection.error, 'warn');
         return;
       }
-      if (!await loadNativeItems(selection.items) || request !== practiceSession.request || isMutationBusy()) {
+      if (!await loadNativeItems(selection.items, isCurrentStart) || !isCurrentStart()) {
         return;
       }
       disposePracticeClock();
@@ -443,13 +449,19 @@
       $('#practice-card').innerHTML = `<div class="practice-focus-head"><b>${esc(practiceSession.current.scopeName || '刷题练习')} · 总提交</b><span class="practice-round-progress">本轮进度 · 第 ${practiceSession.current.idx + 1} / ${practiceSession.current.items.length} 题</span><div class="practice-tools-v26"><button class="ghost mini-btn" id="p-favorite">${isFavoriteV27(q.id, practiceItemBankIdV8916(item)) ? '取消收藏' : '收藏题目'}</button><button class="ghost mini-btn" id="p-edit-v120" disabled title="本轮总提交结束后可编辑题目">编辑题目</button><button class="ghost mini-btn" id="p-exit" ${locked ? 'disabled' : ''}>退出练习</button></div></div>${questionHtml(q, false, 0, item)}<div class="actions practice-actions-v44"><button class="ghost" id="p-prev" ${locked || practiceSession.current.idx === 0 ? 'disabled' : ''}>上一题</button><button class="ghost" id="p-next" ${locked || practiceSession.current.idx === practiceSession.current.items.length - 1 ? 'disabled' : ''}>下一题</button><button class="primary" id="p-submit-all">${locked ? '继续提交' : '总提交'}</button></div><p id="p-total-status" role="status">${totalPracticeStatus()}${locked ? ' · 答案已锁定，请完成自评与保存。' : ' · 提交前可修改答案。'}</p><div id="p-feedback" role="status"></div><div id="p-ai-v613"></div>${renderTotalPracticeNav()}`;
       applyAnswerStateV26('#practice-card', q, st.chosen || []);
       const session = practiceSession.current;
+      const marker = $('#practice-card .question-title');
+      const canEdit = () => canEditPracticeOptions(session, key) && marker?.isConnected
+        && $('#practice-card')?.contains(marker);
       const capture = () => {
+        if (!canEdit()) {
+          return;
+        }
         setPracticeAnswerStateV26(key, { chosen: collectAnswer('#practice-card', q) });
         $('#p-total-status').textContent = `${totalPracticeStatus()} · 提交前可修改答案。`;
         $('#practice-nav-v26').outerHTML = renderTotalPracticeNav();
         bindPracticeNavV30();
       };
-      bindAnswerOptionControls('#practice-card', q, practiceSession.current.idx + 1, () => canEditPracticeOptions(session, key), capture);
+      bindAnswerOptionControls('#practice-card', q, practiceSession.current.idx + 1, canEdit, capture);
       // 草稿属于本轮，不写入学习记录；输入时采集可覆盖切题、收藏重绘和键盘操作。
       $$('#practice-card .text-answer').forEach((input) => {
         input.disabled = locked;
@@ -717,8 +729,15 @@
       practiceSession.current.answerState[id] = { ...getPracticeAnswerStateV26(id), ...next };
     }
     function bindPracticeAnswerDraft(q, key, stateValue) {
-      const session = practiceSession.current; const capture = () => setPracticeAnswerStateV26(key, { chosen: collectAnswer('#practice-card', q) });
-      bindAnswerOptionControls('#practice-card', q, practiceSession.current.idx + 1, () => canEditPracticeOptions(session, key), capture);
+      const session = practiceSession.current; const marker = $('#practice-card .question-title');
+      const canEdit = () => canEditPracticeOptions(session, key) && marker?.isConnected
+        && $('#practice-card')?.contains(marker);
+      const capture = () => {
+        if (canEdit()) {
+          setPracticeAnswerStateV26(key, { chosen: collectAnswer('#practice-card', q) });
+        }
+      };
+      bindAnswerOptionControls('#practice-card', q, practiceSession.current.idx + 1, canEdit, capture);
       if (stateValue.answered || stateValue.revealed) {
         return;
       }

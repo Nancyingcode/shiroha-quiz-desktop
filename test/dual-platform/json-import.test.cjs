@@ -20,7 +20,7 @@ function setup(data, { mode = 'auto', accepted = true } = {}) {
   const confirmations = []; const imports = []; const notices = []; const previews = [];
   const context = vm.createContext({
     $: (selector) => elements[selector],
-    cancelAiPreviewRequestV991() {}, resetAiSuggestionsV991() {}, closeAiPreviewPanelV991() {},
+    invalidateAiImportRequestV99() {}, cancelAiPreviewRequestV991() {}, resetAiSuggestionsV991() {}, closeAiPreviewPanelV991() {},
     normalizeQuestion: api.normalizeQuestion, normalizeBackupPayloadV23: api.normalizeBackupPayloadV23,
     countUnresolvedBackupImagesV24: api.countUnresolvedBackupImagesV24,
     ShirohaPlatform: { storage: {} },

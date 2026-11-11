@@ -16,43 +16,64 @@
   const questionKey = (bankId, questionId) => JSON.stringify([bankId, questionId]);
   /** @param {unknown} a @param {unknown} b */
   const equal = (a, b) => JSON.stringify(a) === JSON.stringify(b);
-  /** @param {Snapshot} before @param {Snapshot} next */
-  function changes(before, next) {
+  /** @param {Snapshot} snapshot */
+  function indexSnapshot(snapshot) {
+    /** @type {Map<string,{bank:import('../../web/platform/contracts').Bank,questions:Map<string,import('../../web/platform/contracts').Question>}>} */
+    const banks = new Map();
+    /** @type {Map<string,Map<string,import('../../web/platform/contracts').Question>>} */
+    const firstBankQuestions = new Map();
+    for (const bank of snapshot.banks) {
+      const questions = new Map(bank.questions.map((question) => [question.id, question]));
+      // 异常重复题库 ID 的回执判断沿用原有首次匹配语义。
+      if (!firstBankQuestions.has(bank.id)) { firstBankQuestions.set(bank.id, questions); }
+      banks.set(bank.id, { bank, questions });
+    }
+    const records = new Map(snapshot.records.map((record) => [record.id, record]));
+    return { banks, firstBankQuestions, records };
+  }
+  /** @param {Snapshot} before @param {Snapshot} next @param {ReturnType<typeof indexSnapshot>} index */
+  function changes(before, next, index) {
     /** @type {Record<string,unknown>[]} */ const result = [];
     /** @param {unknown} a @param {unknown} b */
     const equal = (a, b) => JSON.stringify(a) === JSON.stringify(b);
     /** @param {Snapshot} value */
     const header = (value) => Object.fromEntries(Object.entries(value).filter(([key]) => !['banks', 'records'].includes(key)));
     if (!equal(header(before), header(next))) { result.push({ kind: 'put_header', header: header(next) }); }
-    const banks = new Map(before.banks.map((bank) => [bank.id, bank]));
+    const nextBankOrder = next.banks.map((bank) => bank.id);
+    const nextBanks = new Set(nextBankOrder);
     for (const bank of next.banks) {
-      const previous = banks.get(bank.id);
+      const indexed = index.banks.get(bank.id);
+      const previous = indexed?.bank;
       if (!previous) {
         result.push({ kind: 'put_bank', bank });
       } else {
         if (!equal({ ...previous, questions: undefined }, { ...bank, questions: undefined })) { result.push({ kind: 'put_bank_metadata', bank: Object.fromEntries(Object.entries(bank).filter(([key]) => key !== 'questions')) }); }
-        const questions = new Map(previous.questions.map((question) => [question.id, question]));
+        const { questions } = indexed;
+        const nextQuestionOrder = bank.questions.map((question) => question.id);
+        const nextQuestions = new Set(nextQuestionOrder);
         for (const question of bank.questions) {
           if (!equal(questions.get(question.id), question)) {
             if (questions.has(question.id) && !loadedQuestions.has(questionKey(bank.id, question.id))) { throw new Error('题目正文尚未读取，已阻止保存。'); }
             result.push({ kind: 'put_question', bank_id: bank.id, question });
           }
         }
-        for (const question of previous.questions) { if (!bank.questions.some((item) => item.id === question.id)) { result.push({ kind: 'delete_question', bank_id: bank.id, question_id: question.id }); } }
-        if (!equal(previous.questions.map((q) => q.id), bank.questions.map((q) => q.id))) { result.push({ kind: 'question_order', bank_id: bank.id, ids: bank.questions.map((q) => q.id) }); }
+        for (const question of previous.questions) { if (!nextQuestions.has(question.id)) { result.push({ kind: 'delete_question', bank_id: bank.id, question_id: question.id }); } }
+        if (!equal(previous.questions.map((q) => q.id), nextQuestionOrder)) { result.push({ kind: 'question_order', bank_id: bank.id, ids: nextQuestionOrder }); }
       }
     }
-    for (const bank of before.banks) { if (!next.banks.some((item) => item.id === bank.id)) { result.push({ kind: 'delete_bank', bank_id: bank.id }); } }
-    if (!equal(before.banks.map((b) => b.id), next.banks.map((b) => b.id))) { result.push({ kind: 'bank_order', ids: next.banks.map((b) => b.id) }); }
-    const records = new Map(before.records.map((record) => [record.id, record]));
+    for (const bank of before.banks) { if (!nextBanks.has(bank.id)) { result.push({ kind: 'delete_bank', bank_id: bank.id }); } }
+    if (!equal(before.banks.map((b) => b.id), nextBankOrder)) { result.push({ kind: 'bank_order', ids: nextBankOrder }); }
+    const { records } = index;
+    const nextRecordOrder = next.records.map((record) => record.id);
+    const nextRecords = new Set(nextRecordOrder);
     for (const record of next.records) {
       if (!equal(records.get(record.id), record)) {
         if (records.has(record.id) && !loadedRecords.has(record.id)) { throw new Error('记录详情尚未读取，已阻止保存。'); }
         result.push({ kind: 'put_record', record });
       }
     }
-    for (const record of before.records) { if (!next.records.some((item) => item.id === record.id)) { result.push({ kind: 'delete_record', record_id: record.id }); } }
-    if (!equal(before.records.map((r) => r.id), next.records.map((r) => r.id))) { result.push({ kind: 'record_order', ids: next.records.map((r) => r.id) }); }
+    for (const record of before.records) { if (!nextRecords.has(record.id)) { result.push({ kind: 'delete_record', record_id: record.id }); } }
+    if (!equal(before.records.map((r) => r.id), nextRecordOrder)) { result.push({ kind: 'record_order', ids: nextRecordOrder }); }
     return result.length ? result : [{ kind: 'put_header', header: header(next) }];
   }
   /** @template T @param {string} command @param {Record<string,unknown>} [args] @returns {Promise<T>} */
@@ -185,10 +206,16 @@
     async write(snapshot, operationId, expectedRevision) {
       if (!ready) { throw new Error('本地数据尚未就绪。'); }
       /** @type {{revision:number}|null} */ let receipt;
+      // 身份索引仅归本次写入，回执失败或基线变化后不能沿用旧索引。
+      let indexedSnapshot = baseline;
+      /** @type {ReturnType<typeof indexSnapshot>|null} */ let index = null;
       try {
-        receipt = baseline
-          ? await invoke('local_commit', { changes: changes(baseline, snapshot), operationId, expectedRevision })
-          : await invoke('local_write', { snapshot, operationId, expectedRevision });
+        if (indexedSnapshot) {
+          index = indexSnapshot(indexedSnapshot);
+          receipt = await invoke('local_commit', { changes: changes(indexedSnapshot, snapshot, index), operationId, expectedRevision });
+        } else {
+          receipt = await invoke('local_write', { snapshot, operationId, expectedRevision });
+        }
       } catch (error) {
         if (error && typeof error === 'object' && 'code' in error && error.code === 'duplicate_operation') { throw error; }
         // IPC 回包丢失不代表事务失败；先查持久回执，避免把已保存编辑回滚为旧状态。
@@ -197,8 +224,15 @@
       }
       if (!receipt) { throw new Error('本地保存未返回有效回执。'); }
       revision = receipt.revision;
-      for (const bank of snapshot.banks) { for (const question of bank.questions) { if (!baseline?.banks.find((b) => b.id === bank.id)?.questions.some((q) => q.id === question.id)) { loadedQuestions.add(questionKey(bank.id, question.id)); } } }
-      for (const record of snapshot.records) { if (!baseline?.records.some((r) => r.id === record.id)) { loadedRecords.add(record.id); } }
+      if (baseline !== indexedSnapshot || (baseline && !index)) {
+        indexedSnapshot = baseline;
+        index = indexedSnapshot ? indexSnapshot(indexedSnapshot) : null;
+      }
+      for (const bank of snapshot.banks) {
+        const previousQuestions = index?.firstBankQuestions.get(bank.id);
+        for (const question of bank.questions) { if (!previousQuestions?.has(question.id)) { loadedQuestions.add(questionKey(bank.id, question.id)); } }
+      }
+      for (const record of snapshot.records) { if (!index?.records.has(record.id)) { loadedRecords.add(record.id); } }
       baseline = structuredClone(snapshot);
       return receipt;
     },

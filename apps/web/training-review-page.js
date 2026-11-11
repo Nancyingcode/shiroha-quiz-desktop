@@ -136,10 +136,15 @@
         rows = rows.slice(0, Number(lim));
       }
       rows = nativePage(rows, `records:${mode}:${detailFilter}:${lim}`, list, renderRecords);
-      if (ShirohaPlatform.storage.ensureRecords && !await readNative(() => ShirohaPlatform.storage.ensureRecords(state, rows.filter((r) => nativeOpenRecords.has(r.id)).map((r) => r.id)))) {
+      const openIds = rows.filter((record) => nativeOpenRecords.has(record.id)).map((record) => record.id);
+      const openDetails = [...list.querySelectorAll('[data-native-record]')].filter((node) => openIds.includes(node.dataset.nativeRecord));
+      // toggle 事件可能晚于补读完成；用户已关闭的节点不能被旧读取重新展开。
+      const isCurrentRead = () => renderVersion === nativeRenderVersions.get('records') && nativeViewVisible('records')
+        && openDetails.every((node) => node.isConnected && node.open);
+      if (ShirohaPlatform.storage.ensureRecords && !await readNative(() => ShirohaPlatform.storage.ensureRecords(state, openIds), isCurrentRead)) {
         return;
       }
-      if (renderVersion !== nativeRenderVersions.get('records') || !nativeViewVisible('records')) {
+      if (!isCurrentRead()) {
         return;
       }
       const emptyMessage = wrongOnly ? '<p class="muted">当前筛选范围内暂无含错题的练习或考试记录。</p>' : '<p class="muted">暂无练习或考试记录。</p>';
@@ -206,11 +211,14 @@
       }
       trainingReviewRequest += 1; const request = trainingReviewRequest; const from = origin || $('.view.active')?.id || 'records';
       const focus = document.activeElement; const scroll = { window: window.scrollY, main: $('.main')?.scrollTop || 0 };
-      if (ShirohaPlatform.storage.ensureRecords && !await readNative(() => ShirohaPlatform.storage.ensureRecords(state, [id]))) {
-        platformStatus('复盘加载失败，请再次点击查看复盘重试。', true);
+      const isCurrentRequest = () => request === trainingReviewRequest && $('.view.active')?.id === from;
+      if (ShirohaPlatform.storage.ensureRecords && !await readNative(() => ShirohaPlatform.storage.ensureRecords(state, [id]), isCurrentRequest)) {
+        if (isCurrentRequest()) {
+          platformStatus('复盘加载失败，请再次点击查看复盘重试。', true);
+        }
         return;
       }
-      if (request !== trainingReviewRequest || $('.view.active')?.id !== from) {
+      if (!isCurrentRequest()) {
         return;
       }
       trainingReview = { record, origin: from, focus, scroll, filter: 'all', index: 0 };
@@ -294,11 +302,13 @@
       releaseTrainingReviewAnalysis(selectedAnalysisKey);
       const needsSourceAnalysis = selected?.question && selected.bankId && !String(selected.question.analysis || '').trim();
       if (needsSourceAnalysis) {
+        const isCurrentRead = () => trainingReview === view && renderVersion === nativeRenderVersions.get('training-review')
+          && !!$('#training-review.active');
         // 桌面摘要不含解析；只补读当前选题，切题或离开后的迟到读取不能重绘旧页面。
-        if (!await loadNativeItems([{ bankId: selected.bankId, question: selected.question }])) {
+        if (!await loadNativeItems([{ bankId: selected.bankId, question: selected.question }], isCurrentRead)) {
           return;
         }
-        if (trainingReview !== view || renderVersion !== nativeRenderVersions.get('training-review') || !$('#training-review.active')) {
+        if (!isCurrentRead()) {
           return;
         }
       }

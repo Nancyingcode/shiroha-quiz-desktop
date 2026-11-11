@@ -9,6 +9,8 @@
     const $ = (selector) => document.querySelector(selector);
     // 配置表单、请求状态与待恢复项归当前面板；清除配置或页面卸载时释放。
     let webdavRuntimeV378 = { busy: false, action: '', backups: [], latestFile: '', status: '', statusKind: '', diagnostic: null, pendingRestore: null, formLoaded: false };
+    // 列表缓存只属于当前面板节点，节点重挂载时重新绑定与渲染。
+    let renderedListV378 = null; let renderedListContentV378 = null;
     function defaultWebdavConfigV378() { return { endpoint: '', username: '', remoteDir: 'ShirohaQuiz/Web', rememberPassword: false, lastUploadAt: '', lastUploadFile: '', lastUploadSize: 0, lastUploadSha: '' }; }
     function readWebdavConfigV378() {
       try { const parsed = platform.credentials.readDav();return { ...defaultWebdavConfigV378(), ...(parsed && typeof parsed === 'object' ? parsed : {}) }; } catch { return defaultWebdavConfigV378(); }
@@ -78,7 +80,9 @@
     function setWebdavStatusV378(message, kind = '') { webdavRuntimeV378.status = message;webdavRuntimeV378.statusKind = kind;renderWebdavPanelV378(); }
     function setWebdavBusyV378(action = '') { webdavRuntimeV378.busy = !!action;webdavRuntimeV378.action = action;const stop = $('#webdav-stop-native');if (stop) { stop.disabled = !action; }renderWebdavPanelV378(); }
     async function runWebdavActionV378(action, task) {
-      if (webdavRuntimeV378.busy) { return; }setWebdavBusyV378(action);setWebdavStatusV378(`${action}处理中…`, '');
+      if (webdavRuntimeV378.busy) { return; }
+      webdavRuntimeV378.status = `${action}处理中…`;webdavRuntimeV378.statusKind = '';
+      setWebdavBusyV378(action);
       try { return await task(); } catch (error) { setWebdavDiagnosticV378(action, error);const message = `${action}失败：${classifyWebdavErrorV378(error).summary}`;setWebdavStatusV378(message, 'danger');const details = $('#webdav-diagnostics-details-v378');if (details) { details.open = true; }toast(message, 'danger'); } finally { setWebdavBusyV378(''); }
     }
     function mount(container) {
@@ -118,6 +122,7 @@
       bindWebdavPanelV378();
       renderWebdavPanelV378(true);
     }
+    function onWebdavListClickV378(e) { const button = e.target.closest('[data-webdav-restore-v378]');if (button) { runWebdavActionV378('下载备份', () => prepareWebdavRestoreV378(button.dataset.webdavRestoreV378)); } }
     function bindWebdavPanelV378() {
       const save = $('#webdav-save-v378');if (!save) { return; }
       save.onclick = async () => { try { const config = webdavConfigFromFormV378();await storeWebdavConfigV378(config, webdavPasswordFromFormV378());setWebdavStatusV378('配置已保存。密码按当前“记住密码”选项单独存放。', 'ok');toast('WebDAV 配置已保存。', 'ok'); } catch (error) { setWebdavStatusV378(error.message, 'danger'); } };
@@ -133,7 +138,7 @@
       }
 
       $('#webdav-copy-diagnostics-v378').onclick = () => copyTextV23(webdavDiagnosticTextV378(), '已复制 WebDAV 诊断（不含密码）。');
-      $('#webdav-list-v378').onclick = (e) => { const button = e.target.closest('[data-webdav-restore-v378]');if (button) { runWebdavActionV378('下载备份', () => prepareWebdavRestoreV378(button.dataset.webdavRestoreV378)); } };
+      $('#webdav-list-v378').onclick = onWebdavListClickV378;
       $('#webdav-restore-cancel-v378').onclick = closeWebdavRestoreModalV378;
       $('#webdav-restore-confirm-v378').onclick = () => runWebdavActionV378('恢复备份', confirmWebdavRestoreV378);
       $('#webdav-restore-mode-v378').onchange = syncWebdavRestoreWarningV378;
@@ -154,11 +159,18 @@
       if (list) {
         const rows = webdavRuntimeV378.backups || [];
         const hasReadList = webdavRuntimeV378.status && /刷新|读取/.test(webdavRuntimeV378.status);
+        let content;
         if (rows.length) {
-          list.innerHTML = rows.map((item) => `<div class="webdav-row-v378"><div class="webdav-file-v378"><b>${esc(item.fileName)}${item.fileName === webdavRuntimeV378.latestFile ? '<span class="webdav-latest-v378">latest</span>' : ''}</b><span class="muted">${esc(item.dateText || '时间未知')}</span></div><span class="webdav-row-meta-v378 muted">${formatBytesV376(item.size || 0)}</span><span class="muted">${esc(item.etag || '')}</span><button class="ghost mini-btn" type="button" data-webdav-restore-v378="${esc(item.fileName)}" ${webdavRuntimeV378.busy ? 'disabled' : ''}>恢复</button></div>`).join('');
+          content = rows.map((item) => `<div class="webdav-row-v378"><div class="webdav-file-v378"><b>${esc(item.fileName)}${item.fileName === webdavRuntimeV378.latestFile ? '<span class="webdav-latest-v378">latest</span>' : ''}</b><span class="muted">${esc(item.dateText || '时间未知')}</span></div><span class="webdav-row-meta-v378 muted">${formatBytesV376(item.size || 0)}</span><span class="muted">${esc(item.etag || '')}</span><button class="ghost mini-btn" type="button" data-webdav-restore-v378="${esc(item.fileName)}">恢复</button></div>`).join('');
         } else {
-          list.innerHTML = hasReadList ? '<p class="muted">远端目录中没有本应用生成的备份。</p>' : '<p class="muted">尚未读取远程目录。</p>';
+          content = hasReadList ? '<p class="muted">远端目录中没有本应用生成的备份。</p>' : '<p class="muted">尚未读取远程目录。</p>';
         }
+        if (list !== renderedListV378 || content !== renderedListContentV378) {
+          list.innerHTML = content;
+          list.onclick = onWebdavListClickV378;
+          renderedListV378 = list;renderedListContentV378 = content;
+        }
+        list.querySelectorAll('[data-webdav-restore-v378]').forEach((button) => { button.disabled = webdavRuntimeV378.busy; });
       }
       const diag = $('#webdav-diagnostics-v378');if (diag) { const d = webdavRuntimeV378.diagnostic;diag.innerHTML = d ? `<dl><dt>时间</dt><dd>${esc(fmt(d.time))}</dd><dt>操作</dt><dd>${esc(d.action)}</dd><dt>方法</dt><dd>${esc(d.method || '—')}</dd><dt>地址</dt><dd>${esc(d.url || '—')}</dd><dt>页面 Origin</dt><dd>${esc(d.origin || '—')}</dd><dt>HTTP 状态</dt><dd>${esc(d.status || '—')}</dd><dt>判断</dt><dd>${esc(d.type)}</dd><dt>摘要</dt><dd>${esc(d.summary)}</dd><dt>建议</dt><dd>${esc(d.suggestion)}</dd></dl>` : '尚无诊断信息。'; }
     }

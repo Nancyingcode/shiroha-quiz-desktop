@@ -1927,8 +1927,8 @@
         let primary = baselineCandidates[0] || candidates[0] || { name: '标准逐行解析', questions: [], warnings: [], score: -9999 };
         primary = { ...primary, eval: primary.eval || evaluateCandidate(primary) };
 
-        const localRisk = countLocalRepairWarnings(primary.questions || [], profile);
         const primaryHasQuestions = (primary.questions || []).length > 0;
+        const localRisk = primaryHasQuestions ? primary.eval.localRisk : countLocalRepairWarnings(primary.questions || [], profile);
         const primaryMatchesProfile = primary.eval.qtyOk && primary.eval.typeOk;
         const localRiskIsLimited = localRisk > 0 && localRisk <= localRepairQuestionLimitV58912((primary.questions || []).length);
         const localRepairWorthTrying = primaryHasQuestions && primaryMatchesProfile && localRiskIsLimited;

@@ -13,7 +13,18 @@
     const { resetAi: resetAiSinglePracticeV613, setup: openQuickPracticeSetup, baseItems: practiceBaseItemsV58916,
       question: practiceQuestionV8916, customMode: PRACTICE_START_CUSTOM_V58916,
       exactNumbers: formatExactPracticeNumbersV58916, syncMode: syncPracticeStartModeFieldsV58916 } = practice;
-    const { transaction: runMutation, save: saveSilent, renderAll } = actions;
+    const { transaction: runMutation, save: saveSilent, renderAll, canStartPractice, preparePracticeNavigation } = actions;
+    // 收藏单题读取只属于发起时的页面；离页或新请求会撤销旧跳转。
+    let favoritePracticeRequest = 0;
+    // 可见列表读取按所属页面失效；后台预渲染仍沿用原有渲染策略。
+    let favoriteReadOwner = 0; let wrongReadOwner = 0;
+    function cancelPendingSavedReads(target) {
+      if (target !== 'favorites') { favoriteReadOwner += 1; }
+      if (target !== 'wrongbook') { wrongReadOwner += 1; }
+    }
+    function cancelFavoritePractice() {
+      favoritePracticeRequest += 1;
+    }
     function favoriteRowsV596() {
       const ids = new Set(getFavoriteIdsV27());
       const map = new Map(activeBank().questions.map((q) => [q.id, q]));
@@ -33,6 +44,10 @@
       closeBankQuestionDetail();
       const renderVersion = beginNativeRender('favorites');
       const bank = activeBank();
+      const owner = favoriteReadOwner;
+      const startedVisible = !!$('#favorites')?.classList.contains('active');
+      const isCurrentRead = () => renderVersion === nativeRenderVersions.get('favorites') && activeBank() === bank
+        && (!startedVisible || (owner === favoriteReadOwner && $('#favorites')?.classList.contains('active')));
       const allRows = favoriteRowsV596();
       // eslint-disable-next-line prefer-template -- 外部值可能是对象，保留 + 的默认转换；输入类型受约束后移除此例外。
       const rows = nativePage(allRows, 'favorites:' + bank.id, box, renderFavoritesPageV596);
@@ -50,15 +65,15 @@
       if (clearBtn) {
         clearBtn.disabled = true;
       }
-      if (!await loadNativeItems(practiceSessionItemsForBanksV8916([{ ...bank, questions: rows }]))) {
-        if (renderVersion !== nativeRenderVersions.get('favorites') || activeBank() !== bank) {
+      if (!await loadNativeItems(practiceSessionItemsForBanksV8916([{ ...bank, questions: rows }]), isCurrentRead)) {
+        if (!isCurrentRead()) {
           return;
         }
         body.innerHTML = '<tr><td colspan="7" role="status">收藏题加载失败，请重试。 <button type="button" class="ghost mini-btn" id="retry-favorites">重试</button></td></tr>';
         $('#retry-favorites').onclick = renderFavoritesPageV596;
         return;
       }
-      if (renderVersion !== nativeRenderVersions.get('favorites') || !nativeViewVisible('favorites') || activeBank() !== bank) {
+      if (!isCurrentRead() || !nativeViewVisible('favorites')) {
         return;
       }
       if (practiceBtn) {
@@ -78,17 +93,30 @@
           renderAll();
         }
       });
-      box.querySelectorAll('[data-practice-one-fav-v596]').forEach((btn) => btn.onclick = () => startSingleFavoritePracticeV596(btn.dataset.practiceOneFavV596));
+      box.querySelectorAll('[data-practice-one-fav-v596]').forEach((btn) => btn.onclick = () => startSingleFavoritePracticeV596(btn.dataset.practiceOneFavV596, bank, btn));
     }
-    async function startSingleFavoritePracticeV596(id) {
-      if (!await loadNativeItems(practiceSessionItemsForBanksV8916([{ ...activeBank(), questions: activeBank().questions.filter((q) => q.id === id) }]))) {
+    async function startSingleFavoritePracticeV596(id, bank, button) {
+      const stillCurrent = () => canStartPractice() && activeBank() === bank && button.isConnected
+        && document.getElementById('favorites')?.classList.contains('active')
+        && document.getElementById('favorites-list-v596')?.contains(button);
+      if (!stillCurrent()) {
         return;
       }
-      const q = activeBank().questions.find((x) => x.id === id);
+      favoritePracticeRequest += 1;
+      const request = favoritePracticeRequest;
+      const isCurrentRequest = () => request === favoritePracticeRequest && stillCurrent();
+      if (!await loadNativeItems(practiceSessionItemsForBanksV8916([{ ...bank, questions: bank.questions.filter((q) => q.id === id) }]), isCurrentRequest)) {
+        return;
+      }
+      if (!isCurrentRequest()) {
+        return;
+      }
+      const q = bank.questions.find((x) => x.id === id);
       if (!q) {
         toast('未找到这道收藏题。', 'warn');
         return;
       }
+      preparePracticeNavigation();
       resetAiSinglePracticeV613();
       $$('.nav').forEach((b) => b.classList.remove('active'));
       document.querySelector('[data-view="practice"]').classList.add('active');
@@ -114,6 +142,10 @@
       }
       const renderVersion = beginNativeRender('wrongbook');
       const bid = activeBank().id;
+      const owner = wrongReadOwner;
+      const startedVisible = !!$('#wrongbook')?.classList.contains('active');
+      const isCurrentRead = () => renderVersion === nativeRenderVersions.get('wrongbook') && activeBank().id === bid
+        && (!startedVisible || (owner === wrongReadOwner && $('#wrongbook')?.classList.contains('active')));
       let entries = getWrongEntries(bid);
       const filter = $('#wrong-status-filter')?.value || 'active';
       if (filter === 'active') {
@@ -132,10 +164,10 @@
       const map = new Map(activeBank().questions.map((q) => [q.id, q]));
       // eslint-disable-next-line prefer-template -- 外部值可能是对象，保留 + 的默认转换；输入类型受约束后移除此例外。
       const rows = nativePage(entries.map((e) => ({ e, q: map.get(e.id) })).filter((x) => x.q), 'wrong:' + bid + ':' + filter + ':' + sort, document.getElementById('wrongbook-list'), renderWrongBook);
-      if (!await loadNativeItems(practiceSessionItemsForBanksV8916([{ ...activeBank(), questions: rows.map((row) => row.q) }]))) {
+      if (!await loadNativeItems(practiceSessionItemsForBanksV8916([{ ...activeBank(), questions: rows.map((row) => row.q) }]), isCurrentRead)) {
         return;
       }
-      if (renderVersion !== nativeRenderVersions.get('wrongbook') || !nativeViewVisible('wrongbook') || activeBank().id !== bid) {
+      if (!isCurrentRead() || !nativeViewVisible('wrongbook')) {
         return;
       }
       $('#wrongbook-list').innerHTML = rows.length ? rows.map(({ e, q }) => `<div class="wrong-item"><div class="section-head"><div><b>${label(q.type)}</b><p class="muted">${isTextType(q.type) ? `答案：${esc(q.answer.join(''))}｜` : ''}状态：${esc(e.status)}｜错误 ${e.wrongCount} 次｜做对 ${e.rightCount} 次${e.lastWrongAt ? `｜最近错：${fmt(e.lastWrongAt)}` : ''}</p></div><div class="row-actions"><button class="ghost mini-btn" data-toggle-master-wrong="${esc(q.id)}">${e.status === '已掌握' ? '取消掌握' : '标记已掌握'}</button><button class="ghost mini-btn" data-fav-wrong="${esc(q.id)}">${isFavoriteV27(q.id) ? '取消收藏' : '收藏'}</button><button class="ghost danger mini-btn" data-remove-wrong="${esc(q.id)}">移出</button></div></div><div class="question-title">${renderQuestionBodyV83(q)}</div>${renderReviewOptions(q, e.lastAnswer)}${renderReviewAnswerSummary(q, e.lastAnswer)}${renderReviewAnalysis({ bankId: bid, question: q }, e.lastAnswer, 'wrongbook')}</div>`).join('') : '<p class="muted">当前条件下暂无错题。</p>';
@@ -170,7 +202,7 @@
       });
       updateReviewAnalysisPanels();
     }
-    return { renderFavoritePanelV27, renderFavoritesPageV596, renderWrongBook };
+    return { renderFavoritePanelV27, renderFavoritesPageV596, renderWrongBook, cancelFavoritePractice, cancelPendingSavedReads };
   }
   globalThis.ShirohaSavedQuestionsPage = { create };
 })();

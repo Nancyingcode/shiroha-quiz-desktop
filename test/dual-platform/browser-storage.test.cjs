@@ -7,7 +7,7 @@ const path = require('node:path');
 function runtime(initial = null) {
   const values = new Map(initial === null ? [] : [['state', initial]]);
   const storage = { getItem: (k) => values.get(k) ?? null, setItem: (k, v) => values.set(k, v), removeItem: (k) => values.delete(k) };
-  const context = vm.createContext({ structuredClone, console, setTimeout, clearTimeout });
+  const context = vm.createContext({ structuredClone, console, setTimeout, clearTimeout, Error });
   for (const name of ['validation', 'browser', 'save-queue']) { vm.runInContext(fs.readFileSync(path.join(__dirname, '../../apps/web/platform', `${name}.js`), 'utf8'), context); }
   return { values, storage, create: () => context.ShirohaBrowser.createStorage(storage, 'state'), queue: context.ShirohaSaveQueue.create };
 }
@@ -76,4 +76,49 @@ test('外部标签更改与拒绝访问不得覆盖数据', async () => {
   assert.equal(r.values.get('state'), 'external');
   const denied = r.create(); r.storage.getItem = () => { throw new Error('denied'); };
   assert.equal((await denied.initialize()).state, 'recovery_required');
+});
+test('损坏 JSON、结构和未来版本进入各自恢复状态，并禁止覆盖且可导出原文', async () => {
+  for (const [raw, code] of [
+    ['{broken', 'corrupt_data'],
+    ['null', 'corrupt_data'],
+    ['{"banks":{}}', 'corrupt_data'],
+    ['{"schemaVersion":999,"banks":[]}', 'unsupported_version'],
+  ]) {
+    const r = runtime(raw); const s = r.create();
+    const result = await s.initialize();
+    assert.equal(result.error.code, code);
+    assert.equal(s.recoveryText(), raw);
+    await assert.rejects(s.write(snapshot(), 'blocked', 0), (error) => error.code === 'not_ready');
+    assert.equal(r.values.get('state'), raw);
+  }
+});
+
+for (const [name, code] of [['SecurityError', 'storage_unavailable'], ['QuotaExceededError', 'quota_exceeded']]) {
+  test(`真实 ${name} 的读取和写入失败保留原文及状态`, async () => {
+    const raw = JSON.stringify(snapshot());
+    const read = runtime(raw); const blocked = read.create();
+    const originalGet = read.storage.getItem;
+    read.storage.getItem = () => { throw new globalThis.DOMException('failure', name); };
+    assert.equal((await blocked.initialize()).error.code, code);
+    read.storage.getItem = originalGet;
+    assert.equal(blocked.recoveryText(), raw);
+    await assert.rejects(blocked.write(snapshot(), 'blocked', 0), (error) => error.code === 'not_ready');
+    assert.equal(read.values.get('state'), raw);
+
+    const write = runtime(raw); const s = write.create();
+    await s.initialize();
+    write.storage.setItem = () => { throw new globalThis.DOMException('failure', name); };
+    await assert.rejects(s.write(snapshot(), 'failure', 0), (error) => error.code === code);
+    assert.equal(write.values.get('state'), raw);
+    assert.equal(s.revision(), 0);
+    assert.equal((await s.read()).schemaVersion, 1);
+  });
+}
+
+test('观察到外部变更后优先报告冲突，不再访问存储', async () => {
+  const r = runtime(JSON.stringify(snapshot())); const s = r.create();
+  await s.initialize();
+  s.invalidate();
+  r.storage.getItem = () => { throw new globalThis.DOMException('denied', 'SecurityError'); };
+  await assert.rejects(s.write(snapshot(), 'conflict', 0), (error) => error.code === 'revision_conflict');
 });

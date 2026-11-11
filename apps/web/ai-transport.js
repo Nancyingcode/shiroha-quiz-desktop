@@ -84,7 +84,12 @@
         error.aiStage = 'http';
         lastError = error;
         const canRetryWithoutResponseFormat = index === 0 && (result.status === 400 || result.status === 422);
-        if (canRetryWithoutResponseFormat) { continue; }
+        if (canRetryWithoutResponseFormat) {
+          if (typeof isCurrent === 'function' && !isCurrent()) {
+            throw new Error('题目或 AI 配置已变化，请重新发起请求。');
+          }
+          continue;
+        }
         throw error;
       }
       throw lastError || new Error('AI 请求失败。');

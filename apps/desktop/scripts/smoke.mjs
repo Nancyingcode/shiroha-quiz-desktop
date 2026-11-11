@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
 import { markNativeIsolation } from './native-isolation.mjs';
-import { createNativeMock, nativeServiceSmoke } from './network-smoke.mjs';
+import { cleanupAfterShutdown, createSmokeControl, deadline, reportSmoke, SmokeCheckAborted, SmokeStopFailedError, SmokeUnsettledError, spawnOwned } from './smoke-control.mjs';
+import { createNativeMock, nativeServiceSmoke, NativeMockStartupCleanupError } from './network-smoke.mjs';
 import { documentSmoke } from './document-smoke.mjs';
 import { harnessSmoke, harnessSwitchingSmoke } from './harness-smoke.mjs';
 import { codebuddyCliSmoke, codebuddyCliAfterRestart, codebuddyCliPersistenceSmoke } from './codebuddy-cli-smoke.mjs';
 import { requiredAssets } from './prepare-web.mjs';
-import { spawn, execFile } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { mkdir, mkdtemp, realpath, rm, stat, readFile, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
@@ -49,17 +50,10 @@ function errorText(error) {
   return error instanceof Error ? error.message : String(error);
 }
 
-/** @template T @param {Promise<T>} operation @param {number} timeoutMs @returns {Promise<T>} */
-async function deadline(operation, timeoutMs) {
-  /** @type {ReturnType<typeof setTimeout> | undefined} */
-  let timer;
-  try {
-    return await Promise.race([
-      operation,
-      new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(`操作超过 ${timeoutMs} ms`)), timeoutMs); }),
-    ]);
-  } finally {
-    clearTimeout(timer);
+class SmokeLaunchCleanupError extends AggregateError {
+  /** @param {unknown} cause @param {unknown[]} failures @param {string} status */
+  constructor(cause, failures, status) {
+    super([cause, ...failures], `启动或 CDP 失败：${errorText(cause)}；${status}`, { cause });
   }
 }
 
@@ -86,8 +80,21 @@ function running(child) {
   return child.pid !== undefined && child.exitCode === null && child.signalCode === null;
 }
 
+// 每个子进程只属于本次 smoke；并发关闭共享同一次请求，进程对象释放后弱映射自动失效。
+/** @type {WeakMap<import('node:child_process').ChildProcess, Promise<void>>} */
+const childStops = new WeakMap();
+
 /** @param {import('node:child_process').ChildProcess} child */
-async function stopChild(child) {
+function stopChild(child) {
+  const existing = childStops.get(child);
+  if (existing) { return existing; }
+  const pending = stopChildOnce(child);
+  childStops.set(child, pending);
+  return pending;
+}
+
+/** @param {import('node:child_process').ChildProcess} child */
+async function stopChildOnce(child) {
   if (!running(child)) { return; }
   // 只关闭本脚本启动的 PID；正常关闭允许 WebView2 刷新本次隔离测试的存储。
   await execute('powershell.exe', [
@@ -107,7 +114,11 @@ async function stopChild(child) {
 /** @param {Runtime} runtime */
 async function stop(runtime) {
   await stopChild(runtime.child);
-  await runtime.browser.close().catch(() => undefined);
+  try {
+    await deadline(runtime.browser.close().catch(() => undefined), CLOSE_TIMEOUT_MS);
+  } catch (error) {
+    throw new SmokeUnsettledError(error);
+  }
 }
 
 /** @param {string} url */
@@ -118,11 +129,14 @@ function localResource(url) {
     || (parsed.protocol === 'tauri:' && parsed.hostname === 'localhost');
 }
 
-/** @param {string} executable @param {string} profile @param {number} proxyPort @returns {Promise<Runtime>} */
-async function launch(executable, profile, proxyPort) {
+/** @param {string} executable @param {string} profile @param {number} proxyPort
+ * @param {{assertActive: () => void, registerChild: (child: import('node:child_process').ChildProcess) => void}} lifecycle
+ * @returns {Promise<Runtime>} */
+async function launch(executable, profile, proxyPort, lifecycle) {
   const port = await availablePort();
+  lifecycle.assertActive();
   // 官方接入方式：https://playwright.dev/docs/webview2 。环境变量仅传给测试子进程，避免复用真实 profile 或改变系统调试设置。
-  const child = spawn(executable, [], {
+  const child = spawnOwned(lifecycle, executable, [], {
     cwd: path.dirname(executable), windowsHide: true, stdio: 'ignore',
     env: {
       ...process.env,
@@ -172,10 +186,27 @@ async function launch(executable, profile, proxyPort) {
     // 接入完成后重新加载，确保启动错误与本地资源请求都落入监听范围。
     await page.reload({ waitUntil: 'load' });
     await page.locator('.app-splash').waitFor({ state: 'hidden' });
+    lifecycle.assertActive();
     return { child, browser, page, errors, blocked, requests };
   } catch (error) {
-    await stopChild(child);
-    await browser?.close().catch(() => undefined);
+    /** @type {unknown[]} */
+    const failures = [];
+    let childStatus = '测试进程关闭完成';
+    try { await stopChild(child); } catch (stopError) {
+      failures.push(stopError);
+      childStatus = `测试进程关闭失败：${errorText(stopError)}`;
+    }
+    let browserStatus = '未建立浏览器连接';
+    if (browser) {
+      try {
+        await deadline(browser.close(), CLOSE_TIMEOUT_MS);
+        browserStatus = '浏览器连接关闭完成';
+      } catch (closeError) {
+        failures.push(closeError);
+        browserStatus = `浏览器连接关闭失败：${errorText(closeError)}`;
+      }
+    }
+    if (failures.length) { throw new SmokeLaunchCleanupError(error, failures, `${childStatus}；${browserStatus}`); }
     throw error;
   }
 }
@@ -1021,8 +1052,28 @@ async function main() {
   assert(/\.exe$/i.test(executable) && (await stat(executable)).isFile(), '参数必须是现有 EXE');
   const tempRoot = await realpath(tmpdir());
   const profile = await mkdtemp(path.join(tempRoot, PROFILE_PREFIX));
-  await markNativeIsolation(profile);
-  const networkMock = await createNativeMock(profile);
+  const removeProfile = async (/** @type {string} */ item) => {
+    const actual = await realpath(item);
+    assert.equal(path.dirname(actual).toLowerCase(), tempRoot.toLowerCase());
+    assert(path.basename(actual).startsWith(PROFILE_PREFIX), '拒绝清理非测试目录');
+    await rm(actual, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
+  };
+  /** @type {Awaited<ReturnType<typeof createNativeMock>>} */
+  let networkMock;
+  try {
+    await markNativeIsolation(profile);
+    networkMock = await createNativeMock(profile);
+  } catch (error) {
+    if (error instanceof NativeMockStartupCleanupError) { throw error; }
+    try { await removeProfile(profile); } catch (cleanupError) {
+      throw new AggregateError(
+        [error, cleanupError],
+        `初始化失败：${errorText(error)}；隔离目录清理失败：${errorText(cleanupError)}；目录：${profile}`,
+        { cause: cleanupError },
+      );
+    }
+    throw error;
+  }
   const profiles = [profile];
   /** @type {Check[]} */
   const checks = [];
@@ -1030,17 +1081,33 @@ async function main() {
   let runtime;
   /** @type {Promise<void> | undefined} */
   let cleaning;
+  let forceExit = false;
+  /** @type {SmokeLaunchCleanupError | undefined} */
+  let launchCleanupFailure;
+  const control = createSmokeControl({ checks, timeoutMs: RESOURCE_TIMEOUT_MS,
+    settleTimeoutMs: START_TIMEOUT_MS + (2 * CLOSE_TIMEOUT_MS) + 5_000, stopChild });
+  const launchOwned = (/** @type {string} */ file, /** @type {string} */ data, /** @type {number} */ port) => control.launch(
+    async (lifecycle) => {
+      try { return await launch(file, data, port, lifecycle); } catch (error) {
+        if (error instanceof SmokeLaunchCleanupError) { launchCleanupFailure = error; }
+        throw error;
+      }
+    },
+  );
   // CDP 连接前也拒绝互联网流量；代理不转发任何请求，不依赖系统代理或用户网络设置。
   const proxy = createServer((socket) => { socket.on('error', () => undefined); socket.end('HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n'); });
   const cleanup = () => cleaning ??= (async () => {
-    if (runtime) { await stop(runtime); }
-    proxy.close();
-    networkMock.close();
-    for (const item of profiles) {
-      const actual = await realpath(item);
-      assert.equal(path.dirname(actual).toLowerCase(), tempRoot.toLowerCase());
-      assert(path.basename(actual).startsWith(PROFILE_PREFIX), '拒绝清理非测试目录');
-      await rm(actual, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
+    try {
+      await cleanupAfterShutdown(control, async () => {
+        // 启动期间的浏览器或进程未确认关闭时，即使子进程后来退出也不能删除其 profile。
+        if (launchCleanupFailure) { throw new SmokeUnsettledError(launchCleanupFailure); }
+        if (runtime) { await stop(runtime); }
+        for (const item of profiles) { await removeProfile(item); }
+      });
+    } finally {
+      proxy.close();
+      networkMock.close();
+      if (runtime) { await deadline(runtime.browser.close().catch(() => undefined), CLOSE_TIMEOUT_MS).catch(() => undefined); }
     }
   })();
   const interrupt = () => { void cleanup().then(() => process.exit(130), (error) => { console.error(errorText(error)); process.exit(1); }); };
@@ -1048,11 +1115,11 @@ async function main() {
   /** @param {string} name @param {() => Promise<unknown>} action */
   const check = async (name, action) => {
     console.log(`正在验证：${name}`);
-    try { checks.push({ name, ok: true, detail: await deadline(action(), RESOURCE_TIMEOUT_MS) }); } catch (error) { checks.push({ name, ok: false, error: errorText(error) }); }
+    await control.check(name, action);
   };
   try {
     const proxyPort = await listen(proxy);
-    runtime = await launch(executable, profile, proxyPort);
+    runtime = await launchOwned(executable, profile, proxyPort);
     const { page } = runtime;
     await check('原生 AI、WebDAV、凭据保存与取消撤销', async () => {
       const result = await nativeServiceSmoke(page, networkMock.origin);
@@ -1177,7 +1244,7 @@ async function main() {
       return { closed: true };
     });
     await stop(runtime); runtime = undefined;
-    runtime = await launch(executable, profile, proxyPort);
+    runtime = await launchOwned(executable, profile, proxyPort);
     const memoryRestart = runtime;
     await check('CodeBuddy CLI 登录在重启后重新核验', () => codebuddyCliAfterRestart(memoryRestart.page, () => practiceImportedBank(memoryRestart.page, bankName)));
     await check('Codex 重启后无需进入设置即可生成单题解析', async () => {
@@ -1190,7 +1257,7 @@ async function main() {
       await runtime.page.locator('#ai-harness-auth-refresh').click();
       await runtime.page.waitForFunction(() => Reflect.get(window, 'ShirohaPlatform')?.harness?.status().ready);
       await stop(runtime); runtime = undefined;
-      runtime = await launch(executable, profile, proxyPort);
+      runtime = await launchOwned(executable, profile, proxyPort);
       const restartedPage = runtime.page;
       await restartedPage.waitForFunction(() => {
         const status = Reflect.get(window, 'ShirohaPlatform')?.harness?.status();
@@ -1221,7 +1288,7 @@ async function main() {
     await check('CodeBuddy CLI 过期引导、重启复用与退出跨重启验证', () => codebuddyCliPersistenceSmoke(codebuddyRestart.page, profile, async () => {
       assert(runtime);
       await stop(runtime); runtime = undefined;
-      runtime = await launch(executable, profile, proxyPort);
+      runtime = await launchOwned(executable, profile, proxyPort);
       return runtime.page;
     }));
     const restarted = runtime;
@@ -1310,7 +1377,7 @@ async function main() {
     await stop(runtime); runtime = undefined;
     const migrationProfile = await mkdtemp(path.join(tempRoot, PROFILE_PREFIX));
     profiles.push(migrationProfile); await markNativeIsolation(migrationProfile);
-    runtime = await launch(executable, migrationProfile, proxyPort);
+    runtime = await launchOwned(executable, migrationProfile, proxyPort);
     const migrated = runtime;
     await check('C7/D2 同来源旧原型与凭据联合迁移', async () => {
       await migrated.page.evaluate(() => {
@@ -1338,7 +1405,7 @@ async function main() {
       return { dataMigrated: true, credentialsMigrated: true, legacyDataPreserved: true };
     });
     await stop(runtime); runtime = undefined;
-    runtime = await launch(executable, migrationProfile, proxyPort);
+    runtime = await launchOwned(executable, migrationProfile, proxyPort);
     const migratedRestart = runtime;
     await check('迁移后重启使用 SQLite', async () => {
       await migratedRestart.page.locator('#active-bank-select option[value="legacy-bank"]').waitFor({ state: 'attached' });
@@ -1620,7 +1687,7 @@ async function main() {
     const broken = Buffer.from('C8 synthetic corrupt database');
     await writeFile(path.join(migrationProfile, 'library.sqlite3'), broken);
     await writeFile(path.join(migrationProfile, 'library.sqlite3-wal'), Buffer.from('invalid WAL fixture'));
-    runtime = await launch(executable, migrationProfile, proxyPort);
+    runtime = await launchOwned(executable, migrationProfile, proxyPort);
     const repaired = runtime;
     await check('损坏数据库界面恢复且保留原文件', async () => {
       const status = repaired.page.locator('#platform-status');
@@ -1634,7 +1701,7 @@ async function main() {
       return { recovered: true, originalPreserved: true };
     });
     await stop(runtime);runtime = undefined;
-    runtime = await launch(executable, migrationProfile, proxyPort);
+    runtime = await launchOwned(executable, migrationProfile, proxyPort);
     const repairedRestart = runtime;
     await check('修复后重启读取活动数据库', async () => {
       await repairedRestart.page.locator('#active-bank-select option[value="lazy-a"]').waitFor({ state: 'attached' });
@@ -1650,7 +1717,7 @@ async function main() {
     const damaged = path.join(migrationProfile, 'generations', generation);
     await writeFile(path.join(damaged, 'library.sqlite3'), broken);
     await writeFile(path.join(damaged, 'library.sqlite3-wal'), Buffer.from('invalid WAL fixture'));
-    runtime = await launch(executable, migrationProfile, proxyPort);
+    runtime = await launchOwned(executable, migrationProfile, proxyPort);
     const importedRecovery = runtime;
     await check('损坏数据库从兼容备份修复', async () => {
       const input = importedRecovery.page.locator('#platform-status').getByLabel('选择兼容备份修复数据');
@@ -1661,13 +1728,24 @@ async function main() {
       assert.deepEqual(await readFile(path.join(damaged, 'library.sqlite3')), broken);
       return { imported: true, originalPreserved: true };
     });
-  } catch (error) { checks.push({ name: '启动或运行', ok: false, error: errorText(error) }); } finally {
-    try { await cleanup(); } catch (error) { checks.push({ name: '隔离资源清理', ok: false, error: errorText(error), detail: { profile } }); }
+  } catch (error) {
+    if (!(error instanceof SmokeCheckAborted)) { checks.push({ name: '启动或运行', ok: false, error: errorText(error) }); }
+  } finally {
+    try { await cleanup(); } catch (error) {
+      checks.push({ name: '隔离资源清理', ok: false, error: errorText(error), detail: { profile } });
+      forceExit = error instanceof SmokeUnsettledError || error instanceof SmokeStopFailedError;
+    }
     process.off('SIGINT', interrupt); process.off('SIGTERM', interrupt);
   }
   const ok = checks.length > 0 && checks.every((result) => result.ok);
-  console.log(JSON.stringify({ ok, executable, checks }));
-  process.exitCode = ok ? 0 : 1;
+  await reportSmoke({ ok, executable, checks }, forceExit);
 }
 
-await main().catch((error) => { console.log(JSON.stringify({ ok: false, error: errorText(error) })); process.exitCode = 1; });
+await main().catch(async (error) => {
+  if (error instanceof NativeMockStartupCleanupError) {
+    await reportSmoke({ ok: false, error: errorText(error) }, true);
+    return;
+  }
+  console.log(JSON.stringify({ ok: false, error: errorText(error) }));
+  process.exitCode = 1;
+});

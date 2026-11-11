@@ -182,7 +182,8 @@ test('the hook checks the index while the CI lint command still runs every full 
     "const markerDirectory = path.resolve('../../.git');",
     'const check = process.argv[2];',
     "writeFileSync(path.join(markerDirectory, `ran-${check}`), 'yes');",
-    "if (check === 'platform' && existsSync(path.join(markerDirectory, 'fail-platform'))) {",
+    'writeFileSync(path.join(markerDirectory, `args-${check}`), JSON.stringify(process.argv.slice(3)));',
+    "if (check === 'incremental' && existsSync(path.join(markerDirectory, 'fail-incremental'))) {",
     '  process.exitCode = 7;',
     '}',
     '',
@@ -190,12 +191,12 @@ test('the hook checks the index while the CI lint command still runs every full 
   const pkgPath = path.join(f.project, 'package.json');
   const pkg = JSON.parse(await readFile(pkgPath, 'utf8'));
   pkg.scripts.lint = 'node scripts/lint-runner.mjs';
-  const names = ['eslint', 'platform', 'incremental', 'fixtures', 'docs', 'css'];
+  const names = ['incremental', 'fixtures', 'docs', 'css'];
   for (const name of names) {
     pkg.scripts[`lint:${name}`] = `node scripts/hook-check.mjs ${name}`;
   }
   await writeFile(pkgPath, JSON.stringify(pkg));
-  await writeFile(path.join(f.repository, '.git/fail-platform'), 'fail');
+  await writeFile(path.join(f.repository, '.git/fail-incremental'), 'fail');
   expectSuccess(f.git(['add', '.']));
   expectSuccess(f.git(['commit', '--file', '-'], f.repository, 'chore: 验证并行检查\n'));
   assert.equal(f.git(['log', '-1', '--format=%s']).stdout.trim(), 'chore: 验证并行检查');
@@ -208,7 +209,11 @@ test('the hook checks the index while the CI lint command still runs every full 
   for (const name of names) {
     assert.equal(await readFile(path.join(f.repository, `.git/ran-${name}`), 'utf8'), 'yes');
   }
-  await unlink(path.join(f.repository, '.git/fail-platform'));
+  assert.deepEqual(JSON.parse(await readFile(path.join(f.repository, '.git/args-incremental'), 'utf8')), ['--complete']);
+  for (const name of ['eslint', 'platform']) {
+    await assert.rejects(readFile(path.join(f.repository, `.git/ran-${name}`)), { code: 'ENOENT' });
+  }
+  await unlink(path.join(f.repository, '.git/fail-incremental'));
   expectSuccess(f.fullLint());
 });
 

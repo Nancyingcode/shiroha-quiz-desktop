@@ -78,3 +78,10 @@ test('HTTP 错误详情保留对象的默认转换提示', () => {
   assert.equal(results().aiHttpErrorMessage(400, detail), 'AI 接口返回 HTTP 400：default');
   assert.deepEqual(hints, ['default']);
 });
+
+test('结果带未知 ID 时不能改用有效序号归属到其他题', () => {
+  const api = results();
+  const batch = [{ id: 'B', index: 1, question: {} }, { id: 'D', index: 3, question: {} }];
+  assert.equal(api.normalizeAiAnalysisResultV991({ id: 'unknown', index: 2, analysis: '误归属' }, batch), null);
+  assert.equal(api.normalizeAiAnalysisResultV991({ index: 4, analysis: '按发送题号' }, batch).questionId, 'D');
+});

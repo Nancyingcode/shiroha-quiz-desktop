@@ -7,7 +7,12 @@
     let request = 0;
     let timer = null;
     let dialog = null;
+    function invalidatePending() {
+      // eslint-disable-next-line no-plusplus -- setter 仍接受字符串和 BigInt；限定类型后才能移除此例外。
+      request++;
+    }
     return {
+      invalidatePending,
       get current() { return current; },
       set current(next) {
         if (timer !== null) { globalThis.clearInterval(timer); }
@@ -17,8 +22,7 @@
           dialog.remove();
           dialog = null;
         }
-        // eslint-disable-next-line no-plusplus -- setter 仍接受字符串和 BigInt；限定类型后才能移除此例外。
-        request++;
+        invalidatePending();
         current = next;
       },
       get request() { return request; },
@@ -34,12 +38,16 @@
     // 考卷及倒计时只属于当前轮次；切换考卷后旧读取和定时回调失效。
     let current = { items: [], answers: {}, start: 0, timer: null, deadline: 0, submitted: false };
     let request = 0;
+    function invalidatePending() {
+      // eslint-disable-next-line no-plusplus -- setter 仍接受字符串和 BigInt；限定类型后才能移除此例外。
+      request++;
+    }
     return {
+      invalidatePending,
       get current() { return current; },
       set current(next) {
         if (current.timer !== null) { globalThis.clearInterval(current.timer); }
-        // eslint-disable-next-line no-plusplus -- setter 仍接受字符串和 BigInt；限定类型后才能移除此例外。
-        request++;
+        invalidatePending();
         current = next;
       },
       get request() { return request; },
