@@ -37,6 +37,9 @@
     },
     "no-duplicate-selectors": {
       "count": 28
+    },
+    "selector-max-compound-selectors": {
+      "count": 17
     }
   },
   "../web/styles/bank-and-study-tools.css": {
@@ -44,6 +47,9 @@
       "count": 4
     },
     "no-duplicate-selectors": {
+      "count": 5
+    },
+    "selector-max-compound-selectors": {
       "count": 5
     }
   },

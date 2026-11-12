@@ -45,7 +45,7 @@ test('CSS lint rejects mixed-case extensions in each handwritten stylesheet dire
   for (const dir of ['frontend/nested', '../web/styles/components']) {
     await mkdir(path.join(project, dir), { recursive: true });
   }
-  for (const file of ['../web/styles.css', 'frontend/desktop.css', 'package.json', 'stylelint.config.mjs', 'stylelint-suppressions.json']) {
+  for (const file of ['../web/styles.css', '../web/styles/responsive-artwork.css', 'frontend/desktop.css', 'package.json', 'stylelint.config.mjs', 'stylelint-suppressions.json']) {
     await copyFile(path.join(desktop, file), path.join(project, file));
   }
   for (const file of ['../web/probe.CSS', '../web/styles/components/probe.CsS', 'frontend/nested/probe.cSS']) {
@@ -60,4 +60,63 @@ test('CSS lint rejects mixed-case extensions in each handwritten stylesheet dire
     assert(diagnostics.includes(path.basename(file)), diagnostics);
     await unlink(target);
   }
+});
+
+test('CSS lint caps compound selector depth for new component styles', async (t) => {
+  const { temporary } = await repositoryFixture(t);
+  const desktop = path.resolve(import.meta.dirname, '..');
+  const project = path.join(temporary, 'apps/desktop');
+  for (const dir of ['frontend', '../web/styles/components']) {
+    await mkdir(path.join(project, dir), { recursive: true });
+  }
+  for (const file of ['../web/styles.css', '../web/styles/responsive-artwork.css', 'frontend/desktop.css', 'package.json', 'stylelint.config.mjs', 'stylelint-suppressions.json']) {
+    await copyFile(path.join(desktop, file), path.join(project, file));
+  }
+  const runLint = () => spawnSync('npm run --silent lint:css', {
+    cwd: project, shell: true, encoding: 'utf8', windowsHide: true,
+  });
+  const baseline = runLint();
+  assert.equal(baseline.status, 0, baseline.stdout + baseline.stderr);
+
+  const fragment = path.join(project, '../web/styles/components/depth-probe.css');
+  await writeFile(fragment, '.lint-a > .lint-b > .lint-c > .lint-d { color: red; }\n');
+  const accepted = runLint();
+  assert.equal(accepted.status, 0, accepted.stdout + accepted.stderr);
+
+  await writeFile(fragment, '.lint-a > .lint-b > .lint-c > .lint-d > .lint-e { color: red; }\n');
+  const rejected = runLint();
+  const diagnostics = rejected.stdout + rejected.stderr;
+  assert.equal(rejected.status, 2, diagnostics);
+  assert.match(diagnostics, /selector-max-compound-selectors/);
+  assert(diagnostics.includes('depth-probe.css'), diagnostics);
+});
+
+test('CSS lint resolves shared custom properties across split stylesheets', async (t) => {
+  const { temporary } = await repositoryFixture(t);
+  const desktop = path.resolve(import.meta.dirname, '..');
+  const project = path.join(temporary, 'apps/desktop');
+  for (const dir of ['frontend', '../web/styles/components']) {
+    await mkdir(path.join(project, dir), { recursive: true });
+  }
+  const referenced = ['../web/styles.css', '../web/styles/responsive-artwork.css', 'frontend/desktop.css'];
+  for (const file of [...referenced, 'package.json', 'stylelint.config.mjs', 'stylelint-suppressions.json']) {
+    await copyFile(path.join(desktop, file), path.join(project, file));
+  }
+  const runLint = () => spawnSync('npm run --silent lint:css', {
+    cwd: project, shell: true, encoding: 'utf8', windowsHide: true,
+  });
+  const baseline = runLint();
+  assert.equal(baseline.status, 0, baseline.stdout + baseline.stderr);
+
+  const fragment = path.join(project, '../web/styles/components/theme-probe.css');
+  await writeFile(fragment, '.theme-probe { color: var(--blue3); }\n');
+  const accepted = runLint();
+  assert.equal(accepted.status, 0, accepted.stdout + accepted.stderr);
+
+  await writeFile(fragment, '.theme-probe { color: var(--bule3); }\n');
+  const rejected = runLint();
+  const diagnostics = rejected.stdout + rejected.stderr;
+  assert.equal(rejected.status, 2, diagnostics);
+  assert.match(diagnostics, /no-unknown-custom-properties/);
+  assert(diagnostics.includes('theme-probe.css'), diagnostics);
 });
