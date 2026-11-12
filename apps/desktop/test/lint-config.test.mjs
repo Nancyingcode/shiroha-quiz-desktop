@@ -305,6 +305,37 @@ test('object and destructuring layout rules apply to every handwritten file', as
   assert(outside.messages.some((message) => message.ruleId === '@stylistic/object-property-newline'));
 });
 
+test('complexity ratchet applies to zero-baseline modules only', async () => {
+  const lint = linter();
+  const pilotFiles = [
+    'apps/web/quiz-core.js',
+    'apps/web/platform/index.js',
+    'apps/web/platform/save-queue.js',
+  ];
+  const branchy = [
+    'function branchy(value) {',
+    ...Array.from({ length: 16 }, (_, index) => `  if (value === ${index}) { return ${index}; }`),
+    '  return -1;',
+    '}',
+    'console.log(branchy(1));',
+    '',
+  ].join('\n');
+  const cases = [
+    ['complexity', branchy],
+    ['max-params', 'function many(a, b, c, d, e, f) { return a + b + c + d + e + f; }\nconsole.log(many(1, 2, 3, 4, 5, 6));\n'],
+    ['max-depth', 'function deep(list) { if (list) { while (list.length) { for (const value of list) { if (value) { if (value > 1) { return value; } } } } } return 0; }\nconsole.log(deep([1]));\n'],
+    ['max-nested-callbacks', 'setTimeout(function () { setTimeout(function () { setTimeout(function () { setTimeout(function () { setTimeout(function () { console.log(1); }); }); }); }); });\n'],
+  ];
+  for (const filePath of pilotFiles) {
+    for (const [rule, source] of cases) {
+      const [result] = await lint.lintText(source, { filePath });
+      assert(result.messages.some((message) => message.ruleId === rule), `${filePath}: ${rule}`);
+    }
+  }
+  const [outside] = await lint.lintText(branchy, { filePath: 'apps/web/bank-page.js' });
+  assert.equal(outside.messages.filter((message) => message.ruleId === 'complexity').length, 0);
+});
+
 test('statement-per-line pilot covers zero-hit modules without affecting other files', async () => {
   const lint = linter();
   const source = 'const first = 1; const second = 2;\nconsole.log(first, second);\n';

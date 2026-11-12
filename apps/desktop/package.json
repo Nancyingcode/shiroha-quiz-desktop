@@ -17,7 +17,7 @@
     "typecheck": "tsc --noEmit && tsc -p tsconfig.platform.json",
     "lint": "node scripts/lint-runner.mjs",
     "lint:ci": "node scripts/lint-ci.mjs",
-    "lint:css": "stylelint --config stylelint.config.mjs --suppress-location stylelint-suppressions.json --max-warnings 0 \"../web/{*.[cC][sS][sS],styles/**/*.[cC][sS][sS]}\" \"frontend/**/*.[cC][sS][sS]\"",
+    "lint:css": "stylelint --config stylelint.config.mjs --suppress-location stylelint-suppressions.json --report-needless-disables --report-invalid-scope-disables --max-warnings 0 \"../web/{*.[cC][sS][sS],styles/**/*.[cC][sS][sS]}\" \"frontend/**/*.[cC][sS][sS]\"",
     "lint:eslint": "eslint scripts test *.config.mjs eslint.rules.mjs eslint.migration.mjs --max-warnings 0",
     "lint:platform": "node scripts/lint-platform.mjs",
     "lint:docs": "node scripts/check-docs.mjs",
