@@ -1928,6 +1928,7 @@
         primary = { ...primary, eval: primary.eval || evaluateCandidate(primary) };
 
         const primaryHasQuestions = (primary.questions || []).length > 0;
+        // 标准候选评分后到此处未修改题集或 profile，可复用同一次评分的风险计数。
         const localRisk = primaryHasQuestions ? primary.eval.localRisk : countLocalRepairWarnings(primary.questions || [], profile);
         const primaryMatchesProfile = primary.eval.qtyOk && primary.eval.typeOk;
         const localRiskIsLimited = localRisk > 0 && localRisk <= localRepairQuestionLimitV58912((primary.questions || []).length);

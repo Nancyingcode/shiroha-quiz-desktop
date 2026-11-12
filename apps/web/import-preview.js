@@ -108,6 +108,7 @@
       clearDraft();
     }
     function clearSingle() {
+      // 单文件与双文件读取互相独立；清空单文件不能取消双文件的在途读取。
       invalidateRead('single');
       draft.tableResult = null;
       clearDraft();
