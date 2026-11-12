@@ -74,6 +74,32 @@ jobs:
           $log = Join-Path $env:RUNNER_TEMP 'npm-test.log'
           npm test 2>&1 | Tee-Object -FilePath $log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Surface failing test names in annotations
+        if: failure()
+        run: |
+          $log = Join-Path $env:RUNNER_TEMP 'npm-test.log'
+          if (-not (Test-Path $log)) {
+            Write-Output '::error title=test log::npm test 未生成日志，无法提取失败用例'
+            exit 0
+          }
+          $lines = Get-Content -LiteralPath $log
+          $failing = @($lines | Select-String -Pattern '^\s*✖ ' | ForEach-Object { $_.Line.Trim() })
+          if ($failing.Count -eq 0) {
+            $failing = @($lines | Select-String -Pattern 'not ok ' | ForEach-Object { $_.Line.Trim() })
+          }
+          $position = 0
+          foreach ($name in ($failing | Select-Object -First 6)) {
+            $position += 1
+            $message = $name -replace '%', '%25' -replace ([char]13), ' ' -replace ([char]10), ' '
+            Write-Output "::error title=failing test ${position}::${message}"
+          }
+          $details = @($lines | Select-String -Pattern 'AssertionError|ERR_ASSERTION' -ErrorAction SilentlyContinue |
+            Select-Object -First 3 | ForEach-Object { $_.Line.Trim() })
+          foreach ($line in $details) {
+            $message = $line -replace '%', '%25' -replace ([char]13), ' ' -replace ([char]10), ' '
+            Write-Output "::error title=assertion::${message}"
+          }
+          Write-Output "::error title=failure count::共 $($failing.Count) 个失败用例"
       - name: Upload test output when checks fail
         if: failure()
         uses: actions/upload-artifact@v4
