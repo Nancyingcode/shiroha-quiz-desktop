@@ -24,9 +24,8 @@ test/native-parser-regression/runner/.gradle/
 
 # Editor / IDE
 .idea/
-# 仅忽略 .vscode 下的个人设置，放行团队共享的 Copilot 生成指令。
+# 忽略 .vscode 下的个人设置；.vscode/settings.json 已取消跟踪，本地配置不再入库。
 .vscode/*
-!.vscode/settings.json
 
 # Local temporary comparison / backup files
 _compare_original_zip/
