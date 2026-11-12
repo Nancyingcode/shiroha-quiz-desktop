@@ -69,7 +69,19 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           LINT_EXPECTED_SHA: ${{ inputs.release_commit || github.sha }}
         run: npm run lint:ci
-      - run: npm test
+      - name: Run tests and preserve their output
+        run: |
+          $log = Join-Path $env:RUNNER_TEMP 'npm-test.log'
+          npm test 2>&1 | Tee-Object -FilePath $log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Upload test output when checks fail
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-test-log-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/npm-test.log
+          if-no-files-found: warn
+          retention-days: 7
       - run: npm run test:web-platform
       - run: npm run test:documents
       - run: node --test ../../test/web-webdav/request.test.cjs
