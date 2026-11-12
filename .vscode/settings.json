@@ -1,7 +1,0 @@
-{
-  "github.copilot.chat.commitMessageGeneration.instructions": [
-    {
-      "text": "严格使用 Conventional Commits：type(scope): subject。type 只能是 feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert。scope 从 web|desktop|native|tauri|parser|shared|test|docs|lint|ci|tooling|deps 里选一个，不确定就省略括号。subject 用中文祈使句，不超过 50 个字符，结尾不加句号或中文句号。整个 header 不超过 72 个字符。正文仅在必要时写，与 header 之间空一行，每行不超过 100 个字符。不输出 emoji，不输出 Co-authored-by 或任何署名尾巴。"
-    }
-  ]
-}
