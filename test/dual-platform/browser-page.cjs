@@ -2696,6 +2696,36 @@ function exposeExamRender(source) {
   return source.replace(from, 'return { exitExamFocus, startExam, startExamTicker, submitExam, examQuestionV113, renderExamPaper };');
 }
 
+test('审查回归：特殊字符与跨题库键碰撞不能让考试文本答案串题', async (t) => {
+  const initial = webState();
+  const short = initial.banks[0].questions.find((question) => question.type === 'short');
+  initial.banks[0].questions = [{ ...short, id: 'dup"\\]#1', question: '第一题' }];
+  initial.banks[1].id = 'bank-a#dup"\\]';
+  initial.banks[1].questions = [{ ...short, id: '1', question: '第二题' }];
+  initial.records = [];initial.wrongBook = {};initial.favorites = {};
+  const page = await pageFor(t, JSON.stringify(initial), '', examInstrumentation, { '/exam-page.js': exposeExamRender });
+  page.setDefaultTimeout(5000);
+  await page.locator('.nav[data-view="banks"]').click();
+  await page.locator('[data-practice-group-v8916]').first().click();
+  await page.locator('.nav[data-view="exam"]').click();
+  await page.locator('#exam-order').selectOption('sequence');
+  await page.locator('#exam-count').fill('2');
+  await page.locator('#exam-minutes').fill('0');
+  await page.locator('#start-exam-btn').click();
+  const inputs = page.locator('#exam-card .exam-q textarea');
+  for (let index = 0; index < 2; index += 1) { await inputs.nth(index).fill(`答案${index + 1}`); }
+  const result = await page.evaluate(() => {
+    const { items, answers } = globalThis.__examFixture.session.current;
+    return items.map((item) => ({ key: item.sessionKey, answer: answers[item.sessionKey] }));
+  });
+  assert.equal(new Set(result.map((item) => item.key)).size, 2);
+  assert.deepEqual(result.map((item) => item.answer), [['答案1'], ['答案2']]);
+  await page.locator('#exam-submit-focus-bottom').click();
+  await page.locator('#exam-back-setup').waitFor();
+  const record = JSON.parse(await saved(page)).records[0];
+  assert.deepEqual(record.details.map((detail) => detail.chosen), [['答案1'], ['答案2']]);
+});
+
 test('第三批考试：局部更新计数、焦点与同卷重绘后的迟到事件', async (t) => {
   const initial = webState();
   const single = initial.banks[0].questions[0];
@@ -2981,6 +3011,30 @@ test('第三批收藏：两道题的后发读取先返回时只进入最后选�
   assert.equal(await page.locator('#practice-number-range-v58916').inputValue(), '2-2');
 });
 
+test('审查回归：收藏读取期间保存等待并在完成后恢复列表', async (t) => {
+  const initial = webState();
+  initial.favorites['bank-a'] = ['same-id'];
+  const page = await pageFor(t, JSON.stringify(initial));
+  page.setDefaultTimeout(5000);
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.evaluate(() => {
+    const { storage } = globalThis.ShirohaPlatform;
+    storage.lazy = true;
+    storage.ensureQuestions = () => new Promise((resolve) => { globalThis.__finishFavoriteListRead = resolve; });
+  });
+  await page.locator('.nav[data-view="favorites"]').click();
+  await page.waitForFunction(() => typeof globalThis.__finishFavoriteListRead === 'function');
+  await page.evaluate(() => globalThis.document.querySelector('#save-all-btn').click());
+  await page.locator('body[data-storage-state="pending"]').waitFor();
+  await page.evaluate(() => {
+    delete globalThis.ShirohaPlatform.storage.ensureQuestions;
+    globalThis.__finishFavoriteListRead();
+  });
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.locator('[data-practice-one-fav-v596="same-id"]').waitFor();
+  assert.doesNotMatch(await page.locator('#favorites-list-v596').innerText(), /正在加载收藏题/);
+});
+
 for (const leave of [false, true]) {
   test(`第三批收藏：${leave ? '离页后' : '当前页面'}读取失败的提示归属`, async (t) => {
     const initial = webState();
@@ -3083,6 +3137,8 @@ test('第三批题库：跨页选择导出内容及取消、确认删除保留�
   const first = page.locator('#bank-list [data-bank-bulk-v23]').first();
   const firstId = await first.getAttribute('data-bank-bulk-v23');
   await first.check();
+  assert.equal(await page.locator('#export-bank-all-v23').isChecked(), false);
+  assert.equal(await page.locator('#export-bank-all-v23').evaluate((node) => node.indeterminate), true);
   await page.locator('#bank-list-pager').getByRole('button', { name: '第 2 页', exact: true }).click();
   const second = page.locator('#bank-list [data-bank-bulk-v23]').first();
   const secondId = await second.getAttribute('data-bank-bulk-v23');
@@ -3502,8 +3558,10 @@ test('第三批记录列表明细：关闭一项后其余展开明细继续补�
   await page.waitForFunction(() => globalThis.document.querySelector('[data-native-record="record-1"]')?.open);
   await page.locator('[data-native-record="record-two"] summary').click();
   await page.waitForFunction(() => typeof globalThis.__finishRecordBatch === 'function');
-  await page.locator('[data-native-record="record-1"] summary').click();
-  await page.evaluate(() => globalThis.__finishRecordBatch());
+  await page.evaluate(() => {
+    globalThis.document.querySelector('[data-native-record="record-1"]').open = false;
+    globalThis.__finishRecordBatch();
+  });
   await page.waitForFunction(() => globalThis.__recordBatchReads.some((ids) => ids.length === 1 && ids[0] === 'record-two'));
   await page.waitForFunction(() => {
     const first = globalThis.document.querySelector('[data-native-record="record-1"]');

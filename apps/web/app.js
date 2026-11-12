@@ -491,8 +491,14 @@
     state.settings.practiceScope = { type: PRACTICE_SCOPE_GROUP_V8916, value: group };return true;
   }
   function practiceSessionItemsForBanksV8916(banks) {
-    const used = new Map();const out = [];
-    (banks || []).forEach((bank) => (bank.questions || []).forEach((question) => { const base = `${bank.id}#${question.id}`;const n = used.get(base) || 0;used.set(base, n + 1);out.push({ sessionKey: n ? `${base}#${n}` : base, bankId: bank.id, bankName: bank.name || '', groupName: bankGroupNameV58(bank), question }); }));
+    const used = new Map();const keys = new Set();const out = [];
+    // 历史题号或题库 ID 可能包含分隔符，去重后缀也可能与另一题的原始键相同。
+    (banks || []).forEach((bank) => (bank.questions || []).forEach((question) => {
+      const base = `${bank.id}#${question.id}`;let n = used.get(base) || 0;let key = n ? `${base}#${n}` : base;
+      while (keys.has(key)) { n += 1;key = `${base}#${n}`; }
+      used.set(base, n + 1);keys.add(key);
+      out.push({ sessionKey: key, bankId: bank.id, bankName: bank.name || '', groupName: bankGroupNameV58(bank), question });
+    }));
     return out;
   }
   function currentPracticeItemV8916() { return (practiceSession.current && practiceSession.current.items && practiceSession.current.items[practiceSession.current.idx]) || null; }
