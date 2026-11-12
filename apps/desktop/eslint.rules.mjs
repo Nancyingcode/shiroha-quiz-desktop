@@ -1,5 +1,6 @@
 import js from '@eslint/js';
 import stylistic from '@stylistic/eslint-plugin';
+import importX from 'eslint-plugin-import-x';
 import { styleDebt, semanticDebt } from './eslint.migration.mjs';
 
 /** @type {import('eslint').Linter.RulesRecord} */
@@ -212,6 +213,22 @@ export function createConfig({ desktop = false, debt = false, semanticOnly = fal
         'max-depth': ['error', 4],
         'max-params': ['error', 5],
         'max-nested-callbacks': ['error', 4],
+        // 函数与文件规模同样按棘轮处理：这三个模块当前均无命中，阈值只在新增代码上生效。
+        'max-lines-per-function': ['error', { max: 120, skipBlankLines: true, skipComments: true }],
+        'max-lines': ['error', { max: 600, skipBlankLines: true, skipComments: true }],
+      },
+    },
+    {
+      // 模块图检查只覆盖真实使用 import/require 的文件；浏览器 classic script 没有模块边界，重复导入另行由核心规则覆盖。
+      files: [
+        'apps/desktop/**/*.mjs', 'test/dual-platform/**/*.cjs',
+        'apps/web/platform/**/*.js', 'apps/desktop/frontend/bridge.js',
+      ].map(relative),
+      plugins: { 'import-x': importX },
+      rules: {
+        'import-x/no-unresolved': 'error',
+        'import-x/no-cycle': ['error', { maxDepth: 10 }],
+        'import-x/no-extraneous-dependencies': ['error', { devDependencies: true }],
       },
     },
     {

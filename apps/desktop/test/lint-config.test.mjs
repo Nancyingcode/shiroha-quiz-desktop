@@ -282,6 +282,21 @@ test('duplicate ESM imports are rejected while explicit extensions and named exp
   assert.equal(valid.errorCount + valid.warningCount, 0);
 });
 
+test('module graph checks reject unresolved imports and accept resolvable ones', async () => {
+  const lint = linter();
+  const filePath = 'apps/desktop/scripts/graph-probe.mjs';
+  const [unresolved] = await lint.lintText(
+    "import missing from './definitely-missing.mjs';\nconsole.log(missing);\n",
+    { filePath },
+  );
+  assert(unresolved.messages.some((message) => message.ruleId === 'import-x/no-unresolved'));
+  const [resolved] = await lint.lintText(
+    "import path from 'node:path';\nimport { createConfig } from '../eslint.rules.mjs';\nconsole.log(path.sep, createConfig);\n",
+    { filePath },
+  );
+  assert.equal(resolved.errorCount + resolved.warningCount, 0, JSON.stringify(resolved.messages));
+});
+
 test('object and destructuring layout rules apply to every handwritten file', async () => {
   const lint = linter();
   for (const filePath of [
@@ -334,6 +349,14 @@ test('complexity ratchet applies to zero-baseline modules only', async () => {
   }
   const [outside] = await lint.lintText(branchy, { filePath: 'apps/web/bank-page.js' });
   assert.equal(outside.messages.filter((message) => message.ruleId === 'complexity').length, 0);
+
+  // 函数与文件规模阈值只需确认配置生效，构造超长函数会淹没用例本身。
+  for (const filePath of pilotFiles) {
+    const config = await lint.calculateConfigForFile(path.join(root, filePath));
+    for (const rule of ['max-lines-per-function', 'max-lines']) {
+      assert.equal(config?.rules?.[rule]?.[0], 2, `${filePath}: ${rule}`);
+    }
+  }
 });
 
 test('statement-per-line pilot covers zero-hit modules without affecting other files', async () => {
