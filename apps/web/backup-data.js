@@ -50,10 +50,22 @@
           const q = questionMap.get(e.id) || (e.nativeQuestion && typeof e.nativeQuestion === 'object' ? e.nativeQuestion : null);if (!q) { return; }
           const lastWrongAt = parseCrossPlatformTimeV24(e.lastWrongAt, Date.now());
           nativeWrongBook.push({
-            bankId: bid, bankName: bank.name || bank.title || '', question: structuredClone(q), lastAnswer: Array.isArray(e.lastAnswer) ? e.lastAnswer : [], source: e.source || 'web-export', timestamp: Number(e.timestamp || lastWrongAt),
-            wrongCount: Number(e.wrongCount || 1), rightCount: Number(e.rightCount || 0), reviewRightCount: Number(e.reviewRightCount || 0), streakCorrectCount: Number(e.streakCorrectCount || 0),
-            lastWrongAt, lastCorrectAt: e.lastCorrectAt ? parseCrossPlatformTimeV24(e.lastCorrectAt, null) : null, status: e.status || '未掌握',
-            lastReviewedAt: e.lastReviewedAt ? parseCrossPlatformTimeV24(e.lastReviewedAt, null) : null, nextReviewAt: e.nextReviewAt ? parseCrossPlatformTimeV24(e.nextReviewAt, null) : null, reviewLevel: Number(e.reviewLevel || 0),
+            bankId: bid,
+            bankName: bank.name || bank.title || '',
+            question: structuredClone(q),
+            lastAnswer: Array.isArray(e.lastAnswer) ? e.lastAnswer : [],
+            source: e.source || 'web-export',
+            timestamp: Number(e.timestamp || lastWrongAt),
+            wrongCount: Number(e.wrongCount || 1),
+            rightCount: Number(e.rightCount || 0),
+            reviewRightCount: Number(e.reviewRightCount || 0),
+            streakCorrectCount: Number(e.streakCorrectCount || 0),
+            lastWrongAt,
+            lastCorrectAt: e.lastCorrectAt ? parseCrossPlatformTimeV24(e.lastCorrectAt, null) : null,
+            status: e.status || '未掌握',
+            lastReviewedAt: e.lastReviewedAt ? parseCrossPlatformTimeV24(e.lastReviewedAt, null) : null,
+            nextReviewAt: e.nextReviewAt ? parseCrossPlatformTimeV24(e.nextReviewAt, null) : null,
+            reviewLevel: Number(e.reviewLevel || 0),
           });
         });
       });
@@ -125,7 +137,9 @@
         ...bank,
         id: String(bank.id || makeId('bank_import', index)),
         name: String(bank.name || bank.title || (`导入题库_${index + 1}`)),
-        groupName: pickBankGroupNameFromJsonV58(bank), createdAt: bank.createdAt || now(), updatedAt: now(),
+        groupName: pickBankGroupNameFromJsonV58(bank),
+        createdAt: bank.createdAt || now(),
+        updatedAt: now(),
         questions: (bank.questions || []).map((question, questionIndex) => ({
           ...question, ...normalizeQuestion(question, questionIndex),
         })).filter((question) => question.question),
@@ -147,15 +161,21 @@
         if (!bankId || !questionId) { return; }
         if (!web[bankId]) { web[bankId] = []; }
         web[bankId].push({
-          id: questionId, wrongCount: Number(entry.wrongCount || 1), rightCount: Number(entry.rightCount || 0),
-          reviewRightCount: Number(entry.reviewRightCount || 0), streakCorrectCount: Number(entry.streakCorrectCount || 0),
+          id: questionId,
+          wrongCount: Number(entry.wrongCount || 1),
+          rightCount: Number(entry.rightCount || 0),
+          reviewRightCount: Number(entry.reviewRightCount || 0),
+          streakCorrectCount: Number(entry.streakCorrectCount || 0),
           lastWrongAt: crossTimeToIsoV24(entry.lastWrongAt || entry.timestamp),
           lastCorrectAt: entry.lastCorrectAt ? crossTimeToIsoV24(entry.lastCorrectAt) : '',
           lastReviewedAt: entry.lastReviewedAt ? crossTimeToIsoV24(entry.lastReviewedAt) : '',
           nextReviewAt: entry.nextReviewAt ? crossTimeToIsoV24(entry.nextReviewAt) : '',
-          reviewLevel: Number(entry.reviewLevel || 0), lastAnswer: Array.isArray(entry.lastAnswer) ? entry.lastAnswer : [],
-          source: entry.source || 'native', timestamp: Number(entry.timestamp || entry.lastWrongAt || 0),
-          nativeQuestion: question, status: entry.status || '未掌握',
+          reviewLevel: Number(entry.reviewLevel || 0),
+          lastAnswer: Array.isArray(entry.lastAnswer) ? entry.lastAnswer : [],
+          source: entry.source || 'native',
+          timestamp: Number(entry.timestamp || entry.lastWrongAt || 0),
+          nativeQuestion: question,
+          status: entry.status || '未掌握',
         });
       });
       return web;
@@ -220,8 +240,13 @@
       state.activeBankId = state.banks[state.banks.length - normalized.banks.length]?.id || state.activeBankId;
     }
 
-    return Object.freeze({ buildBackupPayloadV23, buildNativeInteropStateV24, buildNativeCompatibleBackupZipV611,
-      normalizeBackupPayloadV23, mergeBackupBanksV23 });
+    return Object.freeze({
+      buildBackupPayloadV23,
+      buildNativeInteropStateV24,
+      buildNativeCompatibleBackupZipV611,
+      normalizeBackupPayloadV23,
+      mergeBackupBanksV23,
+    });
   }
   globalThis.ShirohaBackupData = Object.freeze({ create });
 })();

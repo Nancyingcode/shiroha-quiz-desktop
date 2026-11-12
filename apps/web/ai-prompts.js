@@ -5,15 +5,23 @@
     function aiRefactorQuestionSnapshotV384(q, index) {
       const item = q && typeof q === 'object' ? q : {};
       return {
-        index: index + 1, questionId: String(item.id || ''), number: String(item.number ?? index + 1),
-        type: item.type || '', question: item.question || '',
+        index: index + 1,
+        questionId: String(item.id || ''),
+        number: String(item.number ?? index + 1),
+        type: item.type || '',
+        question: item.question || '',
         options: (item.options || []).map((option) => ({ key: option.key, text: option.text })),
         answer: Array.isArray(item.answer) ? item.answer : [],
         blankAnswers: Array.isArray(item.blankAnswers) ? item.blankAnswers : [],
-        analysis: item.analysis || '', category: item.category || item.group || '', score: item.score ?? null,
-        subject: item.subject || '', grade: item.grade || '', difficulty: item.difficulty || '',
+        analysis: item.analysis || '',
+        category: item.category || item.group || '',
+        score: item.score ?? null,
+        subject: item.subject || '',
+        grade: item.grade || '',
+        difficulty: item.difficulty || '',
         knowledgePoints: Array.isArray(item.knowledgePoints) ? item.knowledgePoints : [],
-        tags: Array.isArray(item.tags) ? item.tags : [], source: item.source || '',
+        tags: Array.isArray(item.tags) ? item.tags : [],
+        source: item.source || '',
       };
     }
 
@@ -28,11 +36,17 @@
    AI 核对同步原生端异常检查维度；保留 Web 现有 low / confirm / cannot 返回协议。 */
     function aiQuestionPayloadV991(q, index, status) {
       return {
-        id: aiQuestionKeyV991(q, index), index: index + 1, number: q.number ?? '', type: q.type,
-        question: q.question, options: (q.options || []).map((option) => ({ key: option.key, text: option.text })),
+        id: aiQuestionKeyV991(q, index),
+        index: index + 1,
+        number: q.number ?? '',
+        type: q.type,
+        question: q.question,
+        options: (q.options || []).map((option) => ({ key: option.key, text: option.text })),
         answer: Array.isArray(q.answer) ? q.answer : [],
         blankAnswers: Array.isArray(q.blankAnswers) ? q.blankAnswers : undefined,
-        analysis: q.analysis || '', category: q.category || q.group || '', localStatus: status || validateQuestion(q),
+        analysis: q.analysis || '',
+        category: q.category || q.group || '',
+        localStatus: status || validateQuestion(q),
       };
     }
 
@@ -90,7 +104,8 @@
     function aiSingleQuestionPayloadV613(item, chosen) {
       const q = practiceQuestionV8916(item);
       return {
-        type: q.type || '', question: aiSingleTextV613(q.question),
+        type: q.type || '',
+        question: aiSingleTextV613(q.question),
         options: (q.options || []).map((option) => ({ key: option.key, text: aiSingleTextV613(option.text) })),
         answer: Array.isArray(q.answer) ? q.answer.map(aiSingleTextV613) : [],
         blankAnswers: Array.isArray(q.blankAnswers) ? q.blankAnswers.map((group) => group.map(aiSingleTextV613)) : undefined,

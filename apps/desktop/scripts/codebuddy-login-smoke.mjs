@@ -137,7 +137,8 @@ async function questionSmoke(page, startPractice) {
     const savedBank = afterSave.banks.find((bank) => bank.id === sourceBank.id);
     assert(savedBank, '保存后来源题库必须存在');
     assert.deepEqual(afterSave.banks, beforeSave.banks.map((bank) => (bank.id === sourceBank.id ? {
-      ...bank, updatedAt: savedBank.updatedAt,
+      ...bank,
+      updatedAt: savedBank.updatedAt,
       questions: bank.questions.map((question) => (question.id === sourceQuestion.id ? { ...question, analysis: savedDraft } : question)),
     } : bank)), '人工保存只能更新当前题解析和所属题库更新时间，题干、选项、答案及其他题目必须保留');
     assert.deepEqual(afterSave.records, beforeSave.records, '保存解析不能提交答案或新增练习记录');

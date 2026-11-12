@@ -41,16 +41,31 @@ test('跨端序列化从题干图片生成资产而不受空数组阻断', () =>
 
 async function historyWithDifferentCurrentQuestion() {
   const currentQuestion = {
-    id: 'native-blank', number: '1', type: 'BLANK', question: '题库中的新题干。', options: [],
-    answer: ['当前答案'], blankAnswers: [['当前答案']], analysis: '', images: [], score: 4, version: 1,
+    id: 'native-blank',
+    number: '1',
+    type: 'BLANK',
+    question: '题库中的新题干。',
+    options: [],
+    answer: ['当前答案'],
+    blankAnswers: [['当前答案']],
+    analysis: '',
+    images: [],
+    score: 4,
+    version: 1,
   };
   const wrongHistory = {
-    ...currentQuestion, question: '错题条目保存的旧题干。', answer: ['旧错题答案'],
-    blankAnswers: [['旧错题答案']], extensions: { history: '错题原始信息' },
+    ...currentQuestion,
+    question: '错题条目保存的旧题干。',
+    answer: ['旧错题答案'],
+    blankAnswers: [['旧错题答案']],
+    extensions: { history: '错题原始信息' },
   };
   const favoriteHistory = {
-    ...currentQuestion, question: '收藏条目保存的旧题干。', answer: ['旧收藏答案'],
-    blankAnswers: [['旧收藏答案']], extensions: { history: '收藏原始信息' },
+    ...currentQuestion,
+    question: '收藏条目保存的旧题干。',
+    answer: ['旧收藏答案'],
+    blankAnswers: [['旧收藏答案']],
+    extensions: { history: '收藏原始信息' },
   };
   const wrongOrphan = { ...wrongHistory, id: 'deleted-wrong', question: '孤儿错题快照。' };
   const favoriteOrphan = { ...favoriteHistory, id: 'deleted-favorite', question: '孤儿收藏快照。' };
@@ -72,9 +87,21 @@ async function historyWithDifferentCurrentQuestion() {
   const read = await api.readBackupFileV24({ name: 'history.zip', arrayBuffer: () => archive.blob.arrayBuffer() });
   const final = plain(api.normalizeBackupPayloadV23(JSON.parse(read.text), 'history.zip'));
   const currentExport = {
-    ...currentQuestion, volume: '', group: '', category: '', subject: '', grade: '', difficulty: '',
-    knowledgePoints: [], tags: [], source: '', sourceFileId: '', reviewStatus: 'approved', aiConfidence: null,
-    warnings: [], normalized: '题库中的新题干',
+    ...currentQuestion,
+    volume: '',
+    group: '',
+    category: '',
+    subject: '',
+    grade: '',
+    difficulty: '',
+    knowledgePoints: [],
+    tags: [],
+    source: '',
+    sourceFileId: '',
+    reviewStatus: 'approved',
+    aiConfidence: null,
+    warnings: [],
+    normalized: '题库中的新题干',
   };
   assert.deepEqual(source, original);
   assert.deepEqual(api.snapshot(), beforeExport);
@@ -88,9 +115,22 @@ async function historyWithDifferentCurrentQuestion() {
 
 function expectedWrongEntry(question, wrongCount) {
   return {
-    bankId: 'native-bank', bankName: 'Android 自建兼容样本', question, lastAnswer: ['南京', '宁'],
-    source: 'native', timestamp: MILLIS, wrongCount, rightCount: 1, reviewRightCount: 1, streakCorrectCount: 1,
-    lastWrongAt: MILLIS, lastCorrectAt: MILLIS, status: '复习中', lastReviewedAt: null, nextReviewAt: null, reviewLevel: 0,
+    bankId: 'native-bank',
+    bankName: 'Android 自建兼容样本',
+    question,
+    lastAnswer: ['南京', '宁'],
+    source: 'native',
+    timestamp: MILLIS,
+    wrongCount,
+    rightCount: 1,
+    reviewRightCount: 1,
+    streakCorrectCount: 1,
+    lastWrongAt: MILLIS,
+    lastCorrectAt: MILLIS,
+    status: '复习中',
+    lastReviewedAt: null,
+    nextReviewAt: null,
+    reviewLevel: 0,
   };
 }
 

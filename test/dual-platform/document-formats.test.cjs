@@ -42,14 +42,23 @@ test('PDF 文本按页面和坐标排序；文字层失败回退并释放文档'
   context.setTimeout = () => 1;
   context.__pdfjsMixed = {
     mode: '测试 PDF.js',
-    lib: { getDocument: () => ({
-      promise: Promise.resolve({ numPages: 1, getPage: async () => ({ getTextContent: async () => ({ items: [
-        { str: 'second line', transform: [0, 0, 0, 0, 0, 10] },
-        { str: 'question', transform: [0, 0, 0, 0, 20, 20] },
-        { str: 'self authored', transform: [0, 0, 0, 0, 0, 20] },
-      ] }) }) }),
-      destroy: async () => { destroyed += 1; },
-    }) },
+    lib: {
+      getDocument: () => ({
+        promise: Promise.resolve({
+          numPages: 1,
+          getPage: async () => ({
+            getTextContent: async () => ({
+              items: [
+                { str: 'second line', transform: [0, 0, 0, 0, 0, 10] },
+                { str: 'question', transform: [0, 0, 0, 0, 20, 20] },
+                { str: 'self authored', transform: [0, 0, 0, 0, 0, 20] },
+              ],
+            }),
+          }),
+        }),
+        destroy: async () => { destroyed += 1; },
+      }),
+    },
   };
   const file = { arrayBuffer: async () => new TextEncoder().encode('(Fallback self authored question text) Tj').buffer };
   assert.equal(await api.extractPdfText(file), '【第1页】\nself authored question\nsecond line');

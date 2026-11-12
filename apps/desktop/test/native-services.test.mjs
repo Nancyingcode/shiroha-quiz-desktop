@@ -7,18 +7,25 @@ test('整体撤销凭据后同步 Harness 修订，仍能保存直接 API 执行
   let revision = 1;
   const status = () => ({ mode: 'api', adapter: 'codex', model: '', timeoutSeconds: 120, credentialStatus: 'missing', runtimePath: '', runtimeVersion: '', runtimeSource: 'managed', runtimeState: 'unprepared', runtimeReceivedBytes: 0, runtimeTotalBytes: 0, ready: false, reason: '待配置', revision, busy: false });
   const scope = {
-    Response: globalThis.Response, crypto: globalThis.crypto, setTimeout, clearTimeout,
+    Response: globalThis.Response,
+    crypto: globalThis.crypto,
+    setTimeout,
+    clearTimeout,
     document: { getElementById: () => null, addEventListener() {} },
-    ShirohaBrowser: {}, ShirohaBrowserCredentials: {}, ShirohaSaveQueue: { create: () => ({}) },
-    ShirohaDesktopHost: { invoke: async (/** @type {string} */ command, /** @type {{request:{kind:string,revision?:number}}} */ args) => {
-      if (command === 'service_credential' && args.request.kind === 'invalidate') { revision += 1; return {}; }
-      assert.equal(command, 'harness_control');
-      if (args.request.kind === 'save') {
-        if (args.request.revision !== revision) { throw { code: 'harness_stale' }; }
-        revision += 1;
-      }
-      return status();
-    } },
+    ShirohaBrowser: {},
+    ShirohaBrowserCredentials: {},
+    ShirohaSaveQueue: { create: () => ({}) },
+    ShirohaDesktopHost: {
+      invoke: async (/** @type {string} */ command, /** @type {{request:{kind:string,revision?:number}}} */ args) => {
+        if (command === 'service_credential' && args.request.kind === 'invalidate') { revision += 1; return {}; }
+        assert.equal(command, 'harness_control');
+        if (args.request.kind === 'save') {
+          if (args.request.revision !== revision) { throw { code: 'harness_stale' }; }
+          revision += 1;
+        }
+        return status();
+      },
+    },
   };
   for (const file of ['adapter.js', 'harness.js']) { vm.runInNewContext(await readFile(new URL(`../frontend/${file}`, import.meta.url), 'utf8'), scope); }
   const platform = vm.runInNewContext('ShirohaPlatform', scope);
@@ -31,8 +38,11 @@ test('整体撤销凭据后同步 Harness 修订，仍能保存直接 API 执行
 
 test('desktop AI cancellation keeps AbortError semantics when native IPC rejects', async () => {
   const scope = {
-    Response: globalThis.Response, crypto: globalThis.crypto,
-    ShirohaBrowser: {}, ShirohaBrowserCredentials: {}, ShirohaSaveQueue: { create: () => ({}) },
+    Response: globalThis.Response,
+    crypto: globalThis.crypto,
+    ShirohaBrowser: {},
+    ShirohaBrowserCredentials: {},
+    ShirohaSaveQueue: { create: () => ({}) },
     ShirohaDesktopHost: { invoke: async () => { throw { code: 'cancelled' }; } },
   };
   vm.runInNewContext(await readFile(new URL('../frontend/adapter.js', import.meta.url), 'utf8'), scope);
@@ -50,8 +60,11 @@ test('desktop AI configuration and redirect failures have actionable messages', 
     ['payload_too_large', /内容/], ['invalid_input', /参数/],
   ]) {
     const scope = {
-      Response: globalThis.Response, crypto: globalThis.crypto,
-      ShirohaBrowser: {}, ShirohaBrowserCredentials: {}, ShirohaSaveQueue: { create: () => ({}) },
+      Response: globalThis.Response,
+      crypto: globalThis.crypto,
+      ShirohaBrowser: {},
+      ShirohaBrowserCredentials: {},
+      ShirohaSaveQueue: { create: () => ({}) },
       ShirohaDesktopHost: { invoke: async () => { throw { code }; } },
     };
     vm.runInNewContext(await readFile(new URL('../frontend/adapter.js', import.meta.url), 'utf8'), scope);
@@ -67,15 +80,24 @@ test('desktop AI configuration and redirect failures have actionable messages', 
 
 test('desktop credentials expose status only and commit staged secrets explicitly', async () => {
   /** @type {{command:string,args:{request:{kind:string,operation?:{kind:string}},secret?:string|null}}[]} */ const calls = [];
-  const scope = { Response: globalThis.Response, crypto: globalThis.crypto, TextDecoder, TextEncoder: globalThis.TextEncoder, structuredClone: globalThis.structuredClone,
-    ShirohaBrowser: {}, ShirohaBrowserCredentials: {}, ShirohaSaveQueue: { create: () => ({}) },
+  const scope = {
+    Response: globalThis.Response,
+    crypto: globalThis.crypto,
+    TextDecoder,
+    TextEncoder: globalThis.TextEncoder,
+    structuredClone: globalThis.structuredClone,
+    ShirohaBrowser: {},
+    ShirohaBrowserCredentials: {},
+    ShirohaSaveQueue: { create: () => ({}) },
     localStorage: { getItem: () => null },
-    ShirohaDesktopHost: { invoke: async (/** @type {string} */ command, /** @type {{request:{kind:string,operation?:{kind:string}},secret?:string|null}} */ args) => {
-      calls.push({ command, args });
-      if (args.request.kind === 'stage') { return { id: 'staged' }; }
-      if (args.request.kind === 'status') { return { state: 'remembered' }; }
-      return {};
-    } },
+    ShirohaDesktopHost: {
+      invoke: async (/** @type {string} */ command, /** @type {{request:{kind:string,operation?:{kind:string}},secret?:string|null}} */ args) => {
+        calls.push({ command, args });
+        if (args.request.kind === 'stage') { return { id: 'staged' }; }
+        if (args.request.kind === 'status') { return { state: 'remembered' }; }
+        return {};
+      },
+    },
   };
   vm.runInNewContext(await readFile(new URL('../frontend/adapter.js', import.meta.url), 'utf8'), scope);
   const credentials = vm.runInNewContext('ShirohaPlatform.credentials', scope);
@@ -92,13 +114,17 @@ test('desktop credentials expose status only and commit staged secrets explicitl
 test('desktop credential input preserves, replaces or clears each service through a staged operation', async () => {
   /** @type {Record<string, unknown>[]} */ const requests = [];
   const scope = {
-    ShirohaBrowser: {}, ShirohaBrowserCredentials: {}, ShirohaSaveQueue: { create: () => ({}) },
-    ShirohaDesktopHost: { invoke: async (/** @type {string} */ _command, /** @type {{request:Record<string,unknown>}} */ args) => {
-      requests.push(args.request);
-      if (args.request.kind === 'stage') { return { id: `stage-${requests.length}` }; }
-      if (args.request.kind === 'status') { return { state: 'session' }; }
-      return {};
-    } },
+    ShirohaBrowser: {},
+    ShirohaBrowserCredentials: {},
+    ShirohaSaveQueue: { create: () => ({}) },
+    ShirohaDesktopHost: {
+      invoke: async (/** @type {string} */ _command, /** @type {{request:Record<string,unknown>}} */ args) => {
+        requests.push(args.request);
+        if (args.request.kind === 'stage') { return { id: `stage-${requests.length}` }; }
+        if (args.request.kind === 'status') { return { state: 'session' }; }
+        return {};
+      },
+    },
   };
   vm.runInNewContext(await readFile(new URL('../frontend/adapter.js', import.meta.url), 'utf8'), scope);
   const credentials = vm.runInNewContext('ShirohaPlatform.credentials', scope);
@@ -130,8 +156,15 @@ test('desktop credential input preserves, replaces or clears each service throug
 
 test('desktop network maps DAV methods to limited operations and rejects arbitrary methods', async () => {
   /** @type {{command:string,args:{request:{kind:string,operation?:{kind:string}},secret?:string|null}}[]} */ const calls = [];
-  const scope = { Response: globalThis.Response, crypto: globalThis.crypto, TextDecoder, TextEncoder: globalThis.TextEncoder, structuredClone: globalThis.structuredClone,
-    ShirohaBrowser: {}, ShirohaBrowserCredentials: {}, ShirohaSaveQueue: { create: () => ({}) },
+  const scope = {
+    Response: globalThis.Response,
+    crypto: globalThis.crypto,
+    TextDecoder,
+    TextEncoder: globalThis.TextEncoder,
+    structuredClone: globalThis.structuredClone,
+    ShirohaBrowser: {},
+    ShirohaBrowserCredentials: {},
+    ShirohaSaveQueue: { create: () => ({}) },
     localStorage: { getItem: () => null },
     ShirohaDesktopHost: { invoke: async (/** @type {string} */ command, /** @type {{request:{kind:string,operation?:{kind:string}},secret?:string|null}} */ args) => { calls.push({ command, args }); return { status: 200, body: '{}' }; } },
   };

@@ -22,10 +22,17 @@ function commit(overrides = {}) {
 
 function backup(overrides = {}) {
   return {
-    kind: 'shiroha_quiz_web_full_backup', schemaVersion: 1, crossPlatformSchemaVersion: 1,
-    richContentVersion: 'shiroha-web-rich-v1', banks: [{ id: 'bank-1', name: '契约样本', questions: [] }],
-    activeBankId: 'bank-1', wrongBook: {}, favorites: {}, records: [],
-    settings: { suppressDefaultBank: false }, ...overrides,
+    kind: 'shiroha_quiz_web_full_backup',
+    schemaVersion: 1,
+    crossPlatformSchemaVersion: 1,
+    richContentVersion: 'shiroha-web-rich-v1',
+    banks: [{ id: 'bank-1', name: '契约样本', questions: [] }],
+    activeBankId: 'bank-1',
+    wrongBook: {},
+    favorites: {},
+    records: [],
+    settings: { suppressDefaultBank: false },
+    ...overrides,
   };
 }
 

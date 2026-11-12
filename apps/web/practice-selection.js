@@ -1,11 +1,15 @@
 (() => {
   'use strict';
   function create({ state, session: practiceSession, select: $, now, scope, questions, progress }) {
-    const { banks: practiceScopeBanksV8916, current: practiceScopeV8916,
+    const {
+      banks: practiceScopeBanksV8916, current: practiceScopeV8916,
       normalize: normalizePracticeScopeV8916, fromStart: PRACTICE_START_FROM_V58916,
-      continueMode: PRACTICE_START_CONTINUE_V58916, custom: PRACTICE_START_CUSTOM_V58916 } = scope;
-    const { itemsForBanks: practiceSessionItemsForBanksV8916, key: practiceItemKeyV8916,
-      wrongEntries: getWrongEntries, favorites: getFavoriteIdsV27, shuffle, parseNumbers: parsePracticeNumberRangeV58916 } = questions;
+      continueMode: PRACTICE_START_CONTINUE_V58916, custom: PRACTICE_START_CUSTOM_V58916,
+    } = scope;
+    const {
+      itemsForBanks: practiceSessionItemsForBanksV8916, key: practiceItemKeyV8916,
+      wrongEntries: getWrongEntries, favorites: getFavoriteIdsV27, shuffle, parseNumbers: parsePracticeNumberRangeV58916,
+    } = questions;
     const { answer: getPracticeAnswerStateV26 } = progress;
     function readCustomCountV60(selector, fallback = 20) {
       const el = selector ? $(selector) : null;
@@ -258,9 +262,16 @@
     }
     /* SHIROHA_WEB_V58_9_16_PRACTICE_PROGRESS_END */
     return {
-      readCustomCountV60, syncLimitControlV60, bindLimitControlsV60, filteredPracticeItemsV8916,
-      practiceBaseItemsV58916, syncPracticeStartModeFieldsV58916, syncPracticeStartUiV58916,
-      bindPracticeStartControlsV58916, buildPracticeSelectionV58916, updatePracticeProgressV58916,
+      readCustomCountV60,
+      syncLimitControlV60,
+      bindLimitControlsV60,
+      filteredPracticeItemsV8916,
+      practiceBaseItemsV58916,
+      syncPracticeStartModeFieldsV58916,
+      syncPracticeStartUiV58916,
+      bindPracticeStartControlsV58916,
+      buildPracticeSelectionV58916,
+      updatePracticeProgressV58916,
     };
   }
   globalThis.ShirohaPracticeSelection = { create };

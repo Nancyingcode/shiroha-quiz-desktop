@@ -1,14 +1,21 @@
 (() => {
   'use strict';
-  function create({ state, session: practiceSession, training: ShirohaTraining, select: $, selectAll: $$,
-    escape: esc, label, now, makeId, toast, showNotice, selection, scope, question, review, favorites, ai, shell, storage }) {
-    const { readCount: readCustomCountV60, syncLimit: syncLimitControlV60, build: buildPracticeSelectionV58916,
-      updateProgress: updatePracticeProgressV58916, syncStart: syncPracticeStartUiV58916 } = selection;
-    const { current: practiceScopeV8916, normalize: normalizePracticeScopeV8916, label: practiceScopeLabelV8916,
+  function create({
+    state, session: practiceSession, training: ShirohaTraining, select: $, selectAll: $$,
+    escape: esc, label, now, makeId, toast, showNotice, selection, scope, question, review, favorites, ai, shell, storage,
+  }) {
+    const {
+      readCount: readCustomCountV60, syncLimit: syncLimitControlV60, build: buildPracticeSelectionV58916,
+      updateProgress: updatePracticeProgressV58916, syncStart: syncPracticeStartUiV58916,
+    } = selection;
+    const {
+      current: practiceScopeV8916, normalize: normalizePracticeScopeV8916, label: practiceScopeLabelV8916,
       bankType: PRACTICE_SCOPE_BANK_V8916, groupType: PRACTICE_SCOPE_GROUP_V8916,
       fromStart: PRACTICE_START_FROM_V58916, continueMode: PRACTICE_START_CONTINUE_V58916, custom: PRACTICE_START_CUSTOM_V58916,
-      setBank: setPracticeBankScopeV8916, render: renderPracticeScopeUiV8916, activeBank } = scope;
-    const { current: currentPracticeItemV8916, question: practiceQuestionV8916, key: practiceItemKeyV8916,
+      setBank: setPracticeBankScopeV8916, render: renderPracticeScopeUiV8916, activeBank,
+    } = scope;
+    const {
+      current: currentPracticeItemV8916, question: practiceQuestionV8916, key: practiceItemKeyV8916,
       bankId: practiceItemBankIdV8916, bankName: practiceItemBankNameV8916, hasAnswer: hasAnswerValueV58914,
       sameAnswer: sameAnswerForQuestion, isTextType, isMultiBlank: isMultiBlankQuestionV58914,
       blankUserAnswers: blankUserAnswersFromDetailV58914, multiBlankComparison: renderMultiBlankComparisonV58914,
@@ -16,16 +23,23 @@
       reviewSummary: renderReviewAnswerSummary, html: questionHtml, applyAnswer: applyAnswerStateV26, collectAnswer,
       bindOptions: bindAnswerOptionControls, refreshOptions: refreshAnswerOptionControls, canEditOptions: canEditPracticeOptions,
       markOptions, content: renderQuestionContent, feedback: feedbackAnswerHtmlV58914, score: scoreOf, detail: makeAnswerDetail,
-      addWrong, markRight } = question;
-    const { items: trainingSessionItems, attach: attachTrainingReview, completion: trainingCompletion,
-      open: openTrainingReview, page: nativePage, analysis: renderReviewAnalysis, updatePanels: updateReviewAnalysisPanels } = review;
+      addWrong, markRight,
+    } = question;
+    const {
+      items: trainingSessionItems, attach: attachTrainingReview, completion: trainingCompletion,
+      open: openTrainingReview, page: nativePage, analysis: renderReviewAnalysis, updatePanels: updateReviewAnalysisPanels,
+    } = review;
     const { isFavorite: isFavoriteV27, toggle: toggleFavoriteV27 } = favorites;
     const { reset: resetAiSinglePracticeV613, render: renderPracticeAiPanelV613 } = ai;
-    const { collapse: autoCollapseSidebarForFocusV47, restore: restoreSidebarAfterFocusV47, update: updateShellLayoutByView,
+    const {
+      collapse: autoCollapseSidebarForFocusV47, restore: restoreSidebarAfterFocusV47, update: updateShellLayoutByView,
       bindRail: bindFocusRailToggleV34, prewarmMath: prewarmMathJaxV56, editQuestion: openPracticeEditQuestionV120,
-      closeBankDetail: closeBankQuestionDetail, renderAll, renderStats } = shell;
-    const { loadItems: loadNativeItems, isBusy: isMutationBusy, isReady: isApplicationReady,
-      transaction: runMutation, save: saveSilent } = storage;
+      closeBankDetail: closeBankQuestionDetail, renderAll, renderStats,
+    } = shell;
+    const {
+      loadItems: loadNativeItems, isBusy: isMutationBusy, isReady: isApplicationReady,
+      transaction: runMutation, save: saveSilent,
+    } = storage;
     // 运行计时器和复盘视图仅归当前页面；换轮/重置释放计时器，离开复盘后释放快照引用。
     const PRACTICE_CLOCK_REFRESH_MS = 250;
     let lifecycleBound = false;
@@ -888,11 +902,26 @@
       openQuickPracticeSetup();
     }
     return {
-      startPracticeClockTicker, showPracticePause, pausePracticeClock, startWrongPractice,
-      enterPracticeFocus, exitPracticeFocus, startPractice, totalPracticeFilledCount,
-      canLeaveTotalPractice, renderPracticeQuestion, getPracticeAnswerStateV26, showAnsweredStateV26,
-      showSubjectiveFeedback, openQuickPracticeSetup, switchPracticeSourceV27, renderPracticeWrongOverview,
-      needsPracticeSelfAssessment, recordPracticeAnswer, resetPractice, bindPracticeClockLifecycle,
+      startPracticeClockTicker,
+      showPracticePause,
+      pausePracticeClock,
+      startWrongPractice,
+      enterPracticeFocus,
+      exitPracticeFocus,
+      startPractice,
+      totalPracticeFilledCount,
+      canLeaveTotalPractice,
+      renderPracticeQuestion,
+      getPracticeAnswerStateV26,
+      showAnsweredStateV26,
+      showSubjectiveFeedback,
+      openQuickPracticeSetup,
+      switchPracticeSourceV27,
+      renderPracticeWrongOverview,
+      needsPracticeSelfAssessment,
+      recordPracticeAnswer,
+      resetPractice,
+      bindPracticeClockLifecycle,
     };
   }
   globalThis.ShirohaPracticePage = { create };

@@ -1,20 +1,30 @@
 (() => {
   'use strict';
-  function create({ state, draft: importDraft, session: practiceSession, select: $, selectAll: $$,
-    escape: esc, label, short, toast, now, parser, suggestions, editor, practice, view, storage }) {
-    const { countTypes, issueStatus: importIssueStatus, parseOptions: parseOptionsText,
+  function create({
+    state, draft: importDraft, session: practiceSession, select: $, selectAll: $$,
+    escape: esc, label, short, toast, now, parser, suggestions, editor, practice, view, storage,
+  }) {
+    const {
+      countTypes, issueStatus: importIssueStatus, parseOptions: parseOptionsText,
       trimText: trimMultilineBoundaryV5910, isTextType, splitText: splitTextAnswer, splitAnswer,
       isMultiBlank: isMultiBlankQuestionV58914, cloneBlanks: cloneBlankAnswersV58914,
       primaryBlank: primaryBlankAnswerV58914, explicitBlankCount: explicitBlankCountV58914,
       normalizeType: normalizeWebQuestionType, normalizeQuestion, cleanQuestion: cleanImportedQuestion,
-      validate: validateQuestion } = parser;
-    const { renderRow: renderAiSuggestionRowV991, remove: removeAiSuggestionsForQuestionV991,
-      invalidateImport: invalidateAiImportRequestV99, bind: bindAiSuggestionActionsV991, sync: syncAiPreviewToolsV991 } = suggestions;
+      validate: validateQuestion,
+    } = parser;
+    const {
+      renderRow: renderAiSuggestionRowV991, remove: removeAiSuggestionsForQuestionV991,
+      invalidateImport: invalidateAiImportRequestV99, bind: bindAiSuggestionActionsV991, sync: syncAiPreviewToolsV991,
+    } = suggestions;
     const { updateBankUi: updateBankEditUiV45, syncAppend: syncImportAppendUiV59 } = editor;
-    const { currentItem: currentPracticeItemV8916, question: practiceQuestionV8916, bankId: practiceItemBankIdV8916,
-      key: practiceItemKeyV8916, renderScope: renderPracticeScopeUiV8916, render: renderPracticeQuestion } = practice;
-    const { stats: renderStats, banks: renderBankList, bankPreview: renderBankPreview, wrong: renderWrongBook,
-      favorites: renderFavoritesPageV596, records: renderRecords } = view;
+    const {
+      currentItem: currentPracticeItemV8916, question: practiceQuestionV8916, bankId: practiceItemBankIdV8916,
+      key: practiceItemKeyV8916, renderScope: renderPracticeScopeUiV8916, render: renderPracticeQuestion,
+    } = practice;
+    const {
+      stats: renderStats, banks: renderBankList, bankPreview: renderBankPreview, wrong: renderWrongBook,
+      favorites: renderFavoritesPageV596, records: renderRecords,
+    } = view;
     const { transaction: runMutation, save: saveSilent } = storage;
     // 编辑弹窗与多空输入只属于当前页面；打开新题或关闭弹窗时丢弃旧编辑会话。
     let practiceEditSessionV120 = null; let editBlankGroupsV58914 = []; let editMultiBlankEnabledV58914 = false;

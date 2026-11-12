@@ -30,16 +30,20 @@ function setup(entry, data, assets) {
     applyBackupImportV23: async (...args) => { calls.imports.push(args);finish(); },
     toast: (message) => { calls.messages.push(message);finish(); },
     ShirohaDialogs: { confirm: async () => true },
-    ShirohaPlatform: { storage: {
-      recoverySnapshots: async () => [],
-      recoverImport: async (snapshot) => { calls.imports.push([snapshot]); },
-    } },
+    ShirohaPlatform: {
+      storage: {
+        recoverySnapshots: async () => [],
+        recoverImport: async (snapshot) => { calls.imports.push([snapshot]); },
+      },
+    },
     startApplication: async () => {},
-    document: { createElement(tag) {
-      const element = { tag, setAttribute() {}, appendChild() {}, replaceChildren() {} };
-      elements.push(element);
-      return element;
-    } },
+    document: {
+      createElement(tag) {
+        const element = { tag, setAttribute() {}, appendChild() {}, replaceChildren() {} };
+        elements.push(element);
+        return element;
+      },
+    },
   });
   vm.runInContext(source.functionSource(entry), context);
   return { context, calls, elements, finished };

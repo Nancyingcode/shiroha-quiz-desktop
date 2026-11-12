@@ -453,6 +453,12 @@
       await scope.ShirohaPlatform?.harness?.initialize({ restored: true });
     },
   };
-  scope.ShirohaPlatform = { ...scope.ShirohaBrowser, storage, saves: scope.ShirohaSaveQueue.create(storage),
-    download, network, credentials };
+  scope.ShirohaPlatform = {
+    ...scope.ShirohaBrowser,
+    storage,
+    saves: scope.ShirohaSaveQueue.create(storage),
+    download,
+    network,
+    credentials,
+  };
 })();

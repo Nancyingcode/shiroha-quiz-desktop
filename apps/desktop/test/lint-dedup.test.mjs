@@ -179,7 +179,9 @@ test('complete discovery rejects an external JavaScript link before ESLint reads
     await writeFile(path.join(f.temporary, '.gitignore'), '/read-watch.mjs\n/outside-read\n');
     await writeFile(hook, readWatch(link, marker));
     const result = spawnSync(process.execPath, [path.join(desktop, 'scripts/lint-incremental.mjs'), '--complete'], {
-      cwd: f.temporary, encoding: 'utf8', windowsHide: true,
+      cwd: f.temporary,
+      encoding: 'utf8',
+      windowsHide: true,
       env: { ...process.env, NODE_OPTIONS: `--import=${pathToFileURL(hook).href}` },
     });
     assert.equal(result.status, 1, result.stderr + result.stdout);
@@ -220,7 +222,9 @@ test('real ESLint discovery reads legacy files through the ordinary-path guard',
     '',
   ].join('\n'));
   const result = spawnSync(process.execPath, [path.join(desktop, 'scripts/lint-incremental.mjs'), '--complete'], {
-    cwd: f.temporary, encoding: 'utf8', windowsHide: true,
+    cwd: f.temporary,
+    encoding: 'utf8',
+    windowsHide: true,
     env: { ...process.env, NODE_OPTIONS: `--import=${pathToFileURL(hook).href}` },
   });
   assert.equal(result.status, 0, result.stderr + result.stdout);
@@ -300,7 +304,9 @@ test('filename-specific ignore patterns cannot make an external junction safe', 
     await writeFile(path.join(f.temporary, '.gitignore'), '/read-watch.mjs\n/outside-read\n');
     await writeFile(hook, readWatch(path.join(link, 'bad.mjs'), marker));
     const result = spawnSync(process.execPath, [path.join(desktop, 'scripts/lint-incremental.mjs'), '--complete'], {
-      cwd: f.temporary, encoding: 'utf8', windowsHide: true,
+      cwd: f.temporary,
+      encoding: 'utf8',
+      windowsHide: true,
       env: { ...process.env, NODE_OPTIONS: `--import=${pathToFileURL(hook).href}` },
     });
     assert.equal(result.status, 1, result.stderr + result.stdout);

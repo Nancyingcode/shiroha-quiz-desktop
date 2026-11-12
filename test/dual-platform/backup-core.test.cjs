@@ -14,8 +14,12 @@ test('备份转换在无 DOM、存储和文件接口的环境中加载并保留�
   assert.throws(() => core.assertSupportedBackup(future), /版本/);
   assert.equal(core.backupMimeFromPath('assets/PHOTO.JPEG'), 'image/jpeg');
   assert.equal(core.backupMimeFromPath('assets/file.unknown'), 'application/octet-stream');
-  const record = { bankId: 'old', bankName: '原题库', details: [{ sourceBankId: 'old', sourceBankName: '原题库' }],
-    review: { version: 1, items: [{ sourceBankId: 'old', sourceBankName: '原题库', draft: ['甲'] }] } };
+  const record = {
+    bankId: 'old',
+    bankName: '原题库',
+    details: [{ sourceBankId: 'old', sourceBankName: '原题库' }],
+    review: { version: 1, items: [{ sourceBankId: 'old', sourceBankName: '原题库', draft: ['甲'] }] },
+  };
   const before = structuredClone(record);
   const mapped = core.remapBackupRecord(record, { old: { id: 'new', name: '导入题库' } });
   assert.equal(mapped.bankId, 'new');

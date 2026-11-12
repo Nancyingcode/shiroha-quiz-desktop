@@ -8,17 +8,24 @@ const { setImmediate } = require('node:timers');
 for (const fail of [false, true]) {
   test(`PDF extraction releases document after ${fail ? 'failure' : 'success'}`, async () => {
     let destroyed = 0;
-    const pdf = { numPages: 1, getPage: async () => ({ getTextContent: async () => {
-      if (fail) { throw new Error('damaged page'); }
-      return { items: [{ str: 'A self authored question with enough text for extraction', transform: [0, 0, 0, 0, 0, 0] }] };
-    } }), destroy: async () => { destroyed += 1; } };
+    const pdf = {
+      numPages: 1,
+      getPage: async () => ({
+        getTextContent: async () => {
+          if (fail) { throw new Error('damaged page'); }
+          return { items: [{ str: 'A self authored question with enough text for extraction', transform: [0, 0, 0, 0, 0, 0] }] };
+        },
+      }),
+      destroy: async () => { destroyed += 1; },
+    };
     const context = vm.createContext({ Uint8Array, TextDecoder });
     context.window = context;
     context.__pdfjsMixed = { lib: { getDocument: () => ({ promise: Promise.resolve(pdf), destroy: pdf.destroy }) } };
     runWebScripts(context, ['pdf-import.js']);
     const reader = context.ShirohaPdf.create({
       readBuffer: async () => new TextEncoder().encode('(Fallback self authored question with enough text) Tj').buffer,
-      toast() {}, warnDev() {},
+      toast() {},
+      warnDev() {},
     });
     const text = await reader.extractPdfText({});
     assert.match(text, fail ? /Fallback/ : /第1页/);
@@ -50,16 +57,25 @@ function ocrFixture({ recognize, viewport = { width: 1000, height: 1000 } }) {
     render: () => ({ promise: Promise.resolve() }),
     cleanup: () => { stats.cleaned += 1; },
   };
-  const pdf = { loadLocalPdfJs: async () => ({ lib: { getDocument: () => ({
-    promise: Promise.resolve({ numPages: 1, getPage: async () => page }),
-    destroy: async () => { stats.destroyed += 1; },
-  }) } }), pdfDocumentOptions: (data) => ({ data }) };
+  const pdf = {
+    loadLocalPdfJs: async () => ({
+      lib: {
+        getDocument: () => ({
+          promise: Promise.resolve({ numPages: 1, getPage: async () => page }),
+          destroy: async () => { stats.destroyed += 1; },
+        }),
+      },
+    }),
+    pdfDocumentOptions: (data) => ({ data }),
+  };
   const context = vm.createContext({ document, Uint8Array });
   context.window = context;
-  context.Tesseract = { createWorker: async () => ({
-    recognize,
-    terminate: async () => { stats.terminated += 1; },
-  }) };
+  context.Tesseract = {
+    createWorker: async () => ({
+      recognize,
+      terminate: async () => { stats.terminated += 1; },
+    }),
+  };
   runWebScripts(context, ['ocr-import.js']);
   const session = context.ShirohaOcrImport.create({
     pdf, readBuffer: async () => new ArrayBuffer(0), toast() {}, warnDev() {},
@@ -82,10 +98,12 @@ test('cancelling pending recognition releases resources and permits retry withou
   const pending = new Promise((resolve) => { finishOldRecognition = resolve; });
   const started = new Promise((resolve) => { recognitionStarted = resolve; });
   let calls = 0;
-  const { session, elements, stats } = ocrFixture({ recognize: () => {
-    recognitionStarted();
-    return (calls += 1) === 1 ? pending : Promise.resolve({ data: { text: 'new result' } });
-  } });
+  const { session, elements, stats } = ocrFixture({
+    recognize: () => {
+      recognitionStarted();
+      return (calls += 1) === 1 ? pending : Promise.resolve({ data: { text: 'new result' } });
+    },
+  });
   let completed = false;
   const running = session.startPdfOcrImport().then(() => { completed = true; });
   await started;

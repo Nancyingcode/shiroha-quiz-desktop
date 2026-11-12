@@ -150,8 +150,16 @@
   }
 
   globalThis.ShirohaQuizCore = Object.freeze({
-    listPageRange, listPageNumbers, normalizeWebQuestionType, isTextType,
-    normalizeBlankAnswersV58914, isMultiBlankQuestionV58914, normalizeBlankTextV58914,
-    primaryBlankAnswerV58914, cloneBlankAnswersV58914, normalizeTextAnswerForCompare, sameAnswerForQuestion,
+    listPageRange,
+    listPageNumbers,
+    normalizeWebQuestionType,
+    isTextType,
+    normalizeBlankAnswersV58914,
+    isMultiBlankQuestionV58914,
+    normalizeBlankTextV58914,
+    primaryBlankAnswerV58914,
+    cloneBlankAnswersV58914,
+    normalizeTextAnswerForCompare,
+    sameAnswerForQuestion,
   });
 })();

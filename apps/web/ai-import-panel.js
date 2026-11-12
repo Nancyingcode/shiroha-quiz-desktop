@@ -1,105 +1,115 @@
 (() => {
   'use strict';
-  function create({ draft: importDraft, sessions: aiImportSessions, platform: ShirohaPlatform,
-    select: $, selectAll: $$, escape: esc, label, toast, showNotice, settings, requests, editor, preview, limits }) {
-    const { presets: AI_PROVIDER_PRESETS_V99, config: aiExecutionConfigV99, configured: aiConfiguredV99, availability: aiAvailabilityV99, isHarness: isAiHarnessExecutionV99,
-      executionLabel: aiExecutionLabelV99, privacy: aiHarnessPrivacyV99,
-      localEndpoint: isLocalAiEndpointV99, updatePill: updateAiConnectionPillV99, render: renderAiSettingsV99,
-      toggleDiagnostic: toggleAiDiagnosticV375, copyDiagnostic: copyAiDiagnosticV375, copyCors: copyAiOllamaCorsCommandV375,
-      save: saveAiSettingsV99, test: testAiConnectionV99, clear: clearAiSettingsV99 } = settings;
-    const { busy: aiTasksBusyV99, startImport: startAiImportV99, cancelImport: cancelAiImportRequestV99,
-      invalidateImport: invalidateAiImportRequestV99, startPreview: startAiPreviewTaskV991, cancelPreview: cancelAiPreviewRequestV991 } = requests;
+  function create({
+    draft: importDraft, sessions: aiImportSessions, platform: ShirohaPlatform,
+    select: $, selectAll: $$, escape: esc, label, toast, showNotice,
+    settings, requests, editor, preview, limits,
+  }) {
+    const {
+      presets: AI_PROVIDER_PRESETS_V99,
+      config: aiExecutionConfigV99,
+      configured: aiConfiguredV99,
+      availability: aiAvailabilityV99,
+      isHarness: isAiHarnessExecutionV99,
+      executionLabel: aiExecutionLabelV99,
+      privacy: aiHarnessPrivacyV99,
+      localEndpoint: isLocalAiEndpointV99,
+      updatePill: updateAiConnectionPillV99,
+      render: renderAiSettingsV99,
+      toggleDiagnostic: toggleAiDiagnosticV375,
+      copyDiagnostic: copyAiDiagnosticV375,
+      copyCors: copyAiOllamaCorsCommandV375,
+      save: saveAiSettingsV99,
+      test: testAiConnectionV99,
+      clear: clearAiSettingsV99,
+    } = settings;
+    const {
+      busy: aiTasksBusyV99,
+      startImport: startAiImportV99,
+      cancelImport: cancelAiImportRequestV99,
+      invalidateImport: invalidateAiImportRequestV99,
+      startPreview: startAiPreviewTaskV991,
+      cancelPreview: cancelAiPreviewRequestV991,
+    } = requests;
     const { isEditing: isEditingBank, openQuestion: openEditQuestion, normalizeQuestion } = editor;
-    const { status: importIssueStatus, key: aiQuestionKeyV991, findIndex: findImportIndexByAiKeyV991,
-      render: renderImportPreview, renderPracticeAi: renderPracticeAiPanelV613, updateReview, switchView: switchViewV45 } = preview;
-    const { importChars: AI_IMPORT_MAX_CHARS_V99, items: AI_PREVIEW_MAX_ITEMS_V991,
-      analysisBatch: AI_ANALYSIS_DEFAULT_BATCH_V991, reviewBatch: AI_REVIEW_DEFAULT_BATCH_V991 } = limits;
+    const {
+      status: importIssueStatus,
+      key: aiQuestionKeyV991,
+      findIndex: findImportIndexByAiKeyV991,
+      render: renderImportPreview,
+      renderPracticeAi: renderPracticeAiPanelV613,
+      updateReview,
+      switchView: switchViewV45,
+    } = preview;
+    const {
+      importChars: AI_IMPORT_MAX_CHARS_V99,
+      items: AI_PREVIEW_MAX_ITEMS_V991,
+      analysisBatch: AI_ANALYSIS_DEFAULT_BATCH_V991,
+      reviewBatch: AI_REVIEW_DEFAULT_BATCH_V991,
+    } = limits;
     // 文本选择与预览范围只属于当前导入页；重新输入时丢弃旧选择。
-    let aiPreviewPanelModeV991 = 'review'; let aiImportTextSelectionV992 = { start: 0, end: 0, text: '' };
+    let aiPreviewPanelModeV991 = 'review';
+    let aiImportTextSelectionV992 = { start: 0, end: 0, text: '' };
     // 选项状态只属于当前选择框和模式；节点替换或模式变化时重新构建。
-    let aiPreviewScopeNodeV991 = null; let aiPreviewScopeModeV991 = '';
+    let aiPreviewScopeNodeV991 = null;
+    let aiPreviewScopeModeV991 = '';
     const importOrPreviewBusy = () => !!aiImportSessions.importRequest.running || !!aiImportSessions.previewRequest.running;
     function bindAiImportEventsV99() {
+      // 统一的事件属性绑定，避免每处重复“查询 → 判空 → 赋值”；仍用 on* 属性保持覆盖语义。
+      const bindEvent = (selector, eventName, handler) => {
+        const element = $(selector);
+        if (element) {
+          element[eventName] = handler;
+        }
+      };
+      const bindClick = (selector, handler) => bindEvent(selector, 'onclick', handler);
+      const bindChange = (selector, handler) => bindEvent(selector, 'onchange', handler);
+      const bindInput = (selector, handler) => bindEvent(selector, 'oninput', handler);
       ShirohaPlatform.harness?.bind(() => {
         updateAiConnectionPillV99('idle');
         syncAiImportActionV99();
         renderPracticeAiPanelV613();
         updateReview?.();
       }, aiTasksBusyV99);
-      const provider = $('#ai-provider-v99');
-      if (provider) {
-        provider.onchange = () => {
-          const endpoint = $('#ai-endpoint-v99');
-          if (!endpoint) {
-            return;
-          }
-          const presets = Object.values(AI_PROVIDER_PRESETS_V99).map((x) => x.endpoint).filter(Boolean);
-          if (!endpoint.value.trim() || presets.includes(endpoint.value.trim()) || endpoint.value.trim() === endpoint.dataset.lastPreset) {
-            endpoint.value = AI_PROVIDER_PRESETS_V99[provider.value]?.endpoint || '';
-          }
-          endpoint.dataset.lastPreset = AI_PROVIDER_PRESETS_V99[provider.value]?.endpoint || '';
-        };
-      }
-      const save = $('#ai-save-settings-v99');
-      if (save) {
-        save.onclick = saveAiSettingsV99;
-      }
-      const bindClick = (selector, handler) => {
-        const button = $(selector);
-        if (button) {
-          button.onclick = handler;
+      bindChange('#ai-provider-v99', (event) => {
+        const provider = event.currentTarget;
+        const endpoint = $('#ai-endpoint-v99');
+        if (!endpoint) {
+          return;
         }
-      };
+        const presets = Object.values(AI_PROVIDER_PRESETS_V99).map((x) => x.endpoint).filter(Boolean);
+        if (!endpoint.value.trim() || presets.includes(endpoint.value.trim()) || endpoint.value.trim() === endpoint.dataset.lastPreset) {
+          endpoint.value = AI_PROVIDER_PRESETS_V99[provider.value]?.endpoint || '';
+        }
+        endpoint.dataset.lastPreset = AI_PROVIDER_PRESETS_V99[provider.value]?.endpoint || '';
+      });
+      bindClick('#ai-save-settings-v99', saveAiSettingsV99);
       bindClick('#ai-test-connection-v99', testAiConnectionV99);
       bindClick('#ai-toggle-diagnostics-v375', toggleAiDiagnosticV375);
       bindClick('#ai-copy-diagnostics-v375', copyAiDiagnosticV375);
       bindClick('#ai-copy-ollama-cors-v375', copyAiOllamaCorsCommandV375);
       bindClick('#ai-clear-settings-v99', clearAiSettingsV99);
       bindClick('#ai-organize-import-btn-v99', openAiImportPanelV99);
-      const start = $('#ai-import-start-btn-v99');
-      if (start) {
-        start.onclick = startAiImportV99;
-      }
-      const cancel = $('#ai-import-cancel-btn-v99');
-      if (cancel) {
-        cancel.onclick = () => {
-          if (aiImportSessions.importRequest.running) {
-            cancelAiImportRequestV99(false);
-          } else {
-            closeAiImportPanelV99();
-          }
-        };
-      }
-      const settings = $('#ai-import-settings-btn-v99');
-      if (settings) {
-        settings.onclick = async () => await openSettingsOrRetry('import_organize');
-      }
-      const review = $('#ai-review-import-btn-v991');
-      if (review) {
-        review.onclick = () => openAiPreviewPanelV991('review');
-      }
-      const analysis = $('#ai-analysis-import-btn-v991');
-      if (analysis) {
-        analysis.onclick = () => openAiPreviewPanelV991('analysis');
-      }
-      const previewStart = $('#ai-preview-start-btn-v991');
-      if (previewStart) {
-        previewStart.onclick = startAiPreviewTaskV991;
-      }
-      const previewCancel = $('#ai-preview-cancel-btn-v991');
-      if (previewCancel) {
-        previewCancel.onclick = () => {
-          if (aiImportSessions.previewRequest.running) {
-            cancelAiPreviewRequestV991(false);
-          } else {
-            closeAiPreviewPanelV991();
-          }
-        };
-      }
-      const previewSettings = $('#ai-preview-settings-btn-v991');
-      if (previewSettings) {
-        previewSettings.onclick = async () => await openSettingsOrRetry(aiPreviewPanelModeV991 === 'analysis' ? 'batch_analysis' : 'batch_review');
-      }
+      bindClick('#ai-import-start-btn-v99', startAiImportV99);
+      bindClick('#ai-import-cancel-btn-v99', () => {
+        if (aiImportSessions.importRequest.running) {
+          cancelAiImportRequestV99(false);
+        } else {
+          closeAiImportPanelV99();
+        }
+      });
+      bindClick('#ai-import-settings-btn-v99', async () => await openSettingsOrRetry('import_organize'));
+      bindClick('#ai-review-import-btn-v991', () => openAiPreviewPanelV991('review'));
+      bindClick('#ai-analysis-import-btn-v991', () => openAiPreviewPanelV991('analysis'));
+      bindClick('#ai-preview-start-btn-v991', startAiPreviewTaskV991);
+      bindClick('#ai-preview-cancel-btn-v991', () => {
+        if (aiImportSessions.previewRequest.running) {
+          cancelAiPreviewRequestV991(false);
+        } else {
+          closeAiPreviewPanelV991();
+        }
+      });
+      bindClick('#ai-preview-settings-btn-v991', async () => await openSettingsOrRetry(aiPreviewPanelModeV991 === 'analysis' ? 'batch_analysis' : 'batch_review'));
       const importText = $('#import-text');
       if (importText && !importText.dataset.aiSelectionBoundV992) {
         importText.dataset.aiSelectionBoundV992 = '1';
@@ -133,41 +143,16 @@
         invalidateAiImportRequestV99();
         if (!invalidationWillSync) { refreshAiImportPanelV99(); }
       });
-      const previewScope = $('#ai-preview-scope-v991');
-      if (previewScope) {
-        previewScope.onchange = () => {
-          clearAiPreviewStatusStickyV991();
-          refreshAiPreviewPanelV991();
-        };
-      }
-      const previewCondition = $('#ai-preview-condition-v992');
-      if (previewCondition) {
-        previewCondition.onchange = () => {
-          clearAiPreviewStatusStickyV991();
-          refreshAiPreviewPanelV991();
-        };
-      }
-      const previewRangeStart = $('#ai-preview-range-start-v992');
-      if (previewRangeStart) {
-        previewRangeStart.oninput = () => {
-          clearAiPreviewStatusStickyV991();
-          refreshAiPreviewPanelV991();
-        };
-      }
-      const previewRangeEnd = $('#ai-preview-range-end-v992');
-      if (previewRangeEnd) {
-        previewRangeEnd.oninput = () => {
-          clearAiPreviewStatusStickyV991();
-          refreshAiPreviewPanelV991();
-        };
-      }
-      const previewBatch = $('#ai-preview-batch-v991');
-      if (previewBatch) {
-        previewBatch.oninput = () => {
-          clearAiPreviewStatusStickyV991();
-          refreshAiPreviewPanelV991();
-        };
-      }
+      // 预览筛选条件变化必须先丢弃粘性状态再重渲染，共用一个处理器避免各处分支漂移。
+      const refreshAiPreviewOnFilterChangeV991 = () => {
+        clearAiPreviewStatusStickyV991();
+        refreshAiPreviewPanelV991();
+      };
+      bindChange('#ai-preview-scope-v991', refreshAiPreviewOnFilterChangeV991);
+      bindChange('#ai-preview-condition-v992', refreshAiPreviewOnFilterChangeV991);
+      bindInput('#ai-preview-range-start-v992', refreshAiPreviewOnFilterChangeV991);
+      bindInput('#ai-preview-range-end-v992', refreshAiPreviewOnFilterChangeV991);
+      bindInput('#ai-preview-batch-v991', refreshAiPreviewOnFilterChangeV991);
       renderAiSettingsV99();
       syncAiImportActionV99();
     }
@@ -234,10 +219,21 @@
       const scope = aiImportScopeV992();
       const selected = currentAiImportSelectionV992();
       if (scope === 'selection') {
-        return { scope, text: selected, label: '当前选中文本', sourceText: full,
-          selectionStart: aiImportTextSelectionV992.start, selectionEnd: aiImportTextSelectionV992.end };
+        return {
+          scope,
+          text: selected,
+          label: '当前选中文本',
+          sourceText: full,
+          selectionStart: aiImportTextSelectionV992.start,
+          selectionEnd: aiImportTextSelectionV992.end,
+        };
       }
-      return { scope: 'all', text: full.trim(), label: '全部原始文本', sourceText: full };
+      return {
+        scope: 'all',
+        text: full.trim(),
+        label: '全部原始文本',
+        sourceText: full,
+      };
     }
     function openAiImportPanelV99() {
       if (isEditingBank()) {
@@ -742,10 +738,20 @@
       });
     }
     return {
-      bindAiImportEventsV99, syncAiImportActionV99, closeAiImportPanelV99, aiImportRangeV992,
-      refreshAiImportPanelV99, setAiImportStatusV99, closeAiPreviewPanelV991, aiPreviewModeLabelV991,
-      collectAiPreviewTargetDetailsV992, refreshAiPreviewPanelV991, setAiPreviewStatusV991,
-      syncAiPreviewToolsV991, renderAiSuggestionRowV991, bindAiSuggestionActionsV991,
+      bindAiImportEventsV99,
+      syncAiImportActionV99,
+      closeAiImportPanelV99,
+      aiImportRangeV992,
+      refreshAiImportPanelV99,
+      setAiImportStatusV99,
+      closeAiPreviewPanelV991,
+      aiPreviewModeLabelV991,
+      collectAiPreviewTargetDetailsV992,
+      refreshAiPreviewPanelV991,
+      setAiPreviewStatusV991,
+      syncAiPreviewToolsV991,
+      renderAiSuggestionRowV991,
+      bindAiSuggestionActionsV991,
       mode: () => aiPreviewPanelModeV991,
     };
   }

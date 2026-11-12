@@ -43,8 +43,13 @@ async function fixedFixtures() {
 
 /** @param {Fixture} fixture */
 function fixtureMetadata(fixture) {
-  return { id: fixture.id, fileName: fixture.fileName, sha256: createHash('sha256').update(fixture.text).digest('hex'),
-    bytes: Buffer.byteLength(fixture.text), expectedQuestions: fixture.questions };
+  return {
+    id: fixture.id,
+    fileName: fixture.fileName,
+    sha256: createHash('sha256').update(fixture.text).digest('hex'),
+    bytes: Buffer.byteLength(fixture.text),
+    expectedQuestions: fixture.questions,
+  };
 }
 
 /** @param {import('playwright-core').Page} page @param {Fixture} fixture */
@@ -54,8 +59,11 @@ async function measureFixture(page, fixture) {
   await page.locator('#import-mode').selectOption(fixture.mode);
   await page.locator('#import-save-mode-v59').selectOption('new');
   const parseStart = performance.now();
-  await page.locator('#import-file').setInputFiles({ name: fixture.fileName,
-    mimeType: fixture.mode === 'json' ? 'application/json' : 'text/plain', buffer: Buffer.from(fixture.text) });
+  await page.locator('#import-file').setInputFiles({
+    name: fixture.fileName,
+    mimeType: fixture.mode === 'json' ? 'application/json' : 'text/plain',
+    buffer: Buffer.from(fixture.text),
+  });
   await page.waitForFunction((text) => (/** @type {HTMLTextAreaElement | null} */ (document.querySelector('#import-text')))?.value === text, fixture.text.replace(/\r\n/g, '\n'));
   await page.locator('#parse-import-btn').click();
   await page.waitForFunction((expected) => document.querySelectorAll('#import-preview tbody tr').length === expected, fixture.questions);
@@ -87,8 +95,14 @@ async function measureFixture(page, fixture) {
   await page.locator('#start-practice-btn').click();
   await page.locator('#practice-card .question-title').first().waitFor({ state: 'visible' });
   assert.match(await page.locator('#practice-progress').innerText(), new RegExp(`1\\s*/\\s*${fixture.questions}`));
-  return { ...fixtureMetadata(fixture), parseMs: Math.round(parseMs), importCommitMs: Math.round(importCommitMs),
-    manualSaveMs: Math.round(manualSaveMs), persistedQuestions: matching[0].questions?.length, storedBytes: Buffer.byteLength(raw) };
+  return {
+    ...fixtureMetadata(fixture),
+    parseMs: Math.round(parseMs),
+    importCommitMs: Math.round(importCommitMs),
+    manualSaveMs: Math.round(manualSaveMs),
+    persistedQuestions: matching[0].questions?.length,
+    storedBytes: Buffer.byteLength(raw),
+  };
 }
 
 async function availablePort() {
@@ -187,7 +201,8 @@ async function measure(executable, profile, index, fixture) {
   const earliest = new Date().toISOString();
   const start = performance.now();
   const child = spawn(executable, [], {
-    stdio: 'ignore', windowsHide: true,
+    stdio: 'ignore',
+    windowsHide: true,
     env: {
       ...process.env,
       SHIROHA_TEST_ROOT: profile,
@@ -239,17 +254,22 @@ async function measure(executable, profile, index, fixture) {
       const timings = await measureFixture(page, fixture);
       await delay(IDLE_MS);
       const afterProcesses = await sampleMemory(owned);
-      fixtureResult = { ...timings,
+      fixtureResult = {
+        ...timings,
         workingSetMiB: +(afterProcesses.reduce((sum, item) => sum + item.WorkingSet64, 0) / MIB_BYTES).toFixed(1),
         privateMiB: +(afterProcesses.reduce((sum, item) => sum + item.PrivateMemorySize64, 0) / MIB_BYTES).toFixed(1),
-        processes: afterProcesses };
+        processes: afterProcesses,
+      };
     }
     return {
-      run: index + 1, profile: fixture || index === 0 ? 'fresh' : 'reused',
-      domMs: Math.round(domMs), visibleMs: Math.round(visibleMs),
+      run: index + 1,
+      profile: fixture || index === 0 ? 'fresh' : 'reused',
+      domMs: Math.round(domMs),
+      visibleMs: Math.round(visibleMs),
       workingSetMiB: +(processes.reduce((sum, item) => sum + item.WorkingSet64, 0) / MIB_BYTES).toFixed(1),
       privateMiB: +(processes.reduce((sum, item) => sum + item.PrivateMemorySize64, 0) / MIB_BYTES).toFixed(1),
-      processes, diagnostics: { ...diagnostics, jsHeapUsedMiB: +(heap.usedSize / MIB_BYTES).toFixed(2) },
+      processes,
+      diagnostics: { ...diagnostics, jsHeapUsedMiB: +(heap.usedSize / MIB_BYTES).toFixed(2) },
       ...(fixtureResult ? { fixture: fixtureResult } : {}),
     };
   } finally {
@@ -290,11 +310,20 @@ try {
   complete = true;
 } finally {
   await mkdir(path.dirname(output), { recursive: true });
-  await writeFile(output, JSON.stringify({ executable, profile, measuredAt: new Date().toISOString(), complete,
+  await writeFile(output, JSON.stringify({
+    executable,
+    profile,
+    measuredAt: new Date().toISOString(),
+    complete,
     protocol: { runs: RUN_COUNT, idleMs: IDLE_MS, firstProfile: 'fresh', followingProfiles: fixturesMode ? 'fresh per fixture' : 'reused', debugging: 'CDP', memory: 'entire process tree' },
-    ...(fixturesMode ? { fixtures: fixtures.map(fixtureMetadata), profiles,
+    ...(fixturesMode ? {
+      fixtures: fixtures.map(fixtureMetadata),
+      profiles,
       executableSha256: createHash('sha256').update(await readFile(executable)).digest('hex'),
-      sourceSha256: createHash('sha256').update(appSource).digest('hex') } : {}), results }, null, 2));
+      sourceSha256: createHash('sha256').update(appSource).digest('hex'),
+    } : {}),
+    results,
+  }, null, 2));
   // 失败时保留隔离目录供排查；只删除成功完成且路径验证通过的本次临时目录。
   if (complete) {
     for (const item of profiles) {

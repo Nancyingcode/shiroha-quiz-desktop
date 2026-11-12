@@ -37,7 +37,8 @@ async function totalResult(h) {
 
 const cases = [
   {
-    name: 'wrong-analysis-book-generates-draft-and-saves-only-analysis', options,
+    name: 'wrong-analysis-book-generates-draft-and-saves-only-analysis',
+    options,
     async run(h) {
       const panel = await wrongBook(h);
       await button(panel, 'generate').waitFor();
@@ -65,7 +66,8 @@ const cases = [
     },
   },
   {
-    name: 'wrong-analysis-feedback-preserves-draft-on-regeneration-error-and-discard', options,
+    name: 'wrong-analysis-feedback-preserves-draft-on-regeneration-error-and-discard',
+    options,
     async run(h) {
       await h.start(); await h.submitChoice('B');
       const panel = h.page.locator('#p-feedback [data-review-analysis]');
@@ -83,7 +85,8 @@ const cases = [
     },
   },
   {
-    name: 'wrong-analysis-result-save-preserves-record-snapshot-and-refreshes-book', options,
+    name: 'wrong-analysis-result-save-preserves-record-snapshot-and-refreshes-book',
+    options,
     async run(h) {
       const panel = await totalResult(h);
       const before = await stored(h);
@@ -97,7 +100,8 @@ const cases = [
     },
   },
   {
-    name: 'wrong-analysis-quota-rollback-keeps-draft-and-retry', options,
+    name: 'wrong-analysis-quota-rollback-keeps-draft-and-retry',
+    options,
     async run(h) {
       await h.start(); await h.submitChoice('B');
       const panel = h.page.locator('#p-feedback [data-review-analysis]');
@@ -124,7 +128,8 @@ const cases = [
     },
   },
   {
-    name: 'wrong-analysis-unconfigured-settings-no-network', options: { ...options, configured: false },
+    name: 'wrong-analysis-unconfigured-settings-no-network',
+    options: { ...options, configured: false },
     async run(h) {
       const panel = await wrongBook(h);
       assert.match(await panel.innerText(), /暂无解析/);
@@ -135,7 +140,8 @@ const cases = [
     },
   },
   {
-    name: 'wrong-analysis-stop-and-late-response-cannot-replace-another-question', options: { ...options, ignoreAbort: true },
+    name: 'wrong-analysis-stop-and-late-response-cannot-replace-another-question',
+    options: { ...options, ignoreAbort: true },
     async run(h) {
       await h.start(); await h.submitChoice('B');
       const first = h.page.locator('#p-feedback [data-review-analysis]');
@@ -157,7 +163,8 @@ const cases = [
     },
   },
   {
-    name: 'wrong-analysis-deleted-source-retains-result-draft', options,
+    name: 'wrong-analysis-deleted-source-retains-result-draft',
+    options,
     async run(h) {
       const panel = await totalResult(h);
       await generate(h, panel, 'ORPHAN_RESULT_DRAFT');
@@ -174,7 +181,8 @@ const cases = [
     },
   },
   {
-    name: 'wrong-analysis-exam-result-can-generate-and-save', options,
+    name: 'wrong-analysis-exam-result-can-generate-and-save',
+    options,
     async run(h) {
       await h.page.locator('.nav[data-view="exam"]').click();
       await h.page.locator('#exam-count').fill('5');

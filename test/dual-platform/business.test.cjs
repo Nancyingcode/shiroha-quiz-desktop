@@ -315,7 +315,8 @@ test('跨端导出保持正文图片顺序并去重结构化图片', () => {
   const second = 'data:image/png;base64,BBBB';
   const extra = 'data:image/png;base64,CCCC';
   const output = api.exportQuestionImagesForCrossExportV83({
-    id: 'image-order', question: `![甲](${first})\n![乙](${second})`,
+    id: 'image-order',
+    question: `![甲](${first})\n![乙](${second})`,
     images: [{ dataUrl: first }, { dataUrl: extra, sourceName: '附图', order: 4 }],
   });
   assert.deepEqual(plain(output.images.map((image) => image.order)), [1, 2, 4]);
@@ -351,8 +352,14 @@ test('答案表保留区间、粘连题号、分组和原始答案文本', () =>
 
 test('重复题号无法判断题型时保留空答案并保持源数据不变', () => {
   const { api } = loadWeb();
-  const questions = [{ id: 'x', number: 1, type: 'judge', question: '判断？',
-    options: [{ key: 'A', text: '正确' }, { key: 'B', text: '错误' }], answer: [] }];
+  const questions = [{
+    id: 'x',
+    number: 1,
+    type: 'judge',
+    question: '判断？',
+    options: [{ key: 'A', text: '正确' }, { key: 'B', text: '错误' }],
+    answer: [],
+  }];
   const answers = [
     { number: '1', group: '单选题', answer: ['C'], raw: 'C' },
     { number: '1', group: '多选题', answer: ['A', 'C'], raw: 'AC' },

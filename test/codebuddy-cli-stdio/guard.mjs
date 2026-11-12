@@ -214,7 +214,9 @@ export async function createGuardedRelay(upstream, expectedBearer = undefined) {
     });
     try {
       const result = await fetch(new URL('/chat/completions', target), {
-        method: 'POST', body, redirect: 'error',
+        method: 'POST',
+        body,
+        redirect: 'error',
         headers: { 'content-type': 'application/json', authorization: 'Bearer relay-fake-upstream-key' },
         signal: AbortSignal.any([controller.signal, AbortSignal.timeout(UPSTREAM_TIMEOUT_MS)]),
       });

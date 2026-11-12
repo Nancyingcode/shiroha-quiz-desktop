@@ -77,15 +77,25 @@ test('configuration changes, missing history, mismatched parents and untrusted b
   const input = event(f, base, head);
   assert.equal((await planCiLint({ ...input, hasBaseline: async () => false })).mode, 'full');
   const missing = 'f'.repeat(40);
-  assert.equal((await planCiLint({ ...input, event: { pull_request: {
-    base: { sha: missing, ref: 'main' }, head: { sha: head },
-  } } })).mode, 'full');
+  assert.equal((await planCiLint({
+    ...input,
+    event: {
+      pull_request: {
+        base: { sha: missing, ref: 'main' }, head: { sha: head },
+      },
+    },
+  })).mode, 'full');
   assert.equal((await planCiLint({ ...input, eventName: 'push' })).mode, 'full');
   assert.equal((await planCiLint({ ...input, eventName: 'merge_group' })).mode, 'full');
   await assert.rejects(planCiLint({ ...input, sha: 'a'.repeat(40) }), /检出的提交与预期提交不一致/);
-  assert.equal((await planCiLint({ ...input, event: { pull_request: {
-    base: { sha: head, ref: 'main' }, head: { sha: base },
-  } } })).mode, 'full');
+  assert.equal((await planCiLint({
+    ...input,
+    event: {
+      pull_request: {
+        base: { sha: head, ref: 'main' }, head: { sha: base },
+      },
+    },
+  })).mode, 'full');
   const shallow = path.join(f.temporary, '.git/shallow');
   await writeFile(shallow, `${input.sha}\n`);
   assert.equal((await planCiLint(input)).mode, 'full');
@@ -164,10 +174,22 @@ test('a JavaScript symlink checked out as a regular file cannot bypass CI', asyn
 
 test('a baseline requires the matching successful push job and its full lint step', async () => {
   const baseSha = 'a'.repeat(40);
-  const run = { id: 42, path: '.github/workflows/desktop.yml', head_sha: baseSha,
-    head_branch: 'main', event: 'push', status: 'completed', conclusion: 'success' };
-  const options = { baseSha, baseRef: 'main', repository: 'owner/repo', token: 'fixture',
-    apiUrl: 'https://example.invalid' };
+  const run = {
+    id: 42,
+    path: '.github/workflows/desktop.yml',
+    head_sha: baseSha,
+    head_branch: 'main',
+    event: 'push',
+    status: 'completed',
+    conclusion: 'success',
+  };
+  const options = {
+    baseSha,
+    baseRef: 'main',
+    repository: 'owner/repo',
+    token: 'fixture',
+    apiUrl: 'https://example.invalid',
+  };
   const request = async (/** @type {string} */ url) => ({
     ok: true,
     json: async () => (url.includes('/jobs?')
@@ -178,8 +200,13 @@ test('a baseline requires the matching successful push job and its full lint ste
   assert.equal(await hasPassedBaseline({ ...options, request: async () => ({ ok: false, json: async () => ({}) }) }), false);
   assert.equal(await hasPassedBaseline({ ...options, token: '' }), false);
   assert.equal(await hasPassedBaseline({ ...options, request: async () => { throw new Error('offline'); } }), false);
-  assert.equal(await hasPassedBaseline({ ...options, request: async () => ({ ok: true,
-    json: async () => ({ workflow_runs: [{ ...run, head_branch: 'other' }] }) }) }), false);
+  assert.equal(await hasPassedBaseline({
+    ...options,
+    request: async () => ({
+      ok: true,
+      json: async () => ({ workflow_runs: [{ ...run, head_branch: 'other' }] }),
+    }),
+  }), false);
 });
 
 /** @param {import('node:test').TestContext} t @param {(root: string) => Promise<void>} change */
@@ -202,8 +229,15 @@ async function ciEntryFixture(t, change) {
   const merge = git(f, ['rev-parse', 'HEAD']);
   const eventPath = path.join(f.temporary, 'event.json');
   await writeFile(eventPath, JSON.stringify({ pull_request: { base: { sha: base, ref: 'main' }, head: { sha: head } } }));
-  const run = { id: 42, path: '.github/workflows/desktop.yml', head_sha: base, head_branch: 'main',
-    event: 'push', status: 'completed', conclusion: 'success' };
+  const run = {
+    id: 42,
+    path: '.github/workflows/desktop.yml',
+    head_sha: base,
+    head_branch: 'main',
+    event: 'push',
+    status: 'completed',
+    conclusion: 'success',
+  };
   const script = [
     "import { pathToFileURL } from 'node:url';",
     'globalThis.fetch = async (url) => ({',
@@ -214,9 +248,16 @@ async function ciEntryFixture(t, change) {
     '});',
     'await import(pathToFileURL(process.argv[1]).href);',
   ].join('\n');
-  const environment = { ...process.env, npm_execpath: driver, GITHUB_EVENT_PATH: eventPath,
-    GITHUB_EVENT_NAME: 'pull_request', LINT_EXPECTED_SHA: merge, GITHUB_REPOSITORY: 'owner/repo',
-    GITHUB_TOKEN: 'fixture', GITHUB_API_URL: 'https://example.invalid' };
+  const environment = {
+    ...process.env,
+    npm_execpath: driver,
+    GITHUB_EVENT_PATH: eventPath,
+    GITHUB_EVENT_NAME: 'pull_request',
+    LINT_EXPECTED_SHA: merge,
+    GITHUB_REPOSITORY: 'owner/repo',
+    GITHUB_TOKEN: 'fixture',
+    GITHUB_API_URL: 'https://example.invalid',
+  };
   const runCi = (/** @type {string} */ baseline) => spawnSync(
     process.execPath,
     ['--input-type=module', '-e', script, ciScript],

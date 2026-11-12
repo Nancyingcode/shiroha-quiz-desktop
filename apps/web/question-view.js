@@ -1,10 +1,12 @@
 (() => {
   'use strict';
-  function create({ select: $, selectAll: $$, escape: esc, warn: warnDev, platform: ShirohaPlatform,
+  function create({
+    select: $, selectAll: $$, escape: esc, warn: warnDev, platform: ShirohaPlatform,
     normalizeJsonMultilineTextV5910, trimMultilineBoundaryV5910, displayOptionTextV589,
     repairCircledCombinationQuestion, normalizeQuestionImagesForWebV83, questionImageDataUriRegexV83,
     questionTextContainsDataUriV83, practiceSourceMeta, label, scoreOf, hasAnswerValueV58914,
-    isMultiBlankQuestionV58914, isTextType, normalizeWebQuestionType, normalizeBlankAnswersV58914 }) {
+    isMultiBlankQuestionV58914, isTextType, normalizeWebQuestionType, normalizeBlankAnswersV58914,
+  }) {
     function ensureRichQuestionContentStylesV55() {
       if (typeof document === 'undefined' || document.getElementById('shiroha-rich-question-style-v55')) {
         return;
@@ -585,11 +587,26 @@
       $$(`${root} .option`).forEach((o) => o.classList.toggle('selected', o.querySelector('input').checked));
     }
     return {
-      renderQuestionContent, prewarmMathJaxV56, scheduleMathJaxTypesetV56, parseDocxMarkdownTableBlockV55,
-      renderQuestionBodyV83, questionHtml, bindAnswerOptionControls, refreshAnswerOptionControls,
-      collectTextAnswerFromElementV58914, collectAnswer, answerDisplay, blankAnswersFromDetailV58914,
-      blankUserAnswersFromDetailV58914, renderMultiBlankComparisonV58914, feedbackAnswerHtmlV58914,
-      markOptions, practiceReviewAnswerHtml, renderReviewAnswerSummary, renderReviewOptions, applyAnswerStateV26,
+      renderQuestionContent,
+      prewarmMathJaxV56,
+      scheduleMathJaxTypesetV56,
+      parseDocxMarkdownTableBlockV55,
+      renderQuestionBodyV83,
+      questionHtml,
+      bindAnswerOptionControls,
+      refreshAnswerOptionControls,
+      collectTextAnswerFromElementV58914,
+      collectAnswer,
+      answerDisplay,
+      blankAnswersFromDetailV58914,
+      blankUserAnswersFromDetailV58914,
+      renderMultiBlankComparisonV58914,
+      feedbackAnswerHtmlV58914,
+      markOptions,
+      practiceReviewAnswerHtml,
+      renderReviewAnswerSummary,
+      renderReviewOptions,
+      applyAnswerStateV26,
     };
   }
   globalThis.ShirohaQuestionView = { create };

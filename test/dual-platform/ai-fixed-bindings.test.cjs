@@ -29,15 +29,23 @@ test('AI 六个固定按钮直接绑定原处理器，缺节点和重复绑定�
     nodes['#ai-preview-panel-v991'] = { classList: { contains: () => true } };
     const context = vm.createContext({});
     let source = fs.readFileSync(path.join(__dirname, '../../apps/web/ai-import-panel.js'), 'utf8');
-    const anchor = 'bindAiImportEventsV99, syncAiImportActionV99, closeAiImportPanelV99,';
+    // 单行锚点：不依赖文件换行符（CRLF/LF），也不受逐行排版规则影响。
+    const anchor = 'bindAiImportEventsV99,';
     assert(source.includes(anchor));
-    source = source.replace(anchor, 'bindAiImportEventsV99, openAiImportPanelV99, syncAiImportActionV99, closeAiImportPanelV99,');
+    source = source.replace(anchor, 'bindAiImportEventsV99, openAiImportPanelV99,');
     vm.runInContext(source, context);
     let notices = 0;
     const panel = context.ShirohaAiImportPanel.create({
-      draft: { questions: [] }, sessions: { importRequest: {}, previewRequest: {} },
-      platform: {}, select: (selector) => nodes[selector] || null, selectAll: () => [],
-      settings: { ...handlers, render() {} }, requests: {}, editor: { isEditing: () => true }, preview: {}, limits: {},
+      draft: { questions: [] },
+      sessions: { importRequest: {}, previewRequest: {} },
+      platform: {},
+      select: (selector) => nodes[selector] || null,
+      selectAll: () => [],
+      settings: { ...handlers, render() {} },
+      requests: {},
+      editor: { isEditing: () => true },
+      preview: {},
+      limits: {},
       showNotice: () => { notices += 1; },
     });
     panel.bindAiImportEventsV99();

@@ -10,8 +10,11 @@ import { createReleaseDraft } from '../scripts/release-github.mjs';
 import { ensureInstallerIntegrity } from '../scripts/installer-integrity.mjs';
 
 const input = {
-  ref: 'refs/tags/desktop-v0.1.0', commit: 'a'.repeat(40),
-  repository: 'example/quiz', runId: '1234', runAttempt: '1',
+  ref: 'refs/tags/desktop-v0.1.0',
+  commit: 'a'.repeat(40),
+  repository: 'example/quiz',
+  runId: '1234',
+  runAttempt: '1',
 };
 const executable = 'src-tauri/target/x86_64-pc-windows-msvc/release/shiroha-quiz-desktop.exe';
 const installer = 'src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/Shiroha Quiz_0.1.0_x64-setup.exe';

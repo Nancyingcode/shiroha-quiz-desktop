@@ -6,8 +6,17 @@ assert.ok(process.argv[2], 'Usage: node verify.mjs <run-directory>');
 const summary = JSON.parse(await readFile(path.join(process.argv[2], 'summary.json'), 'utf8'));
 const cases = new Map(summary.observations.map((item) => [item.scenario, item]));
 const requestCounts = {
-  stop: 1, length: 4, content_filter: 1, eof: 1, done_only: 1, malformed: 3,
-  tool: 2, cancel: 1, timeout: 1, password: 1, interrupt: 1,
+  stop: 1,
+  length: 4,
+  content_filter: 1,
+  eof: 1,
+  done_only: 1,
+  malformed: 3,
+  tool: 2,
+  cancel: 1,
+  timeout: 1,
+  password: 1,
+  interrupt: 1,
 };
 assert.equal(cases.size, Object.keys(requestCounts).length);
 for (const [name, expectedCount] of Object.entries(requestCounts)) {

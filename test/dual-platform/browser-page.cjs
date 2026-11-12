@@ -2321,9 +2321,12 @@ async function configureMockImportAi(page) {
     globalThis.ShirohaPlatform.network.ai = async (_config, payload) => {
       const input = JSON.parse(payload.messages[1].content);
       return new Promise((resolve) => {
-        globalThis.__batchRequests.push({ input, resolve: (content) => resolve({
-          ok: true, status: 200, text: async () => JSON.stringify({ choices: [{ message: { content: JSON.stringify(content) } }] }),
-        }) });
+        globalThis.__batchRequests.push({
+          input,
+          resolve: (content) => resolve({
+            ok: true, status: 200, text: async () => JSON.stringify({ choices: [{ message: { content: JSON.stringify(content) } }] }),
+          }),
+        });
       });
     };
   });
@@ -2639,9 +2642,11 @@ test('AI 成功结束只同步一次，中间批次仍立即展示建议', async
     const text = Object.getOwnPropertyDescriptor(globalThis.Node.prototype, 'textContent');
     for (const [selector, key] of [['#ai-import-provider-v99', 'import'], ['#ai-preview-title-v991', 'preview']]) {
       const node = globalThis.document.querySelector(selector);
-      Object.defineProperty(node, 'textContent', { configurable: true,
+      Object.defineProperty(node, 'textContent', {
+        configurable: true,
         get() { return text.get.call(this); },
-        set(value) { globalThis.__batch2Refreshes[key] += 1;text.set.call(this, value); } });
+        set(value) { globalThis.__batch2Refreshes[key] += 1;text.set.call(this, value); },
+      });
     }
   });
   await page.evaluate(() => { const request = globalThis.__batchRequests[0];request.resolve({ results: [{ id: request.input.questions[0].id, analysis: '第一批建议', needsReview: false }] }); });

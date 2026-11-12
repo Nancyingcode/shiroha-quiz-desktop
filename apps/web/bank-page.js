@@ -1,22 +1,32 @@
 (() => {
   'use strict';
-  function create({ state, select: $, selectAll: $$, escape: esc, label, short, formatDate: fmt, now, countTypes,
-    scope, paging, rendering, selection, actions, content }) {
-    const { ensureGroupUi: ensureBankGroupUiV58, ensure: ensurePracticeScopeV8916, current: practiceScopeV8916,
+  function create({
+    state, select: $, selectAll: $$, escape: esc, label, short, formatDate: fmt, now, countTypes,
+    scope, paging, rendering, selection, actions, content,
+  }) {
+    const {
+      ensureGroupUi: ensureBankGroupUiV58, ensure: ensurePracticeScopeV8916, current: practiceScopeV8916,
       groupName: bankGroupNameV58, pathLabel: bankPathLabelV58, normalizeGroup: normalizeBankGroupNameV58,
       renderGroups: renderBankGroupDatalistV58, setBank: setPracticeBankScopeV8916, setGroup: setPracticeGroupScopeV8916,
-      groupType: PRACTICE_SCOPE_GROUP_V8916, bankType: PRACTICE_SCOPE_BANK_V8916 } = scope;
-    const { page: nativePage, visible: nativeViewVisible, begin: beginNativeRender, versions: nativeRenderVersions,
-      loadItems: loadNativeItems, itemsForBanks: practiceSessionItemsForBanksV8916 } = paging;
+      groupType: PRACTICE_SCOPE_GROUP_V8916, bankType: PRACTICE_SCOPE_BANK_V8916,
+    } = scope;
+    const {
+      page: nativePage, visible: nativeViewVisible, begin: beginNativeRender, versions: nativeRenderVersions,
+      loadItems: loadNativeItems, itemsForBanks: practiceSessionItemsForBanksV8916,
+    } = paging;
     const { all: renderAll, exportSummary: renderExportBankSummaryV23, toast } = rendering;
     const { get: getExportSelection, set: setExportSelection } = selection;
-    const { activeBank, transaction: runMutation, save: saveSilent, edit: editBankByIdV45, duplicate: duplicateBankById,
+    const {
+      activeBank, transaction: runMutation, save: saveSilent, edit: editBankByIdV45, duplicate: duplicateBankById,
       exportBank: exportBankById, deleteBanks: deleteBanksV32, deleteQuestions: deleteBankQuestions,
-      canSelectExportBanks } = actions;
-    const { stripUnsafe: stripUnsafeImageDataUrisV83, optionText: pickRichOptionTextV57,
+      canSelectExportBanks,
+    } = actions;
+    const {
+      stripUnsafe: stripUnsafeImageDataUrisV83, optionText: pickRichOptionTextV57,
       repair: repairCircledCombinationQuestion, parseTable: parseDocxMarkdownTableBlockV55,
       normalizeImages: normalizeQuestionImagesForWebV83, normalizeType: normalizeWebQuestionType,
-      questionBody: renderQuestionBodyV83, questionContent: renderQuestionContent, answerDisplay } = content;
+      questionBody: renderQuestionBodyV83, questionContent: renderQuestionContent, answerDisplay,
+    } = content;
     // 选择仅归当前题库页面会话；切库或题目集合被替换后重置，不写入备份。
     let bankQuestionSelection = { bank: null, idsKey: '', selected: new Set() };
     // 可见预览的读取只属于发起时的题库页；离页后即使返回也不能显示旧失败。

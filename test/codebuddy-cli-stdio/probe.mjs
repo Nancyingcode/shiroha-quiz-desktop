@@ -20,26 +20,47 @@ const CASES = ['stop', 'length', 'content_filter', 'eof', 'done_only', 'malforme
 
 function environment(dirs, endpoint) {
   return {
-    SystemRoot: process.env.SystemRoot, WINDIR: process.env.WINDIR,
+    SystemRoot: process.env.SystemRoot,
+    WINDIR: process.env.WINDIR,
     PATH: path.join(process.env.SystemRoot, 'System32'),
-    HOME: dirs.home, USERPROFILE: dirs.home, APPDATA: dirs.appdata,
-    LOCALAPPDATA: dirs.localappdata, TEMP: dirs.temp, TMP: dirs.temp,
-    CODEBUDDY_CONFIG_DIR: dirs.config, CODEBUDDY_DATA_ROOT: dirs.data,
-    CODEBUDDY_CREDENTIALS_IN_MEMORY: '1', DISABLE_AUTOUPDATER: '1',
-    DISABLE_TELEMETRY: '1', DISABLE_ERROR_REPORTING: '1',
-    CODEBUDDY_SKIP_BUILTIN_MARKETPLACE: '1', CODEBUDDY_DISABLE_PLUGIN_INSTALLS: '1',
-    CODEBUDDY_API_KEY_HELPER_DISABLED: '1', CODEBUDDY_DISABLE_PARENT_MEMORY: '1',
-    CODEBUDDY_DISABLE_AUTO_MEMORY: '1', CODEBUDDY_CODE_DISABLE_AUTO_MEMORY: '1',
-    CODEBUDDY_DISABLE_SYSTEM_REMINDER_MD: '1', CODEBUDDY_MEMORY_RELEVANCE_DISABLED: '1',
-    CODEBUDDY_MEMORY_EXTRACTION_DISABLED: '1', CBC_ENABLE_FUNCTION_HOOKS: '0',
-    CLAUDE_CODE_ENABLE_FUNCTION_HOOKS: '0', CODEBUDDY_CODE_DISABLE_SESSION_SUMMARY: '1',
-    CODEBUDDY_CODE_DISABLE_TERMINAL_TITLE: '1', CODEBUDDY_CODE_DISABLE_BACKGROUND_TASKS: '1',
-    CODEBUDDY_DISABLE_TRACE_COLLECTOR: '1', CODEBUDDY_DISABLE_SHELL_SNAPSHOT: '1',
-    CODEBUDDY_CODE_MAX_TURNS: '1', CODEBUDDY_MAX_RETRIES: '0',
-    CODEBUDDY_BASE_URL: endpoint, CODEBUDDY_API_KEY: FAKE_KEY,
-    HTTP_PROXY: 'http://127.0.0.1:9', HTTPS_PROXY: 'http://127.0.0.1:9',
-    ALL_PROXY: 'http://127.0.0.1:9', NO_PROXY: '127.0.0.1,localhost',
-    LANG: 'zh_CN.UTF-8', NO_COLOR: '1',
+    HOME: dirs.home,
+    USERPROFILE: dirs.home,
+    APPDATA: dirs.appdata,
+    LOCALAPPDATA: dirs.localappdata,
+    TEMP: dirs.temp,
+    TMP: dirs.temp,
+    CODEBUDDY_CONFIG_DIR: dirs.config,
+    CODEBUDDY_DATA_ROOT: dirs.data,
+    CODEBUDDY_CREDENTIALS_IN_MEMORY: '1',
+    DISABLE_AUTOUPDATER: '1',
+    DISABLE_TELEMETRY: '1',
+    DISABLE_ERROR_REPORTING: '1',
+    CODEBUDDY_SKIP_BUILTIN_MARKETPLACE: '1',
+    CODEBUDDY_DISABLE_PLUGIN_INSTALLS: '1',
+    CODEBUDDY_API_KEY_HELPER_DISABLED: '1',
+    CODEBUDDY_DISABLE_PARENT_MEMORY: '1',
+    CODEBUDDY_DISABLE_AUTO_MEMORY: '1',
+    CODEBUDDY_CODE_DISABLE_AUTO_MEMORY: '1',
+    CODEBUDDY_DISABLE_SYSTEM_REMINDER_MD: '1',
+    CODEBUDDY_MEMORY_RELEVANCE_DISABLED: '1',
+    CODEBUDDY_MEMORY_EXTRACTION_DISABLED: '1',
+    CBC_ENABLE_FUNCTION_HOOKS: '0',
+    CLAUDE_CODE_ENABLE_FUNCTION_HOOKS: '0',
+    CODEBUDDY_CODE_DISABLE_SESSION_SUMMARY: '1',
+    CODEBUDDY_CODE_DISABLE_TERMINAL_TITLE: '1',
+    CODEBUDDY_CODE_DISABLE_BACKGROUND_TASKS: '1',
+    CODEBUDDY_DISABLE_TRACE_COLLECTOR: '1',
+    CODEBUDDY_DISABLE_SHELL_SNAPSHOT: '1',
+    CODEBUDDY_CODE_MAX_TURNS: '1',
+    CODEBUDDY_MAX_RETRIES: '0',
+    CODEBUDDY_BASE_URL: endpoint,
+    CODEBUDDY_API_KEY: FAKE_KEY,
+    HTTP_PROXY: 'http://127.0.0.1:9',
+    HTTPS_PROXY: 'http://127.0.0.1:9',
+    ALL_PROXY: 'http://127.0.0.1:9',
+    NO_PROXY: '127.0.0.1,localhost',
+    LANG: 'zh_CN.UTF-8',
+    NO_COLOR: '1',
   };
 }
 
@@ -76,9 +97,12 @@ async function scanMarkers(directory, markers) {
 }
 
 function sendChunk(response, delta, finishReason = null) {
-  response.write(`data: ${JSON.stringify({ id: 'synthetic-completion', object: 'chat.completion.chunk',
+  response.write(`data: ${JSON.stringify({
+    id: 'synthetic-completion',
+    object: 'chat.completion.chunk',
     choices: [{ index: 0, delta, finish_reason: finishReason }],
-    usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 } })}\n\n`);
+    usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+  })}\n\n`);
 }
 
 async function runCase(executable, runRoot, scenario, guarded = false) {
@@ -109,7 +133,8 @@ async function runCase(executable, runRoot, scenario, guarded = false) {
   let sessionId = '';
   const prompt = `合成题目 ${marker}。Return ${RESPONSE_TEXT}`;
   const sendControl = (subtype) => child.stdin.write(`${JSON.stringify({
-    type: 'control_request', request_id: `probe-${subtype}`,
+    type: 'control_request',
+    request_id: `probe-${subtype}`,
     request: { subtype, hasPrompt: false, session_id: sessionId },
   })}\n`);
   const consumeControlLine = (line) => {
@@ -118,10 +143,13 @@ async function runCase(executable, runRoot, scenario, guarded = false) {
     if (event.type === 'control_response') {
       const { response } = event;
       // Authentication replies may contain tokens, so raw control responses never enter evidence.
-      const summary = { request_id: response?.request_id, subtype: response?.subtype,
+      const summary = {
+        request_id: response?.request_id,
+        subtype: response?.subtype,
         fields: Object.keys(response?.response ?? {}),
         hasAccount: Boolean(response?.response?.account?.userId),
-        interrupted: response?.response?.interrupted };
+        interrupted: response?.response?.interrupted,
+      };
       controlResponses.push(summary);
       events.push({ type: 'control_response', response: summary });
       if (response?.subtype !== 'success') { stop('control-error'); return; }
@@ -191,9 +219,12 @@ async function runCase(executable, runRoot, scenario, guarded = false) {
             signal: AbortSignal.timeout(2_000),
           });
           const body = await result.json();
-          localRoutes.push({ route, status: result.status,
+          localRoutes.push({
+            route,
+            status: result.status,
             errorCode: body.error?.code ?? body.code ?? null,
-            gatewayMode: body.data?.gatewayMode });
+            gatewayMode: body.data?.gatewayMode,
+          });
         }
       }
     }
@@ -206,10 +237,20 @@ async function runCase(executable, runRoot, scenario, guarded = false) {
       return;
     }
     if (scenario === 'tool' && calls.length === 1) {
-      sendChunk(response, { role: 'assistant', tool_calls: [{ index: 0, id: 'synthetic-write',
-        type: 'function', function: { name: 'Write', arguments: JSON.stringify({
-          file_path: path.join(dirs.work, 'tool-sentinel.txt'), content: 'TOOL_MUST_NOT_RUN',
-        }) } }] });
+      sendChunk(response, {
+        role: 'assistant',
+        tool_calls: [{
+          index: 0,
+          id: 'synthetic-write',
+          type: 'function',
+          function: {
+            name: 'Write',
+            arguments: JSON.stringify({
+              file_path: path.join(dirs.work, 'tool-sentinel.txt'), content: 'TOOL_MUST_NOT_RUN',
+            }),
+          },
+        }],
+      });
       sendChunk(response, {}, 'tool_calls');
       response.end('data: [DONE]\n\n');
       return;
@@ -308,22 +349,39 @@ async function runCase(executable, runRoot, scenario, guarded = false) {
   try { await access(path.join(dirs.work, 'tool-sentinel.txt')); toolFileExists = true; } catch (error) { if (error.code !== 'ENOENT') { throw error; } }
   const modelCalls = calls.filter((call) => call.method === 'POST' && call.url === '/chat/completions');
   const observation = {
-    scenario, exit, stopReason: stopReason ?? null, ports, localRoutes,
-    connectionClosedBeforeCleanup, controlResponses, toolFileExists,
-    requestCount: modelCalls.length, unexpectedRoutes: calls.length - modelCalls.length,
+    scenario,
+    exit,
+    stopReason: stopReason ?? null,
+    ports,
+    localRoutes,
+    connectionClosedBeforeCleanup,
+    controlResponses,
+    toolFileExists,
+    requestCount: modelCalls.length,
+    unexpectedRoutes: calls.length - modelCalls.length,
     toolsAdvertised: modelCalls.some((call) => JSON.parse(call.body).tools?.length > 0),
     parentRulesSent: modelCalls.some((call) => /AGENTS\.md|always_applied_workspace_rules/.test(call.body)),
-    result: results.map((event) => ({ subtype: event.subtype, is_error: event.is_error,
-      result: event.result, terminal_reason: event.terminal_reason ?? null })),
+    result: results.map((event) => ({
+      subtype: event.subtype,
+      is_error: event.is_error,
+      result: event.result,
+      terminal_reason: event.terminal_reason ?? null,
+    })),
     assistantStops: assistants.map((event) => event.message?.stop_reason),
     partialStops: partials.map((event) => event.event?.delta?.stop_reason).filter((value) => value !== undefined),
     eventTypes: [...new Set(events.map((event) => event.type ?? 'invalid'))],
-    markerFiles: markerFiles.map((file) => path.relative(isolated, file)), serverErrors,
-    ...(relay ? { guard: { ...relay.evidence(), candidate: validateCandidate(
-      events,
-      relay.evidence(),
-      Boolean(stopReason) || exit.code !== 0,
-    ) } } : {}),
+    markerFiles: markerFiles.map((file) => path.relative(isolated, file)),
+    serverErrors,
+    ...(relay ? {
+      guard: {
+        ...relay.evidence(),
+        candidate: validateCandidate(
+          events,
+          relay.evidence(),
+          Boolean(stopReason) || exit.code !== 0,
+        ),
+      },
+    } : {}),
   };
   await writeFile(path.join(runRoot, `${scenario}.json`), JSON.stringify({ observation, events, stderr, calls }, null, 2));
   console.log(JSON.stringify(observation));
@@ -348,7 +406,8 @@ async function main() {
     observations.push(await runCase(executable, runRoot, scenario, guarded));
   }
   await writeFile(path.join(runRoot, 'summary.json'), JSON.stringify({
-    executableHash: EXPECTED_HASH, observations,
+    executableHash: EXPECTED_HASH,
+    observations,
     meaning: 'Probe execution only; not approval of production integration or subscription authentication',
   }, null, 2));
   console.log(`Evidence: ${runRoot}`);

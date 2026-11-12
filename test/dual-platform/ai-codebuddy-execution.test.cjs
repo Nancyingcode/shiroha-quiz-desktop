@@ -302,9 +302,12 @@ test('single analysis and followup show the fixed native diagnostic while preser
   installAiSettings(context);
   runWebScripts(context, ['ai-question-sessions.js']);
   const sessions = context.ShirohaAiQuestionSessions.createPractice({
-    practice: { current: () => practice }, question: { current: () => item, allowed: () => true, key: () => 'synthetic-key', fingerprint: () => 'same', answer: () => ({ chosen: ['B'] }) },
+    practice: { current: () => practice },
+    question: { current: () => item, allowed: () => true, key: () => 'synthetic-key', fingerprint: () => 'same', answer: () => ({ chosen: ['B'] }) },
     request: { config: () => ({ configured: true, requestConfig: { execution: f.api.snapshot(), timeoutSeconds: 120 } }), timeout: async (_seconds, run) => run({}), chat: (_config, _messages, options) => f.api.execute(f.api.snapshot(), options.task, []), analysisMessages: () => [], followUpMessages: () => [] },
-    result: {}, view: { render() {}, sanitize: context.sanitizeAiDiagnosticDetailV375, notice: (_title, text) => notices.push(text) }, maxFollowUps: 12,
+    result: {},
+    view: { render() {}, sanitize: context.sanitizeAiDiagnosticDetailV375, notice: (_title, text) => notices.push(text) },
+    maxFollowUps: 12,
   });
   const session = sessions.getSession('synthetic-key');
   Object.assign(session, { draft: '保留当前追问', analysis: { analysis: '保留原解析' }, initialAnalysis: '保留初始解析', messages: [{ role: 'assistant', content: '保留历史' }] });
@@ -329,7 +332,8 @@ test('AI 会话公开的请求号保留文本和 BigInt 的原有自增转换', 
   const stopBeforeRequest = new Error('验证请求序号后停止');
   const reviewRun = context.ShirohaAiQuestionSessions.createReview({
     question: { ...question, source: () => { throw stopBeforeRequest; } },
-    request: { config: () => ({ configured: true, requestConfig: {} }) }, view,
+    request: { config: () => ({ configured: true, requestConfig: {} }) },
+    view,
   });
   const session = practice.getSession('key');
   for (const [value, next] of [['9', 10], [9n, 10n]]) {

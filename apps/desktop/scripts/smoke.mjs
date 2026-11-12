@@ -137,7 +137,9 @@ async function launch(executable, profile, proxyPort, lifecycle) {
   lifecycle.assertActive();
   // 官方接入方式：https://playwright.dev/docs/webview2 。环境变量仅传给测试子进程，避免复用真实 profile 或改变系统调试设置。
   const child = spawnOwned(lifecycle, executable, [], {
-    cwd: path.dirname(executable), windowsHide: true, stdio: 'ignore',
+    cwd: path.dirname(executable),
+    windowsHide: true,
+    stdio: 'ignore',
     env: {
       ...process.env,
       SHIROHA_TEST_ROOT: profile,
@@ -288,13 +290,18 @@ async function visualLayout(page, screenshotName) {
       mainLeft: main.getBoundingClientRect().left,
       mainWidth: main.getBoundingClientRect().width,
       navigationRight: side.getBoundingClientRect().right,
-      contentLeft: rect.left, contentRight: rect.right,
-      focus, collapsed,
+      contentLeft: rect.left,
+      contentRight: rect.right,
+      focus,
+      collapsed,
       navigationTransparent: backgroundAlpha === 0 && sideStyle.backgroundImage === 'none',
       navigationHasShadow: sideStyle.boxShadow !== 'none',
       navigationFits,
       navigationToggle: {
-        left: toggleRect.left, top: toggleRect.top, width: toggleRect.width, height: toggleRect.height,
+        left: toggleRect.left,
+        top: toggleRect.top,
+        width: toggleRect.width,
+        height: toggleRect.height,
         titleGap: toggleRect.left - titleRect.right,
         insideTitlebar: toggleRect.top >= captionRect.top && toggleRect.bottom <= captionRect.bottom,
         beforeWindowControls: toggleRect.right <= controlsRect.left,
@@ -452,7 +459,8 @@ async function toggleNavigationMotion(page) {
     } while (animations.some((animation) => animation.playState === 'running') && window.performance.now() < end);
     const finish = positions.at(-1) ?? start;
     return {
-      start, finish,
+      start,
+      finish,
       intermediateFrames: positions.filter((left) => left > Math.min(start, finish) + 1 && left < Math.max(start, finish) - 1).length,
       animationCount: animations.length,
       completed: animations.every((animation) => animation.playState !== 'running'),
@@ -592,10 +600,17 @@ async function notificationVisualSmoke(page) {
   const appearance = async (selector) => page.locator(selector).evaluateAll((nodes) => nodes.map((node) => {
     const style = window.getComputedStyle(node); const rect = node.getBoundingClientRect();
     const paragraph = node.querySelector('p');
-    return { background: style.backgroundColor, border: Number.parseFloat(style.borderTopWidth), borderLeft: Number.parseFloat(style.borderLeftWidth),
-      borderColor: style.borderTopColor, borderLeftColor: style.borderLeftColor, radius: Number.parseFloat(style.borderRadius), shadow: style.boxShadow,
+    return {
+      background: style.backgroundColor,
+      border: Number.parseFloat(style.borderTopWidth),
+      borderLeft: Number.parseFloat(style.borderLeftWidth),
+      borderColor: style.borderTopColor,
+      borderLeftColor: style.borderLeftColor,
+      radius: Number.parseFloat(style.borderRadius),
+      shadow: style.boxShadow,
       fits: rect.left >= 0 && rect.right <= window.innerWidth + 1 && rect.top >= (document.getElementById('desktop-titlebar')?.getBoundingClientRect().bottom ?? 0) && rect.bottom <= window.innerHeight + 1 && node.scrollWidth <= node.clientWidth + 1,
-      wrapped: !paragraph || paragraph.getBoundingClientRect().height > Number.parseFloat(window.getComputedStyle(paragraph).lineHeight) * 1.5 };
+      wrapped: !paragraph || paragraph.getBoundingClientRect().height > Number.parseFloat(window.getComputedStyle(paragraph).lineHeight) * 1.5,
+    };
   }));
   /** @param {Awaited<ReturnType<typeof appearance>>} styles @param {boolean} [coloredShadow] */
   const verify = (styles, coloredShadow = false) => styles.forEach((style) => {
@@ -890,11 +905,15 @@ async function importAndPractice(page, bankName, analysisText = '1 + 1 = 2') {
   await page.locator('#import-bank-name').fill(bankName);
   await page.locator('#import-mode').selectOption('json');
   await page.locator('#import-save-mode-v59').selectOption('new');
-  await page.locator('#import-text').fill(JSON.stringify({ questions: [{
-    type: 'single', question: FIXTURE_QUESTION,
-    options: [{ key: 'A', text: '2' }, { key: 'B', text: '3' }],
-    answer: ['A'], analysis: analysisText,
-  }] }));
+  await page.locator('#import-text').fill(JSON.stringify({
+    questions: [{
+      type: 'single',
+      question: FIXTURE_QUESTION,
+      options: [{ key: 'A', text: '2' }, { key: 'B', text: '3' }],
+      answer: ['A'],
+      analysis: analysisText,
+    }],
+  }));
   await page.locator('#parse-import-btn').click();
   await page.locator('#import-preview tbody tr').filter({ hasText: FIXTURE_QUESTION }).waitFor({ state: 'visible' });
   await page.locator('#confirm-import-btn').click();
@@ -1084,8 +1103,12 @@ async function main() {
   let forceExit = false;
   /** @type {SmokeLaunchCleanupError | undefined} */
   let launchCleanupFailure;
-  const control = createSmokeControl({ checks, timeoutMs: RESOURCE_TIMEOUT_MS,
-    settleTimeoutMs: START_TIMEOUT_MS + (2 * CLOSE_TIMEOUT_MS) + 5_000, stopChild });
+  const control = createSmokeControl({
+    checks,
+    timeoutMs: RESOURCE_TIMEOUT_MS,
+    settleTimeoutMs: START_TIMEOUT_MS + (2 * CLOSE_TIMEOUT_MS) + 5_000,
+    stopChild,
+  });
   const launchOwned = (/** @type {string} */ file, /** @type {string} */ data, /** @type {number} */ port) => control.launch(
     async (lifecycle) => {
       try { return await launch(file, data, port, lifecycle); } catch (error) {
@@ -1425,10 +1448,13 @@ async function main() {
       await migratedRestart.page.addInitScript(() => {
         const calls = /** @type {string[]} */ ([]);
         Object.defineProperty(window, '__nativeCalls', { value: calls });
-        Object.defineProperty(window, 'ShirohaDesktopHost', { configurable: true, set(host) {
-          const original = host.invoke;host.invoke = (/** @type {string} */command, /** @type {{query?:{kind?:string}}} */args) => { calls.push(`${command}:${args?.query?.kind || ''}`);return original(command, args); };
-          Object.defineProperty(window, 'ShirohaDesktopHost', { value: host, configurable: true });
-        } });
+        Object.defineProperty(window, 'ShirohaDesktopHost', {
+          configurable: true,
+          set(host) {
+            const original = host.invoke;host.invoke = (/** @type {string} */command, /** @type {{query?:{kind?:string}}} */args) => { calls.push(`${command}:${args?.query?.kind || ''}`);return original(command, args); };
+            Object.defineProperty(window, 'ShirohaDesktopHost', { value: host, configurable: true });
+          },
+        });
       });
       await migratedRestart.page.reload();
       await migratedRestart.page.locator('#active-bank-select option[value="lazy-a"]').waitFor({ state: 'attached' });

@@ -17,7 +17,8 @@ const githubMaximumResponseBytes = 16 * 1024 * 1024;
 /** @type {GhRunner} */
 async function runGh(args) {
   const { stdout } = await executeFile('gh', args, {
-    encoding: 'utf8', maxBuffer: githubMaximumResponseBytes,
+    encoding: 'utf8',
+    maxBuffer: githubMaximumResponseBytes,
     timeout: args[0] === 'release' ? githubUploadTimeoutMs : githubApiTimeoutMs,
     env: { ...process.env, GH_HOST: 'github.com', GH_PROMPT_DISABLED: '1' },
   });

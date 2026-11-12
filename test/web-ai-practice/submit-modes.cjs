@@ -64,7 +64,8 @@ const cases = [
     },
   })),
   {
-    name: 'practice-review-ai-total-settings-preserves-draft', options: { configured: false },
+    name: 'practice-review-ai-total-settings-preserves-draft',
+    options: { configured: false },
     async run(h) {
       await startTotal(h);
       await h.page.locator('#practice-card .option[data-key="B"]').click();

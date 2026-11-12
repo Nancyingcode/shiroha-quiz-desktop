@@ -63,7 +63,8 @@ test('browser typecheck rejects incorrect JSDoc and unavailable Node globals', a
   const config = path.join(temporary, 'tsconfig.json');
   await writeFile(config, JSON.stringify({
     extends: path.join(desktop, 'tsconfig.platform.json'),
-    files: [probe], include: [],
+    files: [probe],
+    include: [],
   }));
   const run = () => spawnSync(
     process.execPath,

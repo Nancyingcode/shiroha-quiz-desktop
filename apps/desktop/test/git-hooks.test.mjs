@@ -29,7 +29,9 @@ async function fixture(t) {
   const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_')));
   // 隔离开发机的签名、全局 hooks 和 Husky 初始化，避免测试创建的提交触及真实仓库设置。
   Object.assign(env, {
-    GIT_CONFIG_GLOBAL: globalConfig, GIT_CONFIG_NOSYSTEM: '1', HUSKY: '1',
+    GIT_CONFIG_GLOBAL: globalConfig,
+    GIT_CONFIG_NOSYSTEM: '1',
+    HUSKY: '1',
     XDG_CONFIG_HOME: path.join(temporary, 'config'),
   });
   const git = (/** @type {string[]} */ args, cwd = repository, /** @type {string | undefined} */ input = undefined) => spawnSync(
@@ -49,7 +51,9 @@ async function fixture(t) {
   await copyFile(path.join(desktop, 'scripts/lint-index.mjs'), path.join(project, 'scripts/lint-index.mjs'));
   const pkg = JSON.parse(await readFile(path.join(desktop, 'package.json'), 'utf8'));
   await writeFile(path.join(project, 'package.json'), JSON.stringify({
-    private: true, type: 'module', scripts: {
+    private: true,
+    type: 'module',
+    scripts: {
       lint: 'eslint scripts --max-warnings 0', 'lint:index': pkg.scripts['lint:index'], commitlint: pkg.scripts.commitlint,
     },
   }));

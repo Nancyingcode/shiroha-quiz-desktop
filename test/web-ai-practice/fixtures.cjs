@@ -22,7 +22,8 @@ function fixture({ configured = true, rich = false, emptyAnalysis = false } = {}
     questions[0].options = [{ key: 'A', text: String.raw`\(4\)` }, { key: 'B', text: String.raw`\(5\)` }];
     questions[0].analysis = OLD_RICH_ANALYSIS;
     questions[0].richContent = {
-      schema: 'shiroha-web-rich-v1', features: ['latex_formula', 'docx_table'],
+      schema: 'shiroha-web-rich-v1',
+      features: ['latex_formula', 'docx_table'],
       fields: {
         question: { text: questions[0].question, source: 'question', features: ['latex_formula'] },
         options: questions[0].options.map((option) => ({ text: option.text, source: 'option', features: ['latex_formula'] })),
@@ -33,10 +34,21 @@ function fixture({ configured = true, rich = false, emptyAnalysis = false } = {}
   return {
     schemaVersion: 1,
     banks: [{ id: BANK_ID, name: 'Web AI E2E synthetic bank', groupName: 'E2E', createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z', questions }],
-    activeBankId: BANK_ID, wrongBook: emptyAnalysis ? { [BANK_ID]: [{ id: questions[0].id, lastAnswer: ['B'], wrongCount: 1, status: '未掌握' }] } : {}, favorites: {},
+    activeBankId: BANK_ID,
+    wrongBook: emptyAnalysis ? { [BANK_ID]: [{ id: questions[0].id, lastAnswer: ['B'], wrongCount: 1, status: '未掌握' }] } : {},
+    favorites: {},
     records: [{
-      id: 'safe-history-record', mode: '练习', bankId: BANK_ID, bankName: 'Synthetic historical practice',
-      total: 1, answered: 1, correct: 1, wrong: 0, accuracy: 100, date: '2026-01-02T00:00:00.000Z', duration: 1,
+      id: 'safe-history-record',
+      mode: '练习',
+      bankId: BANK_ID,
+      bankName: 'Synthetic historical practice',
+      total: 1,
+      answered: 1,
+      correct: 1,
+      wrong: 0,
+      accuracy: 100,
+      date: '2026-01-02T00:00:00.000Z',
+      duration: 1,
       details: [{ questionId: questions[0].id, question: questions[0].question, type: 'single', chosen: ['A'], answer: ['A'], correct: true, nativeQuestion: JSON.parse(JSON.stringify(questions[0])) }],
     }],
     crossPlatformMeta: { favoriteQuestions: {} },

@@ -11,12 +11,21 @@ test('复盘正文惰性读取与释放保留轻量摘要，重读不产生写�
   const full = { id: 'training', reviewSummary: metadata, review: { version: 1, items: [{ question: { id: 'old', question: '历史正文' } }] }, details: [] };
   const index = { schemaVersion: 1, banks: [], records: [{ id: 'training', reviewSummary: metadata }], settings: {}, wrongBook: {}, favorites: {}, crossPlatformMeta: {}, activeBankId: '' };
   let detailReads = 0;
-  const scope = { ShirohaDesktopHost: { invoke: async (/** @type {string} */command, /** @type {{query?:{kind:string}}} */args) => {
-    if (command === 'local_initialize') { return { revision: 1, hasData: true }; }
-    if (args?.query?.kind === 'summary') { return { revision: 1, snapshot: globalThis.structuredClone(index) }; }
-    if (args?.query?.kind === 'details') { detailReads += 1;return [globalThis.structuredClone(full)]; }
-    assert.fail(`只读复盘不应写入：${command}`);
-  } }, ShirohaBrowser: {}, ShirohaBrowserCredentials: {}, ShirohaSaveQueue: { create: () => ({}) }, localStorage: { getItem: () => null }, structuredClone: globalThis.structuredClone };
+  const scope = {
+    ShirohaDesktopHost: {
+      invoke: async (/** @type {string} */command, /** @type {{query?:{kind:string}}} */args) => {
+        if (command === 'local_initialize') { return { revision: 1, hasData: true }; }
+        if (args?.query?.kind === 'summary') { return { revision: 1, snapshot: globalThis.structuredClone(index) }; }
+        if (args?.query?.kind === 'details') { detailReads += 1;return [globalThis.structuredClone(full)]; }
+        assert.fail(`只读复盘不应写入：${command}`);
+      },
+    },
+    ShirohaBrowser: {},
+    ShirohaBrowserCredentials: {},
+    ShirohaSaveQueue: { create: () => ({}) },
+    localStorage: { getItem: () => null },
+    structuredClone: globalThis.structuredClone,
+  };
   vm.runInNewContext(source, scope);
   const storage = /** @type {import('../../web/platform/runtime.d.ts').BrowserStorage} */ (vm.runInNewContext('ShirohaPlatform.storage', scope));
   await storage.initialize();const view = await storage.read();assert(view);
@@ -39,11 +48,19 @@ for (const [code, expected] of /** @type {Array<[string,RegExp]>} */ ([
   test(`原生初始化 ${code} 显示可操作的安全提示并保持禁止写入`, async () => {
     const source = await readFile(new URL('../frontend/adapter.js', import.meta.url), 'utf8');
     /** @type {string[]} */ const calls = [];
-    const scope = { ShirohaDesktopHost: { invoke: async (/** @type {string} */ command) => {
-      calls.push(command);
-      throw { code, message: 'fixture-secret-do-not-display', details: 'private-fixture-path' };
-    } }, ShirohaBrowser: {}, ShirohaBrowserCredentials: {}, ShirohaSaveQueue: { create: () => ({}) },
-    localStorage: { getItem: () => null, setItem: () => assert.fail('browser write') }, structuredClone: globalThis.structuredClone };
+    const scope = {
+      ShirohaDesktopHost: {
+        invoke: async (/** @type {string} */ command) => {
+          calls.push(command);
+          throw { code, message: 'fixture-secret-do-not-display', details: 'private-fixture-path' };
+        },
+      },
+      ShirohaBrowser: {},
+      ShirohaBrowserCredentials: {},
+      ShirohaSaveQueue: { create: () => ({}) },
+      localStorage: { getItem: () => null, setItem: () => assert.fail('browser write') },
+      structuredClone: globalThis.structuredClone,
+    };
     vm.runInNewContext(source, scope);
     const result = await platform(scope).storage.initialize();
     assert.equal(result.state, 'recovery_required');
@@ -58,9 +75,14 @@ for (const [code, expected] of /** @type {Array<[string,RegExp]>} */ ([
 for (const code of ['unknown_failure', 'constructor', 'toString', '__proto__']) {
   test(`未知原生错误 ${code} 仅显示固定提示，不显示底层秘密`, async () => {
     const source = await readFile(new URL('../frontend/adapter.js', import.meta.url), 'utf8');
-    const scope = { ShirohaDesktopHost: { invoke: async () => { throw { code, message: 'fixture-secret-do-not-display' }; } },
-      ShirohaBrowser: {}, ShirohaBrowserCredentials: {}, ShirohaSaveQueue: { create: () => ({}) },
-      localStorage: { getItem: () => null }, structuredClone: globalThis.structuredClone };
+    const scope = {
+      ShirohaDesktopHost: { invoke: async () => { throw { code, message: 'fixture-secret-do-not-display' }; } },
+      ShirohaBrowser: {},
+      ShirohaBrowserCredentials: {},
+      ShirohaSaveQueue: { create: () => ({}) },
+      localStorage: { getItem: () => null },
+      structuredClone: globalThis.structuredClone,
+    };
     vm.runInNewContext(source, scope);
     const result = await platform(scope).storage.initialize();
     assert.equal(result.state, 'recovery_required');
@@ -70,11 +92,19 @@ for (const code of ['unknown_failure', 'constructor', 'toString', '__proto__']) 
 
 test('恢复查询访问被拒绝时不套用启动窗口未授权提示', async () => {
   const source = await readFile(new URL('../frontend/adapter.js', import.meta.url), 'utf8');
-  const scope = { ShirohaDesktopHost: { invoke: async (/** @type {string} */ command) => {
-    assert.equal(command, 'local_query');
-    throw { code: 'permission_denied', message: 'fixture-secret-do-not-display' };
-  } }, ShirohaBrowser: {}, ShirohaBrowserCredentials: {}, ShirohaSaveQueue: { create: () => ({}) },
-  localStorage: { getItem: () => null }, structuredClone: globalThis.structuredClone };
+  const scope = {
+    ShirohaDesktopHost: {
+      invoke: async (/** @type {string} */ command) => {
+        assert.equal(command, 'local_query');
+        throw { code: 'permission_denied', message: 'fixture-secret-do-not-display' };
+      },
+    },
+    ShirohaBrowser: {},
+    ShirohaBrowserCredentials: {},
+    ShirohaSaveQueue: { create: () => ({}) },
+    localStorage: { getItem: () => null },
+    structuredClone: globalThis.structuredClone,
+  };
   vm.runInNewContext(source, scope);
   const storage = /** @type {import('../../web/platform/runtime.d.ts').BrowserStorage} */ (vm.runInNewContext('ShirohaPlatform.storage', scope));
   assert(storage.recoverySnapshots);
@@ -86,8 +116,13 @@ test('恢复查询访问被拒绝时不套用启动窗口未授权提示', async
 
 test('desktop storage fails closed without the native bridge and never writes browser storage', async () => {
   const source = await readFile(new URL('../frontend/adapter.js', import.meta.url), 'utf8');
-  const scope = { ShirohaBrowser: {}, ShirohaBrowserCredentials: {}, ShirohaSaveQueue: { create: () => ({}) },
-    localStorage: { getItem: () => null, setItem: () => assert.fail('browser write') }, structuredClone: globalThis.structuredClone };
+  const scope = {
+    ShirohaBrowser: {},
+    ShirohaBrowserCredentials: {},
+    ShirohaSaveQueue: { create: () => ({}) },
+    localStorage: { getItem: () => null, setItem: () => assert.fail('browser write') },
+    structuredClone: globalThis.structuredClone,
+  };
   vm.runInNewContext(source, scope);
   const result = await platform(scope).storage.initialize();
   assert.equal(result.state, 'recovery_required');
@@ -97,15 +132,23 @@ test('desktop storage fails closed without the native bridge and never writes br
 test('native revisions and durable operation receipts drive the existing save queue', async () => {
   const source = await readFile(new URL('../frontend/adapter.js', import.meta.url), 'utf8');
   /** @type {Array<[string, unknown]>} */ const calls = [];
-  const scope = { ShirohaDesktopHost: { invoke: async (/** @type {string} */ name, /** @type {unknown} */ args) => {
-    calls.push([name, args]);
-    if (name === 'local_initialize') { return { revision: 7, hasData: true }; }
-    if (name === 'local_read') { return { schemaVersion: 1, banks: [], records: [] }; }
-    if (name === 'local_write') { return { revision: 8 }; }
-    if (name === 'local_operation') { return { revision: 8 }; }
-    throw new Error('unexpected command');
-  } }, ShirohaBrowser: {}, ShirohaBrowserCredentials: {}, ShirohaSaveQueue: { create: () => ({}) },
-  localStorage: { getItem: () => null }, structuredClone: globalThis.structuredClone };
+  const scope = {
+    ShirohaDesktopHost: {
+      invoke: async (/** @type {string} */ name, /** @type {unknown} */ args) => {
+        calls.push([name, args]);
+        if (name === 'local_initialize') { return { revision: 7, hasData: true }; }
+        if (name === 'local_read') { return { schemaVersion: 1, banks: [], records: [] }; }
+        if (name === 'local_write') { return { revision: 8 }; }
+        if (name === 'local_operation') { return { revision: 8 }; }
+        throw new Error('unexpected command');
+      },
+    },
+    ShirohaBrowser: {},
+    ShirohaBrowserCredentials: {},
+    ShirohaSaveQueue: { create: () => ({}) },
+    localStorage: { getItem: () => null },
+    structuredClone: globalThis.structuredClone,
+  };
   vm.runInNewContext(source, scope);
   assert.equal((await platform(scope).storage.initialize()).state, 'ready');
   assert.equal(platform(scope).storage.revision(), 7);
@@ -119,9 +162,18 @@ test('learning-only edits send changes without copying unchanged question images
   const source = await readFile(new URL('../frontend/adapter.js', import.meta.url), 'utf8');
   const snapshot = { schemaVersion: 1, banks: [{ id: 'b', name: 'bank', questions: [{ id: 'q', question: 'large-image-payload', type: 'single', answer: [], options: [] }] }], records: [], favorites: {}, wrongBook: {}, settings: {}, activeBankId: 'b', crossPlatformMeta: {} };
   /** @type {Array<[string,unknown]>} */const calls = [];
-  const scope = { ShirohaDesktopHost: { invoke: async (/** @type {string} */name, /** @type {unknown} */args) => {
-    calls.push([name, args]);if (name === 'local_initialize') { return { revision: 1, hasData: true }; } if (name === 'local_query') { return { revision: 1, snapshot }; } return { revision: 2 };
-  } }, ShirohaBrowser: {}, ShirohaBrowserCredentials: {}, ShirohaSaveQueue: { create: () => ({}) }, localStorage: { getItem: () => null }, structuredClone: globalThis.structuredClone };
+  const scope = {
+    ShirohaDesktopHost: {
+      invoke: async (/** @type {string} */name, /** @type {unknown} */args) => {
+        calls.push([name, args]);if (name === 'local_initialize') { return { revision: 1, hasData: true }; } if (name === 'local_query') { return { revision: 1, snapshot }; } return { revision: 2 };
+      },
+    },
+    ShirohaBrowser: {},
+    ShirohaBrowserCredentials: {},
+    ShirohaSaveQueue: { create: () => ({}) },
+    localStorage: { getItem: () => null },
+    structuredClone: globalThis.structuredClone,
+  };
   vm.runInNewContext(source, scope);
   const storage = /** @type {{initialize():Promise<unknown>,read():Promise<unknown>,write(snapshot:unknown,id:string,revision:number):Promise<unknown>}} */ (vm.runInNewContext('ShirohaPlatform.storage', scope));
   await storage.initialize();await storage.read();
@@ -132,13 +184,21 @@ test('learning-only edits send changes without copying unchanged question images
 
 test('a lost commit reply is resolved by its durable operation receipt', async () => {
   const source = await readFile(new URL('../frontend/adapter.js', import.meta.url), 'utf8');
-  const scope = { ShirohaDesktopHost: { invoke: async (/** @type {string} */ name) => {
-    if (name === 'local_initialize') { return { revision: 0, hasData: false }; }
-    if (name === 'local_write') { throw new Error('lost reply'); }
-    if (name === 'local_operation') { return { revision: 1 }; }
-    throw new Error('unexpected command');
-  } }, ShirohaBrowser: {}, ShirohaBrowserCredentials: {}, ShirohaSaveQueue: { create: () => ({}) },
-  localStorage: { getItem: () => null }, structuredClone: globalThis.structuredClone };
+  const scope = {
+    ShirohaDesktopHost: {
+      invoke: async (/** @type {string} */ name) => {
+        if (name === 'local_initialize') { return { revision: 0, hasData: false }; }
+        if (name === 'local_write') { throw new Error('lost reply'); }
+        if (name === 'local_operation') { return { revision: 1 }; }
+        throw new Error('unexpected command');
+      },
+    },
+    ShirohaBrowser: {},
+    ShirohaBrowserCredentials: {},
+    ShirohaSaveQueue: { create: () => ({}) },
+    localStorage: { getItem: () => null },
+    structuredClone: globalThis.structuredClone,
+  };
   vm.runInNewContext(source, scope);
   await platform(scope).storage.initialize();
   await platform(scope).storage.write({ schemaVersion: 1, banks: [], records: [] }, 'lost', 0);
@@ -149,15 +209,24 @@ test('lazy metadata writes preserve unread questions and failed edits restore th
   const source = await readFile(new URL('../frontend/adapter.js', import.meta.url), 'utf8');
   const index = { schemaVersion: 1, banks: [{ id: 'b', name: 'bank', questions: [{ id: 'q', type: 'single', question: '', options: [], answer: [] }] }], records: [], settings: {}, wrongBook: {}, favorites: {}, crossPlatformMeta: {}, activeBankId: 'b' };
   /** @type {Array<{command:string,args:Record<string,unknown>}>} */const calls = [];
-  const scope = { ShirohaDesktopHost: { invoke: async (/** @type {string} */command, /** @type {Record<string,unknown>} */args) => {
-    calls.push({ command, args });
-    if (command === 'local_initialize') { return { revision: 1, hasData: true }; }
-    const query = /** @type {{kind:string}} */ (args?.query);
-    if (query?.kind === 'summary') { return { revision: 1, snapshot: globalThis.structuredClone(index) }; }
-    if (query?.kind === 'details') { return [{ id: 'q', type: 'single', question: '完整题干和图片', options: [], answer: [], extension: { preserved: true } }]; }
-    if (command === 'local_commit') { return { revision: 2 }; }
-    throw new Error('unexpected');
-  } }, ShirohaBrowser: {}, ShirohaBrowserCredentials: {}, ShirohaSaveQueue: { create: () => ({}) }, localStorage: { getItem: () => null }, structuredClone: globalThis.structuredClone };
+  const scope = {
+    ShirohaDesktopHost: {
+      invoke: async (/** @type {string} */command, /** @type {Record<string,unknown>} */args) => {
+        calls.push({ command, args });
+        if (command === 'local_initialize') { return { revision: 1, hasData: true }; }
+        const query = /** @type {{kind:string}} */ (args?.query);
+        if (query?.kind === 'summary') { return { revision: 1, snapshot: globalThis.structuredClone(index) }; }
+        if (query?.kind === 'details') { return [{ id: 'q', type: 'single', question: '完整题干和图片', options: [], answer: [], extension: { preserved: true } }]; }
+        if (command === 'local_commit') { return { revision: 2 }; }
+        throw new Error('unexpected');
+      },
+    },
+    ShirohaBrowser: {},
+    ShirohaBrowserCredentials: {},
+    ShirohaSaveQueue: { create: () => ({}) },
+    localStorage: { getItem: () => null },
+    structuredClone: globalThis.structuredClone,
+  };
   vm.runInNewContext(source, scope);
   const storage = /** @type {import('../../web/platform/runtime.d.ts').BrowserStorage} */ (vm.runInNewContext('ShirohaPlatform.storage', scope));
   await storage.initialize();const view = await storage.read();assert(view);
@@ -179,20 +248,29 @@ for (const collection of ['questions', 'records']) {
       schemaVersion: 1,
       banks: [{ id: 'b', name: 'bank', questions: [{ id: 'q', type: 'single', question: '', options: [], answer: [] }] }],
       records: [{ id: 'r' }],
-      settings: {}, wrongBook: {}, favorites: {}, crossPlatformMeta: {}, activeBankId: 'b',
+      settings: {},
+      wrongBook: {},
+      favorites: {},
+      crossPlatformMeta: {},
+      activeBankId: 'b',
     };
     /** @type {string[]} */ const calls = [];
     const scope = {
-      ShirohaDesktopHost: { invoke: async (/** @type {string} */ command, /** @type {{query?:{kind:string}}} */ args) => {
-        calls.push(command);
-        if (command === 'local_initialize') { return { revision: 1, hasData: true }; }
-        if (args?.query?.kind === 'summary') { return { revision: 1, snapshot: globalThis.structuredClone(index) }; }
-        if (command === 'local_operation') { return null; }
-        if (command === 'local_commit') { return { revision: 2 }; }
-        throw new Error('unexpected command');
-      } },
-      ShirohaBrowser: {}, ShirohaBrowserCredentials: {}, ShirohaSaveQueue: { create: () => ({}) },
-      localStorage: { getItem: () => null }, structuredClone: globalThis.structuredClone,
+      ShirohaDesktopHost: {
+        invoke: async (/** @type {string} */ command, /** @type {{query?:{kind:string}}} */ args) => {
+          calls.push(command);
+          if (command === 'local_initialize') { return { revision: 1, hasData: true }; }
+          if (args?.query?.kind === 'summary') { return { revision: 1, snapshot: globalThis.structuredClone(index) }; }
+          if (command === 'local_operation') { return null; }
+          if (command === 'local_commit') { return { revision: 2 }; }
+          throw new Error('unexpected command');
+        },
+      },
+      ShirohaBrowser: {},
+      ShirohaBrowserCredentials: {},
+      ShirohaSaveQueue: { create: () => ({}) },
+      localStorage: { getItem: () => null },
+      structuredClone: globalThis.structuredClone,
     };
     vm.runInNewContext(source, scope);
     const storage = /** @type {import('../../web/platform/runtime.d.ts').BrowserStorage} */ (vm.runInNewContext('ShirohaPlatform.storage', scope));
@@ -221,30 +299,39 @@ for (const collection of ['questions', 'records']) {
       schemaVersion: 1,
       banks: [{ id: 'b', name: 'bank', questions: [{ id: 'q', type: 'single', question: '', options: [], answer: [] }] }],
       records: [{ id: 'r' }],
-      settings: {}, wrongBook: {}, favorites: {}, crossPlatformMeta: {}, activeBankId: 'b',
+      settings: {},
+      wrongBook: {},
+      favorites: {},
+      crossPlatformMeta: {},
+      activeBankId: 'b',
     };
     /** @type {(value:unknown)=>void} */ let releaseOld = () => { throw new Error('old request was not started'); };
     let nativeRevision = 1;
     const scope = {
-      ShirohaDesktopHost: { invoke: async (/** @type {string} */ command, /** @type {{query?:{kind:string,revision?:number,expected_revision?:number}}} */ args) => {
-        if (command === 'local_initialize') { return { revision: nativeRevision, hasData: true }; }
-        if (args?.query?.kind === 'summary') { return { revision: nativeRevision, snapshot: globalThis.structuredClone(index) }; }
-        if (args?.query?.kind === 'restore') {
-          assert.equal(args.query.expected_revision, 1);
-          nativeRevision = 2;
-          return { revision: nativeRevision };
-        }
-        if (args?.query?.kind === 'details') {
-          if (args.query.revision === 1) { return new Promise((resolve) => { releaseOld = resolve; }); }
-          assert.equal(args.query.revision, 2);
-          return collection === 'questions'
-            ? [{ id: 'q', type: 'single', question: '恢复后的正文', options: [], answer: [] }]
-            : [{ id: 'r', details: [{ question: '恢复后的记录' }] }];
-        }
-        throw new Error('unexpected command');
-      } },
-      ShirohaBrowser: {}, ShirohaBrowserCredentials: {}, ShirohaSaveQueue: { create: () => ({}) },
-      localStorage: { getItem: () => null }, structuredClone: globalThis.structuredClone,
+      ShirohaDesktopHost: {
+        invoke: async (/** @type {string} */ command, /** @type {{query?:{kind:string,revision?:number,expected_revision?:number}}} */ args) => {
+          if (command === 'local_initialize') { return { revision: nativeRevision, hasData: true }; }
+          if (args?.query?.kind === 'summary') { return { revision: nativeRevision, snapshot: globalThis.structuredClone(index) }; }
+          if (args?.query?.kind === 'restore') {
+            assert.equal(args.query.expected_revision, 1);
+            nativeRevision = 2;
+            return { revision: nativeRevision };
+          }
+          if (args?.query?.kind === 'details') {
+            if (args.query.revision === 1) { return new Promise((resolve) => { releaseOld = resolve; }); }
+            assert.equal(args.query.revision, 2);
+            return collection === 'questions'
+              ? [{ id: 'q', type: 'single', question: '恢复后的正文', options: [], answer: [] }]
+              : [{ id: 'r', details: [{ question: '恢复后的记录' }] }];
+          }
+          throw new Error('unexpected command');
+        },
+      },
+      ShirohaBrowser: {},
+      ShirohaBrowserCredentials: {},
+      ShirohaSaveQueue: { create: () => ({}) },
+      localStorage: { getItem: () => null },
+      structuredClone: globalThis.structuredClone,
       crypto: { randomUUID: () => 'synthetic-restore' },
     };
     vm.runInNewContext(source, scope);
@@ -278,8 +365,14 @@ for (const collection of ['questions', 'records']) {
 test('恢复修订后拒绝迟到的完整数据读取并允许重新读取', async () => {
   const source = await readFile(new URL('../frontend/adapter.js', import.meta.url), 'utf8');
   const index = {
-    schemaVersion: 1, banks: [], records: [], settings: {}, favorites: {}, activeBankId: '',
-    wrongBook: { b: [{ id: 'summary' }] }, crossPlatformMeta: {},
+    schemaVersion: 1,
+    banks: [],
+    records: [],
+    settings: {},
+    favorites: {},
+    activeBankId: '',
+    wrongBook: { b: [{ id: 'summary' }] },
+    crossPlatformMeta: {},
   };
   /** @type {(value:unknown)=>void} */ let releaseOld = () => { throw new Error('old request was not started'); };
   let markStarted = () => {};
@@ -288,24 +381,29 @@ test('恢复修订后拒绝迟到的完整数据读取并允许重新读取', as
   let oldHydrates = 0;
   let freshHydrates = 0;
   const scope = {
-    ShirohaDesktopHost: { invoke: async (/** @type {string} */ command, /** @type {{query?:{kind:string,revision?:number}}} */ args) => {
-      if (command === 'local_initialize') { return { revision: nativeRevision, hasData: true }; }
-      if (args?.query?.kind === 'summary') { return { revision: nativeRevision, snapshot: globalThis.structuredClone(index) }; }
-      if (args?.query?.kind === 'restore') { nativeRevision = 2; return { revision: nativeRevision }; }
-      if (args?.query?.kind === 'hydrate') {
-        if (args.query.revision === 1) {
-          oldHydrates += 1;
-          if (oldHydrates === 1) { return new Promise((resolve) => { releaseOld = resolve; markStarted(); }); }
-          return { stale: true };
+    ShirohaDesktopHost: {
+      invoke: async (/** @type {string} */ command, /** @type {{query?:{kind:string,revision?:number}}} */ args) => {
+        if (command === 'local_initialize') { return { revision: nativeRevision, hasData: true }; }
+        if (args?.query?.kind === 'summary') { return { revision: nativeRevision, snapshot: globalThis.structuredClone(index) }; }
+        if (args?.query?.kind === 'restore') { nativeRevision = 2; return { revision: nativeRevision }; }
+        if (args?.query?.kind === 'hydrate') {
+          if (args.query.revision === 1) {
+            oldHydrates += 1;
+            if (oldHydrates === 1) { return new Promise((resolve) => { releaseOld = resolve; markStarted(); }); }
+            return { stale: true };
+          }
+          assert.equal(args.query.revision, 2);
+          freshHydrates += 1;
+          return freshHydrates === 1 ? { b: [{ id: 'restored' }] } : { restored: true };
         }
-        assert.equal(args.query.revision, 2);
-        freshHydrates += 1;
-        return freshHydrates === 1 ? { b: [{ id: 'restored' }] } : { restored: true };
-      }
-      throw new Error('unexpected command');
-    } },
-    ShirohaBrowser: {}, ShirohaBrowserCredentials: {}, ShirohaSaveQueue: { create: () => ({}) },
-    localStorage: { getItem: () => null }, structuredClone: globalThis.structuredClone,
+        throw new Error('unexpected command');
+      },
+    },
+    ShirohaBrowser: {},
+    ShirohaBrowserCredentials: {},
+    ShirohaSaveQueue: { create: () => ({}) },
+    localStorage: { getItem: () => null },
+    structuredClone: globalThis.structuredClone,
     crypto: { randomUUID: () => 'synthetic-restore' },
   };
   vm.runInNewContext(source, scope);
@@ -346,22 +444,34 @@ test('desktop save uses linear question identity work for a single favorite chan
           Object.defineProperty(question, 'id', { enumerable: true, configurable: true, get() { counts.idReads += 1;return id; } });
         }
         const { questions } = bank;
-        Object.defineProperty(questions, 'some', { configurable: true, value: (/** @type {(item:{id:string})=>boolean} */ predicate) => {
-          for (const item of questions) { counts.comparisons += 1;if (predicate(item)) { return true; } }
-          return false;
-        } });
+        Object.defineProperty(questions, 'some', {
+          configurable: true,
+          value: (/** @type {(item:{id:string})=>boolean} */ predicate) => {
+            for (const item of questions) { counts.comparisons += 1;if (predicate(item)) { return true; } }
+            return false;
+          },
+        });
       }
     }
     /** @template T @param {T} value @returns {T} */
     function clone(value) { const copy = globalThis.structuredClone(value);instrument(copy);return copy; }
     /** @type {Array<{command:string,args:Record<string,unknown>|undefined}>} */ const calls = [];
-    const scope = { ShirohaDesktopHost: { invoke: async (/** @type {string} */ command, /** @type {Record<string,unknown>|undefined} */ args) => {
-      calls.push({ command, args });
-      if (command === 'local_initialize') { return { revision: 1, hasData: true }; }
-      if (command === 'local_query') { return { revision: 1, snapshot: clone(snapshot) }; }
-      if (command === 'local_commit') { return { revision: 2 }; }
-      throw new Error(`unexpected ${command}`);
-    } }, ShirohaBrowser: {}, ShirohaBrowserCredentials: {}, ShirohaSaveQueue: { create: () => ({}) }, localStorage: { getItem: () => null }, structuredClone: clone };
+    const scope = {
+      ShirohaDesktopHost: {
+        invoke: async (/** @type {string} */ command, /** @type {Record<string,unknown>|undefined} */ args) => {
+          calls.push({ command, args });
+          if (command === 'local_initialize') { return { revision: 1, hasData: true }; }
+          if (command === 'local_query') { return { revision: 1, snapshot: clone(snapshot) }; }
+          if (command === 'local_commit') { return { revision: 2 }; }
+          throw new Error(`unexpected ${command}`);
+        },
+      },
+      ShirohaBrowser: {},
+      ShirohaBrowserCredentials: {},
+      ShirohaSaveQueue: { create: () => ({}) },
+      localStorage: { getItem: () => null },
+      structuredClone: clone,
+    };
     vm.runInNewContext(source, scope);
     const storage = /** @type {import('../../web/platform/runtime.d.ts').BrowserStorage} */ (vm.runInNewContext('ShirohaPlatform.storage', scope));
     await storage.initialize();
@@ -385,30 +495,48 @@ test('desktop save uses linear question identity work for a single favorite chan
 for (const outcome of ['receipt', 'lost-reply', 'retry']) {
   test(`desktop save preserves ordered changes and ${outcome} semantics`, async () => {
     const source = await readFile(new URL('../frontend/adapter.js', import.meta.url), 'utf8');
-    const summary = { schemaVersion: 1, banks: [
-      { id: 'b1', name: 'first', questions: [{ id: 'shared', type: 'single', question: '', options: [], answer: [] }, { id: 'deleted', type: 'single', question: '', options: [], answer: [] }] },
-      { id: 'b2', name: 'second', questions: [{ id: 'shared', type: 'single', question: '', options: [], answer: [] }] },
-    ], records: [{ id: 'r1' }, { id: 'r2' }], settings: {}, wrongBook: {}, favorites: {}, crossPlatformMeta: {}, activeBankId: 'b1' };
+    const summary = {
+      schemaVersion: 1,
+      banks: [
+        { id: 'b1', name: 'first', questions: [{ id: 'shared', type: 'single', question: '', options: [], answer: [] }, { id: 'deleted', type: 'single', question: '', options: [], answer: [] }] },
+        { id: 'b2', name: 'second', questions: [{ id: 'shared', type: 'single', question: '', options: [], answer: [] }] },
+      ],
+      records: [{ id: 'r1' }, { id: 'r2' }],
+      settings: {},
+      wrongBook: {},
+      favorites: {},
+      crossPlatformMeta: {},
+      activeBankId: 'b1',
+    };
     /** @type {Array<{command:string,args:Record<string,unknown>|undefined}>} */ const calls = [];
     let commits = 0;
-    const scope = { ShirohaDesktopHost: { invoke: async (/** @type {string} */ command, /** @type {Record<string,unknown>|undefined} */ args) => {
-      calls.push({ command, args: globalThis.structuredClone(args) });
-      if (command === 'local_initialize') { return { revision: 1, hasData: true }; }
-      const query = /** @type {{kind?:string,collection?:string,bank_id?:string,ids?:string[]}|undefined} */ (args?.query);
-      if (query?.kind === 'summary') { return { revision: 1, snapshot: globalThis.structuredClone(summary) }; }
-      if (query?.kind === 'details' && query.collection === 'questions') {
-        return (query.ids || []).map((id) => ({ id, type: 'single', question: `正文-${query.bank_id}-${id}`, options: [], answer: [] }));
-      }
-      if (query?.kind === 'details' && query.collection === 'records') { return [{ id: 'r1', details: ['旧记录正文'] }]; }
-      if (command === 'local_commit') {
-        commits += 1;
-        if (commits === 1 && outcome !== 'receipt') { throw { code: 'storage_unavailable' }; }
-        if (commits === 1 || (outcome === 'retry' && commits === 2)) { return { revision: 2 }; }
-        return { revision: 3 };
-      }
-      if (command === 'local_operation') { return outcome === 'lost-reply' ? { revision: 2 } : null; }
-      throw new Error(`unexpected ${command}`);
-    } }, ShirohaBrowser: {}, ShirohaBrowserCredentials: {}, ShirohaSaveQueue: { create: () => ({}) }, localStorage: { getItem: () => null }, structuredClone: globalThis.structuredClone };
+    const scope = {
+      ShirohaDesktopHost: {
+        invoke: async (/** @type {string} */ command, /** @type {Record<string,unknown>|undefined} */ args) => {
+          calls.push({ command, args: globalThis.structuredClone(args) });
+          if (command === 'local_initialize') { return { revision: 1, hasData: true }; }
+          const query = /** @type {{kind?:string,collection?:string,bank_id?:string,ids?:string[]}|undefined} */ (args?.query);
+          if (query?.kind === 'summary') { return { revision: 1, snapshot: globalThis.structuredClone(summary) }; }
+          if (query?.kind === 'details' && query.collection === 'questions') {
+            return (query.ids || []).map((id) => ({ id, type: 'single', question: `正文-${query.bank_id}-${id}`, options: [], answer: [] }));
+          }
+          if (query?.kind === 'details' && query.collection === 'records') { return [{ id: 'r1', details: ['旧记录正文'] }]; }
+          if (command === 'local_commit') {
+            commits += 1;
+            if (commits === 1 && outcome !== 'receipt') { throw { code: 'storage_unavailable' }; }
+            if (commits === 1 || (outcome === 'retry' && commits === 2)) { return { revision: 2 }; }
+            return { revision: 3 };
+          }
+          if (command === 'local_operation') { return outcome === 'lost-reply' ? { revision: 2 } : null; }
+          throw new Error(`unexpected ${command}`);
+        },
+      },
+      ShirohaBrowser: {},
+      ShirohaBrowserCredentials: {},
+      ShirohaSaveQueue: { create: () => ({}) },
+      localStorage: { getItem: () => null },
+      structuredClone: globalThis.structuredClone,
+    };
     vm.runInNewContext(source, scope);
     const storage = /** @type {import('../../web/platform/runtime.d.ts').BrowserStorage} */ (vm.runInNewContext('ShirohaPlatform.storage', scope));
     await storage.initialize();const view = /** @type {MutableAdapterSnapshot|null} */ (/** @type {unknown} */ (await storage.read()));assert(view);
@@ -461,16 +589,25 @@ test('desktop save does not confuse identical question IDs in different banks', 
   const question = { id: 'same', type: 'single', question: '', options: [], answer: [] };
   const summary = { schemaVersion: 1, banks: [{ id: 'a', questions: [question] }, { id: 'b', questions: [question] }], records: [], settings: {}, wrongBook: {}, favorites: {}, crossPlatformMeta: {}, activeBankId: 'a' };
   /** @type {string[]} */ const calls = [];
-  const scope = { ShirohaDesktopHost: { invoke: async (/** @type {string} */ command, /** @type {Record<string,unknown>|undefined} */ args) => {
-    calls.push(command);
-    if (command === 'local_initialize') { return { revision: 1, hasData: true }; }
-    const query = /** @type {{kind?:string,bank_id?:string}|undefined} */ (args?.query);
-    if (query?.kind === 'summary') { return { revision: 1, snapshot: globalThis.structuredClone(summary) }; }
-    if (query?.kind === 'details') { return [{ ...question, question: `正文-${query.bank_id}` }]; }
-    if (command === 'local_operation') { return null; }
-    if (command === 'local_commit') { return { revision: 2 }; }
-    throw new Error(`unexpected ${command}`);
-  } }, ShirohaBrowser: {}, ShirohaBrowserCredentials: {}, ShirohaSaveQueue: { create: () => ({}) }, localStorage: { getItem: () => null }, structuredClone: globalThis.structuredClone };
+  const scope = {
+    ShirohaDesktopHost: {
+      invoke: async (/** @type {string} */ command, /** @type {Record<string,unknown>|undefined} */ args) => {
+        calls.push(command);
+        if (command === 'local_initialize') { return { revision: 1, hasData: true }; }
+        const query = /** @type {{kind?:string,bank_id?:string}|undefined} */ (args?.query);
+        if (query?.kind === 'summary') { return { revision: 1, snapshot: globalThis.structuredClone(summary) }; }
+        if (query?.kind === 'details') { return [{ ...question, question: `正文-${query.bank_id}` }]; }
+        if (command === 'local_operation') { return null; }
+        if (command === 'local_commit') { return { revision: 2 }; }
+        throw new Error(`unexpected ${command}`);
+      },
+    },
+    ShirohaBrowser: {},
+    ShirohaBrowserCredentials: {},
+    ShirohaSaveQueue: { create: () => ({}) },
+    localStorage: { getItem: () => null },
+    structuredClone: globalThis.structuredClone,
+  };
   vm.runInNewContext(source, scope);
   const storage = /** @type {import('../../web/platform/runtime.d.ts').BrowserStorage} */ (vm.runInNewContext('ShirohaPlatform.storage', scope));
   await storage.initialize();const view = /** @type {MutableAdapterSnapshot|null} */ (/** @type {unknown} */ (await storage.read()));assert(view);
@@ -492,15 +629,24 @@ test('desktop save rechecks a replaced baseline while waiting for the receipt', 
   /** @type {(receipt:{revision:number})=>void} */ let release = () => { throw new Error('commit not started'); };
   const pending = new Promise((resolve) => { release = resolve; });
   let reads = 0;let commits = 0;
-  const scope = { ShirohaDesktopHost: { invoke: async (/** @type {string} */ command, /** @type {Record<string,unknown>|undefined} */ args) => {
-    if (command === 'local_initialize') { return { revision: 1, hasData: true }; }
-    const query = /** @type {{kind?:string}|undefined} */ (args?.query);
-    if (query?.kind === 'summary') { reads += 1;return { revision: 1, snapshot: globalThis.structuredClone(reads === 1 ? original : replacement) }; }
-    if (query?.kind === 'details') { return [{ id: 'new', type: 'single', question: '已读取正文', options: [], answer: [] }]; }
-    if (command === 'local_commit') { commits += 1;return commits === 1 ? pending : { revision: 3 }; }
-    if (command === 'local_operation') { return null; }
-    throw new Error(`unexpected ${command}`);
-  } }, ShirohaBrowser: {}, ShirohaBrowserCredentials: {}, ShirohaSaveQueue: { create: () => ({}) }, localStorage: { getItem: () => null }, structuredClone: globalThis.structuredClone };
+  const scope = {
+    ShirohaDesktopHost: {
+      invoke: async (/** @type {string} */ command, /** @type {Record<string,unknown>|undefined} */ args) => {
+        if (command === 'local_initialize') { return { revision: 1, hasData: true }; }
+        const query = /** @type {{kind?:string}|undefined} */ (args?.query);
+        if (query?.kind === 'summary') { reads += 1;return { revision: 1, snapshot: globalThis.structuredClone(reads === 1 ? original : replacement) }; }
+        if (query?.kind === 'details') { return [{ id: 'new', type: 'single', question: '已读取正文', options: [], answer: [] }]; }
+        if (command === 'local_commit') { commits += 1;return commits === 1 ? pending : { revision: 3 }; }
+        if (command === 'local_operation') { return null; }
+        throw new Error(`unexpected ${command}`);
+      },
+    },
+    ShirohaBrowser: {},
+    ShirohaBrowserCredentials: {},
+    ShirohaSaveQueue: { create: () => ({}) },
+    localStorage: { getItem: () => null },
+    structuredClone: globalThis.structuredClone,
+  };
   vm.runInNewContext(source, scope);
   const storage = /** @type {import('../../web/platform/runtime.d.ts').BrowserStorage} */ (vm.runInNewContext('ShirohaPlatform.storage', scope));
   await storage.initialize();
@@ -526,13 +672,22 @@ test('desktop save preserves bank insertion, deletion and order across the recei
   const summary = { schemaVersion: 1, banks: [{ id: 'removed', name: '旧库', questions: [question] }, { id: 'kept', name: '保留库', questions: [question] }], records: [], settings: {}, wrongBook: {}, favorites: {}, crossPlatformMeta: {}, activeBankId: 'kept' };
   /** @type {Array<{command:string,args:Record<string,unknown>|undefined}>} */ const calls = [];
   let commits = 0;
-  const scope = { ShirohaDesktopHost: { invoke: async (/** @type {string} */ command, /** @type {Record<string,unknown>|undefined} */ args) => {
-    calls.push({ command, args: globalThis.structuredClone(args) });
-    if (command === 'local_initialize') { return { revision: 1, hasData: true }; }
-    if (command === 'local_query') { return { revision: 1, snapshot: globalThis.structuredClone(summary) }; }
-    if (command === 'local_commit') { commits += 1;return { revision: commits + 1 }; }
-    throw new Error(`unexpected ${command}`);
-  } }, ShirohaBrowser: {}, ShirohaBrowserCredentials: {}, ShirohaSaveQueue: { create: () => ({}) }, localStorage: { getItem: () => null }, structuredClone: globalThis.structuredClone };
+  const scope = {
+    ShirohaDesktopHost: {
+      invoke: async (/** @type {string} */ command, /** @type {Record<string,unknown>|undefined} */ args) => {
+        calls.push({ command, args: globalThis.structuredClone(args) });
+        if (command === 'local_initialize') { return { revision: 1, hasData: true }; }
+        if (command === 'local_query') { return { revision: 1, snapshot: globalThis.structuredClone(summary) }; }
+        if (command === 'local_commit') { commits += 1;return { revision: commits + 1 }; }
+        throw new Error(`unexpected ${command}`);
+      },
+    },
+    ShirohaBrowser: {},
+    ShirohaBrowserCredentials: {},
+    ShirohaSaveQueue: { create: () => ({}) },
+    localStorage: { getItem: () => null },
+    structuredClone: globalThis.structuredClone,
+  };
   vm.runInNewContext(source, scope);
   const storage = /** @type {import('../../web/platform/runtime.d.ts').BrowserStorage} */ (vm.runInNewContext('ShirohaPlatform.storage', scope));
   await storage.initialize();const view = /** @type {MutableAdapterSnapshot|null} */ (/** @type {unknown} */ (await storage.read()));assert(view);

@@ -31,7 +31,8 @@ const cases = [
   ...require('./training-review-analysis.cjs').cases,
   ...require('./submit-modes.cjs').cases,
   {
-    name: 'unconfigured-never-requests', options: { configured: false },
+    name: 'unconfigured-never-requests',
+    options: { configured: false },
     async run(h) {
       await h.start();
       await h.quiet();
@@ -43,7 +44,8 @@ const cases = [
     },
   },
   {
-    name: 'unconfigured-settings-visible-preserves-practice-answer-state', options: { configured: false },
+    name: 'unconfigured-settings-visible-preserves-practice-answer-state',
+    options: { configured: false },
     async run(h) {
       await h.start();
       await h.submitChoice('A');
@@ -141,7 +143,8 @@ const cases = [
     },
   },
   {
-    name: 'inflight-question-switch-does-not-write-current-question', options: { ignoreAbort: true },
+    name: 'inflight-question-switch-does-not-write-current-question',
+    options: { ignoreAbort: true },
     async run(h) {
       await h.start(); await h.reveal();
       const original = await snapshot(h.page);
@@ -179,7 +182,8 @@ const cases = [
     },
   },
   ...['exit', 'reset', 'restart'].map((mode) => ({
-    name: `late-analysis-cannot-write-new-session-${mode}`, options: { ignoreAbort: true },
+    name: `late-analysis-cannot-write-new-session-${mode}`,
+    options: { ignoreAbort: true },
     async run(h) {
       await h.start(); await h.reveal();
       const pending = h.mock.enqueue('analysis', analysis('STALE_OLD_SESSION_RESULT'), { hold: true });
@@ -201,7 +205,8 @@ const cases = [
     },
   })),
   {
-    name: 'late-follow-up-cannot-write-new-session', options: { ignoreAbort: true },
+    name: 'late-follow-up-cannot-write-new-session',
+    options: { ignoreAbort: true },
     async run(h) {
       await h.start(); await h.reveal();
       await h.generate(analysis('OLD_FOLLOW_SESSION_ANALYSIS'));
@@ -344,7 +349,8 @@ const cases = [
     },
   },
   {
-    name: 'rich-analysis-plain-save-removes-old-rich-field-preserves-stem-options', options: { rich: true },
+    name: 'rich-analysis-plain-save-removes-old-rich-field-preserves-stem-options',
+    options: { rich: true },
     async run(h) {
       await h.start(); await h.reveal();
       const before = await snapshot(h.page);
@@ -365,7 +371,8 @@ const cases = [
     },
   },
   {
-    name: 'rich-analysis-formula-save-keeps-backslashes-and-updates-only-analysis', options: { rich: true },
+    name: 'rich-analysis-formula-save-keeps-backslashes-and-updates-only-analysis',
+    options: { rich: true },
     async run(h) {
       await h.start(); await h.submitChoice('A');
       const before = await snapshot(h.page);

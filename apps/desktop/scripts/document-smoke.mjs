@@ -99,15 +99,18 @@ export async function documentSmoke(page) {
         api.createWorker = (language, mode, options) => {
           api.createWorker = createWorker;
           let cancelled = false;
-          return createWorker(language, mode, { ...options, logger(progress) {
-            options.logger(progress);
-            // 等待真实 Worker 开始识别再取消，防止仅覆盖加载阶段而遗漏未结束的 recognize Promise。
-            if (!cancelled && progress.status === 'recognizing text') {
-              cancelled = true;
-              document.body.dataset.ocrCancellationPhase = 'recognizing';
-              document.getElementById('ocr-cancel-btn')?.click();
-            }
-          } });
+          return createWorker(language, mode, {
+            ...options,
+            logger(progress) {
+              options.logger(progress);
+              // 等待真实 Worker 开始识别再取消，防止仅覆盖加载阶段而遗漏未结束的 recognize Promise。
+              if (!cancelled && progress.status === 'recognizing text') {
+                cancelled = true;
+                document.body.dataset.ocrCancellationPhase = 'recognizing';
+                document.getElementById('ocr-cancel-btn')?.click();
+              }
+            },
+          });
         };
       });
       await page.locator('#ocr-start-btn').click();

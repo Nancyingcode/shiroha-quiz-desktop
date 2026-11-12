@@ -8,8 +8,16 @@
     const applyTableImportResultV49 = applyTable;
     const $ = (selector) => document.querySelector(selector);
     // 预览草稿只属于当前页面；单文件或双文件清空时保留原有报告与筛选语义。
-    const draft = { questions: [], tableResult: null, warnings: [], report: '', diagnostics: null,
-      filter: 'priority', selected: new Set(), sourceMeta: { name: '', size: 0, type: '' } };
+    const draft = {
+      questions: [],
+      tableResult: null,
+      warnings: [],
+      report: '',
+      diagnostics: null,
+      filter: 'priority',
+      selected: new Set(),
+      sourceMeta: { name: '', size: 0, type: '' },
+    };
     // 每个输入槽位拥有独立读取代次；用户替换或清空内容时废弃该槽位的迟到结果。
     const readGenerations = { single: 0, question: 0, answer: 0 };
     let bankNameGeneration = 0;
@@ -114,8 +122,14 @@
       clearDraft();
     }
     function snapshot() {
-      return { cache: draft.questions, warnings: draft.warnings, report: draft.report,
-        diagnostics: draft.diagnostics, filter: draft.filter, selected: draft.selected };
+      return {
+        cache: draft.questions,
+        warnings: draft.warnings,
+        report: draft.report,
+        diagnostics: draft.diagnostics,
+        filter: draft.filter,
+        selected: draft.selected,
+      };
     }
     function restore(previous) {
       draft.questions = previous.cache;

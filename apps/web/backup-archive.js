@@ -48,9 +48,15 @@
         const alreadyIncluded = question.images.some((image) => image && (image.localPath === asset.name
           || image.dataUrl === src || image.dataUri === src || image.localPath === src || image.src === src));
         if (!alreadyIncluded) {
-          question.images.push({ id: safeImageId('native_zip', question.id || 'q', nextOrder),
-            localPath: asset.name, sourceName: asset.fileName, order: nextOrder,
-            width: null, height: null, sizeBytes: asset.bytes.length });
+          question.images.push({
+            id: safeImageId('native_zip', question.id || 'q', nextOrder),
+            localPath: asset.name,
+            sourceName: asset.fileName,
+            order: nextOrder,
+            width: null,
+            height: null,
+            sizeBytes: asset.bytes.length,
+          });
           nextOrder += 1;
         }
         return `\n【${cleanAlt}】\n`;

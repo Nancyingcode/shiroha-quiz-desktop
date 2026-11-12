@@ -1,18 +1,28 @@
 (() => {
   'use strict';
-  function create({ select: $, selectAll: $$, escape: esc, label, short, formatDate: fmt, now, toast,
-    paging, bank, favorites, wrong, review, practice, actions }) {
-    const { visible: nativeViewVisible, begin: beginNativeRender, page: nativePage, versions: nativeRenderVersions,
-      loadItems: loadNativeItems, itemsForBanks: practiceSessionItemsForBanksV8916 } = paging;
-    const { active: activeBank, closeDetail: closeBankQuestionDetail, copyText: bankQuestionCopyText,
-      openDetail: openBankQuestionDetail } = bank;
+  function create({
+    select: $, selectAll: $$, escape: esc, label, short, formatDate: fmt, now, toast,
+    paging, bank, favorites, wrong, review, practice, actions,
+  }) {
+    const {
+      visible: nativeViewVisible, begin: beginNativeRender, page: nativePage, versions: nativeRenderVersions,
+      loadItems: loadNativeItems, itemsForBanks: practiceSessionItemsForBanksV8916,
+    } = paging;
+    const {
+      active: activeBank, closeDetail: closeBankQuestionDetail, copyText: bankQuestionCopyText,
+      openDetail: openBankQuestionDetail,
+    } = bank;
     const { ids: getFavoriteIdsV27, toggle: toggleFavoriteV27, isFavorite: isFavoriteV27 } = favorites;
     const { get: getWrongEntries, set: setWrongEntries, remove: removeWrong } = wrong;
-    const { questionBody: renderQuestionBodyV83, options: renderReviewOptions, summary: renderReviewAnswerSummary,
-      analysis: renderReviewAnalysis, updatePanels: updateReviewAnalysisPanels, isTextType } = review;
-    const { resetAi: resetAiSinglePracticeV613, setup: openQuickPracticeSetup, baseItems: practiceBaseItemsV58916,
+    const {
+      questionBody: renderQuestionBodyV83, options: renderReviewOptions, summary: renderReviewAnswerSummary,
+      analysis: renderReviewAnalysis, updatePanels: updateReviewAnalysisPanels, isTextType,
+    } = review;
+    const {
+      resetAi: resetAiSinglePracticeV613, setup: openQuickPracticeSetup, baseItems: practiceBaseItemsV58916,
       question: practiceQuestionV8916, customMode: PRACTICE_START_CUSTOM_V58916,
-      exactNumbers: formatExactPracticeNumbersV58916, syncMode: syncPracticeStartModeFieldsV58916 } = practice;
+      exactNumbers: formatExactPracticeNumbersV58916, syncMode: syncPracticeStartModeFieldsV58916,
+    } = practice;
     const { transaction: runMutation, save: saveSilent, renderAll, canStartPractice, preparePracticeNavigation } = actions;
     // 收藏单题读取只属于发起时的页面；离页或新请求会撤销旧跳转。
     let favoritePracticeRequest = 0;

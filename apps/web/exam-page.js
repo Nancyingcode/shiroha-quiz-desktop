@@ -1,20 +1,30 @@
 (() => {
   'use strict';
-  function create({ session: examSession, state, select: $, selectAll: $$, escape: esc, label, now, makeId,
-    question, practice, view, storage }) {
-    const { current: practiceQuestionV8916, key: practiceItemKeyV8916, bankId: practiceItemBankIdV8916,
+  function create({
+    session: examSession, state, select: $, selectAll: $$, escape: esc, label, now, makeId,
+    question, practice, view, storage,
+  }) {
+    const {
+      current: practiceQuestionV8916, key: practiceItemKeyV8916, bankId: practiceItemBankIdV8916,
       bankName: practiceItemBankNameV8916, isTextType, hasAnswer: hasAnswerValueV58914, score: scoreOf,
       sameAnswer: sameAnswerForQuestion, detail: makeAnswerDetail, collectText: collectTextAnswerFromElementV58914,
       html: questionHtml, applyAnswer: applyAnswerStateV26, bindOptions: bindAnswerOptionControls, collectAnswer,
-      feedback: feedbackAnswerHtmlV58914, content: renderQuestionContent, markOptions } = question;
-    const { scope: practiceScopeV8916, scopeLabel: practiceScopeLabelV8916, scopeSummary: practiceScopeSummaryV8916,
+      feedback: feedbackAnswerHtmlV58914, content: renderQuestionContent, markOptions,
+    } = question;
+    const {
+      scope: practiceScopeV8916, scopeLabel: practiceScopeLabelV8916, scopeSummary: practiceScopeSummaryV8916,
       groupType: PRACTICE_SCOPE_GROUP_V8916, filteredItems: filteredPracticeItemsV8916,
-      reviewItems: trainingSessionItems, attachReview: attachTrainingReview, addWrong, markRight, activeBank } = practice;
-    const { restoreSidebar: restoreSidebarAfterFocusV47, collapseSidebar: autoCollapseSidebarForFocusV47,
+      reviewItems: trainingSessionItems, attachReview: attachTrainingReview, addWrong, markRight, activeBank,
+    } = practice;
+    const {
+      restoreSidebar: restoreSidebarAfterFocusV47, collapseSidebar: autoCollapseSidebarForFocusV47,
       shell: updateShellLayoutByView, prewarmMath: prewarmMathJaxV56, bindRail: bindFocusRailToggleV34,
-      renderAll, renderReviewAnalysis, updateReviewPanels: updateReviewAnalysisPanels, openReview: openTrainingReview } = view;
-    const { loadItems: loadNativeItems, isBusy: isMutationBusy, isReady: isApplicationReady, saveFailed: hasMutationSaveError,
-      transaction: runMutation, save: saveSilent } = storage;
+      renderAll, renderReviewAnalysis, updateReviewPanels: updateReviewAnalysisPanels, openReview: openTrainingReview,
+    } = view;
+    const {
+      loadItems: loadNativeItems, isBusy: isMutationBusy, isReady: isApplicationReady, saveFailed: hasMutationSaveError,
+      transaction: runMutation, save: saveSilent,
+    } = storage;
     // 答题卡缓存只归当前试卷 DOM；重绘时从会话答案重建，交卷和回滚不修改缓存。
     let examAnswerCard = null;
     function examQuestionV113(item) {

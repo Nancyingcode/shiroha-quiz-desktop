@@ -2,10 +2,12 @@
   'use strict';
 
   const WEBDAV_BACKUP_FILE_RE_V378 = /^shiroha-web-backup-(\d{8})-(\d{6})-([a-f0-9]{8})\.json$/i;
-  function create({ platform, storeWebdavConfigV378, clearWebdavStorageV378, loadNativeAll,
+  function create({
+    platform, storeWebdavConfigV378, clearWebdavStorageV378, loadNativeAll,
     getState, buildBackupPayloadV23, normalizeBackupPayloadV23, applyNormalizedBackupV378,
     isStringTooLargeErrorV376, isMutationBusy, APP_VERSION,
-    now, fmt, esc, formatBytesV376, copyTextV23, toast, renderAll, setupEnhancedDataToolsV23 }) {
+    now, fmt, esc, formatBytesV376, copyTextV23, toast, renderAll, setupEnhancedDataToolsV23,
+  }) {
     const $ = (selector) => document.querySelector(selector);
     // 配置表单、请求状态与待恢复项归当前面板；清除配置或页面卸载时释放。
     let webdavRuntimeV378 = { busy: false, action: '', backups: [], latestFile: '', status: '', statusKind: '', diagnostic: null, pendingRestore: null, formLoaded: false };
@@ -263,8 +265,14 @@
       if (!await applyNormalizedBackupV378(pending.normalized, mode)) { return; } const bankCount = pending.normalized.banks.length; const { questionCount } = pending; const { fileName } = pending;closeWebdavRestoreModalV378();renderAll();setupEnhancedDataToolsV23();renderWebdavPanelV378();setWebdavStatusV378(`恢复完成：${fileName}，${bankCount} 个题库、${questionCount} 道题（${mode === 'overwrite' ? '覆盖' : '合并'}）。`, 'ok');toast('WebDAV 备份恢复完成。', 'ok');
     }
 
-    return Object.freeze({ defaultWebdavConfigV378, mount, renderWebdavPanelV378,
-      isBusy: () => webdavRuntimeV378.busy, webdavRequestV378, classifyWebdavErrorV378 });
+    return Object.freeze({
+      defaultWebdavConfigV378,
+      mount,
+      renderWebdavPanelV378,
+      isBusy: () => webdavRuntimeV378.busy,
+      webdavRequestV378,
+      classifyWebdavErrorV378,
+    });
   }
   globalThis.ShirohaWebdavPanel = Object.freeze({ create });
 })();

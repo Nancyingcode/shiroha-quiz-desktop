@@ -14,23 +14,33 @@ function setup(data, { mode = 'auto', accepted = true } = {}) {
   const original = [{ question: '之前的识别预览', answer: ['A'] }];
   const input = { value: JSON.stringify(data), dataset: {} };
   const elements = {
-    '#import-text': input, '#import-strategy': { value: 'auto' },
-    '#import-mode': { value: mode }, '#confirm-import-btn': { disabled: true },
+    '#import-text': input,
+    '#import-strategy': { value: 'auto' },
+    '#import-mode': { value: mode },
+    '#confirm-import-btn': { disabled: true },
   };
   const confirmations = []; const imports = []; const notices = []; const previews = [];
   const context = vm.createContext({
     $: (selector) => elements[selector],
-    invalidateAiImportRequestV99() {}, cancelAiPreviewRequestV991() {}, resetAiSuggestionsV991() {}, closeAiPreviewPanelV991() {},
-    normalizeQuestion: api.normalizeQuestion, normalizeBackupPayloadV23: api.normalizeBackupPayloadV23,
+    invalidateAiImportRequestV99() {},
+    cancelAiPreviewRequestV991() {},
+    resetAiSuggestionsV991() {},
+    closeAiPreviewPanelV991() {},
+    normalizeQuestion: api.normalizeQuestion,
+    normalizeBackupPayloadV23: api.normalizeBackupPayloadV23,
     countUnresolvedBackupImagesV24: api.countUnresolvedBackupImagesV24,
     ShirohaPlatform: { storage: {} },
     ShirohaDialogs: { confirm: async (message) => { confirmations.push(message); return accepted; } },
     runMutation: async (action) => action(),
     applyBackupImportV23: async (...args) => { imports.push(args); },
     renderImportPreview: (questions) => previews.push(plain(questions)),
-    collectImportWarnings: () => [], collectSoftRiskWarnings: () => [], countTypes: () => ({}),
-    largeImportRiskMessageV376: () => '', summarizeImportResultV376: () => '识别完成',
-    showNotice: (...args) => notices.push(args), toast: (...args) => notices.push(args),
+    collectImportWarnings: () => [],
+    collectSoftRiskWarnings: () => [],
+    countTypes: () => ({}),
+    largeImportRiskMessageV376: () => '',
+    summarizeImportResultV376: () => '识别完成',
+    showNotice: (...args) => notices.push(args),
+    toast: (...args) => notices.push(args),
   });
   runWebScripts(context, ['import-preview.js']);
   context.importDraft = context.ShirohaImportPreview.create({ readers: {}, ocr: {} });

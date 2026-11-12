@@ -11,24 +11,47 @@ function installSessions(context) {
   runWebScripts(context, ['ai-import-sessions.js']);
   const sessions = context.ShirohaAiImportSessions.create({
     draft: context.importDraft,
-    configuration: { isEditing: () => !!context.bankEditSessionV45, current: context.aiExecutionConfigV99,
-      configured: context.aiConfiguredV99, unavailable: context.aiUnavailableReasonV99,
-      request: context.aiRequestConfigV99, label: context.aiExecutionLabelV99 },
-    organizer: { range: context.aiImportRangeV992, context: context.aiRefactorContextV384,
-      messages: context.buildAiMessagesV99, parse: context.parseAiRefactorPayloadV384,
+    configuration: {
+      isEditing: () => !!context.bankEditSessionV45,
+      current: context.aiExecutionConfigV99,
+      configured: context.aiConfiguredV99,
+      unavailable: context.aiUnavailableReasonV99,
+      request: context.aiRequestConfigV99,
+      label: context.aiExecutionLabelV99,
+    },
+    organizer: {
+      range: context.aiImportRangeV992,
+      context: context.aiRefactorContextV384,
+      messages: context.buildAiMessagesV99,
+      parse: context.parseAiRefactorPayloadV384,
       parseText: context.parseTextQuestions,
-      risk: context.largeImportRiskMessageV376 },
-    preview: { mode: () => context.aiPreviewPanelModeV991, collectTargets: context.collectAiPreviewTargetDetailsV992,
-      key: context.aiQuestionKeyV991, fingerprint: context.aiQuestionFingerprintV991,
-      payload: context.aiQuestionPayloadV991, issueStatus: context.importIssueStatus,
-      label: context.aiPreviewModeLabelV991, analysisMessages: context.buildAiAnalysisMessagesV991,
-      reviewMessages: context.buildAiReviewMessagesV991, resultArray: context.aiResultArrayV991,
-      normalizeReview: context.normalizeAiReviewResultV991, normalizeAnalysis: context.normalizeAiAnalysisResultV991,
-      findIndex: context.findImportIndexByAiKeyV991 },
-    view: { select: context.$, sync: context.syncAiImportActionV99,
-      refreshImport: context.refreshAiImportPanelV99, refreshPreview: context.refreshAiPreviewPanelV991,
-      importStatus: context.setAiImportStatusV99, previewStatus: context.setAiPreviewStatusV991,
-      notice: context.showNotice, render: context.renderImportPreview },
+      risk: context.largeImportRiskMessageV376,
+    },
+    preview: {
+      mode: () => context.aiPreviewPanelModeV991,
+      collectTargets: context.collectAiPreviewTargetDetailsV992,
+      key: context.aiQuestionKeyV991,
+      fingerprint: context.aiQuestionFingerprintV991,
+      payload: context.aiQuestionPayloadV991,
+      issueStatus: context.importIssueStatus,
+      label: context.aiPreviewModeLabelV991,
+      analysisMessages: context.buildAiAnalysisMessagesV991,
+      reviewMessages: context.buildAiReviewMessagesV991,
+      resultArray: context.aiResultArrayV991,
+      normalizeReview: context.normalizeAiReviewResultV991,
+      normalizeAnalysis: context.normalizeAiAnalysisResultV991,
+      findIndex: context.findImportIndexByAiKeyV991,
+    },
+    view: {
+      select: context.$,
+      sync: context.syncAiImportActionV99,
+      refreshImport: context.refreshAiImportPanelV99,
+      refreshPreview: context.refreshAiPreviewPanelV991,
+      importStatus: context.setAiImportStatusV99,
+      previewStatus: context.setAiPreviewStatusV991,
+      notice: context.showNotice,
+      render: context.renderImportPreview,
+    },
     transport: { request: context.requestAiChatV99, timeout: context.withAiTimeoutV99 },
     limits: { importChars: 50000, previewItems: 200, analysisBatch: 10, reviewBatch: 20 },
   });
@@ -43,13 +66,19 @@ function setup(respond) {
   const requests = [];
   const original = [{ question: '原题', answer: ['A'] }];
   const context = vm.createContext({
-    aiImportRequestV99: { running: false }, aiPreviewRequestV991: { running: false },
-    bankEditSessionV45: null, AI_IMPORT_MAX_CHARS_V99: 50000,
+    aiImportRequestV99: { running: false },
+    aiPreviewRequestV991: { running: false },
+    bankEditSessionV45: null,
+    AI_IMPORT_MAX_CHARS_V99: 50000,
     ShirohaPlatform: {},
     ensureAiImportStateV99: () => ({ endpoint: 'https://example.invalid', model: 'fixture', timeoutSeconds: 10 }),
-    readStoredAiKeyV99: () => '', aiImportRangeV992: () => ({ text: '待整理题目', label: '全文' }),
-    aiRefactorContextV384: () => ({}), syncAiImportActionV99() {}, setAiImportStatusV99() {},
-    showNotice() {}, refreshAiImportPanelV99() {},
+    readStoredAiKeyV99: () => '',
+    aiImportRangeV992: () => ({ text: '待整理题目', label: '全文' }),
+    aiRefactorContextV384: () => ({}),
+    syncAiImportActionV99() {},
+    setAiImportStatusV99() {},
+    showNotice() {},
+    refreshAiImportPanelV99() {},
     withAiTimeoutV99: (_timeout, run) => run({}),
     buildAiMessagesV99: (_text, options) => options,
     requestAiChatV99: async (_config, options) => { requests.push(options.requestedMode); return respond(requests.length); },
@@ -100,21 +129,31 @@ function cancellationFixture(overrides = {}) {
   const context = vm.createContext({
     aiImportRequestV99: { running: false, controller: null },
     aiPreviewRequestV991: { running: false, mode: '', cancelled: false, controller: null },
-    aiImportSilentCancelV99: false, aiPreviewPanelModeV991: 'analysis',
-    bankEditSessionV45: null, AI_IMPORT_MAX_CHARS_V99: 50000, AI_PREVIEW_MAX_ITEMS_V991: 200,
-    AI_ANALYSIS_DEFAULT_BATCH_V991: 10, AI_REVIEW_DEFAULT_BATCH_V991: 20,
-    AbortController, setTimeout: () => 0, clearTimeout() {},
+    aiImportSilentCancelV99: false,
+    aiPreviewPanelModeV991: 'analysis',
+    bankEditSessionV45: null,
+    AI_IMPORT_MAX_CHARS_V99: 50000,
+    AI_PREVIEW_MAX_ITEMS_V991: 200,
+    AI_ANALYSIS_DEFAULT_BATCH_V991: 10,
+    AI_REVIEW_DEFAULT_BATCH_V991: 20,
+    AbortController,
+    setTimeout: () => 0,
+    clearTimeout() {},
     ShirohaPlatform: { credentials: { status: () => '' } },
     ensureAiImportStateV99: () => ({ endpoint: 'https://example.invalid', model: 'fixture', timeoutSeconds: 10 }),
     readStoredAiKeyV99: () => '',
     aiProviderLabelV99: () => 'fixture',
     aiImportRangeV992: () => ({ text: '待整理题目', label: '全文' }),
     aiRefactorContextV384: () => ({ currentQuestions: [], warnings: [] }),
-    syncAiImportActionV99() {}, refreshAiImportPanelV99() {}, refreshAiPreviewPanelV991() {},
+    syncAiImportActionV99() {},
+    refreshAiImportPanelV99() {},
+    refreshAiPreviewPanelV991() {},
     setAiImportStatusV99: (message) => status.push(message),
     setAiPreviewStatusV991: (message) => status.push(message),
     showNotice: (...args) => notices.push(args),
-    buildAiMessagesV99: () => [], buildAiAnalysisMessagesV991: () => [], buildAiReviewMessagesV991: () => [],
+    buildAiMessagesV99: () => [],
+    buildAiAnalysisMessagesV991: () => [],
+    buildAiReviewMessagesV991: () => [],
     requestAiChatV99: (_config, _messages, options) => {
       const request = deferred();
       request.controller = options.controller;
@@ -124,18 +163,28 @@ function cancellationFixture(overrides = {}) {
       return request.promise;
     },
     withAiTimeoutV99: (_timeout, run) => run(new AbortController()),
-    parseAiRefactorPayloadV384: (content) => ({ mode: 'direct_questions', structuredUsable: true,
-      questions: [{ id: content, question: content }], structuredIssues: [], notes: [] }),
+    parseAiRefactorPayloadV384: (content) => ({
+      mode: 'direct_questions',
+      structuredUsable: true,
+      questions: [{ id: content, question: content }],
+      structuredIssues: [],
+      notes: [],
+    }),
     aiExecutionLabelV99: () => 'fixture',
-    resetAiSuggestionsV991() {}, renderImportPreview() {}, largeImportRiskMessageV376: () => '',
+    resetAiSuggestionsV991() {},
+    renderImportPreview() {},
+    largeImportRiskMessageV376: () => '',
     collectAiPreviewTargetDetailsV992: () => ({ indexes: [0], baseIndexes: [0] }),
-    aiQuestionKeyV991: (question) => question.id, aiQuestionFingerprintV991: (question) => question.question,
-    aiQuestionPayloadV991: (question) => question, importIssueStatus: () => ({}),
+    aiQuestionKeyV991: (question) => question.id,
+    aiQuestionFingerprintV991: (question) => question.question,
+    aiQuestionPayloadV991: (question) => question,
+    importIssueStatus: () => ({}),
     aiPreviewModeLabelV991: () => 'AI 补解析',
     aiResultArrayV991: (content) => [{ analysis: content }],
     normalizeAiAnalysisResultV991: (raw) => ({ questionId: 'original', index: 0, analysis: raw.analysis, note: '' }),
     findImportIndexByAiKeyV991: () => 0,
-    $: (selector) => (selector === '#ai-preview-batch-v991' ? { value: '10' } : null), ...overrides,
+    $: (selector) => (selector === '#ai-preview-batch-v991' ? { value: '10' } : null),
+    ...overrides,
   });
   runWebScripts(context, ['import-preview.js']);
   context.importDraft = context.ShirohaImportPreview.create({ readers: {}, ocr: {} });
@@ -147,13 +196,24 @@ function cancellationFixture(overrides = {}) {
   }
   if (context.useRealResults) {
     runWebScripts(context, ['ai-prompts.js', 'ai-results.js']);
-    const prompts = context.ShirohaAiPrompts.create({ question: () => null, importKey: context.aiQuestionKeyV991,
-      validate: () => ({}), maxChars: 50000 });
-    const results = context.ShirohaAiResults.create({ normalizeType: (type) => type, normalizeQuestion: (question) => question,
-      makeId: (_prefix, index) => `new-${index}`, trimMultilineBoundaryV5910: (value) => String(value).trim(),
-      splitAnswer: (value) => String(value || '').split(',') });
-    Object.assign(context, results, { aiQuestionPayloadV991: prompts.aiQuestionPayloadV991,
-      buildAiAnalysisMessagesV991: (items) => items, buildAiReviewMessagesV991: (items) => items });
+    const prompts = context.ShirohaAiPrompts.create({
+      question: () => null,
+      importKey: context.aiQuestionKeyV991,
+      validate: () => ({}),
+      maxChars: 50000,
+    });
+    const results = context.ShirohaAiResults.create({
+      normalizeType: (type) => type,
+      normalizeQuestion: (question) => question,
+      makeId: (_prefix, index) => `new-${index}`,
+      trimMultilineBoundaryV5910: (value) => String(value).trim(),
+      splitAnswer: (value) => String(value || '').split(','),
+    });
+    Object.assign(context, results, {
+      aiQuestionPayloadV991: prompts.aiQuestionPayloadV991,
+      buildAiAnalysisMessagesV991: (items) => items,
+      buildAiReviewMessagesV991: (items) => items,
+    });
   }
   installAiSettings(context);
   if (context.useRealTimeout) {
@@ -240,8 +300,13 @@ test('文本兜底在取消后迟到，即使新整理已完成也不能恢复�
   const { context, pending, status } = cancellationFixture({
     parseAiRefactorPayloadV384: (content) => {
       if (content === '无效结构') { throw new Error('结构无效'); }
-      return { mode: 'direct_questions', structuredUsable: true,
-        questions: [{ id: content, question: content }], structuredIssues: [], notes: [] };
+      return {
+        mode: 'direct_questions',
+        structuredUsable: true,
+        questions: [{ id: content, question: content }],
+        structuredIssues: [],
+        notes: [],
+      };
     },
   });
   const first = context.startAiImportV99();
@@ -331,9 +396,16 @@ for (const kind of ['import', 'preview']) {
 }
 
 function draftState(draft) {
-  return JSON.stringify({ questions: draft.questions, selected: [...draft.selected], warnings: draft.warnings,
-    report: draft.report, diagnostics: draft.diagnostics, filter: draft.filter,
-    tableResult: draft.tableResult, sourceMeta: draft.sourceMeta });
+  return JSON.stringify({
+    questions: draft.questions,
+    selected: [...draft.selected],
+    warnings: draft.warnings,
+    report: draft.report,
+    diagnostics: draft.diagnostics,
+    filter: draft.filter,
+    tableResult: draft.tableResult,
+    sourceMeta: draft.sourceMeta,
+  });
 }
 
 for (const stage of ['首次成功', '首次失败', '兜底之前', '兜底成功', '兜底失败']) {
@@ -448,7 +520,8 @@ for (const outcome of ['空结果', '抛错']) {
 
 function batchFixture() {
   const fixture = cancellationFixture({
-    useRealIdentity: true, useRealResults: true,
+    useRealIdentity: true,
+    useRealResults: true,
     collectAiPreviewTargetDetailsV992: () => ({ indexes: [1, 3], baseIndexes: [1, 3] }),
     $: (selector) => (selector === '#ai-preview-batch-v991' ? { value: '1' } : null),
   });
@@ -527,7 +600,9 @@ for (const mode of ['review', 'analysis']) {
   test(`${mode} 31 题每批 30 道时实际发送 30 + 1`, async () => {
     const indexes = Array.from({ length: 31 }, (_, index) => index);
     const { context, pending } = cancellationFixture({
-      useRealIdentity: true, useRealResults: true, aiPreviewPanelModeV991: mode,
+      useRealIdentity: true,
+      useRealResults: true,
+      aiPreviewPanelModeV991: mode,
       collectAiPreviewTargetDetailsV992: () => ({ indexes, baseIndexes: indexes }),
       $: (selector) => (selector === '#ai-preview-batch-v991' ? { value: '30' } : null),
     });
@@ -573,7 +648,8 @@ test('无 ID 的同一对象重复出现在草稿时身份不唯一', async () =
 
 test('第三批目标提前变化时立即停止后续所有批次并保留首批建议', async () => {
   const { context, pending, status } = cancellationFixture({
-    useRealIdentity: true, useRealResults: true,
+    useRealIdentity: true,
+    useRealResults: true,
     collectAiPreviewTargetDetailsV992: () => ({ indexes: [0, 1, 2], baseIndexes: [0, 1, 2] }),
     $: (selector) => (selector === '#ai-preview-batch-v991' ? { value: '1' } : null),
   });
@@ -625,7 +701,9 @@ for (const mode of ['review', 'analysis']) {
   test(`${mode} 上限允许 200 题，201 题不发送`, async () => {
     let total = 201;
     const { context, pending, status } = cancellationFixture({
-      useRealIdentity: true, useRealResults: true, aiPreviewPanelModeV991: mode,
+      useRealIdentity: true,
+      useRealResults: true,
+      aiPreviewPanelModeV991: mode,
       collectAiPreviewTargetDetailsV992: () => {
         const indexes = Array.from({ length: total }, (_, index) => index);
         return { indexes, baseIndexes: indexes };
@@ -652,13 +730,21 @@ for (const code of [400, 422]) {
   test(`第三批目标变化后首次 API 返回 ${code} 不再发兼容重试`, async () => {
     const response = deferred();
     const calls = [];
-    const platform = { credentials: { native: false, status: () => '' }, network: { ai: async (_config, payload) => {
-      calls.push(payload);
-      if (calls.length === 1) { return response.promise; }
-      return { ok: true, status: 200, text: async () => '{"choices":[{"message":{"content":"{\\"results\\":[]}"}}]}' };
-    } } };
+    const platform = {
+      credentials: { native: false, status: () => '' },
+      network: {
+        ai: async (_config, payload) => {
+          calls.push(payload);
+          if (calls.length === 1) { return response.promise; }
+          return { ok: true, status: 200, text: async () => '{"choices":[{"message":{"content":"{\\"results\\":[]}"}}]}' };
+        },
+      },
+    };
     const { context, status } = cancellationFixture({
-      useRealIdentity: true, useRealResults: true, useRealNetworkTransport: true, ShirohaPlatform: platform,
+      useRealIdentity: true,
+      useRealResults: true,
+      useRealNetworkTransport: true,
+      ShirohaPlatform: platform,
       collectAiPreviewTargetDetailsV992: () => ({ indexes: [0, 1, 2], baseIndexes: [0, 1, 2] }),
       $: (selector) => (selector === '#ai-preview-batch-v991' ? { value: '1' } : null),
     });

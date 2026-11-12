@@ -48,8 +48,13 @@ function fixture(options = {}) {
   };
   const context = {
     ShirohaDesktopHost: options.desktop === false ? undefined : host,
-    ShirohaPlatform: { harness: { status() { return { adapter: options.cliSelected ? 'codebuddy' : 'codex', mode: 'harness' }; }, codebuddyAccountChanged(/** @type {{revision:number,phase:string,blocked:boolean}} */ account) { accounts.push(account); },
-      ...(options.sharedReadiness ? { ensureReady: async () => { checks.push('readiness'); } } : {}) } },
+    ShirohaPlatform: {
+      harness: {
+        status() { return { adapter: options.cliSelected ? 'codebuddy' : 'codex', mode: 'harness' }; },
+        codebuddyAccountChanged(/** @type {{revision:number,phase:string,blocked:boolean}} */ account) { accounts.push(account); },
+        ...(options.sharedReadiness ? { ensureReady: async () => { checks.push('readiness'); } } : {}),
+      },
+    },
     document: {
       readyState: options.loading ? 'loading' : 'complete',
       getElementById: (/** @type {string} */ id) => elements.get(id),
@@ -61,7 +66,13 @@ function fixture(options = {}) {
     addEventListener: (/** @type {string} */ name, /** @type {()=>void} */ callback) => events.set(name, callback),
   };
   return {
-    get, calls, copied, accounts, checks, timers, events,
+    get,
+    calls,
+    copied,
+    accounts,
+    checks,
+    timers,
+    events,
     start: () => vm.runInNewContext(source, context),
     /** @param {(kind:string)=>Promise<unknown>} response */
     respond(response) { respond = response; },

@@ -37,9 +37,19 @@ async function seedReview(h, { unknownSource = false, changedSnapshot = false, c
       completion: 'ended_early', submitMode: 'single', timing: 'active',
     });
     state.records = [{
-      id: 'training-ai-record', mode: '练习', bankId: source, bankName: bank.name,
-      date: '2026-01-02T00:00:00.000Z', total: 3, answered: 2, correct: 1,
-      wrong: 1, accuracy: 50, duration: 20, details, review,
+      id: 'training-ai-record',
+      mode: '练习',
+      bankId: source,
+      bankName: bank.name,
+      date: '2026-01-02T00:00:00.000Z',
+      total: 3,
+      answered: 2,
+      correct: 1,
+      wrong: 1,
+      accuracy: 50,
+      duration: 20,
+      details,
+      review,
       reviewSummary: globalThis.ShirohaTraining.reviewSummary(review, details),
     }];
     if (collision) {
@@ -71,7 +81,8 @@ async function generate(h, panel, text) {
 
 const cases = [
   {
-    name: 'training-review-ai-entry-draft-save-and-history', options: { emptyAnalysis: true },
+    name: 'training-review-ai-entry-draft-save-and-history',
+    options: { emptyAnalysis: true },
     async run(h) {
       await seedReview(h, { crossBankCollision: true });
       const panel = await openReview(h);
@@ -145,7 +156,8 @@ const cases = [
     },
   },
   {
-    name: 'training-review-ai-missing-or-changed-source-keeps-draft', options: { emptyAnalysis: true },
+    name: 'training-review-ai-missing-or-changed-source-keeps-draft',
+    options: { emptyAnalysis: true },
     async run(h) {
       await seedReview(h, { unknownSource: true });
       let panel = await openReview(h);
@@ -167,7 +179,8 @@ const cases = [
     },
   },
   {
-    name: 'training-review-ai-save-failure-retains-draft', options: { emptyAnalysis: true },
+    name: 'training-review-ai-save-failure-retains-draft',
+    options: { emptyAnalysis: true },
     async run(h) {
       await seedReview(h);
       const panel = await openReview(h);

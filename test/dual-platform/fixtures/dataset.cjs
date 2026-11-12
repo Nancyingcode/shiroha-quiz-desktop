@@ -46,10 +46,25 @@ function webState() {
     activeBankId: 'bank-a',
     wrongBook: { 'bank-a': [{ id: 'deleted-question', wrongCount: 2, rightCount: 1, reviewRightCount: 1, streakCorrectCount: 1, lastWrongAt: TIME, lastCorrectAt: TIME, lastReviewedAt: TIME, nextReviewAt: '2026-10-24T00:00:00.000Z', reviewLevel: 1, lastAnswer: ['遗失'], source: 'fixture', timestamp: MILLIS, status: '复习中', nativeQuestion: historical }] },
     favorites: { 'bank-a': ['deleted-question'], 'bank-b': ['same-id'] },
-    records: [{ id: 'record-1', mode: '考试', bankId: 'bank-a', bankName: '阶段A全题型', date: TIME, total: 2, answered: 2, correct: 1, wrong: 1, accuracy: 50, duration: 30, score: 4, totalScore: 5, details: [
-      { questionId: 'blank', question: first[3].question, type: 'blank', chosen: ['北京市', '京'], userAnswer: ['北京市', '京'], userBlankAnswers: ['北京市', '京'], blankAnswers: [['北京', '北京市'], ['京']], answer: ['北京；京'], correct: true, score: 4, fullScore: 4, sourceBankId: 'bank-a', sourceBankName: '阶段A全题型', nativeQuestion: first[3] },
-      { questionId: 'deleted-question', question: historical.question, type: 'blank', chosen: ['遗失'], userAnswer: ['遗失'], answer: ['保全'], correct: false, score: 0, fullScore: 1, sourceBankId: 'bank-a', sourceBankName: '阶段A全题型', nativeQuestion: historical },
-    ] }],
+    records: [{
+      id: 'record-1',
+      mode: '考试',
+      bankId: 'bank-a',
+      bankName: '阶段A全题型',
+      date: TIME,
+      total: 2,
+      answered: 2,
+      correct: 1,
+      wrong: 1,
+      accuracy: 50,
+      duration: 30,
+      score: 4,
+      totalScore: 5,
+      details: [
+        { questionId: 'blank', question: first[3].question, type: 'blank', chosen: ['北京市', '京'], userAnswer: ['北京市', '京'], userBlankAnswers: ['北京市', '京'], blankAnswers: [['北京', '北京市'], ['京']], answer: ['北京；京'], correct: true, score: 4, fullScore: 4, sourceBankId: 'bank-a', sourceBankName: '阶段A全题型', nativeQuestion: first[3] },
+        { questionId: 'deleted-question', question: historical.question, type: 'blank', chosen: ['遗失'], userAnswer: ['遗失'], answer: ['保全'], correct: false, score: 0, fullScore: 1, sourceBankId: 'bank-a', sourceBankName: '阶段A全题型', nativeQuestion: historical },
+      ],
+    }],
     settings: { suppressDefaultBank: true, aiImportV99: { provider: 'custom', endpoint: 'https://ai.example.invalid/v1/chat/completions', model: 'fixture-model', rememberKey: false } },
     crossPlatformMeta: { favoriteQuestions: { 'bank-a': { 'deleted-question': { favoritedAt: MILLIS, question: historical } } } },
   };
@@ -58,7 +73,14 @@ function webState() {
 function androidBackup() {
   const question = { id: 'native-blank', number: '1', type: 'BLANK', question: '首都___，简称___。', options: [], answer: ['北京；京'], blankAnswers: [['北京', '北京市'], ['京']], analysis: '', images: [{ id: 'native-image', localPath: 'assets/pixel.png', sourceName: 'pixel.png', order: 1, width: 1, height: 1, sizeBytes: Buffer.from(PNG_BASE64, 'base64').length }], score: 4, version: 1 };
   return {
-    app: 'Shiroha Quiz', kind: 'shiroha_quiz_full_backup', version: 3, schemaVersion: 3, crossPlatformSchemaVersion: 1, exportedBy: 'native', exportedAt: MILLIS, activeBankId: 'native-bank',
+    app: 'Shiroha Quiz',
+    kind: 'shiroha_quiz_full_backup',
+    version: 3,
+    schemaVersion: 3,
+    crossPlatformSchemaVersion: 1,
+    exportedBy: 'native',
+    exportedAt: MILLIS,
+    activeBankId: 'native-bank',
     banks: [{ id: 'native-bank', name: 'Android 自建兼容样本', groupName: '互通', createdAt: MILLIS, updatedAt: MILLIS, questions: [question] }],
     wrongBook: [{ bankId: 'native-bank', bankName: 'Android 自建兼容样本', question, wrongCount: 2, rightCount: 1, reviewRightCount: 1, streakCorrectCount: 1, lastWrongAt: MILLIS, lastCorrectAt: MILLIS, timestamp: MILLIS, lastAnswer: ['南京', '宁'], status: '复习中' }],
     favoriteQuestions: [{ bankId: 'native-bank', bankName: 'Android 自建兼容样本', question, favoritedAt: MILLIS }],

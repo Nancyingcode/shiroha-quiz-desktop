@@ -46,8 +46,12 @@
   function backupMimeFromPath(path) {
     const ext = String(path || '').split('.').pop().toLowerCase();
     return ({
-      png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif',
-      webp: 'image/webp', bmp: 'image/bmp',
+      png: 'image/png',
+      jpg: 'image/jpeg',
+      jpeg: 'image/jpeg',
+      gif: 'image/gif',
+      webp: 'image/webp',
+      bmp: 'image/bmp',
     })[ext] || 'application/octet-stream';
   }
 
@@ -71,8 +75,10 @@
   }
 
   function createRecordConverters({ makeId, now, serializeQuestion, toNativeQuestionType }) {
-    const { normalizeWebQuestionType, normalizeBlankAnswersV58914, cloneBlankAnswersV58914,
-      isMultiBlankQuestionV58914 } = globalThis.ShirohaQuizCore;
+    const {
+      normalizeWebQuestionType, normalizeBlankAnswersV58914, cloneBlankAnswersV58914,
+      isMultiBlankQuestionV58914,
+    } = globalThis.ShirohaQuizCore;
 
     function toNative(record, bankMap) {
       const bankId = record.bankId || '';
@@ -83,10 +89,15 @@
         const savedQuestion = detail.nativeQuestion && typeof detail.nativeQuestion === 'object'
           ? detail.nativeQuestion : null;
         let question = savedQuestion || questionMap.get(questionId) || {
-          id: questionId || makeId('record_q', index), number: String(index + 1),
-          type: toNativeQuestionType(detail.type || 'short'), question: detail.question || '',
-          options: [], answer: Array.isArray(detail.answer) ? detail.answer : [],
-          analysis: '', category: detail.category || '', images: [],
+          id: questionId || makeId('record_q', index),
+          number: String(index + 1),
+          type: toNativeQuestionType(detail.type || 'short'),
+          question: detail.question || '',
+          options: [],
+          answer: Array.isArray(detail.answer) ? detail.answer : [],
+          analysis: '',
+          category: detail.category || '',
+          images: [],
         };
         if (!Array.isArray(question.blankAnswers) && Array.isArray(detail.blankAnswers)) {
           question = { ...question, blankAnswers: cloneBlankAnswersV58914(detail.blankAnswers) };
@@ -100,23 +111,32 @@
         let answerText;
         if (detail.nativeAnswerText != null) { answerText = String(detail.nativeAnswerText); } else if (Array.isArray(detail.answer)) { answerText = detail.answer.join(' / '); } else { answerText = String(detail.answer || ''); }
         const result = {
-          question: serializeQuestion(question), userAnswer: [...userAnswer], correct: !!detail.correct,
+          question: serializeQuestion(question),
+          userAnswer: [...userAnswer],
+          correct: !!detail.correct,
           answerText,
           earnedScore: detail.nativeEarnedScore !== undefined ? detail.nativeEarnedScore : (detail.score ?? null),
           maxScore: detail.nativeMaxScore !== undefined ? detail.nativeMaxScore : (detail.fullScore ?? null),
-          autoScored: detail.autoScored !== false, sourceBankId: detail.sourceBankId || bankId || null,
+          autoScored: detail.autoScored !== false,
+          sourceBankId: detail.sourceBankId || bankId || null,
           sourceBankName: detail.sourceBankName || bank?.name || '',
         };
         if (userBlankAnswers.length || isMultiBlank) { result.userBlankAnswers = [...userBlankAnswers]; }
         return result;
       });
       return {
-        id: record.id || makeId('rec'), bankId: bankId || null, bankName: record.bankName || bank?.name || '',
-        source: record.nativeSource || 'web', title: record.nativeTitle || record.name || record.mode || '练习',
-        scopeType: record.scopeType || null, scopeName: record.scopeName || null,
-        total: Number(record.total || questionResults.length || 0), correct: Number(record.correct || 0),
+        id: record.id || makeId('rec'),
+        bankId: bankId || null,
+        bankName: record.bankName || bank?.name || '',
+        source: record.nativeSource || 'web',
+        title: record.nativeTitle || record.name || record.mode || '练习',
+        scopeType: record.scopeType || null,
+        scopeName: record.scopeName || null,
+        total: Number(record.total || questionResults.length || 0),
+        correct: Number(record.correct || 0),
         timestamp: parseCrossPlatformTime(record.date || record.timestamp, Date.now()),
-        durationSeconds: Number(record.duration || 0) || null, autoSubmitted: !!record.autoSubmitted,
+        durationSeconds: Number(record.duration || 0) || null,
+        autoSubmitted: !!record.autoSubmitted,
         startedAt: record.startedAt ? parseCrossPlatformTime(record.startedAt, null) : null,
         earnedScore: record.nativeEarnedScore !== undefined ? record.nativeEarnedScore : (record.score ?? null),
         totalScore: record.nativeTotalScore !== undefined ? record.nativeTotalScore : (record.totalScore ?? null),
@@ -139,17 +159,24 @@
         let score = result.correct ? 1 : 0;
         if (earned != null) { score = Number(earned); }
         const detail = {
-          questionId: question.id || '', question: question.question || '',
+          questionId: question.id || '',
+          question: question.question || '',
           type: normalizeWebQuestionType(question.type) || String(question.type || '').toLowerCase(),
-          category: question.category || '', chosen: userBlankAnswers.length ? [...userBlankAnswers] : [...userAnswer],
+          category: question.category || '',
+          chosen: userBlankAnswers.length ? [...userBlankAnswers] : [...userAnswer],
           userAnswer: [...userAnswer],
           answer: Array.isArray(question.answer) && question.answer.length
             ? question.answer : splitNativeAnswerText(result.answerText),
-          correct: !!result.correct, score,
-          fullScore: max == null ? 1 : Number(max), nativeEarnedScore: earned ?? null,
-          nativeMaxScore: max ?? null, nativeAnswerText: result.answerText ?? '', autoScored: result.autoScored !== false,
+          correct: !!result.correct,
+          score,
+          fullScore: max == null ? 1 : Number(max),
+          nativeEarnedScore: earned ?? null,
+          nativeMaxScore: max ?? null,
+          nativeAnswerText: result.answerText ?? '',
+          autoScored: result.autoScored !== false,
           sourceBankId: result.sourceBankId || record.bankId || '',
-          sourceBankName: result.sourceBankName || record.bankName || '', time: '',
+          sourceBankName: result.sourceBankName || record.bankName || '',
+          time: '',
         };
         if (blankAnswers.length) { detail.blankAnswers = cloneBlankAnswersV58914(blankAnswers); }
         if (userBlankAnswers.length || blankAnswers.length) { detail.userBlankAnswers = [...userBlankAnswers]; }
@@ -162,15 +189,29 @@
         if (result && result.question) { detail.nativeQuestion = result.question; }
       });
       return {
-        id: record.id || makeId('rec'), mode: record.title || record.source || '练习',
-        nativeTitle: record.title || '', nativeSource: record.source || '', bankId: record.bankId || '',
-        bankName: record.bankName || '', scopeType: record.scopeType || null, scopeName: record.scopeName || null,
-        date: crossTimeToIso(record.timestamp) || now(), total, correct, wrong: Math.max(0, total - correct),
-        answered: total, accuracy: total > 0 ? Math.round(correct / total * 100) : 0,
-        duration: Number(record.durationSeconds || 0), score: record.earnedScore == null ? 0 : Number(record.earnedScore),
+        id: record.id || makeId('rec'),
+        mode: record.title || record.source || '练习',
+        nativeTitle: record.title || '',
+        nativeSource: record.source || '',
+        bankId: record.bankId || '',
+        bankName: record.bankName || '',
+        scopeType: record.scopeType || null,
+        scopeName: record.scopeName || null,
+        date: crossTimeToIso(record.timestamp) || now(),
+        total,
+        correct,
+        wrong: Math.max(0, total - correct),
+        answered: total,
+        accuracy: total > 0 ? Math.round(correct / total * 100) : 0,
+        duration: Number(record.durationSeconds || 0),
+        score: record.earnedScore == null ? 0 : Number(record.earnedScore),
         totalScore: record.totalScore == null ? 0 : Number(record.totalScore),
-        nativeEarnedScore: record.earnedScore ?? null, nativeTotalScore: record.totalScore ?? null,
-        passScore: null, passed: null, details, autoSubmitted: !!record.autoSubmitted,
+        nativeEarnedScore: record.earnedScore ?? null,
+        nativeTotalScore: record.totalScore ?? null,
+        passScore: null,
+        passed: null,
+        details,
+        autoSubmitted: !!record.autoSubmitted,
         startedAt: record.startedAt ? crossTimeToIso(record.startedAt) : '',
       };
     }
@@ -178,7 +219,11 @@
   }
 
   globalThis.ShirohaBackupCore = Object.freeze({
-    assertSupportedBackup, remapBackupRecord, backupMimeFromPath, parseCrossPlatformTime,
-    crossTimeToIso, createRecordConverters,
+    assertSupportedBackup,
+    remapBackupRecord,
+    backupMimeFromPath,
+    parseCrossPlatformTime,
+    crossTimeToIso,
+    createRecordConverters,
   });
 })();

@@ -38,8 +38,12 @@ test('拒绝损坏 UTF-8 和超过上限的响应', () => {
 
 function events() {
   const base = { session_id: 'session', _requestId: 'request' };
-  const streamed = (event) => ({ ...base, type: 'stream_event',
-    _meta: { 'codebuddy.ai/modelRequestId': 'model-request' }, event });
+  const streamed = (event) => ({
+    ...base,
+    type: 'stream_event',
+    _meta: { 'codebuddy.ai/modelRequestId': 'model-request' },
+    event,
+  });
   return [
     { type: 'system', subtype: 'init', session_id: 'session' },
     streamed({ type: 'message_start', message: { id: 'model-request', role: 'assistant', content: [], stop_reason: null } }),
@@ -123,7 +127,8 @@ test('关闭转发层取消上游，迟到完成不能恢复证明', async () =>
   await new Promise((resolve) => upstream.listen(0, '127.0.0.1', resolve));
   const relay = await createGuardedRelay(`http://127.0.0.1:${upstream.address().port}`);
   const downstream = fetch(`${relay.endpoint}/chat/completions`, {
-    method: 'POST', headers: relay.headers,
+    method: 'POST',
+    headers: relay.headers,
     body: JSON.stringify({ model: 'poc-model', stream: true }),
   }).catch(() => null);
   try {

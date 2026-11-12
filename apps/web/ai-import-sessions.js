@@ -208,8 +208,13 @@
       const targets = indexes.map((index) => {
         const question = importDraft.questions[index];
         const id = aiQuestionKeyV991(question, index);
-        return { id, index, question, fingerprint: aiQuestionFingerprintV991(question),
-          payload: aiQuestionPayloadV991(question, index, importIssueStatus(question, importDraft.diagnostics?.profile || {})) };
+        return {
+          id,
+          index,
+          question,
+          fingerprint: aiQuestionFingerprintV991(question),
+          payload: aiQuestionPayloadV991(question, index, importIssueStatus(question, importDraft.diagnostics?.profile || {})),
+        };
       });
       if (targets.some((target) => !target.id || findIndex(target.id, -1) !== target.index)) {
         setAiPreviewStatusV991('目标题目身份不唯一或缺失，请重新识别并选择后再试。', 'warn');
@@ -317,9 +322,16 @@
       const rangeSnapshot = JSON.stringify(range);
       const previous = importDraft.snapshot();
       const { tableResult, sourceMeta } = importDraft;
-      const draftSnapshot = JSON.stringify({ questions: importDraft.questions, selected: [...importDraft.selected],
-        warnings: importDraft.warnings, report: importDraft.report, diagnostics: importDraft.diagnostics,
-        filter: importDraft.filter, tableResult, sourceMeta });
+      const draftSnapshot = JSON.stringify({
+        questions: importDraft.questions,
+        selected: [...importDraft.selected],
+        warnings: importDraft.warnings,
+        report: importDraft.report,
+        diagnostics: importDraft.diagnostics,
+        filter: importDraft.filter,
+        tableResult,
+        sourceMeta,
+      });
 
       const owner = { running: true, controller: null, cancelled: false };
       aiImportRequestV99 = owner;
@@ -332,9 +344,16 @@
         const sameDraft = importDraft.questions === previous.cache
           && importDraft.warnings === previous.warnings && importDraft.diagnostics === previous.diagnostics
           && importDraft.tableResult === tableResult && importDraft.sourceMeta === sourceMeta
-          && JSON.stringify({ questions: importDraft.questions, selected: [...importDraft.selected],
-            warnings: importDraft.warnings, report: importDraft.report, diagnostics: importDraft.diagnostics,
-            filter: importDraft.filter, tableResult: importDraft.tableResult, sourceMeta: importDraft.sourceMeta }) === draftSnapshot;
+          && JSON.stringify({
+            questions: importDraft.questions,
+            selected: [...importDraft.selected],
+            warnings: importDraft.warnings,
+            report: importDraft.report,
+            diagnostics: importDraft.diagnostics,
+            filter: importDraft.filter,
+            tableResult: importDraft.tableResult,
+            sourceMeta: importDraft.sourceMeta,
+          }) === draftSnapshot;
         return isCurrentImportRequest() && sameDraft && JSON.stringify(currentRange) === rangeSnapshot
           && JSON.stringify(aiRefactorContextV384(currentRange)) === contextSnapshot;
       };
@@ -470,12 +489,18 @@
       get previewRequest() {
         return aiPreviewRequestV991;
       },
-      cancelAiImportRequestV99, invalidateAiImportRequestV99, cancelAiPreviewRequestV991,
-      startAiPreviewTaskV991, startAiImportV99,
-      resetAiSuggestionsV991, removeAiSuggestionsForQuestionV991, invalidateAiPreviewTargetV991,
+      cancelAiImportRequestV99,
+      invalidateAiImportRequestV99,
+      cancelAiPreviewRequestV991,
+      startAiPreviewTaskV991,
+      startAiImportV99,
+      resetAiSuggestionsV991,
+      removeAiSuggestionsForQuestionV991,
+      invalidateAiPreviewTargetV991,
       getReview: (key) => currentAiSuggestionV991(reviewSuggestions, key),
       getAnalysis: (key) => currentAiSuggestionV991(analysisSuggestions, key),
-      deleteReview: (key) => reviewSuggestions.delete(key), deleteAnalysis: (key) => analysisSuggestions.delete(key),
+      deleteReview: (key) => reviewSuggestions.delete(key),
+      deleteAnalysis: (key) => analysisSuggestions.delete(key),
     };
   }
 

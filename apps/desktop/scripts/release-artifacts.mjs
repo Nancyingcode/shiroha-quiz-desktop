@@ -26,8 +26,11 @@ export function releaseContext(input) {
 
 export function contextFromEnvironment() {
   return releaseContext({
-    ref: process.env.GITHUB_REF, commit: process.env.RELEASE_COMMIT || process.env.GITHUB_SHA, repository: process.env.GITHUB_REPOSITORY,
-    runId: process.env.GITHUB_RUN_ID, runAttempt: process.env.GITHUB_RUN_ATTEMPT,
+    ref: process.env.GITHUB_REF,
+    commit: process.env.RELEASE_COMMIT || process.env.GITHUB_SHA,
+    repository: process.env.GITHUB_REPOSITORY,
+    runId: process.env.GITHUB_RUN_ID,
+    runAttempt: process.env.GITHUB_RUN_ATTEMPT,
   });
 }
 

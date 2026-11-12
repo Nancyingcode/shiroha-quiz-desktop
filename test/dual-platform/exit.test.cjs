@@ -9,13 +9,22 @@ function fixture(overrides = {}) {
   const prompts = [];
   const status = [];
   const context = vm.createContext({
-    ShirohaDesktopHost: {}, mutationBusy: false, mutationSaveError: null,
-    exam: { items: [], submitted: false }, ocrSession: { isRunning: () => false, cancel() {} },
-    practice: { items: [] }, totalPracticeFilledCount: () => 0,
+    ShirohaDesktopHost: {},
+    mutationBusy: false,
+    mutationSaveError: null,
+    exam: { items: [], submitted: false },
+    ocrSession: { isRunning: () => false, cancel() {} },
+    practice: { items: [] },
+    totalPracticeFilledCount: () => 0,
     $: () => null,
-    webdavPanel: { isBusy: () => false }, aiImportSessions: { importRequest: { running: false }, previewRequest: { running: false } }, practiceAiSessions: { isBusy: () => false }, reviewAiSessions: { isBusy: () => false },
-    confirm: (message) => { prompts.push(message); return false; }, platformStatus: (message) => status.push(message),
-    ShirohaPlatform: { network: { cancelAll: async () => {} }, saves: { idle: async () => {} } }, ...overrides,
+    webdavPanel: { isBusy: () => false },
+    aiImportSessions: { importRequest: { running: false }, previewRequest: { running: false } },
+    practiceAiSessions: { isBusy: () => false },
+    reviewAiSessions: { isBusy: () => false },
+    confirm: (message) => { prompts.push(message); return false; },
+    platformStatus: (message) => status.push(message),
+    ShirohaPlatform: { network: { cancelAll: async () => {} }, saves: { idle: async () => {} } },
+    ...overrides,
   });
   context.ShirohaDialogs = { confirm: context.confirm };
   context.practiceSession = { current: context.practice };

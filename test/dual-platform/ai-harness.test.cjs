@@ -170,13 +170,23 @@ test('等待检查期间选择未接入的提供方后停止等待轮询', async
 test('AI 设置读取缓慢时题库先可用，核验完成后再启动后台检查', async () => {
   const pending = deferred(); let unlocked = false; let checks = 0;
   const context = vm.createContext({
-    applicationStarted: false, applicationGeneration: 0, applicationReady: false, state: {},
+    applicationStarted: false,
+    applicationGeneration: 0,
+    applicationReady: false,
+    state: {},
     document: { body: { dataset: {} } },
-    ShirohaPlatform: { credentials: { initialize: async () => {} }, harness: {
-      initialize: () => pending.promise, ensureReady: async () => { checks += 1; },
-    } },
-    loadState: async () => ({}), ensureAiImportStateV99: () => ({}),
-    lockApplication: (locked) => { unlocked = !locked; }, platformStatus() {}, init() {}, warnDev() {},
+    ShirohaPlatform: {
+      credentials: { initialize: async () => {} },
+      harness: {
+        initialize: () => pending.promise, ensureReady: async () => { checks += 1; },
+      },
+    },
+    loadState: async () => ({}),
+    ensureAiImportStateV99: () => ({}),
+    lockApplication: (locked) => { unlocked = !locked; },
+    platformStatus() {},
+    init() {},
+    warnDev() {},
   });
   vm.runInContext(loadWebSource().functionSource('startApplication'), context);
   const starting = context.startApplication();
@@ -193,13 +203,23 @@ test('AI 设置读取缓慢时题库先可用，核验完成后再启动后台�
 test('恢复发生在旧启动读取期间时，不启动旧生命周期的自动核验', async () => {
   const first = deferred(); const restored = deferred(); let calls = 0; let checks = 0;
   const context = vm.createContext({
-    applicationStarted: false, applicationGeneration: 0, applicationReady: false, state: {},
+    applicationStarted: false,
+    applicationGeneration: 0,
+    applicationReady: false,
+    state: {},
     document: { body: { dataset: {} } },
-    ShirohaPlatform: { credentials: { initialize: async () => {} }, harness: {
-      initialize: () => { calls += 1; return calls === 1 ? first.promise : restored.promise; },
-      ensureReady: async () => { checks += 1; },
-    } },
-    loadState: async () => ({}), ensureAiImportStateV99: () => ({}), lockApplication() {}, platformStatus() {}, init() {},
+    ShirohaPlatform: {
+      credentials: { initialize: async () => {} },
+      harness: {
+        initialize: () => { calls += 1; return calls === 1 ? first.promise : restored.promise; },
+        ensureReady: async () => { checks += 1; },
+      },
+    },
+    loadState: async () => ({}),
+    ensureAiImportStateV99: () => ({}),
+    lockApplication() {},
+    platformStatus() {},
+    init() {},
   });
   vm.runInContext(loadWebSource().functionSource('startApplication'), context);
   await context.startApplication(); await context.startApplication();
@@ -549,11 +569,14 @@ test('恢复后切换回 Codex 不得自动解除恢复确认', async () => {
 
 test('请求撞上就绪检查时等待，输入变化后不发送旧题目', async () => {
   const pending = deferred(); let valid = true; let calls = 0;
-  const platform = { harness: {
-    status: () => ({ ...status, readiness: 'checking', ready: false }),
-    snapshot: () => ({ ...status }), ensureReady: () => pending.promise,
-    execute: async () => { calls += 1; return { content: 'fixture' }; },
-  } };
+  const platform = {
+    harness: {
+      status: () => ({ ...status, readiness: 'checking', ready: false }),
+      snapshot: () => ({ ...status }),
+      ensureReady: () => pending.promise,
+      execute: async () => { calls += 1; return { content: 'fixture' }; },
+    },
+  };
   const context = vm.createContext({ ShirohaPlatform: platform, URL });
   installAiSettings(context); installAiTransport(context);
   const options = { task: 'question_analysis', isCurrent: () => valid };
@@ -661,9 +684,14 @@ test('单题请求等待期间切题，不发送原题内容', async () => {
   const sessions = context.ShirohaAiQuestionSessions.createPractice({
     practice: { current: () => owner },
     question: { current: () => items[owner.idx], allowed: () => true, key: (item) => item?.id, fingerprint: (item) => item?.id, answer: () => ({ chosen: ['A'] }), hasImages: () => false },
-    request: { config: () => ({ configured: true, requestConfig: { timeoutSeconds: 120 } }), timeout: (_seconds, run) => run(new AbortController()),
-      chat: async (_config, _messages, options) => { await pending.promise; if (!options.isCurrent()) { throw new Error('题目已变化'); } sends += 1; return { content: 'fixture' }; }, analysisMessages: () => [] },
-    result: { analysis: () => ({ analysis: 'fixture' }) }, view: { render() {}, sanitize: (message) => message, notice() {} },
+    request: {
+      config: () => ({ configured: true, requestConfig: { timeoutSeconds: 120 } }),
+      timeout: (_seconds, run) => run(new AbortController()),
+      chat: async (_config, _messages, options) => { await pending.promise; if (!options.isCurrent()) { throw new Error('题目已变化'); } sends += 1; return { content: 'fixture' }; },
+      analysisMessages: () => [],
+    },
+    result: { analysis: () => ({ analysis: 'fixture' }) },
+    view: { render() {}, sanitize: (message) => message, notice() {} },
   });
   const running = sessions.runAnalysis(); owner.idx = 1; pending.resolve(); await running;
   assert.equal(sends, 0);
@@ -920,7 +948,9 @@ test('共享测试与统一请求入口拒绝缺少账户修订的CodeBuddy和�
     const calls = [];const messages = [];const button = { disabled: false, textContent: '测试连接' };
     const context = vm.createContext({
       ShirohaPlatform: { harness: { formMode: () => 'harness', formAdapter: () => adapter, snapshot: () => ({ ...status, adapter }), test: async () => calls.push('test'), execute: async () => calls.push('execute') }, network: { ai: async () => calls.push('network') } },
-      $: () => button, setAiSettingsStatusV99: (message) => messages.push(message), updateAiConnectionPillV99() {},
+      $: () => button,
+      setAiSettingsStatusV99: (message) => messages.push(message),
+      updateAiConnectionPillV99() {},
     });
     installAiSettings(context);
     vm.runInContext(source.between('testAiConnectionV99', 'aiQuestionKeyV991'), context);
@@ -1520,11 +1550,16 @@ for (const code of [400, 422]) {
       const pending = deferred();
       const calls = [];
       let current = true;
-      const platform = { credentials: { native: false }, network: { ai: async (_config, payload) => {
-        calls.push(payload);
-        if (calls.length === 1) { return pending.promise; }
-        return { ok: true, status: 200, text: async () => '{"choices":[{"message":{"content":"ok"}}]}' };
-      } } };
+      const platform = {
+        credentials: { native: false },
+        network: {
+          ai: async (_config, payload) => {
+            calls.push(payload);
+            if (calls.length === 1) { return pending.promise; }
+            return { ok: true, status: 200, text: async () => '{"choices":[{"message":{"content":"ok"}}]}' };
+          },
+        },
+      };
       const context = vm.createContext({ ShirohaPlatform: platform });
       installAiSettings(context);
       installAiTransport(context);

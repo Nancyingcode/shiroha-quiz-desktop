@@ -1,14 +1,20 @@
 (() => {
   'use strict';
   function create({ state, draft: importDraft, select: $, toast, now, makeId, scope, data, preview, navigation, actions }) {
-    const { current: practiceScopeV8916, groupType: PRACTICE_SCOPE_GROUP_V8916, ensure: ensurePracticeScopeV8916,
+    const {
+      current: practiceScopeV8916, groupType: PRACTICE_SCOPE_GROUP_V8916, ensure: ensurePracticeScopeV8916,
       groupName: bankGroupNameV58, normalizeGroup: normalizeBankGroupNameV58, readGroup: readImportBankGroupV58,
-      ensureGroupUi: ensureBankGroupUiV58 } = scope;
-    const { normalize: normalizeQuestion, clean: cleanImportedQuestion, warnings: collectImportWarnings,
+      ensureGroupUi: ensureBankGroupUiV58,
+    } = scope;
+    const {
+      normalize: normalizeQuestion, clean: cleanImportedQuestion, warnings: collectImportWarnings,
       loadBanks: loadNativeBanks, confirmDeletion: confirmBankQuestionDeletion,
-      removeReferences: removeBankQuestionReferences } = data;
-    const { cancelAi: cancelAiPreviewRequestV991, resetAi: resetAiSuggestionsV991, closeAi: closeAiPreviewPanelV991,
-      render: renderImportPreview, resetSelection: resetBankQuestionSelection } = preview;
+      removeReferences: removeBankQuestionReferences,
+    } = data;
+    const {
+      cancelAi: cancelAiPreviewRequestV991, resetAi: resetAiSuggestionsV991, closeAi: closeAiPreviewPanelV991,
+      render: renderImportPreview, resetSelection: resetBankQuestionSelection,
+    } = preview;
     const { switchView: switchViewV45 } = navigation;
     const { transaction: runMutation, save: saveSilent, renderAll, canStartEdit } = actions;
     // 二次编辑会话仅在打开编辑器后存在；成功保存或确认退出时释放。

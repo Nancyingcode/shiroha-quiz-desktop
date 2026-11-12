@@ -145,7 +145,14 @@
     };
   }
   globalThis.ShirohaTraining = Object.freeze({
-    parsePracticeNumberRangeV58916, formatExactPracticeNumbersV58916,
-    createClock, elapsedClock, transitionClock, formatDuration, buildReview, reviewRows, reviewSummary,
+    parsePracticeNumberRangeV58916,
+    formatExactPracticeNumbersV58916,
+    createClock,
+    elapsedClock,
+    transitionClock,
+    formatDuration,
+    buildReview,
+    reviewRows,
+    reviewSummary,
   });
 })();

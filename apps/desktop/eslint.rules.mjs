@@ -66,6 +66,12 @@ export const styleRules = {
   '@stylistic/comma-spacing': 'error',
   '@stylistic/key-spacing': 'error',
   '@stylistic/object-curly-spacing': ['error', 'always'],
+  // 多行对象/解构必须逐项换行，禁止“首尾同行 + 续行缩进不齐”的排版。
+  '@stylistic/object-property-newline': ['error', { allowAllPropertiesOnSameLine: true }],
+  '@stylistic/object-curly-newline': ['error', {
+    ObjectExpression: { multiline: true, consistent: true },
+    ObjectPattern: { multiline: true, consistent: true },
+  }],
   '@stylistic/array-bracket-spacing': ['error', 'never'],
   '@stylistic/space-in-parens': ['error', 'never'],
   '@stylistic/eol-last': ['error', 'always'],
@@ -180,8 +186,15 @@ export function createConfig({ desktop = false, debt = false, semanticOnly = fal
     {
       files: [relative('apps/web/app.js')],
       // 共享脚本先于入口加载；旧导出扩展可能不存在，入口以 typeof 检查后才调用。
-      languageOptions: { globals: { ShirohaPlatform: 'readonly', ShirohaTraining: 'readonly',
-        ShirohaDialogs: 'readonly', requestAnimationFrame: 'readonly', renderExportBankSelectorV23: 'readonly' } },
+      languageOptions: {
+        globals: {
+          ShirohaPlatform: 'readonly',
+          ShirohaTraining: 'readonly',
+          ShirohaDialogs: 'readonly',
+          requestAnimationFrame: 'readonly',
+          renderExportBankSelectorV23: 'readonly',
+        },
+      },
     },
     {
       files: [relative('apps/desktop/frontend/bridge.js')],
@@ -191,8 +204,11 @@ export function createConfig({ desktop = false, debt = false, semanticOnly = fal
       files: browserCallbackFiles.map(relative),
       languageOptions: {
         globals: {
-          window: 'readonly', document: 'readonly', localStorage: 'readonly',
-          location: 'readonly', Worker: 'readonly',
+          window: 'readonly',
+          document: 'readonly',
+          localStorage: 'readonly',
+          location: 'readonly',
+          Worker: 'readonly',
         },
       },
     },

@@ -16,7 +16,11 @@ function fixture(existingPlatform) {
   const storage = { invalidate: () => calls.push('invalidate') };
   const saves = {};
   const browser = {
-    resourceJson: {}, media: {}, files: {}, preferences: {}, download: () => {},
+    resourceJson: {},
+    media: {},
+    files: {},
+    preferences: {},
+    download: () => {},
     createStorage(adapter, key) {
       calls.push({ adapter, key });
       return storage;

@@ -11,8 +11,12 @@ const { runWebScripts } = require('../dual-platform/source-tools.cjs');
 function harness(protocol, fetch) {
   const timers = new Set();
   const context = vm.createContext({
-    URL, TextEncoder, AbortController, btoa,
-    location: { protocol }, fetch,
+    URL,
+    TextEncoder,
+    AbortController,
+    btoa,
+    location: { protocol },
+    fetch,
     setTimeout(callback) { const timer = { callback }; timers.add(timer); return timer; },
     clearTimeout(timer) { timers.delete(timer); },
   });

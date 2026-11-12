@@ -13,10 +13,13 @@ for (const [name, text, expected] of [
 ]) {
   test(`解析主候选复用已完成的风险计数：${name}`, () => {
     const marker = '    function countLocalRepairWarnings(qs, profile) {';
-    const { api, context } = loadWeb({ deterministicIds: true, parserSourceTransform(source) {
-      assert.equal(source.split(marker).length, 2);
-      return source.replace(marker, `${marker}\n      globalThis.__batch4RiskCount = (globalThis.__batch4RiskCount || 0) + 1;`);
-    } });
+    const { api, context } = loadWeb({
+      deterministicIds: true,
+      parserSourceTransform(source) {
+        assert.equal(source.split(marker).length, 2);
+        return source.replace(marker, `${marker}\n      globalThis.__batch4RiskCount = (globalThis.__batch4RiskCount || 0) + 1;`);
+      },
+    });
     context.__batch4RiskCount = 0;
     const questions = api.parseTextQuestions(text, 'auto');
     assert(questions.length > 0);

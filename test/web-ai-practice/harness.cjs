@@ -13,11 +13,19 @@ const TEST_ROOT = __dirname;
 const WEB_ROOT = path.resolve(TEST_ROOT, '../../apps/web');
 const DEPENDENCIES = 'C:\\Users\\REiQEr\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\node\\node_modules';
 const SEL = {
-  panel: '#p-ai-v613', open: '[data-ai-single-open-v613]', regenerate: '[data-ai-single-analysis-v613]',
-  follow: '[data-ai-single-follow-v613]', input: '#practice-ai-follow-input-v613', send: '[data-ai-single-send-v613]',
-  save: '[data-ai-single-save-v613]', stop: '[data-ai-single-stop-v613]', close: '[data-ai-single-close-v613]',
+  panel: '#p-ai-v613',
+  open: '[data-ai-single-open-v613]',
+  regenerate: '[data-ai-single-analysis-v613]',
+  follow: '[data-ai-single-follow-v613]',
+  input: '#practice-ai-follow-input-v613',
+  send: '[data-ai-single-send-v613]',
+  save: '[data-ai-single-save-v613]',
+  stop: '[data-ai-single-stop-v613]',
+  close: '[data-ai-single-close-v613]',
   settings: '[data-ai-single-settings-v613]',
-  text: '.practice-ai-text-v613', chat: '.practice-ai-chat-v613', confidence: '.practice-ai-confidence-v613',
+  text: '.practice-ai-text-v613',
+  chat: '.practice-ai-chat-v613',
+  confidence: '.practice-ai-confidence-v613',
 };
 
 function within(root, target) {
@@ -239,7 +247,13 @@ async function setup(browser, url, keys, { configured = true, rich = false, empt
   }, { keys, initial: fixture({ configured, rich, emptyAnalysis }), key: FAKE_KEY, ignoreAbort });
 
   const harness = {
-    page, context, mock, blocked, pageErrors, timeout, keys,
+    page,
+    context,
+    mock,
+    blocked,
+    pageErrors,
+    timeout,
+    keys,
     get bridgeUsed() { return bridgeUsed; },
     async boot() {
       await page.goto(url, { waitUntil: 'load' });
@@ -355,19 +369,34 @@ function readSnapshot() {
   const bankId = item?.bankId || state.activeBankId;
   const key = item?.sessionKey || `${bankId}#${question?.id || ''}`;
   return JSON.parse(JSON.stringify({
-    question, bank: state.banks.find((bank) => bank.id === bankId), key,
+    question,
+    bank: state.banks.find((bank) => bank.id === bankId),
+    key,
     identities: { practice: identity(practice), answerState: identity(practice.answerState) },
     practice: {
-      idx: practice.idx, answered: practice.answered, correct: practice.correct, wrong: practice.wrong, start: practice.start,
-      answerState: practice.answerState, details: practice.details, progressKey: practice.progressKey,
-      startMode: practice.startMode, startIndex: practice.startIndex, baseItemKeys: practice.baseItemKeys,
+      idx: practice.idx,
+      answered: practice.answered,
+      correct: practice.correct,
+      wrong: practice.wrong,
+      start: practice.start,
+      answerState: practice.answerState,
+      details: practice.details,
+      progressKey: practice.progressKey,
+      startMode: practice.startMode,
+      startIndex: practice.startIndex,
+      baseItemKeys: practice.baseItemKeys,
       items: practice.items.map((entry) => ({ bankId: entry.bankId, sessionKey: entry.sessionKey, questionId: (entry.question || entry).id })),
     },
-    progress: state.settings.practiceProgressV58916, wrongBook: state.wrongBook, favorites: state.favorites,
-    records: state.records, settings: state.settings, activeBankId: state.activeBankId,
+    progress: state.settings.practiceProgressV58916,
+    wrongBook: state.wrongBook,
+    favorites: state.favorites,
+    records: state.records,
+    settings: state.settings,
+    activeBankId: state.activeBankId,
     ui: {
       progress: document.querySelector('#practice-progress')?.textContent,
-      submitDisabled: document.querySelector('#p-submit')?.disabled, revealDisabled: document.querySelector('#p-reveal')?.disabled,
+      submitDisabled: document.querySelector('#p-submit')?.disabled,
+      revealDisabled: document.querySelector('#p-reveal')?.disabled,
       answers: [...document.querySelectorAll('#practice-card .option input, #practice-card .text-answer')].map((input) => ({ value: input.value, checked: input.checked, disabled: input.disabled })),
       nav: document.querySelector('#practice-nav-v26')?.innerHTML,
     },

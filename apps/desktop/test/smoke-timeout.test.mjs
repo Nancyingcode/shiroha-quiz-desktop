@@ -13,7 +13,9 @@ function fixture() {
   /** @type {Array<{name: string, ok: boolean, detail?: unknown, error?: string}>} */
   const checks = [];
   const control = createSmokeControl({
-    checks, timeoutMs: 25, settleTimeoutMs: 1000,
+    checks,
+    timeoutMs: 25,
+    settleTimeoutMs: 1000,
     stopChild: async (child) => {
       if (child.exitCode !== null || child.signalCode !== null) { return; }
       const closed = new Promise((resolve) => child.once('close', resolve));
@@ -27,7 +29,9 @@ function fixture() {
 test('shutdown reports every child that failed to stop and retains the profile', async () => {
   let attempts = 0;
   const control = createSmokeControl({
-    checks: [], timeoutMs: 1000, settleTimeoutMs: 1000,
+    checks: [],
+    timeoutMs: 1000,
+    settleTimeoutMs: 1000,
     stopChild: async () => { attempts += 1; throw new Error(`stop failure ${attempts}`); },
   });
   await control.launch(async (lifecycle) => {
@@ -280,7 +284,9 @@ test('smoke removes its own profile if isolation marking or mock startup fails',
   const script = fileURLToPath(new URL('../scripts/smoke.mjs', import.meta.url));
   for (const injected of ['test-isolation', 'network-mock-origin']) {
     const result = spawnSync(process.execPath, [script, fakeExecutable], {
-      encoding: 'utf8', timeout: 5000, windowsHide: true,
+      encoding: 'utf8',
+      timeout: 5000,
+      windowsHide: true,
       env: { ...process.env, TEMP: temp, TMP: temp, INJECT_FILE: injected, NODE_OPTIONS: `--import=${pathToFileURL(hook).href}` },
     });
     assert.ifError(result.error);
@@ -321,7 +327,9 @@ test('unconfirmed mock shutdown retains the profile and both startup and cleanup
   ].join('\n'));
   const script = fileURLToPath(new URL('../scripts/smoke.mjs', import.meta.url));
   const result = spawnSync(process.execPath, [script, fakeExecutable], {
-    encoding: 'utf8', timeout: 5000, windowsHide: true,
+    encoding: 'utf8',
+    timeout: 5000,
+    windowsHide: true,
     env: { ...process.env, TEMP: temp, TMP: temp, NODE_OPTIONS: `--import=${pathToFileURL(hook).href}` },
   });
   assert.ifError(result.error);
@@ -380,9 +388,17 @@ for (const scenario of ['stop-failure', 'browser-failure', 'stop-and-browser-fai
     ].join('\n'));
     const script = fileURLToPath(new URL('../scripts/smoke.mjs', import.meta.url));
     const result = spawnSync(process.execPath, [script, fakeExecutable], {
-      encoding: 'utf8', timeout: 15000, windowsHide: true,
-      env: { ...process.env, TEMP: temp, TMP: temp, FAILURE_SCENARIO: scenario, BROWSER_MARKER: marker,
-        NODE_OPTIONS: `--import=${pathToFileURL(hook).href}` },
+      encoding: 'utf8',
+      timeout: 15000,
+      windowsHide: true,
+      env: {
+        ...process.env,
+        TEMP: temp,
+        TMP: temp,
+        FAILURE_SCENARIO: scenario,
+        BROWSER_MARKER: marker,
+        NODE_OPTIONS: `--import=${pathToFileURL(hook).href}`,
+      },
     });
     assert.ifError(result.error);
     assert.equal(result.status, 1, result.stderr + result.stdout);

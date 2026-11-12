@@ -1,16 +1,47 @@
 (() => {
   'use strict';
-  function create({ session: practiceSession, practiceAi: practiceAiSessions, reviewAi: reviewAiSessions,
-    select: $, selectAll: $$, escape: esc, question, settings, actions }) {
-    const { currentItem: currentPracticeItemV8916, question: practiceQuestionV8916, key: practiceItemKeyV8916,
-      answer: getPracticeAnswerStateV26, hasImages: aiSingleHasImagesV613, source: reviewAnalysisSource,
-      content: renderQuestionContent } = question;
-    const { config: aiExecutionConfigV99, configured: aiConfiguredV99, availability: aiAvailabilityV99, request: aiRequestConfigV99, isHarness: isAiHarnessExecutionV99,
-      label: aiExecutionLabelV99, privacy: aiHarnessPrivacyV99 } = settings;
-    const { practiceSession: aiSingleSessionV613, runPractice: runAiSingleAnalysisV613,
-      followUp: runAiSingleFollowUpV613, save: saveAiSingleAnalysisV613, runReview: runReviewAnalysis,
-      saveReview: saveReviewAnalysis, exitPractice: exitPracticeFocus, exitExam: exitExamFocus,
-      switchView: switchViewV45, isReady: isApplicationReady, retryReadiness } = actions;
+  function create({
+    session: practiceSession,
+    practiceAi: practiceAiSessions,
+    reviewAi: reviewAiSessions,
+    select: $,
+    selectAll: $$,
+    escape: esc,
+    question,
+    settings,
+    actions,
+  }) {
+    const {
+      currentItem: currentPracticeItemV8916,
+      question: practiceQuestionV8916,
+      key: practiceItemKeyV8916,
+      answer: getPracticeAnswerStateV26,
+      hasImages: aiSingleHasImagesV613,
+      source: reviewAnalysisSource,
+      content: renderQuestionContent,
+    } = question;
+    const {
+      config: aiExecutionConfigV99,
+      configured: aiConfiguredV99,
+      availability: aiAvailabilityV99,
+      request: aiRequestConfigV99,
+      isHarness: isAiHarnessExecutionV99,
+      label: aiExecutionLabelV99,
+      privacy: aiHarnessPrivacyV99,
+    } = settings;
+    const {
+      practiceSession: aiSingleSessionV613,
+      runPractice: runAiSingleAnalysisV613,
+      followUp: runAiSingleFollowUpV613,
+      save: saveAiSingleAnalysisV613,
+      runReview: runReviewAnalysis,
+      saveReview: saveReviewAnalysis,
+      exitPractice: exitPracticeFocus,
+      exitExam: exitExamFocus,
+      switchView: switchViewV45,
+      isReady: isApplicationReady,
+      retryReadiness,
+    } = actions;
     let reviewEventsBound = false;
     function aiSingleAllowedV613(item) {
       return !!item && !practiceSession.current.completed;

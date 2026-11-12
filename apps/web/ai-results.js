@@ -240,7 +240,8 @@
 
       return {
         ...q,
-        id: makeId('aiq', index), number: q.number ?? q['序号'] ?? index + 1,
+        id: makeId('aiq', index),
+        number: q.number ?? q['序号'] ?? index + 1,
         type: q.type ?? q.questionType ?? q.kind ?? q['题型'] ?? '',
         question: q.question ?? q.title ?? q.stem ?? q.content ?? q['题干'] ?? q['问题'] ?? '',
         options: canonicalizeAiOptionsV99(q.options ?? q.choices ?? q['选项'] ?? []),
@@ -248,7 +249,9 @@
         blankAnswers: q.blankAnswers ?? q['逐空答案'] ?? q['填空答案'] ?? [],
         analysis: q.analysis ?? q.explanation ?? q.explain ?? q['解析'] ?? '',
         category: q.category ?? q.topic ?? q.group ?? q.section ?? q['分类'] ?? q['章节'] ?? q['分区'] ?? '',
-        source: q.source ?? q['来源'] ?? 'ai-assisted-import-v99', reviewStatus: 'pending', warnings: Array.isArray(q.warnings) ? q.warnings : [],
+        source: q.source ?? q['来源'] ?? 'ai-assisted-import-v99',
+        reviewStatus: 'pending',
+        warnings: Array.isArray(q.warnings) ? q.warnings : [],
       };
     }
 

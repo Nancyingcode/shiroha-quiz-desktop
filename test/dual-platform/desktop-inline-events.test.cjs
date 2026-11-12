@@ -23,18 +23,24 @@ test('实际 Web 七处内联事件生成桌面六个 click 并保留导航和�
   const targets = [];
   const collapsed = new Set();
   const toggle = nodes[5];
-  toggle.parentElement = { classList: { toggle(name) {
-    if (collapsed.has(name)) { collapsed.delete(name);return false; }
-    collapsed.add(name);return true;
-  } } };
+  toggle.parentElement = {
+    classList: {
+      toggle(name) {
+        if (collapsed.has(name)) { collapsed.delete(name);return false; }
+        collapsed.add(name);return true;
+      },
+    },
+  };
   toggle.setAttribute = (name, value) => { toggle[name] = value; };
-  const document = { querySelector(selector) {
-    const event = selector.match(/data-desktop-event-(\d+)/);
-    if (event) { return nodes[Number(event[1])]; }
-    const nav = selector.match(/data-view="([^"]+)"/);
-    if (nav) { return { click() { targets.push(nav[1]); } }; }
-    return null;
-  } };
+  const document = {
+    querySelector(selector) {
+      const event = selector.match(/data-desktop-event-(\d+)/);
+      if (event) { return nodes[Number(event[1])]; }
+      const nav = selector.match(/data-view="([^"]+)"/);
+      if (nav) { return { click() { targets.push(nav[1]); } }; }
+      return null;
+    },
+  };
   vm.runInNewContext(generated.script, { document });
   for (const node of nodes.slice(0, 5)) { node.handler.call(node, { type: 'click' }); }
   assert.deepEqual(targets, ['practice', 'import', 'banks', 'settings', 'settings']);

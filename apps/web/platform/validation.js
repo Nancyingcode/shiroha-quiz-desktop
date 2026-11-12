@@ -15,12 +15,30 @@
   const BACKUP_SETTINGS = new Set(['suppressDefaultBank', 'aiImportV99', 'practiceProgressV58916', 'practiceScope', 'lastMigratedFromSchema', 'lastMigratedAt', 'migratedFromStorageKey']);
   /** @type {Readonly<Record<ErrorCode, true>>} */
   const ERROR_CODES = Object.freeze({
-    invalid_input: true, unsupported_version: true, sensitive_data: true, not_ready: true,
-    storage_unavailable: true, corrupt_data: true, quota_exceeded: true, revision_conflict: true,
-    duplicate_operation: true, dependency_failed: true, operation_busy: true, outcome_unknown: true,
-    invalid_transition: true, cancelled: true, not_found: true, permission_denied: true,
-    network: true, timeout: true, authentication: true, rate_limited: true, tls: true,
-    response_too_large: true, integrity_failed: true, credential_unavailable: true,
+    invalid_input: true,
+    unsupported_version: true,
+    sensitive_data: true,
+    not_ready: true,
+    storage_unavailable: true,
+    corrupt_data: true,
+    quota_exceeded: true,
+    revision_conflict: true,
+    duplicate_operation: true,
+    dependency_failed: true,
+    operation_busy: true,
+    outcome_unknown: true,
+    invalid_transition: true,
+    cancelled: true,
+    not_found: true,
+    permission_denied: true,
+    network: true,
+    timeout: true,
+    authentication: true,
+    rate_limited: true,
+    tls: true,
+    response_too_large: true,
+    integrity_failed: true,
+    credential_unavailable: true,
   });
 
   /** @param {ErrorCode} code @returns {CheckResult} */

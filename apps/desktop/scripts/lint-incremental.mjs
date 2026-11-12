@@ -138,9 +138,13 @@ if (complete) {
       preprocess: (/** @type {string} */ _source, /** @type {string} */ filename) => { found.push(filename); return []; },
       postprocess: () => [],
     };
-    const discovery = new ESLint({ cwd, overrideConfigFile: config, overrideConfig: [{
-      files: ['**/*.[jJ][sS]', '**/*.[mM][jJ][sS]', '**/*.[cC][jJ][sS]'], processor,
-    }] });
+    const discovery = new ESLint({
+      cwd,
+      overrideConfigFile: config,
+      overrideConfig: [{
+        files: ['**/*.[jJ][sS]', '**/*.[mM][jJ][sS]', '**/*.[cC][jJ][sS]'], processor,
+      }],
+    });
     await discovery.lintFiles(patterns);
     return found;
   };

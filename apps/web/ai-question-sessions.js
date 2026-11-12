@@ -31,9 +31,20 @@
         sessions.delete(key);
       }
       if (!sessions.has(key)) {
-        sessions.set(key, { analysis: null, initialAnalysis: '', messages: [], loading: '', error: '',
-          notice: '', followUpOpen: false, draft: '', expanded: false, controller: null,
-          requestId: 0, fingerprint });
+        sessions.set(key, {
+          analysis: null,
+          initialAnalysis: '',
+          messages: [],
+          loading: '',
+          error: '',
+          notice: '',
+          followUpOpen: false,
+          draft: '',
+          expanded: false,
+          controller: null,
+          requestId: 0,
+          fingerprint,
+        });
       }
       return sessions.get(key);
     }
@@ -165,9 +176,13 @@
           parsed.warning = result.mergeWarning(parsed.warning, '本次未发送图片，追问与修订解析仅供文字部分参考。');
         }
         const active = session.analysis;
-        session.analysis = { ...active, analysis: parsed.revisedAnalysis, confidence: parsed.confidence,
+        session.analysis = {
+          ...active,
+          analysis: parsed.revisedAnalysis,
+          confidence: parsed.confidence,
           needsReview: !!active.needsReview || parsed.needsReview,
-          warning: result.mergeWarning(active.warning, parsed.warning) };
+          warning: result.mergeWarning(active.warning, parsed.warning),
+        };
         session.messages = [...pending, { role: 'assistant', content: parsed.reply }].slice(-maxFollowUps * 2);
         session.draft = '';
         session.notice = '已根据本次追问更新解析草稿；确认无误后可保存到题库。';
@@ -186,8 +201,14 @@
       }
     }
 
-    return { reset, getSession, stop, runAnalysis, runFollowUp,
-      isBusy: () => Array.from(sessions.values()).some((session) => session.loading) };
+    return {
+      reset,
+      getSession,
+      stop,
+      runAnalysis,
+      runFollowUp,
+      isBusy: () => Array.from(sessions.values()).some((session) => session.loading),
+    };
   }
 
   function createReview({ question, request, result, storage, view }) {
@@ -212,8 +233,21 @@
         session = null;
       }
       if (!session) {
-        session = { key, item, chosen: [...chosen], fingerprint, context, analysis: null,
-          loading: '', saving: false, saved: false, error: '', notice: '', requestId: 0, controller: null };
+        session = {
+          key,
+          item,
+          chosen: [...chosen],
+          fingerprint,
+          context,
+          analysis: null,
+          loading: '',
+          saving: false,
+          saved: false,
+          error: '',
+          notice: '',
+          requestId: 0,
+          controller: null,
+        };
         sessions.set(key, session);
       }
       session.item = item;
@@ -314,8 +348,17 @@
       session.notice = '';
     }
 
-    return { get: (key) => sessions.get(key), getOrCreate, remove, retain, run, save, stop, discard,
-      isBusy: () => Array.from(sessions.values()).some((session) => session.loading || session.saving) };
+    return {
+      get: (key) => sessions.get(key),
+      getOrCreate,
+      remove,
+      retain,
+      run,
+      save,
+      stop,
+      discard,
+      isBusy: () => Array.from(sessions.values()).some((session) => session.loading || session.saving),
+    };
   }
 
   globalThis.ShirohaAiQuestionSessions = Object.freeze({ createPractice, createReview });

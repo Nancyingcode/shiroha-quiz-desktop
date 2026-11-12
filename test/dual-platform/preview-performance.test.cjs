@@ -22,12 +22,20 @@ function editorFixture() {
   const context = vm.createContext({});
   runWebScripts(context, ['question-editor.js']);
   const editor = context.ShirohaQuestionEditor.create({
-    state: {}, draft, session: {}, select: (name) => nodes[name] || null,
+    state: {},
+    draft,
+    session: {},
+    select: (name) => nodes[name] || null,
     selectAll: (name) => (name === '[data-select-import]' ? [checkbox] : []),
-    escape: (value) => String(value), label: (value) => String(value), short: (value) => value,
+    escape: (value) => String(value),
+    label: (value) => String(value),
+    short: (value) => value,
     parser: { countTypes: (items) => ({ single: items.length }), issueStatus: (question) => { diagnostics += 1;return question.issue; } },
     suggestions: { renderRow: () => '', bind() {}, sync() {}, invalidateImport() {} },
-    editor: { updateBankUi() {}, syncAppend() {} }, practice: {}, view: {}, storage: {},
+    editor: { updateBankUi() {}, syncAppend() {} },
+    practice: {},
+    view: {},
+    storage: {},
   });
   return { editor, draft, nodes, checkbox, count: () => diagnostics, reset: () => { diagnostics = 0; } };
 }
@@ -121,10 +129,21 @@ test('AI 自定义题号范围错误保留原有提示且不做题目诊断', ()
 
 function uiElement(hidden = false) {
   const classes = new Set(hidden ? ['ai-hidden-v99'] : []);
-  return { dataset: {}, value: '', textContent: '', className: '', disabled: false,
-    classList: { add: (name) => classes.add(name), remove: (name) => classes.delete(name), contains: (name) => classes.has(name),
-      toggle(name, enabled) { if (enabled) { classes.add(name); } else { classes.delete(name); } } },
-    setAttribute() {}, scrollIntoView() {} };
+  return {
+    dataset: {},
+    value: '',
+    textContent: '',
+    className: '',
+    disabled: false,
+    classList: {
+      add: (name) => classes.add(name),
+      remove: (name) => classes.delete(name),
+      contains: (name) => classes.has(name),
+      toggle(name, enabled) { if (enabled) { classes.add(name); } else { classes.delete(name); } },
+    },
+    setAttribute() {},
+    scrollIntoView() {},
+  };
 }
 
 function panelUiFixture() {
@@ -137,10 +156,13 @@ function panelUiFixture() {
   }
   function makeScope() {
     const node = uiElement();let html = '';
-    Object.defineProperty(node, 'innerHTML', { get: () => html, set: (value) => {
-      html = value;counts.options += 1;
-      node.value = [...html.matchAll(/value="([^"]+)"/g)][0]?.[1] || '';
-    } });
+    Object.defineProperty(node, 'innerHTML', {
+      get: () => html,
+      set: (value) => {
+        html = value;counts.options += 1;
+        node.value = [...html.matchAll(/value="([^"]+)"/g)][0]?.[1] || '';
+      },
+    });
     return node;
   }
   nodes['#ai-preview-scope-v991'] = makeScope();
@@ -161,13 +183,25 @@ function panelUiFixture() {
   const sessions = { importRequest: { running: false }, previewRequest: { running: false } };
   let notification = () => { throw new Error('未绑定通知'); };
   const context = vm.createContext({});runWebScripts(context, ['ai-import-sessions.js', 'ai-import-panel.js']);
-  const panel = context.ShirohaAiImportPanel.create({ draft, sessions,
+  const panel = context.ShirohaAiImportPanel.create({
+    draft,
+    sessions,
     platform: { harness: { bind: (callback) => { notification = callback; } } },
-    select: (name) => nodes[name] || null, selectAll: (name) => (name === 'input[name="ai-import-scope-v992"]' ? [all, selection] : []),
-    settings: { presets: {}, config: () => ({ execution: 'api', endpoint: 'https://example.invalid', model: 'mock' }), configured: () => true,
-      availability: () => ({ state: 'ready' }), isHarness: () => false, executionLabel: () => 'mock', localEndpoint: () => false,
-      updatePill: () => { counts.pill += 1; }, render() {} },
-    requests: { busy: () => false, invalidateImport() {} }, editor: { isEditing: () => false },
+    select: (name) => nodes[name] || null,
+    selectAll: (name) => (name === 'input[name="ai-import-scope-v992"]' ? [all, selection] : []),
+    settings: {
+      presets: {},
+      config: () => ({ execution: 'api', endpoint: 'https://example.invalid', model: 'mock' }),
+      configured: () => true,
+      availability: () => ({ state: 'ready' }),
+      isHarness: () => false,
+      executionLabel: () => 'mock',
+      localEndpoint: () => false,
+      updatePill: () => { counts.pill += 1; },
+      render() {},
+    },
+    requests: { busy: () => false, invalidateImport() {} },
+    editor: { isEditing: () => false },
     preview: { status: () => '正常', renderPracticeAi: () => { counts.practice += 1; }, updateReview: () => { counts.review += 1; } },
     limits: { importChars: 50000, items: 200, analysisBatch: 10, reviewBatch: 20 },
   });
@@ -241,9 +275,11 @@ test('主动修改范围清除旧提示，普通刷新保留提示', () => {
 test('全局渲染只通过导入同步入口刷新一次预览面板', () => {
   const counts = { import: 0, preview: 0 };
   const names = ['ensureBankGroupUiV58', 'ensurePracticeScopeV8916', 'updateAiConnectionPillV99', 'renderStats', 'renderBankSelect', 'renderMergeSelect', 'renderBankList', 'renderBankPreview', 'renderWrongBook', 'renderFavoritesPageV596', 'renderRecords', 'renderRecentTraining', 'renderBankInputs', 'renderBuiltInPanelV252', 'renderPracticeScopeUiV8916', 'renderExportBankSelectorV23', 'renderImportTargetBankOptionsV59', 'syncImportAppendUiV59', 'syncHomeVersionPromptV586', 'syncPracticeStartUiV58916'];
-  const context = vm.createContext({ ...Object.fromEntries(names.map((name) => [name, () => {}])),
+  const context = vm.createContext({
+    ...Object.fromEntries(names.map((name) => [name, () => {}])),
     syncAiImportActionV99() { counts.import += 1;counts.preview += 1; },
-    syncAiPreviewToolsV991() { counts.preview += 1; } });
+    syncAiPreviewToolsV991() { counts.preview += 1; },
+  });
   vm.runInContext(`${loadWebSource().functionSource('renderAll')}\nrenderAll();`, context);
   assert.deepEqual(counts, { import: 1, preview: 1 });
 });

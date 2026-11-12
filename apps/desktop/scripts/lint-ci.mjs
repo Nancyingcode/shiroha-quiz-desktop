@@ -49,8 +49,10 @@ export async function hasPassedBaseline(options) {
   const [owner, repo] = repository.split('/').map(encodeURIComponent);
   const endpoint = `${apiUrl.replace(/\/$/, '')}/repos/${owner}/${repo}/actions/runs`;
   const query = new URLSearchParams({ head_sha: baseSha, event: 'push', status: 'success', per_page: '100' });
-  const init = { headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json' },
-    signal: AbortSignal.timeout(8000) };
+  const init = {
+    headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json' },
+    signal: AbortSignal.timeout(8000),
+  };
   try {
     const response = await request(`${endpoint}?${query}`, init);
     if (!response.ok) { return false; }
@@ -111,8 +113,12 @@ export async function planCiLint(options) {
   const config = changed.find(affectsLintConfiguration);
   if (config) { return full(`检查配置或运行环境发生变化：${config}`); }
   if (!await options.hasBaseline(base, baseRef)) { return full('无法确认目标提交已通过完整检查'); }
-  return { mode: 'changed', reason: '基于目标提交和实际检出的合并结果', changed,
-    files: candidates.filter((file) => jsFile.test(file)) };
+  return {
+    mode: 'changed',
+    reason: '基于目标提交和实际检出的合并结果',
+    changed,
+    files: candidates.filter((file) => jsFile.test(file)),
+  };
 }
 
 /** @param {string} repositoryRoot @param {string[]} files */
@@ -122,8 +128,10 @@ export async function lintChangedFiles(repositoryRoot, files) {
     return true;
   }
   const { ESLint } = await import('eslint');
-  const lint = new ESLint({ cwd: repositoryRoot,
-    overrideConfigFile: path.join(repositoryRoot, 'apps/desktop/eslint.platform.config.mjs') });
+  const lint = new ESLint({
+    cwd: repositoryRoot,
+    overrideConfigFile: path.join(repositoryRoot, 'apps/desktop/eslint.platform.config.mjs'),
+  });
   const modes = new Map();
   // Windows 可能把 Git 符号链接检出为普通文件，因此必须同时验证索引中的类型。
   for (let start = 0; start < files.length; start += 64) {
@@ -172,10 +180,19 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
   // CI 必须验证原始提交，而不是前置步骤意外修改后的文件。
   git(root, ['diff', '--quiet', 'HEAD', '--']);
   const event = /** @type {PullRequestEvent} */ (JSON.parse(await readFile(process.env.GITHUB_EVENT_PATH ?? '', 'utf8')));
-  const plan = await planCiLint({ root, eventName: process.env.GITHUB_EVENT_NAME ?? '', event, sha: expected,
-    hasBaseline: (baseSha, baseRef) => hasPassedBaseline({ baseSha, baseRef,
-      repository: process.env.GITHUB_REPOSITORY ?? '', token: process.env.GITHUB_TOKEN ?? '',
-      apiUrl: process.env.GITHUB_API_URL ?? 'https://api.github.com' }) });
+  const plan = await planCiLint({
+    root,
+    eventName: process.env.GITHUB_EVENT_NAME ?? '',
+    event,
+    sha: expected,
+    hasBaseline: (baseSha, baseRef) => hasPassedBaseline({
+      baseSha,
+      baseRef,
+      repository: process.env.GITHUB_REPOSITORY ?? '',
+      token: process.env.GITHUB_TOKEN ?? '',
+      apiUrl: process.env.GITHUB_API_URL ?? 'https://api.github.com',
+    }),
+  });
   console.log(`CI lint: ${plan.mode} (${plan.reason})`);
   if (plan.mode === 'full') {
     if (!runNpm('lint')) { process.exitCode = 1; }

@@ -293,8 +293,16 @@ async function main() {
     process.removeListener('SIGTERM', interrupt);
     await mkdir(path.dirname(REPORT_PATH), { recursive: true });
     await writeFile(REPORT_PATH, JSON.stringify({
-      measuredAt: new Date().toISOString(), complete: complete && !cleanupError && !interrupted,
-      checks, profile, retainedProfile, cleanupError, interrupted, errors, blockedRequests, developmentLog,
+      measuredAt: new Date().toISOString(),
+      complete: complete && !cleanupError && !interrupted,
+      checks,
+      profile,
+      retainedProfile,
+      cleanupError,
+      interrupted,
+      errors,
+      blockedRequests,
+      developmentLog,
     }, null, 2));
     console.log(`开发模式回归报告：${REPORT_PATH}`);
     if (retainedProfile) { console.log(`保留本次隔离目录：${profile}`); }

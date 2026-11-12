@@ -104,6 +104,8 @@ const invalidCases = [
   ['@stylistic/quote-props', "console.log({ 'value': 1 });\n"],
   ['@stylistic/no-confusing-arrow', 'console.log([1].map((value) => value ? 1 : 0));\n'],
   ['@stylistic/no-mixed-operators', 'console.log(1 + 2 * 3);\n'],
+  ['@stylistic/object-property-newline', 'const value = {\n  first: 1,\n  second: 2, third: 3,\n};\nconsole.log(value);\n'],
+  ['@stylistic/object-curly-newline', 'const {\n  first } = { first: 1 };\nconsole.log(first);\n'],
 ];
 
 for (const filePath of probes) {
@@ -277,6 +279,29 @@ test('duplicate ESM imports are rejected while explicit extensions and named exp
     { filePath },
   );
   assert.equal(valid.errorCount + valid.warningCount, 0);
+});
+
+test('object and destructuring layout rules apply to every handwritten file', async () => {
+  const lint = linter();
+  for (const filePath of [
+    'apps/web/ai-import-panel.js',
+    'apps/web/ai-question-panels.js',
+    'apps/web/ai-settings.js',
+  ]) {
+    for (const [rule, source] of [
+      ['@stylistic/object-property-newline', 'const value = {\n  first: 1,\n  second: 2, third: 3,\n};\nconsole.log(value);\n'],
+      ['@stylistic/object-curly-newline', 'const {\n  first } = { first: 1 };\nconsole.log(first);\n'],
+    ]) {
+      const [result] = await lint.lintText(source, { filePath });
+      assert(result.messages.some((message) => message.ruleId === rule), `${filePath}: ${rule}`);
+    }
+  }
+  // 全局启用后，作用域外的存量文件同样命中规则。
+  const [outside] = await lint.lintText(
+    'const value = {\n  first: 1,\n  second: 2, third: 3,\n};\nconsole.log(value);\n',
+    { filePath: 'apps/web/training.js' },
+  );
+  assert(outside.messages.some((message) => message.ruleId === '@stylistic/object-property-newline'));
 });
 
 test('clean semantic and formatting rules remain blocking across complete legacy files', async () => {

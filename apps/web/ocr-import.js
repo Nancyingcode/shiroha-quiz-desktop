@@ -170,7 +170,11 @@
     }
 
     return {
-      setOcrImportSource, resetOcrImportState, setOcrStatus, startPdfOcrImport, currentOcrText,
+      setOcrImportSource,
+      resetOcrImportState,
+      setOcrStatus,
+      startPdfOcrImport,
+      currentOcrText,
       isRunning: () => ocrImportState.running,
       cancel: () => ocrImportState.cancel?.(),
       getFile: () => ocrImportState.file,

@@ -12,7 +12,8 @@ const browserAdvice = /CORS|跨域|Origin|浏览器|当前网页/;
 function harness(native, ai = async () => { throw new Error('未配置 mock 响应'); }) {
   const timers = new Set();
   const context = vm.createContext({
-    URL, AbortController: globalThis.AbortController,
+    URL,
+    AbortController: globalThis.AbortController,
     location: { origin: native ? 'http://tauri.localhost' : 'https://quiz.example.invalid' },
     AI_PROVIDER_PRESETS_V99: { ollama: { label: 'Ollama' }, custom: { label: '自定义接口' } },
     ShirohaPlatform: { network: { ai }, credentials: { native, redact: (_config, text) => text } },
@@ -154,10 +155,14 @@ for (const status of [400, 422]) {
     const { context } = harness(false, async (_config, payload) => {
       calls.push(payload);
       const first = calls.length === 1;
-      return { ok: !first, status: first ? status : 200, text: async () => {
-        reads.push(first ? status : 200);
-        return first ? '不支持格式参数' : JSON.stringify({ choices: [{ message: { content: '{"ok":true}' } }] });
-      } };
+      return {
+        ok: !first,
+        status: first ? status : 200,
+        text: async () => {
+          reads.push(first ? status : 200);
+          return first ? '不支持格式参数' : JSON.stringify({ choices: [{ message: { content: '{"ok":true}' } }] });
+        },
+      };
     });
     const result = await context.requestAiChatV99(config, []);
     assert.equal(result.content, '{"ok":true}');
