@@ -114,8 +114,11 @@ export function createSmokeControl(options) {
   async function shutdown() {
     stopped = true;
     const results = await Promise.allSettled([...children].map((child) => options.stopChild(child)));
-    const failed = results.find((result) => result.status === 'rejected');
-    if (failed?.status === 'rejected') { throw new SmokeStopFailedError(failed.reason); }
+    const failures = results.filter((result) => result.status === 'rejected').map((result) => result.reason);
+    if (failures.length) {
+      const message = failures.map((reason) => (reason instanceof Error ? reason.message : String(reason))).join('；');
+      throw new SmokeStopFailedError(new AggregateError(failures, message));
+    }
     try {
       await deadline(Promise.all([Promise.allSettled([...launches]), Promise.allSettled([...actions])]), options.settleTimeoutMs);
     } catch (error) {

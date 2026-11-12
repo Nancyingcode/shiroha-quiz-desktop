@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
+import { EventEmitter } from 'node:events';
 import { access, mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -22,6 +23,27 @@ function fixture() {
   });
   return { checks, control };
 }
+
+test('shutdown reports every child that failed to stop and retains the profile', async () => {
+  let attempts = 0;
+  const control = createSmokeControl({
+    checks: [], timeoutMs: 1000, settleTimeoutMs: 1000,
+    stopChild: async () => { attempts += 1; throw new Error(`stop failure ${attempts}`); },
+  });
+  await control.launch(async (lifecycle) => {
+    lifecycle.registerChild(/** @type {import('node:child_process').ChildProcess} */ (/** @type {unknown} */ (new EventEmitter())));
+    lifecycle.registerChild(/** @type {import('node:child_process').ChildProcess} */ (/** @type {unknown} */ (new EventEmitter())));
+  });
+  let cleaned = false;
+  await assert.rejects(cleanupAfterShutdown(control, async () => { cleaned = true; }), (error) => {
+    assert(error instanceof Error);
+    assert.match(error.message, /stop failure 1/);
+    assert.match(error.message, /stop failure 2/);
+    return true;
+  });
+  assert.equal(attempts, 2);
+  assert.equal(cleaned, false);
+});
 
 test('an outer timeout stops the next shared check and waits for its late action', async () => {
   const { control, checks } = fixture();
