@@ -191,6 +191,42 @@ test('complete discovery rejects an external JavaScript link before ESLint reads
   }
 });
 
+test('real ESLint discovery reads legacy files through the ordinary-path guard', async (t) => {
+  const f = await repositoryFixture(t);
+  const desktop = path.join(f.temporary, 'apps/desktop');
+  await copyFile(new URL('../eslint.config.mjs', import.meta.url), path.join(desktop, 'eslint.config.mjs'));
+  await mkdir(path.join(desktop, 'test'), { recursive: true });
+  await mkdir(path.join(f.temporary, 'apps/web/platform'), { recursive: true });
+  await mkdir(path.join(f.temporary, 'test/dual-platform'), { recursive: true });
+  await writeFile(path.join(desktop, 'test/base.mjs'), 'export {};\n');
+  await writeFile(path.join(f.temporary, 'apps/web/training.js'), "console.log('valid');\n");
+  await writeFile(path.join(f.temporary, 'apps/web/platform/base.js'), "console.log('valid');\n");
+  await writeFile(path.join(f.temporary, 'test/dual-platform/base.cjs'), "console.log('valid');\n");
+  const watched = path.join(desktop, 'scripts/legacy-only.mjs');
+  const marker = path.join(f.temporary, 'guard-observed');
+  const hook = path.join(f.temporary, 'guard-watch.mjs');
+  await writeFile(watched, 'export {};\n');
+  await writeFile(path.join(f.temporary, '.gitignore'), '/apps/desktop/scripts/legacy-only.mjs\n/guard-watch.mjs\n/guard-observed\n');
+  await writeFile(hook, [
+    "import fs from 'node:fs';",
+    "import fsp from 'node:fs/promises';",
+    `const watched = ${JSON.stringify(watched)};`,
+    `const marker = ${JSON.stringify(marker)};`,
+    'const original = fsp.readFile;',
+    'fsp.readFile = function(file, ...args) {',
+    '  if (String(file) === watched && new Error().stack?.includes("guardedReadFile")) fs.writeFileSync(marker, "guarded");',
+    '  return Reflect.apply(original, this, [file, ...args]);',
+    '};',
+    '',
+  ].join('\n'));
+  const result = spawnSync(process.execPath, [path.join(desktop, 'scripts/lint-incremental.mjs'), '--complete'], {
+    cwd: f.temporary, encoding: 'utf8', windowsHide: true,
+    env: { ...process.env, NODE_OPTIONS: `--import=${pathToFileURL(hook).href}` },
+  });
+  assert.equal(result.status, 0, result.stderr + result.stdout);
+  assert.equal(await readFile(marker, 'utf8'), 'guarded');
+});
+
 test('legacy discovery skips ignored JavaScript links and directory junctions it does not traverse', async (t) => {
   const f = await repositoryFixture(t);
   const desktop = path.join(f.temporary, 'apps/desktop');
