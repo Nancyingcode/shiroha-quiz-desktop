@@ -51,6 +51,7 @@ export const semanticRules = {
   'no-loop-func': 'error',
   'no-plusplus': 'error',
   'prefer-template': 'error',
+  'no-unused-expressions': 'error',
 };
 
 /** @type {import('eslint').Linter.RulesRecord} */
@@ -195,6 +196,11 @@ export function createConfig({ desktop = false, debt = false, semanticOnly = fal
           renderExportBankSelectorV23: 'readonly',
         },
       },
+    },
+    {
+      // 每行只允许一条语句：先在已零命中的拆分模块试点，其余模块随业务修改逐个纳入。
+      files: ['apps/web/quiz-core.js', 'apps/web/training.js', 'apps/web/practice-selection.js'].map(relative),
+      rules: { '@stylistic/max-statements-per-line': ['error', { max: 1 }] },
     },
     {
       files: [relative('apps/desktop/frontend/bridge.js')],

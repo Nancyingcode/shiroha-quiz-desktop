@@ -68,6 +68,7 @@ const invalidCases = [
   ['no-loop-func', 'let index = 0; while (index < 2) { setTimeout(() => console.log(index), 0); index += 1; }\n'],
   ['no-plusplus', 'let value = 0; value++; console.log(value);\n'],
   ['prefer-template', "const value = 1; console.log('value: ' + value);\n"],
+  ['no-unused-expressions', 'const value = 1;\nvalue;\nconsole.log(value);\n'],
   ['@stylistic/indent', 'if (true) {\n console.log(1);\n}\n'],
   ['@stylistic/quotes', 'console.log("double");\n'],
   ['@stylistic/semi', "console.log('missing')\n"],
@@ -302,6 +303,20 @@ test('object and destructuring layout rules apply to every handwritten file', as
     { filePath: 'apps/web/training.js' },
   );
   assert(outside.messages.some((message) => message.ruleId === '@stylistic/object-property-newline'));
+});
+
+test('statement-per-line pilot covers zero-hit modules without affecting other files', async () => {
+  const lint = linter();
+  const source = 'const first = 1; const second = 2;\nconsole.log(first, second);\n';
+  for (const filePath of ['apps/web/quiz-core.js', 'apps/web/training.js', 'apps/web/practice-selection.js']) {
+    const [result] = await lint.lintText(source, { filePath });
+    assert(result.messages.some((message) => message.ruleId === '@stylistic/max-statements-per-line'), filePath);
+  }
+  const [outside] = await lint.lintText(source, { filePath: 'apps/web/bank-page.js' });
+  assert.equal(
+    outside.messages.filter((message) => message.ruleId === '@stylistic/max-statements-per-line').length,
+    0,
+  );
 });
 
 test('clean semantic and formatting rules remain blocking across complete legacy files', async () => {
