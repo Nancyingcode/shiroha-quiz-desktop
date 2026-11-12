@@ -56,6 +56,8 @@ async function fixture(t) {
     scripts: {
       lint: 'eslint scripts --max-warnings 0', 'lint:index': pkg.scripts['lint:index'], commitlint: pkg.scripts.commitlint,
     },
+    // 夹具未安装依赖；越权依赖检查按真实工程声明的 devDependencies 判定，否则会把已声明的开发依赖误报为外部包。
+    devDependencies: pkg.devDependencies,
   }));
   await writeFile(path.join(repository, '.gitignore'), 'node_modules/\n');
   await symlink(path.join(desktop, 'node_modules'), path.join(project, 'node_modules'), 'junction');
