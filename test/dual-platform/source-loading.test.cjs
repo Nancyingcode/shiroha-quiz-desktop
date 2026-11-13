@@ -281,3 +281,34 @@ test('切换练习或考试时请求序号沿用数值转换并使旧读取失�
     assert.equal(session.request, 11n);
   }
 });
+
+test('切换练习或考试时先清理旧计时器且只清理一次', () => {
+  for (const type of ['practice', 'exam']) {
+    const cleared = [];
+    const context = vm.createContext({
+      clearInterval(timer) {
+        cleared.push({ timer, request: session.request, current: session.current });
+      },
+    });
+    runWebScripts(context, ['study-sessions.js']);
+    const session = type === 'practice'
+      ? context.ShirohaStudySessions.createPractice()
+      : context.ShirohaStudySessions.createExam();
+    const previous = { timer: 0 };
+    session.current = previous;
+    if (type === 'practice') {
+      session.timer = 0;
+    }
+    const previousRequest = session.request;
+    const next = { timer: null };
+    session.current = next;
+    assert.equal(cleared.length, 1);
+    assert.equal(cleared[0].timer, 0);
+    assert.equal(cleared[0].request, previousRequest);
+    assert.equal(cleared[0].current, previous);
+    assert.equal(session.request, previousRequest + 1);
+    assert.equal(session.current, next);
+    session.current = { timer: null };
+    assert.equal(cleared.length, 1);
+  }
+});

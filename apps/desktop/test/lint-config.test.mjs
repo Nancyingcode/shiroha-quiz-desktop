@@ -360,12 +360,24 @@ test('complexity ratchet applies to zero-baseline modules only', async () => {
   }
 });
 
-test('statement-per-line pilot covers zero-hit modules without affecting other files', async () => {
+test('statement-per-line pilot covers zero-hit modules without affecting other files', async (t) => {
   const lint = linter();
   const source = 'const first = 1; const second = 2;\nconsole.log(first, second);\n';
-  for (const filePath of ['apps/web/quiz-core.js', 'apps/web/training.js', 'apps/web/practice-selection.js']) {
-    const [result] = await lint.lintText(source, { filePath });
-    assert(result.messages.some((message) => message.ruleId === '@stylistic/max-statements-per-line'), filePath);
+  for (const filePath of [
+    'apps/web/quiz-core.js',
+    'apps/web/training.js',
+    'apps/web/practice-selection.js',
+    'apps/web/ai-results.js',
+    'apps/web/bank-editor.js',
+    'apps/web/platform/index.js',
+    'apps/web/text-answers.js',
+    'apps/web/platform/save-queue.js',
+    'apps/web/study-sessions.js',
+  ]) {
+    await t.test(filePath, async () => {
+      const [result] = await lint.lintText(source, { filePath });
+      assert(result.messages.some((message) => message.ruleId === '@stylistic/max-statements-per-line'), filePath);
+    });
   }
   const [outside] = await lint.lintText(source, { filePath: 'apps/web/bank-page.js' });
   assert.equal(
