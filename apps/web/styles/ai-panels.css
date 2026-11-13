@@ -83,8 +83,8 @@
 .import-preview-tools-v5981{flex-wrap:wrap!important;max-width:690px!important}
 .import-preview-tools-v5981 .ai-preview-tool-v991{border-color:rgba(37,99,235,.24)!important;background:#f7fbff!important;color:#2457a7!important}
 .ai-preview-panel-v991{margin:0 0 16px;padding:18px;border:1px solid rgba(37,99,235,.16);border-radius:20px;background:linear-gradient(135deg,rgba(248,251,255,.98),rgba(255,255,255,.98));box-shadow:0 14px 30px rgba(37,99,235,.07)}
-.ai-preview-control-grid-v991{display:grid;grid-template-columns:minmax(280px,1fr) minmax(180px,.45fr);gap:14px;margin:15px 0}
-.ai-preview-meta-grid-v991{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:14px 0}
+.ai-preview-control-grid-v991{display:grid;grid-template-columns:minmax(230px,1fr) minmax(250px,1fr) minmax(170px,.55fr);gap:14px;margin:15px 0}
+.ai-preview-meta-grid-v991{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin:14px 0}
 .ai-preview-meta-grid-v991>div{padding:13px 14px;border:1px solid var(--line);border-radius:15px;background:#fff;min-width:0}
 .ai-preview-meta-grid-v991 span{display:block;color:var(--muted);font-size:12px;margin-bottom:5px}
 .ai-preview-meta-grid-v991 b{display:block;color:#1e3a5f;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -121,10 +121,8 @@
 .ai-scope-option-v992 input{margin:0}
 .ai-scope-option-v992 small{color:var(--muted);font-size:12px}
 .ai-range-hint-v992{margin:9px 0 0;color:var(--muted);font-size:13px;line-height:1.6}
-.ai-preview-control-grid-v991{grid-template-columns:minmax(230px,1fr) minmax(250px,1fr) minmax(170px,.55fr)}
 .ai-preview-range-fields-v992{display:grid;grid-template-columns:180px 180px minmax(300px,1fr);gap:14px;align-items:end;margin:-2px 0 15px;padding:14px 15px;border:1px solid rgba(37,99,235,.13);border-radius:15px;background:#f8fbff}
 .ai-preview-range-fields-v992 p{margin:0 0 10px;color:var(--muted);font-size:13px;line-height:1.55}
-.ai-preview-meta-grid-v991{grid-template-columns:repeat(5,minmax(0,1fr))}
 /* SHIROHA_WEB_ISSUE_99_STAGE1_RANGE_CONTROL_V992_END */
 
 /* SHIROHA_WEB_PRACTICE_AI_SINGLE_QUESTION_V613_START */
@@ -162,6 +160,11 @@
   .practice-ai-actions-v613 .mini-btn{flex:1 1 auto}
 }
 /* SHIROHA_WEB_PRACTICE_AI_SINGLE_QUESTION_V613_END */
+
+@media(max-width:1180px){
+  .ai-preview-control-grid-v991,
+  .ai-preview-range-fields-v992{grid-template-columns:minmax(0,1fr)}
+}
 
 @media(max-width:720px){
   .ai-diagnostics-head-v375{display:block}

@@ -54,6 +54,43 @@ test('首写 quota 失败阻断依赖写入；明确重试后恢复', async () =
   r.storage.setItem = original; queue.resume(); await queue.save(snapshot());
   assert.equal(queue.status().state, 'saved');
 });
+test('保存进行中禁止恢复，失败阻断后继直到明确重试', async () => {
+  const r = runtime();
+  let releaseWrite;
+  let shouldFail = true;
+  const gate = new Promise((resolve) => { releaseWrite = resolve; });
+  const writes = [];
+  const queue = r.queue({
+    revision: () => 0,
+    async write(_snapshot, id) {
+      writes.push(id);
+      await gate;
+      if (shouldFail) {
+        throw new Error('write failed');
+      }
+      return { revision: 1 };
+    },
+  });
+  const first = queue.save(snapshot());
+  const second = queue.save(snapshot());
+  const settled = Promise.allSettled([first, second]);
+  await Promise.resolve();
+  assert.equal(writes.length, 1);
+  assert.throws(() => queue.resume(), /保存仍在进行/);
+  releaseWrite();
+  const [firstResult, secondResult] = await settled;
+  assert.equal(firstResult.status, 'rejected');
+  assert.match(firstResult.reason.message, /write failed/);
+  assert.equal(secondResult.status, 'rejected');
+  assert.match(secondResult.reason.message, /前一次保存失败/);
+  assert.equal(writes.length, 1);
+  assert.equal(queue.status().state, 'failed');
+  shouldFail = false;
+  queue.resume();
+  await queue.save(snapshot());
+  assert.equal(writes.length, 2);
+  assert.equal(queue.status().state, 'saved');
+});
 test('保存队列状态优先显示进行中，再显示失败，明确恢复后显示已保存', async () => {
   const r = runtime(); const s = r.create(); await s.initialize();
   const queue = r.queue(s); const original = r.storage.setItem;

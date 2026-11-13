@@ -281,16 +281,43 @@ test('post-upload verification rejects public or incomplete releases without mod
   }
 });
 
-test('workflow preserves the online build before overwrite and gates writes behind checks', async () => {
-  const checks = await readFile(new URL('../../../.github/workflows/desktop.yml', import.meta.url), 'utf8');
-  const release = await readFile(new URL('../../../.github/workflows/desktop-release.yml', import.meta.url), 'utf8');
-  const sequence = ['npm run build -- --target x86_64-pc-windows-msvc\n', 'release-artifacts.mjs stage exe', 'npm run bundle:nsis', 'release-artifacts.mjs stage nsis', 'npm run bundle:offline', 'release-artifacts.mjs stage offline', 'release-artifacts.mjs finalize', 'uses: actions/upload-artifact@'];
+/** @param {string} checks */
+function assertReleaseCollectionOrder(checks) {
+  const releaseUpload = checks.split(/^ {6}- /m).find((step) => /^ {8}uses: actions\/upload-artifact@/m.test(step)
+    && /^ {10}name: windows-release-/m.test(step));
+  assert.ok(releaseUpload, 'Missing verified release upload step');
+  assert.match(releaseUpload, /^ {8}if: inputs\.collect_release == true$/m);
+  assert.match(releaseUpload, /^ {10}if-no-files-found: error$/m);
+  const sequence = [
+    'npm run build -- --target x86_64-pc-windows-msvc\n',
+    'release-artifacts.mjs stage exe',
+    'npm run bundle:nsis',
+    'release-artifacts.mjs stage nsis',
+    'npm run bundle:offline',
+    'release-artifacts.mjs stage offline',
+    'release-artifacts.mjs finalize',
+    releaseUpload,
+  ];
   let previous = -1;
   for (const step of sequence) {
-    const position = checks.replace(/\r\n/g, '\n').indexOf(step);
+    const position = checks.indexOf(step);
     assert.ok(position > previous, `Missing or misplaced build/collection step: ${step}`);
     previous = position;
   }
+  return releaseUpload;
+}
+
+test('workflow preserves the online build before overwrite and gates writes behind checks', async () => {
+  const checks = (await readFile(new URL('../../../.github/workflows/desktop.yml', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
+  const release = await readFile(new URL('../../../.github/workflows/desktop-release.yml', import.meta.url), 'utf8');
+  const releaseUpload = assertReleaseCollectionOrder(checks);
+  const releaseBlock = `      - ${releaseUpload}`;
+  const withoutReleaseUpload = checks.replace(releaseBlock, '');
+  assert.notEqual(withoutReleaseUpload, checks);
+  assert.throws(() => assertReleaseCollectionOrder(withoutReleaseUpload), /Missing verified release upload step/);
+  const buildStep = '      - run: npm run build -- --target x86_64-pc-windows-msvc\n';
+  const earlyReleaseUpload = withoutReleaseUpload.replace(buildStep, `${releaseBlock}${buildStep}`);
+  assert.throws(() => assertReleaseCollectionOrder(earlyReleaseUpload), /Missing or misplaced build\/collection step/);
   assert.match(checks, /collect_release:[\s\S]*?default: false/);
   assert.match(checks, /^permissions:\s+contents: read\s+actions: read/m);
   assert.match(release, /^permissions:\s+contents: read\s+actions: read/m);

@@ -120,3 +120,35 @@ test('CSS lint resolves shared custom properties across split stylesheets', asyn
   assert.match(diagnostics, /no-unknown-custom-properties/);
   assert(diagnostics.includes('theme-probe.css'), diagnostics);
 });
+
+test('CSS lint rejects unknown animation names in the splash card', async (t) => {
+  const { temporary } = await repositoryFixture(t);
+  const desktop = path.resolve(import.meta.dirname, '..');
+  const project = path.join(temporary, 'apps/desktop');
+  for (const dir of ['frontend', '../web/styles']) {
+    await mkdir(path.join(project, dir), { recursive: true });
+  }
+  for (const file of [
+    '../web/styles.css', '../web/styles/responsive-artwork.css', '../web/styles/app-shell.css',
+    'frontend/desktop.css', 'package.json', 'stylelint.config.mjs', 'stylelint-suppressions.json',
+  ]) {
+    await copyFile(path.join(desktop, file), path.join(project, file));
+  }
+  const runLint = () => spawnSync('npm run --silent lint:css', {
+    cwd: project, shell: true, encoding: 'utf8', windowsHide: true,
+  });
+  const accepted = runLint();
+  assert.equal(accepted.status, 0, accepted.stdout + accepted.stderr);
+
+  const fragment = path.join(project, '../web/styles/app-shell.css');
+  const source = await readFile(fragment, 'utf8');
+  const misspelled = source.replace('animation:splashCardIn ', 'animation:splashCadrIn ');
+  assert.notEqual(misspelled, source);
+  await writeFile(fragment, misspelled);
+  const rejected = runLint();
+  const diagnostics = rejected.stdout + rejected.stderr;
+  assert.equal(rejected.status, 2, diagnostics);
+  assert.equal((diagnostics.match(/no-unknown-animations/g) ?? []).length, 1, diagnostics);
+  assert.match(diagnostics, /splashCadrIn/);
+  assert.match(diagnostics, /\b1 problem\b/);
+});
