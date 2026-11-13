@@ -202,6 +202,55 @@ test('子路径入口加载全部共享样式且关键控件样式生效', async
   assert.equal(field, '14px');
 });
 
+test('AI 预览控制与题号范围在窄屏内完整显示', async (t) => {
+  const page = await pageFor(t, JSON.stringify(webState()));
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.locator('.nav[data-view="import"]').click();
+  await page.locator('#import-mode').selectOption('normal');
+  await page.locator('#import-strategy').selectOption('compact');
+  await page.locator('#import-save-mode-v59').selectOption('new');
+  await page.locator('#import-text').fill('1. 本地测试？\nA. 甲\nB. 乙\n答案：B\n2. 下一题？\nA. 左\nB. 右\n答案：A');
+  await page.locator('#parse-import-btn').click();
+  await page.locator('#import-summary').filter({ hasText: '最终识别：2题' }).waitFor();
+  for (const mode of ['analysis', 'review']) {
+    await page.locator(`#ai-${mode}-import-btn-v991`).click();
+    await page.locator('#ai-preview-panel-v991').waitFor({ state: 'visible' });
+    await page.locator('#ai-preview-scope-v991').selectOption('range');
+    await page.locator('#ai-preview-range-fields-v992').waitFor({ state: 'visible' });
+    for (const width of [1280, 600, 360, 720, 900, 1180]) {
+      await page.setViewportSize({ width, height: 900 });
+      const grids = await page.locator('.ai-preview-control-grid-v991, .ai-preview-range-fields-v992').evaluateAll(async (elements) => {
+        await globalThis.document.fonts.ready;
+        const animations = globalThis.document.getAnimations().filter((animation) => animation.playState === 'running' && Number.isFinite(animation.effect?.getComputedTiming().endTime));
+        await Promise.all(animations.map((animation) => animation.finished.catch(() => undefined)));
+        return elements.map((element) => {
+          const bounds = element.getBoundingClientRect();
+          const controls = [...element.querySelectorAll('input, select')].filter((control) => control.getClientRects().length);
+          return {
+            name: element.className,
+            columns: globalThis.getComputedStyle(element).gridTemplateColumns.split(' ').length,
+            fits: element.scrollWidth <= element.clientWidth + 1,
+            controlsFit: controls.every((control) => {
+              const rect = control.getBoundingClientRect();
+              return rect.left >= bounds.left - 1 && rect.right <= bounds.right + 1;
+            }),
+          };
+        });
+      });
+      assert.equal(grids.length, 2);
+      for (const grid of grids) {
+        assert.equal(grid.fits, true, `${mode} ${width}px ${grid.name} 内容溢出`);
+        assert.equal(grid.controlsFit, true, `${mode} ${width}px ${grid.name} 控件越界`);
+        if (width === 1280) {
+          assert.equal(grid.columns, 3, `${mode} ${width}px ${grid.name} 宽屏列数`);
+        }
+      }
+    }
+    await page.locator('#ai-preview-cancel-btn-v991').click();
+  }
+});
+
 for (const format of ['json', 'zip']) {
   test(`旧 Android v3 ${format} 实际导入保留图片、多空、收藏和记录`, async (t) => {
     const page = await pageFor(t, JSON.stringify(webState()));

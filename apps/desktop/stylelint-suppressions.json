@@ -56,9 +56,6 @@
   "../web/styles/ai-panels.css": {
     "no-descending-specificity": {
       "count": 1
-    },
-    "no-duplicate-selectors": {
-      "count": 2
     }
   },
   "../web/styles/controls-and-feedback.css": {
