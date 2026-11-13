@@ -108,7 +108,7 @@ test('cancelling pending recognition releases resources and permits retry withou
   const running = session.startPdfOcrImport().then(() => { completed = true; });
   await started;
   elements['ocr-cancel-btn'].onclick();
-  await new Promise((resolve) => setImmediate(resolve));
+  await new Promise((resolve) => { setImmediate(resolve); });
   assert.equal(completed, true, 'cancellation must not await the terminated Worker');
   await running;
   assert.equal(session.isRunning(), false);
@@ -117,7 +117,7 @@ test('cancelling pending recognition releases resources and permits retry withou
   assert.equal(elements['ocr-use-text-btn'].disabled, true);
   await session.startPdfOcrImport();
   finishOldRecognition({ data: { text: 'late old result' } });
-  await new Promise((resolve) => setImmediate(resolve));
+  await new Promise((resolve) => { setImmediate(resolve); });
   assert.match(session.currentOcrText(), /new result/);
   assert.doesNotMatch(session.currentOcrText(), /late old result/);
   assert.equal(session.isRunning(), false);

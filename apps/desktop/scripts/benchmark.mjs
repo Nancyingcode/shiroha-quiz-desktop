@@ -113,7 +113,7 @@ async function availablePort() {
   });
   const address = server.address();
   assert(address && typeof address !== 'string', '无法取得调试端口');
-  await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve(undefined))));
+  await new Promise((resolve, reject) => { server.close((error) => (error ? reject(error) : resolve(undefined))); });
   return address.port;
 }
 

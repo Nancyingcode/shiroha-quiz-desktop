@@ -1953,7 +1953,7 @@ test('题库删除：失效 ID 不写入，重复点击只删除一次，旧编�
   const before = await saved(page);let confirmations = 0;page.on('app-dialog', () => { confirmations += 1; });
   await page.locator('[data-delete-bank-question="same-id"]').evaluate((button) => { button.dataset.deleteBankQuestion = 'missing-id';button.click(); });
   assert.equal(await saved(page), before);assert.equal(confirmations, 0);
-  await page.evaluate(() => { const { write } = globalThis.ShirohaPlatform.storage;globalThis.ShirohaPlatform.storage.write = async (...args) => { await new Promise((resolve) => setTimeout(resolve, 150));return write(...args); }; });
+  await page.evaluate(() => { const { write } = globalThis.ShirohaPlatform.storage;globalThis.ShirohaPlatform.storage.write = async (...args) => { await new Promise((resolve) => { setTimeout(resolve, 150); });return write(...args); }; });
   await page.locator('[data-delete-bank-question="missing-id"]').evaluate((button) => { button.dataset.deleteBankQuestion = 'same-id';button.click();button.click(); });
   await page.locator('body[data-storage-state="ready"]').waitFor();
   assert.equal(confirmations, 1);assert.equal(JSON.parse(await saved(page)).banks[0].questions.length, 6);

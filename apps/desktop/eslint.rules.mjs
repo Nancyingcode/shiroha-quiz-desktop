@@ -55,6 +55,7 @@ export const semanticRules = {
   'no-unused-expressions': 'error',
   // 类型感知规则受 typescript-eslint 的 peer 范围阻塞，先补不依赖类型信息的拒绝语义检查。
   'prefer-promise-reject-errors': 'error',
+  'no-promise-executor-return': 'error',
 };
 
 /** @type {import('eslint').Linter.RulesRecord} */

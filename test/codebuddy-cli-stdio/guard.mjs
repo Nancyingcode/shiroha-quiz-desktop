@@ -249,7 +249,7 @@ export async function createGuardedRelay(upstream, expectedBearer = undefined) {
       if (evidence.state === 'unused' || evidence.state === 'pending') { evidence.state = 'cancelled'; }
       for (const controller of controllers) { controller.abort(); }
       server.closeAllConnections();
-      await new Promise((resolve) => server.close(resolve));
+      await new Promise((resolve) => { server.close(resolve); });
       await Promise.allSettled([...requests]);
     },
   };

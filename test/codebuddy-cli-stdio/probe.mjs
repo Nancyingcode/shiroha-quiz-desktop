@@ -325,7 +325,7 @@ async function runCase(executable, runRoot, scenario, guarded = false) {
     if (usesControlProtocol) { sendControl('initialize'); } else { child.stdin.end(prompt); }
     exit = await closed;
     await cleanupPromise;
-    if (!connectionClosed) { await new Promise((resolve) => setTimeout(resolve, 100)); }
+    if (!connectionClosed) { await new Promise((resolve) => { setTimeout(resolve, 100); }); }
     connectionClosedBeforeCleanup = connectionClosed;
   } finally {
     clearTimeout(timer);
@@ -334,7 +334,7 @@ async function runCase(executable, runRoot, scenario, guarded = false) {
     await cleanupPromise;
     await relay?.close();
     server.closeAllConnections();
-    await new Promise((resolve) => server.close(resolve));
+    await new Promise((resolve) => { server.close(resolve); });
   }
   for (const line of stdout.split(/\r?\n/).filter((line) => line.trim())) {
     try { events.push(JSON.parse(line)); } catch { events.push({ invalid: line }); }

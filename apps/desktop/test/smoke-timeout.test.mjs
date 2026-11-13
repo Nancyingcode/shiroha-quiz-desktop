@@ -18,7 +18,7 @@ function fixture() {
     settleTimeoutMs: 1000,
     stopChild: async (child) => {
       if (child.exitCode !== null || child.signalCode !== null) { return; }
-      const closed = new Promise((resolve) => child.once('close', resolve));
+      const closed = new Promise((resolve) => { child.once('close', resolve); });
       assert.equal(child.kill(), true);
       await closed;
     },
@@ -126,7 +126,7 @@ test('a timeout during launch stops only the owned child and waits before profil
     const run = control.check('restart', () => control.launch(async (lifecycle) => {
       const child = spawnOwned(lifecycle, process.execPath, ['-e', 'setTimeout(() => {}, 30000)'], { windowsHide: true, stdio: 'ignore' });
       owned.current = child;
-      owned.closed = new Promise((resolve) => child.once('close', () => resolve()));
+      owned.closed = new Promise((resolve) => { child.once('close', () => resolve()); });
       registered();
       await gate;
       lifecycle.assertActive();
@@ -157,13 +157,13 @@ test('a timeout during launch stops only the owned child and waits before profil
     assert.match(checks[0].error ?? '', /操作超过 25 ms/);
   } finally {
     if (unrelated.exitCode === null && unrelated.signalCode === null) {
-      const closed = new Promise((resolve) => unrelated.once('close', resolve));
+      const closed = new Promise((resolve) => { unrelated.once('close', resolve); });
       unrelated.kill();
       await closed;
     }
     const child = owned.current;
     if (child && child.exitCode === null && child.signalCode === null) {
-      const closed = new Promise((resolve) => child.once('close', resolve));
+      const closed = new Promise((resolve) => { child.once('close', resolve); });
       child.kill();
       await closed;
     }

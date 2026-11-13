@@ -71,7 +71,7 @@ async function listen(server) {
 async function availablePort() {
   const server = createServer();
   const port = await listen(server);
-  await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve(undefined))));
+  await new Promise((resolve, reject) => { server.close((error) => (error ? reject(error) : resolve(undefined))); });
   return port;
 }
 
@@ -245,7 +245,7 @@ $smokeWidth=[int][Math]::Round(${size.width}*$smokeDpi/96)+($smokeOuter.Right-$s
 $smokeHeight=[int][Math]::Round(${size.height}*$smokeDpi/96)+($smokeOuter.Bottom-$smokeOuter.Top)-($smokeClient.Bottom-$smokeClient.Top)
 if(-not [SmokeWindow]::SetWindowPos($smokeWindow,[IntPtr]::Zero,0,0,$smokeWidth,$smokeHeight,0x0016)){throw '调整测试窗口失败'}
 `], { windowsHide: true, timeout: START_TIMEOUT_MS });
-  await runtime.page.evaluate(() => new Promise((resolve) => window.requestAnimationFrame(() => window.requestAnimationFrame(resolve))));
+  await runtime.page.evaluate(() => new Promise((resolve) => { window.requestAnimationFrame(() => window.requestAnimationFrame(resolve)); }));
 }
 
 /** @param {Page} page @param {string} screenshotName */
@@ -454,7 +454,7 @@ async function toggleNavigationMotion(page) {
     const animations = [...app.getAnimations(), ...main.getAnimations()];
     const end = window.performance.now() + 1_000;
     do {
-      await new Promise((resolve) => window.requestAnimationFrame(resolve));
+      await new Promise((resolve) => { window.requestAnimationFrame(resolve); });
       positions.push(main.getBoundingClientRect().left);
     } while (animations.some((animation) => animation.playState === 'running') && window.performance.now() < end);
     const finish = positions.at(-1) ?? start;
@@ -1357,7 +1357,7 @@ async function main() {
       const loginDeadline = Date.now() + 5000;
       while (!(await harnessStatus()).ready) {
         if (Date.now() >= loginDeadline) { throw new Error('恢复前假订阅未就绪'); }
-        await new Promise((resolve) => setTimeout(resolve, 20));
+        await new Promise((resolve) => { setTimeout(resolve, 20); });
       }
       await host.invoke('service_credential', { request: { kind: 'invalidate' } });
       if ((await harnessStatus()).ready) { throw new Error('覆盖导入的凭据失效入口未撤销 Harness 就绪状态'); }

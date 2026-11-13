@@ -285,7 +285,7 @@ async function setup(browser, url, keys, { configured = true, rich = false, empt
       const received = await response;
       const error = await received.finished();
       assert.equal(error, null, 'Delayed response was not actually delivered.');
-      await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 0)));
+      await page.evaluate(() => new Promise((resolve) => { setTimeout(resolve, 0); }));
     },
     async idle() {
       await page.waitForFunction((selector) => {

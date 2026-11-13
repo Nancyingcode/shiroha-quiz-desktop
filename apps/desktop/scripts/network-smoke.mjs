@@ -58,7 +58,7 @@ export async function createNativeMock(root) {
     if (server.listening) {
       try {
         server.closeAllConnections();
-        await new Promise((resolve, reject) => server.close((failure) => (failure ? reject(failure) : resolve(undefined))));
+        await new Promise((resolve, reject) => { server.close((failure) => (failure ? reject(failure) : resolve(undefined))); });
       } catch (cleanupError) {
         throw new NativeMockStartupCleanupError(error, cleanupError, root);
       }

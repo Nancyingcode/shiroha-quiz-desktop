@@ -88,10 +88,10 @@ test('能力值和路径检查不耗预算，并发请求最多一个到达上�
   let calls = 0;
   const upstream = createServer(async (_request, response) => {
     calls += 1;
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    await new Promise((resolve) => { setTimeout(resolve, 50); });
     response.writeHead(200, { 'content-type': 'text/event-stream' }).end(good);
   });
-  await new Promise((resolve) => upstream.listen(0, '127.0.0.1', resolve));
+  await new Promise((resolve) => { upstream.listen(0, '127.0.0.1', resolve); });
   const relay = await createGuardedRelay(`http://127.0.0.1:${upstream.address().port}`);
   const body = JSON.stringify({ model: 'poc-model', stream: true, messages: [] });
   try {
@@ -109,7 +109,7 @@ test('能力值和路径检查不耗预算，并发请求最多一个到达上�
   } finally {
     await relay.close();
     upstream.closeAllConnections();
-    await new Promise((resolve) => upstream.close(resolve));
+    await new Promise((resolve) => { upstream.close(resolve); });
   }
 });
 
@@ -124,7 +124,7 @@ test('关闭转发层取消上游，迟到完成不能恢复证明', async () =>
     response.write(': waiting\n\n');
     markStarted();
   });
-  await new Promise((resolve) => upstream.listen(0, '127.0.0.1', resolve));
+  await new Promise((resolve) => { upstream.listen(0, '127.0.0.1', resolve); });
   const relay = await createGuardedRelay(`http://127.0.0.1:${upstream.address().port}`);
   const downstream = fetch(`${relay.endpoint}/chat/completions`, {
     method: 'POST',
@@ -141,6 +141,6 @@ test('关闭转发层取消上游，迟到完成不能恢复证明', async () =>
     assert.equal(validateCandidate(events(), relay.evidence()).accepted, false);
   } finally {
     upstream.closeAllConnections();
-    await new Promise((resolve) => upstream.close(resolve));
+    await new Promise((resolve) => { upstream.close(resolve); });
   }
 });
