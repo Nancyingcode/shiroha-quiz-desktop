@@ -344,12 +344,14 @@ test('no-shadow pilot rejects local shadowing only in the AI import panel', asyn
   assert.equal(outside.errorCount + outside.warningCount, 0, JSON.stringify(outside.messages));
 });
 
-test('complexity ratchet applies to zero-baseline modules only', async () => {
+test('complexity ratchet applies to zero-baseline modules only', async (t) => {
   const lint = linter();
   const pilotFiles = [
     'apps/web/quiz-core.js',
     'apps/web/platform/index.js',
     'apps/web/platform/save-queue.js',
+    'apps/web/study-sessions.js',
+    'apps/web/platform/browser.js',
   ];
   const branchy = [
     'function branchy(value) {',
@@ -365,21 +367,35 @@ test('complexity ratchet applies to zero-baseline modules only', async () => {
     ['max-depth', 'function deep(list) { if (list) { while (list.length) { for (const value of list) { if (value) { if (value > 1) { return value; } } } } } return 0; }\nconsole.log(deep([1]));\n'],
     ['max-nested-callbacks', 'setTimeout(function () { setTimeout(function () { setTimeout(function () { setTimeout(function () { setTimeout(function () { console.log(1); }); }); }); }); });\n'],
   ];
-  for (const filePath of pilotFiles) {
-    for (const [rule, source] of cases) {
-      const [result] = await lint.lintText(source, { filePath });
-      assert(result.messages.some((message) => message.ruleId === rule), `${filePath}: ${rule}`);
-    }
-  }
-  const [outside] = await lint.lintText(branchy, { filePath: 'apps/web/bank-page.js' });
-  assert.equal(outside.messages.filter((message) => message.ruleId === 'complexity').length, 0);
-
   // 函数与文件规模阈值只需确认配置生效，构造超长函数会淹没用例本身。
+  const expectedRules = {
+    complexity: [2, 15],
+    'max-depth': [2, 4],
+    'max-params': [2, 5],
+    'max-nested-callbacks': [2, 4],
+    'max-lines-per-function': [2, { max: 120, skipBlankLines: true, skipComments: true }],
+    'max-lines': [2, { max: 600, skipBlankLines: true, skipComments: true }],
+  };
   for (const filePath of pilotFiles) {
-    const config = await lint.calculateConfigForFile(path.join(root, filePath));
-    for (const rule of ['max-lines-per-function', 'max-lines']) {
-      assert.equal(config?.rules?.[rule]?.[0], 2, `${filePath}: ${rule}`);
-    }
+    await t.test(filePath, async () => {
+      for (const [rule, source] of cases) {
+        const [result] = await lint.lintText(source, { filePath });
+        assert(result.messages.some((message) => message.ruleId === rule), `${filePath}: ${rule}`);
+      }
+      const config = await lint.calculateConfigForFile(path.join(root, filePath));
+      for (const [rule, expected] of Object.entries(expectedRules)) {
+        assert.deepEqual(config?.rules?.[rule], expected, `${filePath}: ${rule}`);
+      }
+    });
+  }
+  const outsideFile = 'apps/web/bank-page.js';
+  for (const [rule, source] of cases) {
+    const [outside] = await lint.lintText(source, { filePath: outsideFile });
+    assert.equal(outside.messages.filter((message) => message.ruleId === rule).length, 0, rule);
+  }
+  const outsideConfig = await lint.calculateConfigForFile(path.join(root, outsideFile));
+  for (const rule of Object.keys(expectedRules)) {
+    assert.equal(outsideConfig?.rules?.[rule]?.[0] ?? 0, 0, rule);
   }
 });
 
@@ -402,11 +418,14 @@ test('statement-per-line pilot covers zero-hit modules without affecting other f
       assert(result.messages.some((message) => message.ruleId === '@stylistic/max-statements-per-line'), filePath);
     });
   }
-  const [outside] = await lint.lintText(source, { filePath: 'apps/web/bank-page.js' });
-  assert.equal(
-    outside.messages.filter((message) => message.ruleId === '@stylistic/max-statements-per-line').length,
-    0,
-  );
+  for (const filePath of ['apps/web/bank-page.js', 'apps/web/platform/browser.js']) {
+    const [outside] = await lint.lintText(source, { filePath });
+    assert.equal(
+      outside.messages.filter((message) => message.ruleId === '@stylistic/max-statements-per-line').length,
+      0,
+      filePath,
+    );
+  }
 });
 
 test('clean semantic and formatting rules remain blocking across complete legacy files', async () => {
