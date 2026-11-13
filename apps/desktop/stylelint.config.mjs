@@ -5,6 +5,7 @@ export default {
   rules: {
     'no-unknown-animations': true,
     'no-unknown-custom-properties': true,
+    'shorthand-property-no-redundant-values': true,
     'custom-property-pattern': '^[a-z][a-z0-9]*(-[a-z0-9]+)*$',
     'selector-class-pattern': '^[a-z][a-z0-9]*(-[a-z0-9]+)*$',
     // 新组件样式限制选择器复合深度，避免继续叠加「页面状态 + 卡片 + 侧栏 + 子元素」式长链。

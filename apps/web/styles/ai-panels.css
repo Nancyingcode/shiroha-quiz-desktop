@@ -156,7 +156,7 @@
 .practice-ai-follow-v613 textarea:focus{outline:none;border-color:rgba(37,99,235,.36);box-shadow:0 0 0 2px rgba(37,99,235,.06)}
 .practice-ai-follow-v613 .mini-btn{justify-self:start}
 @media(max-width:720px){
-  .practice-ai-panel-v613{padding:13px 13px}
+  .practice-ai-panel-v613{padding:13px}
   .practice-ai-actions-v613 .mini-btn{flex:1 1 auto}
 }
 /* SHIROHA_WEB_PRACTICE_AI_SINGLE_QUESTION_V613_END */

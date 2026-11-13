@@ -2212,8 +2212,8 @@ button{
     z-index:1000 !important;
     display:grid !important;
     grid-template-columns:repeat(4, minmax(0, 1fr)) !important;
-    gap:8px 8px !important;
-    padding:14px 14px !important;
+    gap:8px !important;
+    padding:14px !important;
     border-radius:28px !important;
     background:rgba(255,255,255,.94) !important;
     border:1px solid rgba(47,111,237,.10) !important;

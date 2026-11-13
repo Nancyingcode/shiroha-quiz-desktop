@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 const { chromium } = require('../../apps/desktop/node_modules/playwright-core');
 const { startServer, WEB_ROOT } = require('../web-ai-practice/harness.cjs');
 const { webState, androidBackup, PNG_BASE64, IMAGE } = require('./fixtures/dataset.cjs');
+const { sampleComputedStyles } = require('./css-computed-style.cjs');
 const { loadWeb, plain } = require('./web-source.cjs');
 const { createWebSource } = require('./source-tools.cjs');
 const { pathToFileURL } = require('node:url');
@@ -200,6 +201,82 @@ test('子路径入口加载全部共享样式且关键控件样式生效', async
   }
   const field = await page.locator('#import-bank-name').evaluate((element) => globalThis.getComputedStyle(element).borderRadius);
   assert.equal(field, '14px');
+});
+
+test('导航、首页与练习 AI 面板的响应式间距保持一致', async (t) => {
+  const page = await pageFor(t, JSON.stringify(webState()));
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.evaluate(() => {
+    const toast = globalThis.document.createElement('div');
+    toast.className = 'toast-item';
+    toast.textContent = '样式测试';
+    globalThis.document.querySelector('#app-toast').appendChild(toast);
+  });
+  const selectors = {
+    main: '.main',
+    navigation: '.side .nav[data-view="dashboard"]',
+    side: '.side',
+    kicker: '#dashboard .dashboard-home-main .kicker',
+    description: '#dashboard .dashboard-home-desc',
+    statistic: '#dashboard .dashboard-stat-grid > div',
+    toast: '#app-toast .toast-item',
+  };
+  const all = (value) => [value, value, value, value];
+  const layouts = [
+    { width: 720, nav: ['6px', '2px', '6px', '2px'], main: ['16px', '18px', '174px', '18px'], gap: ['6px', '8px'] },
+    { width: 721, nav: all('12px'), main: ['18px', '32px', '32px', '32px'], gap: ['normal', 'normal'] },
+    { width: 1099, nav: all('12px'), main: ['18px', '32px', '32px', '32px'], gap: ['normal', 'normal'] },
+    { width: 1100, nav: all('10px'), main: ['18px', '0px', '34px', '0px'], gap: ['normal', 'normal'] },
+    { width: 1280, nav: all('10px'), main: ['18px', '0px', '34px', '0px'], gap: ['normal', 'normal'] },
+    { width: 1281, nav: all('11px'), main: ['18px', '0px', '34px', '0px'], gap: ['normal', 'normal'] },
+  ];
+  for (const { width, nav, main, gap } of layouts) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const collapsed of [false, true]) {
+      await page.evaluate((value) => globalThis.document.body.classList.toggle('side-collapsed', value), collapsed);
+      const styles = await page.evaluate(sampleComputedStyles, selectors);
+      const state = `${width}px ${collapsed ? '折叠' : '常规'}`;
+      assert.deepEqual(styles.navigation.padding, nav, `${state} 导航间距`);
+      assert.deepEqual(styles.main.padding, main, `${state} 主体间距`);
+      assert.deepEqual(styles.side.gap, gap, `${state} 导航行列间距`);
+      assert.deepEqual(styles.kicker.margin, ['0px', '0px', '2px', '0px'], `${state} 首页标签外边距`);
+      assert.deepEqual(styles.description.margin, ['0px', '0px', '4px', '0px'], `${state} 首页说明外边距`);
+      assert.deepEqual(styles.statistic.padding, all('12px'), `${state} 统计卡片间距`);
+      assert.deepEqual(styles.toast.padding, all('14px'), `${state} 通知卡片间距`);
+    }
+  }
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.evaluate(() => {
+    globalThis.document.body.classList.remove('side-collapsed');
+    globalThis.document.querySelector('#app-toast').replaceChildren();
+  });
+  await page.locator('.nav[data-view="practice"]').click();
+  await page.locator('#start-practice-btn').click();
+  await page.locator('[data-ai-single-open-v613]').click();
+  await page.locator('.practice-ai-panel-v613').waitFor({ state: 'visible' });
+  for (const [width, expected] of [[720, all('13px')], [721, ['15px', '16px', '15px', '16px']]]) {
+    await page.setViewportSize({ width, height: 900 });
+    const styles = await page.evaluate(sampleComputedStyles, { panel: '.practice-ai-panel-v613' });
+    assert.deepEqual(styles.panel.padding, expected, `${width}px 练习 AI 面板间距`);
+  }
+});
+
+test('兼容移动导航选择器的间距在断点两侧保持一致', async (t) => {
+  const context = await browser.newContext({ viewport: { width: 720, height: 900 } });
+  t.after(() => context.close());
+  const page = await context.newPage();
+  await page.setContent('<div class="mobile-bottom-nav"></div><div class="bottom-nav"></div><nav class="mobile-nav"></nav>');
+  await page.addStyleTag({ path: path.join(WEB_ROOT, 'styles/responsive-artwork.css') });
+  const selectors = { mobileBottom: '.mobile-bottom-nav', bottom: '.bottom-nav', nav: 'nav.mobile-nav' };
+  for (const width of [720, 721]) {
+    await page.setViewportSize({ width, height: 900 });
+    const styles = await page.evaluate(sampleComputedStyles, selectors);
+    for (const [name, style] of Object.entries(styles)) {
+      assert.deepEqual(style.padding, Array(4).fill(width === 720 ? '14px' : '0px'), `${width}px ${name} 内边距`);
+      assert.deepEqual(style.gap, Array(2).fill(width === 720 ? '8px' : 'normal'), `${width}px ${name} 行列间距`);
+    }
+  }
 });
 
 test('AI 预览控制与题号范围在窄屏内完整显示', async (t) => {
@@ -1354,7 +1431,7 @@ test('启动检查完成后已打开的错题和训练复盘原地启用 AI', as
       execute: async () => { globalThis.__modelCalls += 1; throw new Error('不应自动请求模型'); },
     };
     globalThis.__finishReadiness = () => { execution.ready = true; delete execution.readiness; execution.reason = ''; notifyReadiness(); };
-    globalThis.__failReadiness = () => { execution.ready = false; execution.readiness = 'error'; execution.reason = '隔离检查失败'; notifyReadiness(); };
+    globalThis.__failReadiness = (retryable = true) => { execution.ready = false; execution.readiness = 'error'; execution.readinessRetryable = retryable; execution.reason = '隔离检查失败'; notifyReadiness(); };
   `;
   const page = await pageFor(t, JSON.stringify(initial), injection);
   await page.locator('body[data-storage-state="ready"]').waitFor();
@@ -1385,6 +1462,24 @@ test('启动检查完成后已打开的错题和训练复盘原地启用 AI', as
   assert.equal(await page.locator('#ai-import-privacy-v99').getAttribute('aria-busy'), 'false');
   assert.equal(await page.evaluate(() => globalThis.__readinessRetries), 1);
   assert.equal(await page.evaluate(() => globalThis.__readinessChecks), 1);
+  assert.equal(await page.evaluate(() => globalThis.__modelCalls), 0);
+  await seedImportQuestions(page, 1);
+  await page.evaluate(() => globalThis.__failReadiness());
+  await page.locator('#ai-analysis-import-btn-v991').click();
+  const previewSettings = page.locator('#ai-preview-settings-btn-v991');
+  assert.equal(await previewSettings.innerText(), '重试检查');
+  await previewSettings.click();
+  assert.equal(await page.locator('#ai-preview-start-btn-v991').isEnabled(), true);
+  assert.equal(await page.evaluate(() => globalThis.__readinessRetries), 2);
+  assert.equal(await page.evaluate(() => globalThis.__modelCalls), 0);
+  await page.evaluate(() => globalThis.__failReadiness(false));
+  for (const settingsButton of [previewSettings, retry]) {
+    assert.equal(await settingsButton.innerText(), '前往 AI 设置');
+    await settingsButton.click();
+    await page.locator('#ai-settings').waitFor({ state: 'visible' });
+    await page.locator('.nav[data-view="import"]').click();
+  }
+  assert.equal(await page.evaluate(() => globalThis.__readinessRetries), 2);
   assert.equal(await page.evaluate(() => globalThis.__modelCalls), 0);
 });
 
@@ -2408,8 +2503,19 @@ test('AI 面板批量输入、预计次数与双任务互斥', async (t) => {
   for (const [button, defaultValue] of [['#ai-review-import-btn-v991', '20'], ['#ai-analysis-import-btn-v991', '10']]) {
     await page.locator(button).click();
     const batch = page.locator('#ai-preview-batch-v991');
+    const scope = page.locator('#ai-preview-scope-v991');
     assert.equal(await batch.inputValue(), defaultValue);
-    await page.locator('#ai-preview-scope-v991').selectOption('all');
+    const expectedOptions = ['自定义题号范围', '已选择题目', '当前筛选结果', '全部题目'];
+    if (button === '#ai-review-import-btn-v991') { expectedOptions.splice(1, 0, '仅异常题'); }
+    assert.deepEqual(await scope.locator('option').allTextContents(), expectedOptions);
+    await scope.selectOption('all');
+    assert.equal(await page.locator('#ai-preview-range-count-v992').innerText(), '31 题');
+    await scope.selectOption('range');
+    await page.locator('#ai-preview-range-start-v992').fill('3');
+    await page.locator('#ai-preview-range-end-v992').fill('5');
+    assert.equal(await page.locator('#ai-preview-count-v991').innerText(), '3 题');
+    await scope.selectOption('all');
+    assert.equal(await page.locator('#ai-preview-count-v991').innerText(), '31 题');
     for (const value of ['', '0', '-1', '1.5', '31']) {
       await batch.fill(value);
       assert.equal(await batch.inputValue(), value);

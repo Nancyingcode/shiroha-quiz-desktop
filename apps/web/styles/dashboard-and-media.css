@@ -423,13 +423,13 @@
 }
 #dashboard .dashboard-home-main .kicker{
   align-self:flex-start;
-  margin:0 0 2px 0 !important;
+  margin:0 0 2px !important;
 }
 #dashboard .dashboard-home-main h2{
   margin:0 !important;
 }
 #dashboard .dashboard-home-desc{
-  margin:0 0 2px 0 !important;
+  margin:0 0 2px !important;
 }
 #dashboard .dashboard-action-grid{
   margin-top:0 !important;
@@ -781,7 +781,7 @@
 
 #dashboard .dashboard-stat-grid > div{
   min-height:74px !important;
-  padding:12px 12px !important;
+  padding:12px !important;
 }
 
 #dashboard .dashboard-stat-grid b{
