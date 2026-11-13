@@ -1309,7 +1309,7 @@
   }
   async function confirmBankQuestionDeletion(bank, ids) {
     if (bankQuestionDeletionBlocked(bank.id, ids)) { toast('这些试题正在练习或考试中，请先结束相关会话后再删除。', 'warn');return false; }
-    return await ShirohaDialogs.confirm(`确定从“${bank.name}”删除 ${ids.size} 道试题？对应错题和收藏会一并移除，历史成绩保留。删除后不能直接撤销。`);
+    return ShirohaDialogs.confirm(`确定从“${bank.name}”删除 ${ids.size} 道试题？对应错题和收藏会一并移除，历史成绩保留。删除后不能直接撤销。`);
   }
   function removeBankQuestionReferences(bankId, ids) {
     if (Array.isArray(state.wrongBook[bankId])) { state.wrongBook[bankId] = state.wrongBook[bankId].filter((entry) => !ids.has(typeof entry === 'string' ? entry : entry.id)); }

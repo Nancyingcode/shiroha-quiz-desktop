@@ -65,7 +65,8 @@
       const entries = parseZipEntries(buf);
       const get = async (name) => {
         const entry = entries.find((e) => e.name === name);
-        return entry ? await unzipEntry(buf, entry) : '';
+        if (!entry) { return ''; }
+        return unzipEntry(buf, entry);
       };
       const workbook = await get('xl/workbook.xml');
       if (!workbook) { throw new Error('未找到 xl/workbook.xml，可能不是有效 .xlsx 文件'); }

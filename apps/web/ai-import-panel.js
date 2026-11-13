@@ -98,7 +98,7 @@
           closeAiImportPanelV99();
         }
       });
-      bindClick('#ai-import-settings-btn-v99', async () => await openSettingsOrRetry('import_organize'));
+      bindClick('#ai-import-settings-btn-v99', () => openSettingsOrRetry('import_organize'));
       bindClick('#ai-review-import-btn-v991', () => openAiPreviewPanelV991('review'));
       bindClick('#ai-analysis-import-btn-v991', () => openAiPreviewPanelV991('analysis'));
       bindClick('#ai-preview-start-btn-v991', startAiPreviewTaskV991);
@@ -109,7 +109,7 @@
           closeAiPreviewPanelV991();
         }
       });
-      bindClick('#ai-preview-settings-btn-v991', async () => await openSettingsOrRetry(aiPreviewPanelModeV991 === 'analysis' ? 'batch_analysis' : 'batch_review'));
+      bindClick('#ai-preview-settings-btn-v991', () => openSettingsOrRetry(aiPreviewPanelModeV991 === 'analysis' ? 'batch_analysis' : 'batch_review'));
       const importText = $('#import-text');
       if (importText && !importText.dataset.aiSelectionBoundV992) {
         importText.dataset.aiSelectionBoundV992 = '1';

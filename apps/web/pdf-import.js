@@ -96,7 +96,7 @@
     async function inflateBytes(u8) {
       if (!('DecompressionStream' in window)) { throw new Error('当前浏览器缺少 DecompressionStream，无法解压 PDF 压缩文本流'); }
       const tryOne = async (fmt) => new Uint8Array(await new globalThis.Response(new Blob([u8]).stream().pipeThrough(new globalThis.DecompressionStream(fmt))).arrayBuffer());
-      try { return await tryOne('deflate'); } catch { return await tryOne('deflate-raw'); }
+      try { const inflated = await tryOne('deflate'); return inflated; } catch { return tryOne('deflate-raw'); }
     }
     function decodePdfStreamText(s) {
       const out = [];

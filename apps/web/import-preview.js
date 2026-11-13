@@ -87,11 +87,11 @@
     }
     async function readFileToText(file) {
       const lower = file.name.toLowerCase();
-      if (lower.endsWith('.docx')) { return await extractDocxText(file); }
+      if (lower.endsWith('.docx')) { return extractDocxText(file); }
       if (lower.endsWith('.doc')) { throw new Error('暂不支持旧版 .doc，请先在 Word/WPS 中另存为 .docx 后导入'); }
       if (isUnsupportedSpreadsheetFileV49(file)) { throw new Error('暂不支持 .xls / .xlsm，请在 Excel 或 WPS 中另存为 .xlsx 或 .csv 后导入'); }
-      if (lower.endsWith('.pdf')) { return await extractPdfText(file); }
-      return await readText(file);
+      if (lower.endsWith('.pdf')) { return extractPdfText(file); }
+      return readText(file);
     }
 
     function isTableImportFileV49(file) {

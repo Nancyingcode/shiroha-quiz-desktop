@@ -14,7 +14,8 @@ const LOGIN_POLL_MS = 50;
 async function status(page) {
   return page.evaluate(async () => {
     const host = /** @type {{invoke(command:string,args:Record<string,unknown>):Promise<unknown>}} */ (Reflect.get(window, 'ShirohaDesktopHost'));
-    return /** @type {LoginStatus} */ (await host.invoke('codebuddy_control', { request: { kind: 'status' } }));
+    const result = await host.invoke('codebuddy_control', { request: { kind: 'status' } });
+    return /** @type {LoginStatus} */ (result);
   });
 }
 
@@ -22,7 +23,8 @@ async function status(page) {
 async function executionStatus(page) {
   return page.evaluate(async () => {
     const host = /** @type {{invoke(command:string,args:Record<string,unknown>):Promise<unknown>}} */ (Reflect.get(window, 'ShirohaDesktopHost'));
-    return /** @type {HarnessStatus} */ (await host.invoke('harness_control', { request: { kind: 'status' } }));
+    const result = await host.invoke('harness_control', { request: { kind: 'status' } });
+    return /** @type {HarnessStatus} */ (result);
   });
 }
 

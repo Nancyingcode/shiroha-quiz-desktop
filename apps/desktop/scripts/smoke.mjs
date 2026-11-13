@@ -1350,7 +1350,10 @@ async function main() {
     await check('真实 IPC 覆盖快照与恢复', async () => restarted.page.evaluate(async () => {
       const host = (/** @type {NativeTestWindow} */ (window)).ShirohaDesktopHost;
       if (!host) { throw new Error('本地桥接缺失'); }
-      const harnessStatus = async () => /** @type {import('../../web/platform/runtime.d.ts').HarnessStatus} */ (await host.invoke('harness_control', { request: { kind: 'status' } }));
+      const harnessStatus = async () => {
+        const current = await host.invoke('harness_control', { request: { kind: 'status' } });
+        return /** @type {import('../../web/platform/runtime.d.ts').HarnessStatus} */ (current);
+      };
       if ((await harnessStatus()).runtimePath !== 'isolated-fake-codex.exe') { throw new Error('恢复验收只允许隔离假 Harness'); }
       await host.invoke('harness_control', { request: { kind: 'inspect' } });
       await host.invoke('harness_control', { request: { kind: 'login' } });
@@ -1679,7 +1682,8 @@ async function main() {
       const read = () => page.evaluate(async () => {
         const host = (/** @type {NativeTestWindow} */(window)).ShirohaDesktopHost;
         if (!host) { throw new Error('bridge'); }
-        return /** @type {import('../../web/platform/contracts.d.ts').Snapshot} */ (await host.invoke('local_read'));
+        const snapshot = await host.invoke('local_read');
+        return /** @type {import('../../web/platform/contracts.d.ts').Snapshot} */ (snapshot);
       });
       const before = await read();
       await page.reload();await page.locator('body[data-storage-state="ready"]').waitFor();

@@ -71,6 +71,7 @@ const invalidCases = [
   ['no-unused-expressions', 'const value = 1;\nvalue;\nconsole.log(value);\n'],
   ['prefer-promise-reject-errors', 'Promise.reject(0);\n'],
   ['no-promise-executor-return', 'console.log(new Promise((resolve) => setTimeout(resolve, 0)));\n'],
+  ['no-return-await', 'async function read() { return await Promise.resolve(1); }\nconsole.log(read());\n'],
   ['@stylistic/indent', 'if (true) {\n console.log(1);\n}\n'],
   ['@stylistic/quotes', 'console.log("double");\n'],
   ['@stylistic/semi', "console.log('missing')\n"],
