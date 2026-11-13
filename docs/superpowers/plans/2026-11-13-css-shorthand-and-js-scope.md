@@ -132,3 +132,13 @@ Edge 修改前后 92 组计算样式逐项一致：六个断点 × 常规/折叠
 整合分支 `codex/integrate-css-js-scope` 从本地 `main@d603c22` 建立，合入上述依赖链时五份共享文件自动合并，没有文本冲突。已核对主线的 `no-promise-executor-return`、`no-return-await` 与本任务的 `no-shadow`、六项复杂度规则和对应测试同时保留；合并后的配置测试 47/47、CSS 测试 6/6 和平台 lint 已通过。
 
 整合提交为 `da44d97`，其两个父提交分别为 `d603c22` 与 `94d0cdd`。实施记录随后独立提交；完整联合验收针对包含整合结果和本记录的状态重新运行。
+
+### 合并后联合验收
+
+本次联合验收的源码与配置来自提交 `6ecd17c`，该提交包含整合结果及上述实施记录。`npm run typecheck`、全量 `npm run lint` 均通过；`npm test` 的桌面测试 251 项通过、1 项因 Windows 临时目录不区分大小写而按既有规则跳过，共享测试 488/488 通过；`npm run test:web-platform` 为 219/219，通过且无跳过。
+
+同一 Edge 采样脚本重新对照改动前基线，六个响应式断点等共 92 组计算样式完全一致，结果保存在原可视化目录的 `css-merged.json`，SHA-256 为 `d09fb0e462b64e588fdf68dfaa672960934cd57a9b221ad2b031bd72e8c02653`。随后 `npm run build:test` 重新生成桌面资源并成功构建；真实 WebView2 smoke 为 44/44。额外在 WebView2 157.0.4341.46 复核首页、导入页的常规与折叠侧栏，共四组页面状态的计算样式与原始 CSS 一致。
+
+本次日志保存在工作树忽略目录 `apps/desktop/.reports/`，前缀为 `merge-`；原生样式详细结果为 `merge-css-webview2.json`。本次 `native-test` EXE SHA-256 为 `fa3bdbceb038c1388d99696d29ef03ac58be09069c5a0490e8562772877ff53e`，仅用于隔离验收。锁文件、CSS 抑制清单及两份新增复杂度覆盖的业务源码均无变化。
+
+本节仅记录已完成的验收结果，随后作为独立文档提交，并单独运行文档检查；它不改变已验收的源码或配置。整合结果按用户要求合入本地 `main`，不推送。
