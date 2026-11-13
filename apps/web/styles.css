@@ -734,7 +734,7 @@ textarea.text-answer{
   align-items:flex-start;
   justify-content:space-between;
   gap:12px;
-  padding:14px 14px;
+  padding:14px;
   border-radius:16px;
   background:#fff;
   border:1px solid #d8e2f2;

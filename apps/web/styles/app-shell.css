@@ -172,7 +172,7 @@
   }
 
   .main{
-    padding:18px 32px 32px 32px !important;
+    padding:18px 32px 32px !important;
   }
 
   body.side-collapsed .main{
@@ -461,7 +461,7 @@ body.exam-focus #exam-card{
     font-size:11px !important;
   }
   .nav{
-    padding:12px 12px !important;
+    padding:12px !important;
     border-radius:13px !important;
     font-size:14px !important;
   }
@@ -477,7 +477,7 @@ body.exam-focus #exam-card{
     pointer-events:none !important;
   }
   body.side-collapsed .main{
-    padding:18px 32px 32px 32px !important;
+    padding:18px 32px 32px !important;
   }
   body.side-collapsed .main > .topbar,
   body.side-collapsed .main > .view.active{
@@ -602,7 +602,7 @@ body.exam-focus #exam-card{
     line-height:1.25 !important;
   }
   .nav{
-    padding:11px 11px !important;
+    padding:11px !important;
     margin:3px 0 !important;
     font-size:13.5px !important;
     border-radius:13px !important;
@@ -656,7 +656,7 @@ body.exam-focus #exam-card{
     --shiroha-content-safe-gap:416px;
   }
   .brand span{display:none !important;}
-  .nav{font-size:13px !important;padding:10px 10px !important;}
+  .nav{font-size:13px !important;padding:10px !important;}
 }
 /* SHIROHA_WEB_V28_5_CENTER_LOCK_END */
 

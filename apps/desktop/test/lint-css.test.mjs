@@ -121,6 +121,43 @@ test('CSS lint resolves shared custom properties across split stylesheets', asyn
   assert(diagnostics.includes('theme-probe.css'), diagnostics);
 });
 
+test('CSS lint rejects redundant shorthand values without changing source files', async (t) => {
+  const { temporary } = await repositoryFixture(t);
+  const desktop = path.resolve(import.meta.dirname, '..');
+  const project = path.join(temporary, 'apps/desktop');
+  for (const dir of ['frontend', '../web/styles/components']) {
+    await mkdir(path.join(project, dir), { recursive: true });
+  }
+  for (const file of ['../web/styles.css', '../web/styles/responsive-artwork.css', 'frontend/desktop.css', 'package.json', 'stylelint.config.mjs', 'stylelint-suppressions.json']) {
+    await copyFile(path.join(desktop, file), path.join(project, file));
+  }
+  const runLint = () => spawnSync('npm run --silent lint:css', {
+    cwd: project, shell: true, encoding: 'utf8', windowsHide: true,
+  });
+  const fragment = path.join(project, '../web/styles/components/shorthand-probe.css');
+  const directional = '.directional { padding: 10px 12px; gap: 8px 12px; }\n';
+  await writeFile(fragment, directional);
+  const accepted = runLint();
+  assert.equal(accepted.status, 0, accepted.stdout + accepted.stderr);
+  assert.equal(await readFile(fragment, 'utf8'), directional);
+
+  for (const declaration of [
+    'padding: 10px 10px',
+    'margin: 0 1px 2px 1px',
+    'gap: 8px 8px !important',
+    'padding: 10px /* keep comment */ 10px',
+  ]) {
+    const source = `.redundant { ${declaration}; }\n`;
+    await writeFile(fragment, source);
+    const rejected = runLint();
+    const diagnostics = rejected.stdout + rejected.stderr;
+    assert.equal(rejected.status, 2, `${declaration}\n${diagnostics}`);
+    assert.match(diagnostics, /shorthand-property-no-redundant-values/);
+    assert(diagnostics.includes('shorthand-probe.css'), diagnostics);
+    assert.equal(await readFile(fragment, 'utf8'), source);
+  }
+});
+
 test('CSS lint rejects unknown animation names in the splash card', async (t) => {
   const { temporary } = await repositoryFixture(t);
   const desktop = path.resolve(import.meta.dirname, '..');

@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 const { chromium } = require('../../apps/desktop/node_modules/playwright-core');
 const { startServer, WEB_ROOT } = require('../web-ai-practice/harness.cjs');
 const { webState, androidBackup, PNG_BASE64, IMAGE } = require('./fixtures/dataset.cjs');
+const { sampleComputedStyles } = require('./css-computed-style.cjs');
 const { loadWeb, plain } = require('./web-source.cjs');
 const { createWebSource } = require('./source-tools.cjs');
 const { pathToFileURL } = require('node:url');
@@ -200,6 +201,82 @@ test('子路径入口加载全部共享样式且关键控件样式生效', async
   }
   const field = await page.locator('#import-bank-name').evaluate((element) => globalThis.getComputedStyle(element).borderRadius);
   assert.equal(field, '14px');
+});
+
+test('导航、首页与练习 AI 面板的响应式间距保持一致', async (t) => {
+  const page = await pageFor(t, JSON.stringify(webState()));
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.evaluate(() => {
+    const toast = globalThis.document.createElement('div');
+    toast.className = 'toast-item';
+    toast.textContent = '样式测试';
+    globalThis.document.querySelector('#app-toast').appendChild(toast);
+  });
+  const selectors = {
+    main: '.main',
+    navigation: '.side .nav[data-view="dashboard"]',
+    side: '.side',
+    kicker: '#dashboard .dashboard-home-main .kicker',
+    description: '#dashboard .dashboard-home-desc',
+    statistic: '#dashboard .dashboard-stat-grid > div',
+    toast: '#app-toast .toast-item',
+  };
+  const all = (value) => [value, value, value, value];
+  const layouts = [
+    { width: 720, nav: ['6px', '2px', '6px', '2px'], main: ['16px', '18px', '174px', '18px'], gap: ['6px', '8px'] },
+    { width: 721, nav: all('12px'), main: ['18px', '32px', '32px', '32px'], gap: ['normal', 'normal'] },
+    { width: 1099, nav: all('12px'), main: ['18px', '32px', '32px', '32px'], gap: ['normal', 'normal'] },
+    { width: 1100, nav: all('10px'), main: ['18px', '0px', '34px', '0px'], gap: ['normal', 'normal'] },
+    { width: 1280, nav: all('10px'), main: ['18px', '0px', '34px', '0px'], gap: ['normal', 'normal'] },
+    { width: 1281, nav: all('11px'), main: ['18px', '0px', '34px', '0px'], gap: ['normal', 'normal'] },
+  ];
+  for (const { width, nav, main, gap } of layouts) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const collapsed of [false, true]) {
+      await page.evaluate((value) => globalThis.document.body.classList.toggle('side-collapsed', value), collapsed);
+      const styles = await page.evaluate(sampleComputedStyles, selectors);
+      const state = `${width}px ${collapsed ? '折叠' : '常规'}`;
+      assert.deepEqual(styles.navigation.padding, nav, `${state} 导航间距`);
+      assert.deepEqual(styles.main.padding, main, `${state} 主体间距`);
+      assert.deepEqual(styles.side.gap, gap, `${state} 导航行列间距`);
+      assert.deepEqual(styles.kicker.margin, ['0px', '0px', '2px', '0px'], `${state} 首页标签外边距`);
+      assert.deepEqual(styles.description.margin, ['0px', '0px', '4px', '0px'], `${state} 首页说明外边距`);
+      assert.deepEqual(styles.statistic.padding, all('12px'), `${state} 统计卡片间距`);
+      assert.deepEqual(styles.toast.padding, all('14px'), `${state} 通知卡片间距`);
+    }
+  }
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.evaluate(() => {
+    globalThis.document.body.classList.remove('side-collapsed');
+    globalThis.document.querySelector('#app-toast').replaceChildren();
+  });
+  await page.locator('.nav[data-view="practice"]').click();
+  await page.locator('#start-practice-btn').click();
+  await page.locator('[data-ai-single-open-v613]').click();
+  await page.locator('.practice-ai-panel-v613').waitFor({ state: 'visible' });
+  for (const [width, expected] of [[720, all('13px')], [721, ['15px', '16px', '15px', '16px']]]) {
+    await page.setViewportSize({ width, height: 900 });
+    const styles = await page.evaluate(sampleComputedStyles, { panel: '.practice-ai-panel-v613' });
+    assert.deepEqual(styles.panel.padding, expected, `${width}px 练习 AI 面板间距`);
+  }
+});
+
+test('兼容移动导航选择器的间距在断点两侧保持一致', async (t) => {
+  const context = await browser.newContext({ viewport: { width: 720, height: 900 } });
+  t.after(() => context.close());
+  const page = await context.newPage();
+  await page.setContent('<div class="mobile-bottom-nav"></div><div class="bottom-nav"></div><nav class="mobile-nav"></nav>');
+  await page.addStyleTag({ path: path.join(WEB_ROOT, 'styles/responsive-artwork.css') });
+  const selectors = { mobileBottom: '.mobile-bottom-nav', bottom: '.bottom-nav', nav: 'nav.mobile-nav' };
+  for (const width of [720, 721]) {
+    await page.setViewportSize({ width, height: 900 });
+    const styles = await page.evaluate(sampleComputedStyles, selectors);
+    for (const [name, style] of Object.entries(styles)) {
+      assert.deepEqual(style.padding, Array(4).fill(width === 720 ? '14px' : '0px'), `${width}px ${name} 内边距`);
+      assert.deepEqual(style.gap, Array(2).fill(width === 720 ? '8px' : 'normal'), `${width}px ${name} 行列间距`);
+    }
+  }
 });
 
 test('AI 预览控制与题号范围在窄屏内完整显示', async (t) => {
