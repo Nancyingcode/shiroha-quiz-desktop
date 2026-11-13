@@ -125,7 +125,7 @@ test('CSS lint rejects redundant shorthand values without changing source files'
   const { temporary } = await repositoryFixture(t);
   const desktop = path.resolve(import.meta.dirname, '..');
   const project = path.join(temporary, 'apps/desktop');
-  for (const dir of ['frontend', '../web/styles/components']) {
+  for (const dir of ['frontend/nested', '../web/styles/components']) {
     await mkdir(path.join(project, dir), { recursive: true });
   }
   for (const file of ['../web/styles.css', '../web/styles/responsive-artwork.css', 'frontend/desktop.css', 'package.json', 'stylelint.config.mjs', 'stylelint-suppressions.json']) {
@@ -155,6 +155,20 @@ test('CSS lint rejects redundant shorthand values without changing source files'
     assert.match(diagnostics, /shorthand-property-no-redundant-values/);
     assert(diagnostics.includes('shorthand-probe.css'), diagnostics);
     assert.equal(await readFile(fragment, 'utf8'), source);
+  }
+
+  await writeFile(fragment, directional);
+  for (const file of ['../web/shorthand-root.CSS', '../web/styles/components/shorthand-nested.CsS', 'frontend/nested/shorthand-desktop.cSS']) {
+    const target = path.join(project, file);
+    const source = '.redundant { padding: 10px 10px; }\n';
+    await writeFile(target, source);
+    const rejected = runLint();
+    const diagnostics = rejected.stdout + rejected.stderr;
+    assert.equal(rejected.status, 2, diagnostics);
+    assert(diagnostics.includes(path.basename(file)), diagnostics);
+    assert.match(diagnostics, /shorthand-property-no-redundant-values/);
+    assert.equal(await readFile(target, 'utf8'), source);
+    await unlink(target);
   }
 });
 

@@ -109,6 +109,7 @@ if (complete) {
   };
   const scoped = [
     'apps/desktop/scripts', 'apps/desktop/test', 'apps/web/platform', 'apps/web/training.js',
+    'apps/web/ai-import-panel.js', 'apps/web/study-sessions.js',
     'apps/desktop/frontend', 'test/dual-platform',
   ];
   // 避免从软链接或 junction 组成的祖先进入检查范围。
@@ -169,6 +170,8 @@ if (complete) {
     ]);
     const platformFiles = await discover(root, path.join(desktop, 'eslint.platform.config.mjs'), [
       'apps/web/platform/**/*.js', 'apps/web/training.js', 'test/dual-platform/**/*.cjs',
+      ...globSync('apps/web/ai-import-panel.js', { cwd: root }),
+      ...globSync('apps/web/study-sessions.js', { cwd: root }),
       ...globSync('apps/desktop/frontend/**/*.js', { cwd: root }),
     ]);
     const existing = new Set(candidates.map((file) => pathKey(path.join(root, file))));

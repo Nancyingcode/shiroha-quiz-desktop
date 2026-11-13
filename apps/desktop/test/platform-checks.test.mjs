@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { copyFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, readFile, rm, symlink, unlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -36,6 +36,12 @@ test('platform lint accepts a CSS-only desktop frontend and still checks nested 
     await copyFile(path.join(desktop, name), path.join(temporary, 'apps/desktop', name));
   }
   await copyFile(path.join(root, 'apps/web/training.js'), path.join(temporary, 'apps/web/training.js'));
+  const panel = path.join(temporary, 'apps/web/ai-import-panel.js');
+  const sessions = path.join(temporary, 'apps/web/study-sessions.js');
+  const browserStorage = path.join(temporary, 'apps/web/platform/browser.js');
+  await writeFile(panel, "console.log('valid');\n");
+  await writeFile(sessions, "console.log('valid');\n");
+  await writeFile(browserStorage, "console.log('valid');\n");
   await writeFile(path.join(temporary, 'apps/web/platform/probe.js'), "window.document.title = '测试';\n");
   await writeFile(path.join(temporary, 'test/dual-platform/probe.cjs'), "console.log('fixture');\n");
   await writeFile(path.join(temporary, 'apps/desktop/frontend/desktop.css'), 'body { color: #223344; }');
@@ -54,6 +60,68 @@ test('platform lint accepts a CSS-only desktop frontend and still checks nested 
   const valid = run();
   assert.ifError(valid.error);
   assert.equal(valid.status, 0, valid.stdout + valid.stderr);
+
+  await t.test('checks the AI import panel shadowing pilot without rewriting source', async () => {
+    const shadowed = [
+      "const value = 'outer';",
+      'function printValue() {',
+      "  const value = 'inner';",
+      '  console.log(value);',
+      '}',
+      'printValue();',
+      'console.log(value);',
+      '',
+    ].join('\n');
+    await writeFile(panel, shadowed);
+    const rejected = run();
+    assert.ifError(rejected.error);
+    assert.equal(rejected.status, 1, rejected.stdout + rejected.stderr);
+    assert.match(rejected.stdout, /ai-import-panel\.js/);
+    assert.match(rejected.stdout, /no-shadow/);
+    assert.equal(await readFile(panel, 'utf8'), shadowed);
+    const renamed = shadowed.replace("const value = 'inner';", "const innerValue = 'inner';")
+      .replace('  console.log(value);', '  console.log(innerValue);');
+    await writeFile(panel, renamed);
+    const accepted = run();
+    assert.ifError(accepted.error);
+    assert.equal(accepted.status, 0, accepted.stdout + accepted.stderr);
+    assert.equal(await readFile(panel, 'utf8'), renamed);
+  });
+  await t.test('checks both state modules against the complexity pilot', async () => {
+    const branchy = [
+      'function branchy(value) {',
+      ...Array.from({ length: 16 }, (_, index) => `  if (value === ${index}) {\n    return ${index};\n  }`),
+      '  return -1;',
+      '}',
+      'console.log(branchy(1));',
+      '',
+    ].join('\n');
+    for (const file of [sessions, browserStorage]) {
+      await writeFile(file, branchy);
+      const rejected = run();
+      assert.ifError(rejected.error);
+      assert.equal(rejected.status, 1, rejected.stdout + rejected.stderr);
+      assert(rejected.stdout.includes(path.basename(file)), rejected.stdout);
+      assert.match(rejected.stdout, /complexity/);
+      assert.equal(await readFile(file, 'utf8'), branchy);
+      await writeFile(file, "console.log('valid');\n");
+    }
+    const accepted = run();
+    assert.ifError(accepted.error);
+    assert.equal(accepted.status, 0, accepted.stdout + accepted.stderr);
+  });
+  await t.test('rejects a linked AI import panel before reading it', async () => {
+    const linked = path.join(temporary, 'linked-target');
+    await mkdir(linked);
+    await writeFile(path.join(linked, 'probe.js'), "console.log('fixture');\n");
+    await unlink(panel);
+    await symlink(linked, panel, 'junction');
+    const rejected = run();
+    assert.ifError(rejected.error);
+    assert.equal(rejected.status, 1, rejected.stdout + rejected.stderr);
+    assert.match(rejected.stderr, /无法检查链接/);
+    assert.match(rejected.stderr, /ai-import-panel\.js/);
+  });
 });
 
 test('browser typecheck rejects incorrect JSDoc and unavailable Node globals', async (t) => {

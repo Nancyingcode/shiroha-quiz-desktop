@@ -149,6 +149,49 @@ test('empty changes succeed and changed lint errors fail without scanning unrela
   assert.equal(await lintChangedFiles(f.temporary, [file]), false);
 });
 
+test('changed-file lint enforces the AI import shadowing pilot without affecting its sibling', async (t) => {
+  const f = await fixture(t);
+  const panel = 'apps/web/ai-import-panel.js';
+  const sibling = 'apps/web/ai-import-sessions.js';
+  const shadowed = [
+    "const value = 'outer';",
+    'function printValue() {',
+    "  const value = 'inner';",
+    '  console.log(value);',
+    '}',
+    'printValue();',
+    'console.log(value);',
+    '',
+  ].join('\n');
+  for (const file of [panel, sibling]) { await writeFile(path.join(f.temporary, file), shadowed); }
+  git(f, ['add', '--', panel, sibling]);
+  assert.equal(await lintChangedFiles(f.temporary, [panel]), false);
+  assert.equal(await lintChangedFiles(f.temporary, [sibling]), true);
+  const renamed = shadowed.replace("const value = 'inner';", "const innerValue = 'inner';")
+    .replace('  console.log(value);', '  console.log(innerValue);');
+  await writeFile(path.join(f.temporary, panel), renamed);
+  assert.equal(await lintChangedFiles(f.temporary, [panel]), true);
+});
+
+test('changed-file lint enforces the state complexity pilot without affecting other modules', async (t) => {
+  const f = await fixture(t);
+  const pilotFiles = ['apps/web/study-sessions.js', 'apps/web/platform/browser.js'];
+  const outside = 'apps/web/bank-page.js';
+  const branchy = [
+    'function branchy(value) {',
+    ...Array.from({ length: 16 }, (_, index) => `  if (value === ${index}) {\n    return ${index};\n  }`),
+    '  return -1;',
+    '}',
+    'console.log(branchy(1));',
+    '',
+  ].join('\n');
+  await mkdir(path.join(f.temporary, 'apps/web/platform'), { recursive: true });
+  for (const file of [...pilotFiles, outside]) { await writeFile(path.join(f.temporary, file), branchy); }
+  git(f, ['add', '--', ...pilotFiles, outside]);
+  for (const file of pilotFiles) { assert.equal(await lintChangedFiles(f.temporary, [file]), false, file); }
+  assert.equal(await lintChangedFiles(f.temporary, [outside]), true);
+});
+
 test('a JavaScript symlink checked out as a regular file cannot bypass CI', async (t) => {
   const f = await fixture(t);
   git(f, ['config', 'core.symlinks', 'false']);

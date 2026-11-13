@@ -49,6 +49,88 @@ test('full lint orchestrates one complete JavaScript pass and the independent no
     'lint:css', 'lint:docs', 'lint:fixtures', 'lint:incremental',
   ]);
 });
+
+test('complete lint retains both Web pilots when Git ignores their paths', async (t) => {
+  const f = await repositoryFixture(t);
+  const desktop = path.join(f.temporary, 'apps/desktop');
+  await copyFile(new URL('../eslint.config.mjs', import.meta.url), path.join(desktop, 'eslint.config.mjs'));
+  for (const directory of ['apps/desktop/test', 'apps/web/platform', 'test/dual-platform']) {
+    await mkdir(path.join(f.temporary, directory), { recursive: true });
+  }
+  await writeFile(path.join(desktop, 'test/base.mjs'), 'export {};\n');
+  await writeFile(path.join(f.temporary, 'apps/web/platform/base.js'), "console.log('valid');\n");
+  await writeFile(path.join(f.temporary, 'apps/web/training.js'), "console.log('valid');\n");
+  await writeFile(path.join(f.temporary, 'test/dual-platform/base.cjs'), "console.log('valid');\n");
+  await writeFile(path.join(f.temporary, '.gitignore'), 'apps/web/ai-import-panel.js\napps/web/study-sessions.js\n');
+  const panel = path.join(f.temporary, 'apps/web/ai-import-panel.js');
+  const sessions = path.join(f.temporary, 'apps/web/study-sessions.js');
+  const shadowed = [
+    "const value = 'outer';",
+    'function printValue() {',
+    "  const value = 'inner';",
+    '  console.log(value);',
+    '}',
+    'printValue();',
+    'console.log(value);',
+    '',
+  ].join('\n');
+  const branchy = [
+    'function branchy(value) {',
+    ...Array.from({ length: 16 }, (_, index) => `  if (value === ${index}) {\n    return ${index};\n  }`),
+    '  return -1;',
+    '}',
+    'console.log(branchy(1));',
+    '',
+  ].join('\n');
+  await writeFile(panel, shadowed);
+  await writeFile(sessions, branchy);
+  const rejected = f.run('lint-incremental.mjs', ['--complete']);
+  assert.equal(rejected.status, 1, rejected.stderr + rejected.stdout);
+  assert.match(rejected.stdout, /ai-import-panel\.js/);
+  assert.match(rejected.stdout, /no-shadow/);
+  assert.match(rejected.stdout, /study-sessions\.js/);
+  assert.match(rejected.stdout, /complexity/);
+  assert.equal(await readFile(panel, 'utf8'), shadowed);
+  assert.equal(await readFile(sessions, 'utf8'), branchy);
+  const renamed = shadowed.replace("const value = 'inner';", "const innerValue = 'inner';")
+    .replace('  console.log(value);', '  console.log(innerValue);');
+  await writeFile(panel, renamed);
+  await writeFile(sessions, "console.log('valid');\n");
+  const accepted = f.run('lint-incremental.mjs', ['--complete']);
+  assert.equal(accepted.status, 0, accepted.stderr + accepted.stdout);
+  assert.equal(await readFile(panel, 'utf8'), renamed);
+});
+
+test('complete lint rejects a linked AI import pilot before discovery', async (t) => {
+  const f = await repositoryFixture(t);
+  const desktop = path.join(f.temporary, 'apps/desktop');
+  await copyFile(new URL('../eslint.config.mjs', import.meta.url), path.join(desktop, 'eslint.config.mjs'));
+  const linked = path.join(f.temporary, 'linked-target');
+  const panel = path.join(f.temporary, 'apps/web/ai-import-panel.js');
+  await mkdir(linked);
+  await writeFile(path.join(linked, 'probe.js'), "console.log('fixture');\n");
+  await symlink(linked, panel, 'junction');
+  const result = f.run('lint-incremental.mjs', ['--complete']);
+  assert.equal(result.status, 1, result.stderr + result.stdout);
+  assert.match(result.stderr, /无法检查链接/);
+  assert.match(result.stderr, /ai-import-panel\.js/);
+});
+
+test('complete lint rejects linked study sessions before discovery', async (t) => {
+  const f = await repositoryFixture(t);
+  const desktop = path.join(f.temporary, 'apps/desktop');
+  await copyFile(new URL('../eslint.config.mjs', import.meta.url), path.join(desktop, 'eslint.config.mjs'));
+  const linked = path.join(f.temporary, 'linked-target');
+  const sessions = path.join(f.temporary, 'apps/web/study-sessions.js');
+  await mkdir(linked);
+  await writeFile(path.join(linked, 'probe.js'), "console.log('fixture');\n");
+  await symlink(linked, sessions, 'junction');
+  const result = f.run('lint-incremental.mjs', ['--complete']);
+  assert.equal(result.status, 1, result.stderr + result.stdout);
+  assert.match(result.stderr, /无法检查链接/);
+  assert.match(result.stderr, /study-sessions\.js/);
+});
+
 test('complete lint preserves both legacy scopes for Git-ignored files and desktop-specific configuration', async (t) => {
   const f = await repositoryFixture(t);
   const desktop = path.join(f.temporary, 'apps/desktop');
