@@ -316,6 +316,17 @@ test('workflow preserves the online build before overwrite and gates writes behi
   assert.notEqual(withoutReleaseUpload, checks);
   assert.throws(() => assertReleaseCollectionOrder(withoutReleaseUpload), /Missing verified release upload step/);
   const buildStep = '      - run: npm run build -- --target x86_64-pc-windows-msvc\n';
+  const earlierLogUpload = [
+    '      - name: Upload test output when checks fail',
+    '        if: failure()',
+    '        uses: actions/upload-artifact@v4',
+    '        with:',
+    '          name: windows-test-log-${{ github.run_id }}-${{ github.run_attempt }}',
+    '',
+  ].join('\n');
+  const withEarlierLogUpload = checks.replace(buildStep, `${earlierLogUpload}${buildStep}`);
+  assert.notEqual(withEarlierLogUpload, checks);
+  assert.equal(assertReleaseCollectionOrder(withEarlierLogUpload), releaseUpload);
   const earlyReleaseUpload = withoutReleaseUpload.replace(buildStep, `${releaseBlock}${buildStep}`);
   assert.throws(() => assertReleaseCollectionOrder(earlyReleaseUpload), /Missing or misplaced build\/collection step/);
   assert.match(checks, /collect_release:[\s\S]*?default: false/);
