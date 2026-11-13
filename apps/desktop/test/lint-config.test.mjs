@@ -321,6 +321,29 @@ test('object and destructuring layout rules apply to every handwritten file', as
   assert(outside.messages.some((message) => message.ruleId === '@stylistic/object-property-newline'));
 });
 
+test('no-shadow pilot rejects local shadowing only in the AI import panel', async () => {
+  const lint = linter();
+  const filePath = 'apps/web/ai-import-panel.js';
+  const shadowed = [
+    "const value = 'outer';",
+    'function printValue() {',
+    "  const value = 'inner';",
+    '  console.log(value);',
+    '}',
+    'printValue();',
+    'console.log(value);',
+    '',
+  ].join('\n');
+  const renamed = shadowed.replace("const value = 'inner';", "const innerValue = 'inner';")
+    .replace('  console.log(value);', '  console.log(innerValue);');
+  const [invalid] = await lint.lintText(shadowed, { filePath });
+  assert.equal(invalid.messages.filter((message) => message.ruleId === 'no-shadow').length, 1);
+  const [valid] = await lint.lintText(renamed, { filePath });
+  assert.equal(valid.errorCount + valid.warningCount, 0, JSON.stringify(valid.messages));
+  const [outside] = await lint.lintText(shadowed, { filePath: 'apps/web/ai-import-sessions.js' });
+  assert.equal(outside.errorCount + outside.warningCount, 0, JSON.stringify(outside.messages));
+});
+
 test('complexity ratchet applies to zero-baseline modules only', async () => {
   const lint = linter();
   const pilotFiles = [

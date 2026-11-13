@@ -210,6 +210,10 @@ export function createConfig({ desktop = false, debt = false, semanticOnly = fal
       rules: { '@stylistic/max-statements-per-line': ['error', { max: 1 }] },
     },
     {
+      files: [relative('apps/web/ai-import-panel.js')],
+      rules: { 'no-shadow': 'error' },
+    },
+    {
       // 复杂度棘轮只覆盖基线为零的模块；已有超标的模块随业务拆分逐个纳入，避免一次性改造历史函数。
       files: [
         'apps/web/quiz-core.js', 'apps/web/platform/index.js', 'apps/web/platform/save-queue.js',

@@ -1431,7 +1431,7 @@ test('启动检查完成后已打开的错题和训练复盘原地启用 AI', as
       execute: async () => { globalThis.__modelCalls += 1; throw new Error('不应自动请求模型'); },
     };
     globalThis.__finishReadiness = () => { execution.ready = true; delete execution.readiness; execution.reason = ''; notifyReadiness(); };
-    globalThis.__failReadiness = () => { execution.ready = false; execution.readiness = 'error'; execution.reason = '隔离检查失败'; notifyReadiness(); };
+    globalThis.__failReadiness = (retryable = true) => { execution.ready = false; execution.readiness = 'error'; execution.readinessRetryable = retryable; execution.reason = '隔离检查失败'; notifyReadiness(); };
   `;
   const page = await pageFor(t, JSON.stringify(initial), injection);
   await page.locator('body[data-storage-state="ready"]').waitFor();
@@ -1462,6 +1462,24 @@ test('启动检查完成后已打开的错题和训练复盘原地启用 AI', as
   assert.equal(await page.locator('#ai-import-privacy-v99').getAttribute('aria-busy'), 'false');
   assert.equal(await page.evaluate(() => globalThis.__readinessRetries), 1);
   assert.equal(await page.evaluate(() => globalThis.__readinessChecks), 1);
+  assert.equal(await page.evaluate(() => globalThis.__modelCalls), 0);
+  await seedImportQuestions(page, 1);
+  await page.evaluate(() => globalThis.__failReadiness());
+  await page.locator('#ai-analysis-import-btn-v991').click();
+  const previewSettings = page.locator('#ai-preview-settings-btn-v991');
+  assert.equal(await previewSettings.innerText(), '重试检查');
+  await previewSettings.click();
+  assert.equal(await page.locator('#ai-preview-start-btn-v991').isEnabled(), true);
+  assert.equal(await page.evaluate(() => globalThis.__readinessRetries), 2);
+  assert.equal(await page.evaluate(() => globalThis.__modelCalls), 0);
+  await page.evaluate(() => globalThis.__failReadiness(false));
+  for (const settingsButton of [previewSettings, retry]) {
+    assert.equal(await settingsButton.innerText(), '前往 AI 设置');
+    await settingsButton.click();
+    await page.locator('#ai-settings').waitFor({ state: 'visible' });
+    await page.locator('.nav[data-view="import"]').click();
+  }
+  assert.equal(await page.evaluate(() => globalThis.__readinessRetries), 2);
   assert.equal(await page.evaluate(() => globalThis.__modelCalls), 0);
 });
 
@@ -2485,8 +2503,19 @@ test('AI 面板批量输入、预计次数与双任务互斥', async (t) => {
   for (const [button, defaultValue] of [['#ai-review-import-btn-v991', '20'], ['#ai-analysis-import-btn-v991', '10']]) {
     await page.locator(button).click();
     const batch = page.locator('#ai-preview-batch-v991');
+    const scope = page.locator('#ai-preview-scope-v991');
     assert.equal(await batch.inputValue(), defaultValue);
-    await page.locator('#ai-preview-scope-v991').selectOption('all');
+    const expectedOptions = ['自定义题号范围', '已选择题目', '当前筛选结果', '全部题目'];
+    if (button === '#ai-review-import-btn-v991') { expectedOptions.splice(1, 0, '仅异常题'); }
+    assert.deepEqual(await scope.locator('option').allTextContents(), expectedOptions);
+    await scope.selectOption('all');
+    assert.equal(await page.locator('#ai-preview-range-count-v992').innerText(), '31 题');
+    await scope.selectOption('range');
+    await page.locator('#ai-preview-range-start-v992').fill('3');
+    await page.locator('#ai-preview-range-end-v992').fill('5');
+    assert.equal(await page.locator('#ai-preview-count-v991').innerText(), '3 题');
+    await scope.selectOption('all');
+    assert.equal(await page.locator('#ai-preview-count-v991').innerText(), '31 题');
     for (const value of ['', '0', '-1', '1.5', '31']) {
       await batch.fill(value);
       assert.equal(await batch.inputValue(), value);

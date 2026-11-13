@@ -280,11 +280,11 @@
       const provider = $('#ai-import-provider-v99');
       const model = $('#ai-import-model-v99');
       const size = $('#ai-import-size-v99');
-      const preview = $('#ai-import-preview-count-v99');
+      const previewCountElement = $('#ai-import-preview-count-v99');
       const badge = $('#ai-import-badge-v99');
       const privacy = $('#ai-import-privacy-v99');
       const start = $('#ai-import-start-btn-v99');
-      const settings = $('#ai-import-settings-btn-v99');
+      const settingsButton = $('#ai-import-settings-btn-v99');
       const hint = $('#ai-import-range-hint-v992');
       const showsProvider = configured || isHarness;
       if (provider) {
@@ -296,8 +296,8 @@
       if (size) {
         size.textContent = `${range.text.length.toLocaleString('zh-CN')} 字`;
       }
-      if (preview) {
-        preview.textContent = `${importDraft.questions.length} 题`;
+      if (previewCountElement) {
+        previewCountElement.textContent = `${importDraft.questions.length} 题`;
       }
       if (badge) {
         badge.textContent = showsProvider ? aiExecutionLabelV99(config) : '未配置';
@@ -310,9 +310,9 @@
         start.disabled = checking || importOrPreviewBusy() || !range.text || range.text.length > AI_IMPORT_MAX_CHARS_V99;
         start.textContent = aiImportSessions.importRequest.running ? '正在整理……' : '开始整理';
       }
-      if (settings) {
-        settings.classList.toggle('ai-hidden-v99', configured || checking);
-        settings.textContent = availability.retryable ? '重试检查' : '前往 AI 设置';
+      if (settingsButton) {
+        settingsButton.classList.toggle('ai-hidden-v99', configured || checking);
+        settingsButton.textContent = availability.retryable ? '重试检查' : '前往 AI 设置';
       }
       if (privacy) {
         privacy.setAttribute?.('role', 'status'); privacy.setAttribute?.('aria-live', 'polite'); privacy.setAttribute?.('aria-busy', String(checking));
@@ -470,7 +470,7 @@
       const service = $('#ai-preview-service-v991');
       const model = $('#ai-preview-model-v991');
       const start = $('#ai-preview-start-btn-v991');
-      const settings = $('#ai-preview-settings-btn-v991');
+      const settingsButton = $('#ai-preview-settings-btn-v991');
       if (title) {
         title.textContent = aiPreviewModeLabelV991(mode);
       }
@@ -485,7 +485,7 @@
         if (needsOptions) {
           const options = aiPreviewScopeOptionsV991(mode);
           const wanted = resetScope ? 'range' : (scope.value || '');
-          scope.innerHTML = options.map(([value, label]) => `<option value="${value}">${label}</option>`).join('');
+          scope.innerHTML = options.map(([value, optionLabel]) => `<option value="${value}">${optionLabel}</option>`).join('');
           scope.value = options.some(([value]) => value === wanted) ? wanted : options[0][0];
           aiPreviewScopeNodeV991 = scope;aiPreviewScopeModeV991 = mode;
         } else if (resetScope || !scope.value) {
@@ -533,7 +533,7 @@
       }
       const batchSize = globalThis.ShirohaAiImportSessions.previewBatchSize(batch?.value);
       const details = collectAiPreviewTargetDetailsV992(mode, activeScope, condition?.value || 'missing');
-      const requests = batchSize === null ? null : Math.ceil(details.indexes.length / batchSize);
+      const estimatedRequestCount = batchSize === null ? null : Math.ceil(details.indexes.length / batchSize);
       if (rangeCount) {
         rangeCount.textContent = `${details.baseIndexes.length} 题`;
       }
@@ -541,7 +541,7 @@
         count.textContent = `${details.indexes.length} 题`;
       }
       if (requestCount) {
-        requestCount.textContent = requests === null ? '—' : `${requests} 次`;
+        requestCount.textContent = estimatedRequestCount === null ? '—' : `${estimatedRequestCount} 次`;
       }
       if (service) {
         service.textContent = configured || isHarness ? aiExecutionLabelV99(config) : '未配置';
@@ -549,9 +549,9 @@
       if (model) {
         model.textContent = config.model || '—';
       }
-      if (settings) {
-        settings.classList.toggle('ai-hidden-v99', configured || checking);
-        settings.textContent = availability.retryable ? '重试检查' : '前往 AI 设置';
+      if (settingsButton) {
+        settingsButton.classList.toggle('ai-hidden-v99', configured || checking);
+        settingsButton.textContent = availability.retryable ? '重试检查' : '前往 AI 设置';
       }
       if (start) {
         start.classList.toggle('ai-hidden-v99', !configured && !checking);
@@ -580,7 +580,7 @@
           status.textContent = `实际处理 ${details.indexes.length} 道题，超过单次任务 ${AI_PREVIEW_MAX_ITEMS_V991} 道上限。请缩小题号范围或改用勾选后处理，程序不会静默截断。`;
           status.className = 'notice warn';
         } else {
-          status.textContent = `范围内 ${details.baseIndexes.length} 道，实际处理 ${details.indexes.length} 道；按每批 ${batchSize} 道提交，预计请求 ${requests} 次。AI 结果只作为建议。${isHarness ? ` ${aiHarnessPrivacyV99(config, '所选题目的文字与参考答案')}` : ''}`;
+          status.textContent = `范围内 ${details.baseIndexes.length} 道，实际处理 ${details.indexes.length} 道；按每批 ${batchSize} 道提交，预计请求 ${estimatedRequestCount} 次。AI 结果只作为建议。${isHarness ? ` ${aiHarnessPrivacyV99(config, '所选题目的文字与参考答案')}` : ''}`;
           status.className = 'notice';
         }
       }
