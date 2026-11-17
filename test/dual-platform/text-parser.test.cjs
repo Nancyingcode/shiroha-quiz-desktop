@@ -21,7 +21,10 @@ test('诊断构建失败时保留新报告和上一次诊断', () => {
   const { api, context } = loadWeb({
     parserSourceTransform(source) {
       assert.equal(source.split(marker).length, 2);
-      return source.replace(marker, `if (globalThis.__failParserDiagnostics) throw new Error('diagnostic failure');\n${marker}`);
+      return source.replace(
+        marker,
+        `if (globalThis.__failParserDiagnostics) throw new Error('diagnostic failure');\n${marker}`,
+      );
     },
   });
   api.parseTextQuestions('1. 首题？\nA. 甲\nB. 乙\n答案：A');
@@ -51,7 +54,10 @@ test('导入元数据经对象展开和归一化保留唯一 Symbol 与属性描
     assert.equal(descriptor.configurable, true);
   }
   assert.deepEqual(plain(api.getSourceMetaV58910(normalized)), { sourceStart: 3, sourceEnd: 12, originalNumber: 1 });
-  assert.deepEqual(plain(api.getRecruitmentOptionsV58915(normalized)), [{ key: 'A', text: '甲' }, { key: 'B', text: '乙' }]);
+  assert.deepEqual(
+    plain(api.getRecruitmentOptionsV58915(normalized)),
+    [{ key: 'A', text: '甲' }, { key: 'B', text: '乙' }],
+  );
   const otherParser = context.ShirohaTextParser.create({});
   assert.equal(otherParser.getSourceMetaV58910(normalized), api.getSourceMetaV58910(normalized));
   assert.equal(otherParser.getRecruitmentOptionsV58915(normalized), api.getRecruitmentOptionsV58915(normalized));
@@ -67,7 +73,14 @@ test('来源区间的文本起点保留自增时的数值转换', () => {
       return source.replace(marker, `globalThis.__usedSourceBlocks = [...usedBlocks];\n${marker}`);
     },
   });
-  const question = { id: 'q1', number: 1, type: 'single', question: '样题？', options: [{ key: 'A', text: '甲' }], answer: ['A'] };
+  const question = {
+    id: 'q1',
+    number: 1,
+    type: 'single',
+    question: '样题？',
+    options: [{ key: 'A', text: '甲' }],
+    answer: ['A'],
+  };
   for (const [start, end, expectedBlocks] of [['1', 3, ['1', 2, 3]], [1n, 3n, [1n, 2n, 3n]]]) {
     const sourceMeta = { sourceBlockStart: start, sourceBlockEnd: end, originalNumber: 1, explicitNumber: true };
     const detailed = { blocks: [{}, {}, {}, {}], pairs: [{ question, sourceMeta }] };

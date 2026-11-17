@@ -9,7 +9,8 @@ test('DOCX 正文按顺序保留图片、公式、表格与外部块占位', asy
   const xml = '<w:document><w:body>'
     + '<w:p><w:r><w:t>题目 &amp; 图片</w:t><w:drawing><a:blip r:embed="image1"/></w:drawing></w:r></w:p>'
     + '<m:oMath><m:f><m:num><m:r><m:t>1</m:t></m:r></m:num><m:den><m:r><m:t>2</m:t></m:r></m:den></m:f></m:oMath>'
-    + '<w:tbl><w:tr><w:tc><w:p><w:r><w:t>甲</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>乙</w:t></w:r></w:p></w:tc></w:tr></w:tbl>'
+    + '<w:tbl><w:tr><w:tc><w:p><w:r><w:t>甲</w:t></w:r></w:p></w:tc>'
+    + '<w:tc><w:p><w:r><w:t>乙</w:t></w:r></w:p></w:tc></w:tr></w:tbl>'
     + '<w:altChunk r:id="chunk1"/></w:body></w:document>';
   const rels = '<Relationships><Relationship Id="image1" Type="http://x/relationships/image" Target="media/picture.png"/></Relationships>';
   const blob = api.zipStoreFiles([
@@ -30,7 +31,9 @@ test('缺失正文或无法读取唯一外部正文时保留原错误', async ()
   const { api } = loadWeb();
   const missing = api.zipStoreFiles([{ name: 'other', text: '' }]);
   await assert.rejects(api.extractDocxText({ arrayBuffer: () => missing.arrayBuffer() }), /未找到 word\/document.xml/);
-  const chunk = api.zipStoreFiles([{ name: 'word/document.xml', text: '<w:body><w:altChunk r:id="missing"/></w:body>' }]);
+  const chunk = api.zipStoreFiles([
+    { name: 'word/document.xml', text: '<w:body><w:altChunk r:id="missing"/></w:body>' },
+  ]);
   await assert.rejects(api.extractDocxText({ arrayBuffer: () => chunk.arrayBuffer() }), /外部内容块/);
 });
 
@@ -62,7 +65,9 @@ test('PDF 文本按页面和坐标排序；文字层失败回退并释放文档'
       }),
     },
   };
-  const file = { arrayBuffer: async () => new TextEncoder().encode('(Fallback self authored question text) Tj').buffer };
+  const file = {
+    arrayBuffer: async () => new TextEncoder().encode('(Fallback self authored question text) Tj').buffer,
+  };
   assert.equal(await api.extractPdfText(file), '【第1页】\nself authored question\nsecond line');
   assert.equal(destroyed, 1);
   context.__pdfjsMixed.lib.getDocument = () => ({

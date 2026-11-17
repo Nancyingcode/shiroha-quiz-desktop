@@ -36,7 +36,9 @@ const cases = [
       await openSaved(h, 'PERSISTED_PRACTICE_ANALYSIS');
       assert.equal(h.mock.calls.length, 1);
       await h.page.locator('#p-exit').click();
-      if (await h.page.locator('#back-practice-setup').isVisible()) { await h.page.locator('#back-practice-setup').click(); }
+      if (await h.page.locator('#back-practice-setup').isVisible()) {
+        await h.page.locator('#back-practice-setup').click();
+      }
       await h.page.locator('.nav[data-view="favorites"]').click();
       await h.page.locator('#favorites-list-v596 [data-preview-question="safe-single-1"]').click();
       assert.match(await h.page.locator('#bank-question-detail').innerText(), /PERSISTED_PRACTICE_ANALYSIS/);
@@ -85,12 +87,14 @@ const cases = [
       await panel.locator('.review-analysis-saved').waitFor();
       assert.deepEqual((await stored(h)).records, before.records);
       await h.page.locator('#practice-review-result').click();
-      await h.page.locator('#training-question .training-analysis').filter({ hasText: 'PERSISTED_RESULT_ANALYSIS' }).waitFor();
+      await h.page.locator('#training-question .training-analysis')
+        .filter({ hasText: 'PERSISTED_RESULT_ANALYSIS' }).waitFor();
       await h.page.reload();
       await h.page.locator('body[data-storage-state="ready"]').waitFor();
       await h.page.locator('.nav[data-view="records"]').click();
       await h.page.locator('#records [data-training-review]').first().click();
-      await h.page.locator('#training-question .training-analysis').filter({ hasText: 'PERSISTED_RESULT_ANALYSIS' }).waitFor();
+      await h.page.locator('#training-question .training-analysis')
+        .filter({ hasText: 'PERSISTED_RESULT_ANALYSIS' }).waitFor();
       assert.deepEqual((await stored(h)).records, before.records);
       assert.equal(h.mock.calls.length, 1);
     },

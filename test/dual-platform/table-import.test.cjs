@@ -22,9 +22,19 @@ test('XLSX 共享字符串、稀疏列和工作簿关系读取同一表格规则
   const { api } = loadWeb({ deterministicIds: true });
   const blob = api.zipStoreFiles([
     { name: 'xl/workbook.xml', text: '<workbook><sheet name="自建&amp;表" r:id="r1"/></workbook>' },
-    { name: 'xl/_rels/workbook.xml.rels', text: '<Relationships><Relationship Id="r1" Target="worksheets/sheet1.xml"/></Relationships>' },
-    { name: 'xl/sharedStrings.xml', text: '<sst><si><t>题干</t></si><si><t>答案</t></si><si><r><t>自建</t></r><r><t>题目</t></r></si></sst>' },
-    { name: 'xl/worksheets/sheet1.xml', text: '<worksheet><row><c r="A1" t="s"><v>0</v></c><c r="C1" t="s"><v>1</v></c></row><row><c r="A2" t="s"><v>2</v></c><c r="C2" t="inlineStr"><is><t>甲</t></is></c></row></worksheet>' },
+    {
+      name: 'xl/_rels/workbook.xml.rels',
+      text: '<Relationships><Relationship Id="r1" Target="worksheets/sheet1.xml"/></Relationships>',
+    },
+    {
+      name: 'xl/sharedStrings.xml',
+      text: '<sst><si><t>题干</t></si><si><t>答案</t></si><si><r><t>自建</t></r><r><t>题目</t></r></si></sst>',
+    },
+    {
+      name: 'xl/worksheets/sheet1.xml',
+      text: '<worksheet><row><c r="A1" t="s"><v>0</v></c><c r="C1" t="s"><v>1</v></c></row>'
+        + '<row><c r="A2" t="s"><v>2</v></c><c r="C2" t="inlineStr"><is><t>甲</t></is></c></row></worksheet>',
+    },
   ]);
   const result = plain(await api.readTableImportFileV49({ name: '自建.xlsx', arrayBuffer: () => blob.arrayBuffer() }));
   assert.equal(result.questions.length, 1);

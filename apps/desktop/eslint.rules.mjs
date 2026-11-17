@@ -270,6 +270,9 @@ export function createConfig({ desktop = false, debt = false, semanticOnly = fal
         'apps/web/backup-core.js', 'test/codebuddy-cli-stdio/guard.test.mjs',
         'test/codebuddy-cli-stdio/verify-guarded.mjs', 'test/dual-platform/ai-connection.test.cjs',
         'test/dual-platform/circled-stem.test.cjs', 'test/dual-platform/due-review.test.cjs',
+        'apps/desktop/test/config.test.mjs', 'apps/web/ai-transport.js', 'apps/web/platform/browser.js',
+        'test/dual-platform/document-formats.test.cjs', 'test/dual-platform/table-import.test.cjs',
+        'test/dual-platform/text-parser.test.cjs', 'test/web-ai-practice/saved-analysis.cjs',
       ].map(relative),
       rules: {
         '@stylistic/max-len': ['error', {

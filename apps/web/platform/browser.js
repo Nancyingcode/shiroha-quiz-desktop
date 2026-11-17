@@ -9,7 +9,11 @@
   }
   /** @param {unknown} error */
   function storageError(error) {
-    return failure(error && typeof error === 'object' && 'name' in error && error.name === 'QuotaExceededError' ? 'quota_exceeded' : 'storage_unavailable', '浏览器存储失败，请检查存储权限和剩余空间后重试。');
+    return failure(
+      error && typeof error === 'object' && 'name' in error && error.name === 'QuotaExceededError'
+        ? 'quota_exceeded' : 'storage_unavailable',
+      '浏览器存储失败，请检查存储权限和剩余空间后重试。',
+    );
   }
   /** @param {Pick<Storage, 'getItem'|'setItem'|'removeItem'>} storage @param {string} key */
   function createStorage(storage, key) {
@@ -55,7 +59,15 @@
           if (previous.encoded !== encoded) { throw failure('duplicate_operation', '操作编号已被使用。'); }
           return previous.receipt;
         }
-        const checked = scope.ShirohaPlatformValidation.validateCommit({ contractVersion: 1, operationId, expectedRevision, changes: [{ kind: 'replace_snapshot', snapshot: next }] }, { initialization: 'ready', currentRevision: revision, knownOperationIds: [] });
+        const checked = scope.ShirohaPlatformValidation.validateCommit(
+          {
+            contractVersion: 1,
+            operationId,
+            expectedRevision,
+            changes: [{ kind: 'replace_snapshot', snapshot: next }],
+          },
+          { initialization: 'ready', currentRevision: revision, knownOperationIds: [] },
+        );
         if (!checked.ok) { throw failure(checked.error.code, checked.error.message); }
         if (revision !== expectedRevision) { throw failure('revision_conflict', '保存版本已变化，请重新加载。'); }
         if (externallyChanged) { throw failure('revision_conflict', '其他页面已修改数据，请先导出当前内容，再重新加载。'); }
@@ -140,7 +152,15 @@
         const xhr = new globalThis.XMLHttpRequest();
         xhr.open('GET', url, true); xhr.overrideMimeType('application/json;charset=utf-8');
         xhr.onload = () => {
-          try { if (xhr.status === 0 || (xhr.status >= 200 && xhr.status < 300)) { resolve(JSON.parse(xhr.responseText)); } else { reject(new Error(`XHR ${xhr.status}`)); } } catch (error) { reject(error); }
+          try {
+            if (xhr.status === 0 || (xhr.status >= 200 && xhr.status < 300)) {
+              resolve(JSON.parse(xhr.responseText));
+            } else {
+              reject(new Error(`XHR ${xhr.status}`));
+            }
+          } catch (error) {
+            reject(error);
+          }
         };
         xhr.onerror = () => reject(fetchError); xhr.send();
       });
