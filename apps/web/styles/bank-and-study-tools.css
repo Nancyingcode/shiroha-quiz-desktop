@@ -1,4 +1,12 @@
 
+.bank-search-controls{
+  grid-template-columns:minmax(0,2fr) minmax(0,1fr);
+  margin-bottom:14px;
+}
+@media(max-width:720px){
+  .bank-search-controls{grid-template-columns:1fr;}
+}
+
 /* SHIROHA_WEB_V45_FOCUS_NAV_AND_BANK_EDITOR_START
    修复沉浸页展开导航无效；题库操作改为右侧上下对齐；增加题库二次编辑提示条。 */
 @media (min-width:721px){

@@ -19,7 +19,7 @@
     const {
       activeBank, transaction: runMutation, save: saveSilent, edit: editBankByIdV45, duplicate: duplicateBankById,
       exportBank: exportBankById, deleteBanks: deleteBanksV32, deleteQuestions: deleteBankQuestions,
-      canSelectExportBanks,
+      canSelectExportBanks, isBusy,
     } = actions;
     const {
       stripUnsafe: stripUnsafeImageDataUrisV83, optionText: pickRichOptionTextV57,
@@ -31,6 +31,9 @@
     let bankQuestionSelection = { bank: null, idsKey: '', selected: new Set() };
     // 可见预览的读取只属于发起时的题库页；离页后即使返回也不能显示旧失败。
     let bankPreviewOwner = 0;
+    // 用于在切换筛选时清除旧分页；页码本身仍由现有分页器管理。
+    let bankPreviewFilterKey = '';
+    const BANK_SEARCH_BATCH_SIZE = 100;
     function cancelPendingBankPreview() {
       bankPreviewOwner += 1;
     }
@@ -180,18 +183,55 @@
       if (!nativeViewVisible('banks')) {
         return;
       }
+      const searchInput = $('#bank-search-query'); const typeSelect = $('#bank-search-type');
+      searchInput.oninput = renderBankPreview;
+      typeSelect.onchange = renderBankPreview;
+      const rawSearch = searchInput.value; const search = rawSearch.trim().toLocaleLowerCase();
+      const selectedType = typeSelect.value;
+      const filterKey = JSON.stringify([bank.id, rawSearch, selectedType]);
+      if (filterKey !== bankPreviewFilterKey) {
+        document.getElementById('bank-preview-pager')?.replaceChildren();
+        bankPreviewFilterKey = filterKey;
+      }
       closeBankQuestionDetail();
       const renderVersion = beginNativeRender('banks');
       const owner = bankPreviewOwner;
       const startedVisible = !!$('#banks')?.classList.contains('active');
       const isCurrentRead = () => renderVersion === nativeRenderVersions.get('banks') && activeBank().id === bank.id
+        && searchInput.value === rawSearch && typeSelect.value === selectedType && !isBusy() && nativeViewVisible('banks')
         && (!startedVisible || (owner === bankPreviewOwner && $('#banks')?.classList.contains('active')));
-      // eslint-disable-next-line prefer-template -- 历史数据字段可能是对象，保留 + 的默认转换；字段类型受约束后移除此例外。
-      const qs = nativePage(bank.questions, 'preview:' + bank.id, document.getElementById('bank-preview'), renderBankPreview);
-      $('#bank-preview tbody').innerHTML = '<tr><td colspan="8" role="status">正在加载题目……</td></tr>';
+      $('#bank-preview tbody').innerHTML = '<tr data-bank-preview-loading><td colspan="8" role="status">正在加载题目……</td></tr>';
       for (const id of ['select-bank-question-page', 'clear-bank-question-selection', 'delete-selected-questions']) {
         document.getElementById(id).disabled = true;
       }
+      const candidates = bank.questions.filter((q) => selectedType === 'all' || normalizeWebQuestionType(q.type) === selectedType);
+      let filtered = candidates;
+      if (search) {
+        filtered = [];
+        for (let offset = 0;offset < candidates.length;offset += BANK_SEARCH_BATCH_SIZE) {
+          const batch = candidates.slice(offset, offset + BANK_SEARCH_BATCH_SIZE);
+          if (!await loadNativeItems(practiceSessionItemsForBanksV8916([{ ...bank, questions: batch }]), isCurrentRead)) {
+            if (isCurrentRead()) {
+              $('#bank-preview tbody').innerHTML = '<tr><td colspan="8" role="status">题目加载失败，请重试。 <button type="button" id="retry-bank-preview">重试</button></td></tr>';
+              $('#retry-bank-preview').onclick = renderBankPreview;
+            }
+            return;
+          }
+          if (!isCurrentRead()) {
+            return;
+          }
+          filtered.push(...batch.filter((q) => bankQuestionMatchesSearch(q, search)));
+          if (offset + BANK_SEARCH_BATCH_SIZE < candidates.length) {
+            await new Promise((resolve) => { setTimeout(resolve, 0); });
+            if (!isCurrentRead()) {
+              return;
+            }
+          }
+        }
+      }
+      // eslint-disable-next-line prefer-template -- 历史数据字段可能是对象，保留 + 的默认转换；字段类型受约束后移除此例外。
+      const bankPageKey = 'preview:' + bank.id;
+      const qs = nativePage(filtered, JSON.stringify([bankPageKey, rawSearch, selectedType]), document.getElementById('bank-preview'), renderBankPreview);
       if (!await loadNativeItems(practiceSessionItemsForBanksV8916([{ ...bank, questions: qs }]), isCurrentRead)) {
         if (!isCurrentRead()) {
           return;
@@ -207,7 +247,7 @@
       $('#bank-preview tbody').innerHTML = qs.map((q) => {
         const number = bank.questions.indexOf(q) + 1; const preview = bankQuestionCopyText(q);
         return `<tr><td><input type="checkbox" data-select-bank-question="${esc(q.id)}" aria-label="选择第 ${number} 道试题" ${selected.has(q.id) ? 'checked' : ''}></td><td>${number}</td><td>${label(q.type)}</td><td>${esc(short(preview.text, 80))}${preview.text.length > 80 ? ` <button class="ghost mini-btn" type="button" data-preview-full="${esc(q.id)}" aria-label="查看第 ${number} 道试题全文">查看全文</button>` : ''}${preview.hasImages ? ' <span class="muted">含图片</span>' : ''}</td><td>${esc((q.answer || q.answerKeys || []).join(''))}</td><td>${esc(q.category || q.topic || '')}</td><td>${esc(q.score || '默认')}</td><td><button class="ghost mini-btn" type="button" data-preview-question="${esc(q.id)}" aria-expanded="false" aria-controls="bank-question-detail" aria-label="查看第 ${number} 道试题详情">查看详情</button> <button class="ghost danger mini-btn" type="button" data-delete-bank-question="${esc(q.id)}" aria-label="删除第 ${number} 道试题">删除</button></td></tr>`;
-      }).join('') || '<tr><td colspan="8" class="empty">当前题库暂无试题。</td></tr>';
+      }).join('') || `<tr><td colspan="8" class="empty">${bank.questions.length ? '没有符合条件的试题。' : '当前题库暂无试题。'}</td></tr>`;
       $('#bank-preview').querySelectorAll('[data-preview-question]').forEach((button) => button.onclick = () => openBankQuestionDetail(bank, qs.find((q) => q.id === button.dataset.previewQuestion), button, false));
       $('#bank-preview').querySelectorAll('[data-preview-full]').forEach((button) => button.onclick = () => openBankQuestionDetail(bank, qs.find((q) => q.id === button.dataset.previewFull), button, true));
       const updateSelection = () => {
@@ -239,6 +279,16 @@
       };
       $('#delete-selected-questions').onclick = () => deleteBankQuestions(bank.id, [...selected]);
       updateSelection();
+    }
+    function bankQuestionMatchesSearch(q, search) {
+      const preview = bankQuestionPreview(q);
+      if (bankQuestionCopyText(q).text.toLocaleLowerCase().includes(search)) {
+        return true;
+      }
+      return preview.options.some((option) => {
+        const { text } = bankQuestionCopyText({ question: option.text, options: [], images: [] });
+        return text.toLocaleLowerCase().includes(search);
+      });
     }
     function bankQuestionPreview(q) {
       const rich = q.richContent; const fields = rich?.fields || rich; const field = fields?.question;

@@ -220,6 +220,7 @@
       exportBank: exportBankById,
       deleteBanks: deleteBanksV32,
       deleteQuestions: deleteBankQuestions,
+      isBusy: () => mutationBusy,
       canSelectExportBanks: () => applicationReady && !mutationBusy,
     },
     content: {
@@ -844,7 +845,7 @@
     return rows.slice(start, end);
   }
   function releaseNativeView() { if (nativeReads.size || mutationBusy) { return; }ShirohaPlatform.storage.releaseView?.(state, [...(practiceSession.current.items || []), ...(examSession.current.items || [])].map((item) => ({ bankId: practiceItemBankIdV8916(item), questionId: practiceQuestionV8916(item).id })));nativeOpenRecords.clear(); }
-  function renderNativeView() { if (!ShirohaPlatform.storage.lazy) { return; }renderBankPreview();renderWrongBook();renderFavoritesPageV596();renderRecords(); }
+  function renderNativeView() { if (!ShirohaPlatform.storage.lazy) { if ($('#banks')?.classList.contains('active') && $('#bank-preview [data-bank-preview-loading]')) { renderBankPreview(); } return; }renderBankPreview();renderWrongBook();renderFavoritesPageV596();renderRecords(); }
   function activeBank() { return state.banks.find((b) => b.id === state.activeBankId) || state.banks[0] || { questions: [] }; }
 
   function normalizePracticeScopeV8916(scope) {

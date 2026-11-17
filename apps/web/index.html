@@ -299,6 +299,10 @@ C. 判断题
         </div>
         <div class="card">
           <h2>当前题库预览</h2>
+          <div class="form-grid bank-search-controls">
+            <label>搜索题干或选项<input id="bank-search-query" type="search" placeholder="输入关键词" autocomplete="off" /></label>
+            <label>筛选题型<select id="bank-search-type"><option value="all">全部题型</option><option value="single">单选题</option><option value="multiple">多选题</option><option value="judge">判断题</option><option value="blank">填空题</option><option value="short">简答题</option></select></label>
+          </div>
           <div class="actions bank-question-actions" aria-label="试题批量管理">
             <button id="select-bank-question-page" class="ghost" type="button">全选本页</button>
             <button id="clear-bank-question-selection" class="ghost" type="button">清空选择</button>
