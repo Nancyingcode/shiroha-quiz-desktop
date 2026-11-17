@@ -8,7 +8,9 @@ import { promisify } from 'node:util';
 const executeFile = promisify(execFile);
 const mediumIntegrity = 8192;
 const integrityTimeoutMs = 30_000;
-const integrityAliases = new Map([['UN', 0], ['LW', 4096], ['ME', mediumIntegrity], ['MP', 8448], ['HI', 12288], ['SI', 16384]]);
+const integrityAliases = new Map([
+  ['UN', 0], ['LW', 4096], ['ME', mediumIntegrity], ['MP', 8448], ['HI', 12288], ['SI', 16384],
+]);
 
 // 只读取 mandatory label，不请求审计 SACL 权限，也不依赖 icacls 的本地化输出。
 const readLabelCommand = String.raw`
@@ -93,7 +95,10 @@ async function integrityLevel(file, run) {
  * @param {string} file
  * @param {{ repair?: boolean, platform?: string, run?: IntegrityRunner }} [options]
  */
-export async function ensureInstallerIntegrity(file, { repair = true, platform = process.platform, run = runWindows } = {}) {
+export async function ensureInstallerIntegrity(
+  file,
+  { repair = true, platform = process.platform, run = runWindows } = {},
+) {
   await validateInstaller(file);
   if (platform !== 'win32') { return false; }
   try {
@@ -104,7 +109,10 @@ export async function ensureInstallerIntegrity(file, { repair = true, platform =
     if (await integrityLevel(file, run) < mediumIntegrity) { throw new Error('安装包仍带有低完整性标记'); }
     return true;
   } catch (error) {
-    throw new Error(`安装包完整性检查失败: ${file}。低完整性安装包无法写入正常临时目录；请在普通 PowerShell 中重新运行打包命令或 npm run repair:installer。`, { cause: error });
+    throw new Error(
+      `安装包完整性检查失败: ${file}。低完整性安装包无法写入正常临时目录；请在普通 PowerShell 中重新运行打包命令或 npm run repair:installer。`,
+      { cause: error },
+    );
   }
 }
 
@@ -114,7 +122,10 @@ export async function prepareInstaller(root) {
   if (config.productName !== 'Shiroha Quiz' || typeof config.version !== 'string' || !/^\d+\.\d+\.\d+$/.test(config.version)) {
     throw new Error('安装包名称或版本配置无效');
   }
-  const installer = path.join(root, `src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/Shiroha Quiz_${config.version}_x64-setup.exe`);
+  const installer = path.join(
+    root,
+    `src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/Shiroha Quiz_${config.version}_x64-setup.exe`,
+  );
   await ensureInstallerIntegrity(installer);
   return installer;
 }

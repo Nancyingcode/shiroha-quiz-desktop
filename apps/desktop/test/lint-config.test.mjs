@@ -428,6 +428,10 @@ test('line length pilot accepts 120 characters and rejects 121 in selected modul
     'apps/desktop/test/config.test.mjs', 'apps/web/ai-transport.js', 'apps/web/platform/browser.js',
     'test/dual-platform/document-formats.test.cjs', 'test/dual-platform/table-import.test.cjs',
     'test/dual-platform/text-parser.test.cjs', 'test/web-ai-practice/saved-analysis.cjs',
+    'apps/desktop/scripts/installer-integrity.mjs', 'apps/desktop/test/lint-ci.test.mjs',
+    'apps/desktop/test/lint-css.test.mjs', 'apps/desktop/test/prepare-web-actual.test.mjs',
+    'apps/web/platform/dialogs.js', 'test/dual-platform/backup-serialization-empty.test.cjs',
+    'test/dual-platform/browser-storage.test.cjs', 'test/dual-platform/zip-safety.test.cjs',
   ]) {
     const [result] = await lint.lintText(source, { filePath });
     assert.deepEqual(result.messages.filter((m) => m.ruleId === rule).map((m) => m.line), [2], filePath);

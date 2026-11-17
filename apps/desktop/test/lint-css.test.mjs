@@ -45,7 +45,10 @@ test('CSS lint rejects mixed-case extensions in each handwritten stylesheet dire
   for (const dir of ['frontend/nested', '../web/styles/components']) {
     await mkdir(path.join(project, dir), { recursive: true });
   }
-  for (const file of ['../web/styles.css', '../web/styles/responsive-artwork.css', 'frontend/desktop.css', 'package.json', 'stylelint.config.mjs', 'stylelint-suppressions.json']) {
+  for (const file of [
+    '../web/styles.css', '../web/styles/responsive-artwork.css', 'frontend/desktop.css',
+    'package.json', 'stylelint.config.mjs', 'stylelint-suppressions.json',
+  ]) {
     await copyFile(path.join(desktop, file), path.join(project, file));
   }
   for (const file of ['../web/probe.CSS', '../web/styles/components/probe.CsS', 'frontend/nested/probe.cSS']) {
@@ -69,7 +72,10 @@ test('CSS lint caps compound selector depth for new component styles', async (t)
   for (const dir of ['frontend', '../web/styles/components']) {
     await mkdir(path.join(project, dir), { recursive: true });
   }
-  for (const file of ['../web/styles.css', '../web/styles/responsive-artwork.css', 'frontend/desktop.css', 'package.json', 'stylelint.config.mjs', 'stylelint-suppressions.json']) {
+  for (const file of [
+    '../web/styles.css', '../web/styles/responsive-artwork.css', 'frontend/desktop.css',
+    'package.json', 'stylelint.config.mjs', 'stylelint-suppressions.json',
+  ]) {
     await copyFile(path.join(desktop, file), path.join(project, file));
   }
   const runLint = () => spawnSync('npm run --silent lint:css', {
@@ -128,7 +134,10 @@ test('CSS lint rejects redundant shorthand values without changing source files'
   for (const dir of ['frontend/nested', '../web/styles/components']) {
     await mkdir(path.join(project, dir), { recursive: true });
   }
-  for (const file of ['../web/styles.css', '../web/styles/responsive-artwork.css', 'frontend/desktop.css', 'package.json', 'stylelint.config.mjs', 'stylelint-suppressions.json']) {
+  for (const file of [
+    '../web/styles.css', '../web/styles/responsive-artwork.css', 'frontend/desktop.css',
+    'package.json', 'stylelint.config.mjs', 'stylelint-suppressions.json',
+  ]) {
     await copyFile(path.join(desktop, file), path.join(project, file));
   }
   const runLint = () => spawnSync('npm run --silent lint:css', {
@@ -158,7 +167,10 @@ test('CSS lint rejects redundant shorthand values without changing source files'
   }
 
   await writeFile(fragment, directional);
-  for (const file of ['../web/shorthand-root.CSS', '../web/styles/components/shorthand-nested.CsS', 'frontend/nested/shorthand-desktop.cSS']) {
+  for (const file of [
+    '../web/shorthand-root.CSS', '../web/styles/components/shorthand-nested.CsS',
+    'frontend/nested/shorthand-desktop.cSS',
+  ]) {
     const target = path.join(project, file);
     const source = '.redundant { padding: 10px 10px; }\n';
     await writeFile(target, source);

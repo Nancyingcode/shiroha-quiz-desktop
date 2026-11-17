@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
-import { cp, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rm, stat, symlink, utimes, writeFile } from 'node:fs/promises';
+import {
+  cp, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rm, stat, symlink, utimes, writeFile,
+} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -8,7 +10,9 @@ import { prepareWeb } from '../scripts/prepare-web.mjs';
 
 const desktop = fileURLToPath(new URL('..', import.meta.url));
 const web = path.resolve(desktop, '../web');
-const injected = new Set(['bridge.js', 'adapter.js', 'harness.js', 'codebuddy-login.js', 'titlebar.js', 'desktop-events.js']);
+const injected = new Set([
+  'bridge.js', 'adapter.js', 'harness.js', 'codebuddy-login.js', 'titlebar.js', 'desktop-events.js',
+]);
 const offline = [
   'libs/pdf.min.mjs', 'libs/pdf.worker.min.mjs', 'libs/wasm/openjpeg.wasm',
   'libs/ocr/tesseract/tesseract.min.js', 'libs/ocr/tesseract/worker.min.js',
@@ -68,7 +72,11 @@ test('actual Web and generated desktop scripts retain order, bytes, offline asse
   const project = path.join(temp, 'desktop');
   await mkdir(project);
   await cp(path.join(desktop, 'frontend'), path.join(project, 'frontend'), { recursive: true });
-  await symlink(path.join(desktop, 'node_modules'), path.join(project, 'node_modules'), process.platform === 'win32' ? 'junction' : 'dir');
+  await symlink(
+    path.join(desktop, 'node_modules'),
+    path.join(project, 'node_modules'),
+    process.platform === 'win32' ? 'junction' : 'dir',
+  );
   const sourceHtml = await readFile(path.join(web, 'index.html'), 'utf8');
   const expected = scripts(sourceHtml);
   assert(expected.length > 30);
@@ -86,7 +94,9 @@ test('actual Web and generated desktop scripts retain order, bytes, offline asse
     assert.deepEqual(await readFile(path.join(output, name)), await readFile(path.join(web, name)), name);
   }
   const old = new Date('2001-01-01T00:00:00Z');
-  const unchanged = [...new Set(['index.html', 'desktop-events.js', ...expected, ...offline, ...licenses, ...thirdParty])];
+  const unchanged = [...new Set([
+    'index.html', 'desktop-events.js', ...expected, ...offline, ...licenses, ...thirdParty,
+  ])];
   for (const name of unchanged) { await utimes(path.join(output, name), old, old); }
   await prepareWeb(web, project);
   await assertScripts(output, expected);

@@ -7,7 +7,9 @@ const { createHash } = require('node:crypto');
 
 test('ZIP 拒绝重名、穿越、链接和中央目录截断', async () => {
   const { api } = loadWeb();
-  const duplicate = await api.zipStoreFiles([{ name: 'backup.json', text: 'one' }, { name: 'backup.json', text: 'two' }]).arrayBuffer();
+  const duplicate = await api.zipStoreFiles([
+    { name: 'backup.json', text: 'one' }, { name: 'backup.json', text: 'two' },
+  ]).arrayBuffer();
   assert.throws(() => api.parseZipEntries(duplicate), /ZIP/);
   const traversal = await api.zipStoreFiles([{ name: '../backup.json', text: 'one' }]).arrayBuffer();
   assert.throws(() => api.parseZipEntries(traversal), /ZIP/);
@@ -169,9 +171,18 @@ test('ZIP 校验本地头、压缩方式、解压大小及 CRC', async () => {
   await assert.rejects(api.unzipEntryBytes(localMethod, entry), { message: 'ZIP entry data is invalid.' });
   const unsupported = compressed.slice(0);
   new DataView(unsupported).setUint16(8, 99, true);
-  await assert.rejects(api.unzipEntryBytes(unsupported, { ...entry, method: 99 }), { message: 'ZIP compression is unsupported.' });
-  await assert.rejects(api.unzipEntryBytes(compressed, { ...entry, uncompSize: 8 }), { message: 'ZIP entry output is too large.' });
-  await assert.rejects(api.unzipEntryBytes(compressed, { ...entry, checksum: 0 }), { message: 'ZIP entry integrity check failed.' });
+  await assert.rejects(
+    api.unzipEntryBytes(unsupported, { ...entry, method: 99 }),
+    { message: 'ZIP compression is unsupported.' },
+  );
+  await assert.rejects(
+    api.unzipEntryBytes(compressed, { ...entry, uncompSize: 8 }),
+    { message: 'ZIP entry output is too large.' },
+  );
+  await assert.rejects(
+    api.unzipEntryBytes(compressed, { ...entry, checksum: 0 }),
+    { message: 'ZIP entry integrity check failed.' },
+  );
   delete context.DecompressionStream;
   await assert.rejects(api.unzipEntryBytes(compressed, entry), { message: '当前浏览器不支持本地解压，请使用新版 Chrome/Edge。' });
 });

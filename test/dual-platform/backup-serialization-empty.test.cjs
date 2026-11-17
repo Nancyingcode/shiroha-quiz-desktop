@@ -8,7 +8,9 @@ const { androidBackup, IMAGE, MILLIS } = require('./fixtures/dataset.cjs');
 function serializedQuestion(question) {
   const source = JSON.stringify(question);
   const { api } = loadWeb();
-  const result = plain(api.serializeBankForCrossExportV53({ id: 'empty-images-bank', questions: [question] })).questions[0];
+  const result = plain(
+    api.serializeBankForCrossExportV53({ id: 'empty-images-bank', questions: [question] }),
+  ).questions[0];
   assert.equal(JSON.stringify(question), source, '序列化不得修改输入题目');
   return result;
 }
@@ -74,7 +76,11 @@ async function historyWithDifferentCurrentQuestion() {
   source.wrongBook[0].question = structuredClone(wrongHistory);
   source.wrongBook.push({ ...source.wrongBook[0], question: structuredClone(wrongOrphan), wrongCount: 5 });
   source.favoriteQuestions[0].question = structuredClone(favoriteHistory);
-  source.favoriteQuestions.push({ ...source.favoriteQuestions[0], question: structuredClone(favoriteOrphan), favoritedAt: MILLIS + 1000 });
+  source.favoriteQuestions.push({
+    ...source.favoriteQuestions[0],
+    question: structuredClone(favoriteOrphan),
+    favoritedAt: MILLIS + 1000,
+  });
   source.studyRecords[0].questionResults[0].question.images = [];
   const original = plain(source);
   const first = loadWeb().api;
@@ -110,7 +116,15 @@ async function historyWithDifferentCurrentQuestion() {
     assert.deepEqual(fromWeb[key], initial[key], `Web JSON ${key}`);
   }
   assert.deepEqual(final.records, initial.records);
-  return { initial, exported: plain(archive.payload.crossPlatform), currentExport, wrongHistory, favoriteHistory, wrongOrphan, favoriteOrphan };
+  return {
+    initial,
+    exported: plain(archive.payload.crossPlatform),
+    currentExport,
+    wrongHistory,
+    favoriteHistory,
+    wrongOrphan,
+    favoriteOrphan,
+  };
 }
 
 function expectedWrongEntry(question, wrongCount) {
@@ -151,7 +165,12 @@ for (const category of ['wrongBook', 'favoriteQuestions']) {
       });
       assert.deepEqual(fixture.exported.favoriteQuestions, [
         { question: fixture.currentExport, bankId: 'native-bank', bankName: 'Android 自建兼容样本', favoritedAt: MILLIS },
-        { question: fixture.favoriteOrphan, bankId: 'native-bank', bankName: 'Android 自建兼容样本', favoritedAt: MILLIS + 1000 },
+        {
+          question: fixture.favoriteOrphan,
+          bankId: 'native-bank',
+          bankName: 'Android 自建兼容样本',
+          favoritedAt: MILLIS + 1000,
+        },
       ]);
     }
   });

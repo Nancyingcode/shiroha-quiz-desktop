@@ -6,12 +6,32 @@ const fs = require('node:fs');
 const path = require('node:path');
 function runtime(initial = null) {
   const values = new Map(initial === null ? [] : [['state', initial]]);
-  const storage = { getItem: (k) => values.get(k) ?? null, setItem: (k, v) => values.set(k, v), removeItem: (k) => values.delete(k) };
+  const storage = {
+    getItem: (k) => values.get(k) ?? null,
+    setItem: (k, v) => values.set(k, v),
+    removeItem: (k) => values.delete(k),
+  };
   const context = vm.createContext({ structuredClone, console, setTimeout, clearTimeout, Error });
-  for (const name of ['validation', 'browser', 'save-queue']) { vm.runInContext(fs.readFileSync(path.join(__dirname, '../../apps/web/platform', `${name}.js`), 'utf8'), context); }
-  return { values, storage, create: () => context.ShirohaBrowser.createStorage(storage, 'state'), queue: context.ShirohaSaveQueue.create };
+  for (const name of ['validation', 'browser', 'save-queue']) {
+    vm.runInContext(fs.readFileSync(path.join(__dirname, '../../apps/web/platform', `${name}.js`), 'utf8'), context);
+  }
+  return {
+    values,
+    storage,
+    create: () => context.ShirohaBrowser.createStorage(storage, 'state'),
+    queue: context.ShirohaSaveQueue.create,
+  };
 }
-const snapshot = () => ({ schemaVersion: 1, banks: [], activeBankId: '', records: [], settings: { suppressDefaultBank: true }, wrongBook: {}, favorites: {}, crossPlatformMeta: {} });
+const snapshot = () => ({
+  schemaVersion: 1,
+  banks: [],
+  activeBankId: '',
+  records: [],
+  settings: { suppressDefaultBank: true },
+  wrongBook: {},
+  favorites: {},
+  crossPlatformMeta: {},
+});
 test('缺省、明确空库与损坏/未来数据不同；失败原值不变', async () => {
   for (const raw of ['{broken', 'null', '{"schemaVersion":999,"banks":[]}']) {
     const r = runtime(raw); const s = r.create();

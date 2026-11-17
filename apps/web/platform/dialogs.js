@@ -13,7 +13,10 @@
       const dialog = document.createElement('dialog');
       dialog.id = 'app-dialog';
       dialog.setAttribute('aria-labelledby', 'app-dialog-title');
-      dialog.setAttribute('aria-describedby', options.context ? 'app-dialog-context app-dialog-message' : 'app-dialog-message');
+      dialog.setAttribute(
+        'aria-describedby',
+        options.context ? 'app-dialog-context app-dialog-message' : 'app-dialog-message',
+      );
       if (options.danger) { dialog.dataset.variant = 'danger'; }
       dialog.innerHTML = `<form method="dialog" class="app-dialog-form">
         <button type="button" data-dialog-close aria-label="关闭">×</button>
@@ -56,7 +59,9 @@
         if (kind === 'prompt' && accepted) { value = input.value; }
         dialog.close();
         dialog.remove();
-        if (previousFocus instanceof window.HTMLElement && previousFocus.isConnected) { previousFocus.focus({ preventScroll: true }); }
+        if (previousFocus instanceof window.HTMLElement && previousFocus.isConnected) {
+          previousFocus.focus({ preventScroll: true });
+        }
         resolve(value);
       };
       form.addEventListener('submit', (event) => {
@@ -73,11 +78,21 @@
         if (event.key !== 'Tab') { return; }
         const controls = [close, input, cancel, accept].filter((control) => !control.hidden && !control.disabled);
         const first = controls[0]; const last = controls[controls.length - 1];
-        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); } else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault(); last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault(); first.focus();
+        }
       });
       document.body.appendChild(dialog);
       dialog.showModal();
-      if (kind === 'prompt') { input.focus(); input.select(); } else if (kind === 'confirm') { cancel.focus(); } else { accept.focus(); }
+      if (kind === 'prompt') {
+        input.focus(); input.select();
+      } else if (kind === 'confirm') {
+        cancel.focus();
+      } else {
+        accept.focus();
+      }
     });
   }
 

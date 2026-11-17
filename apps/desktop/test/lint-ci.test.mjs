@@ -66,49 +66,52 @@ test('PR scope checks the merged result across commits and retains deleted and r
   assert.equal(await lintChangedFiles(f.temporary, plan.files), true);
 });
 
-test('configuration changes, missing history, mismatched parents and untrusted baselines require full checks', async (t) => {
-  const f = await fixture(t);
-  const base = commit(f, 'initial');
-  git(f, ['switch', '-c', 'feature']);
-  await writeFile(path.join(f.temporary, 'apps/web/change.js'), "console.log('changed');\n");
-  const head = commit(f, 'change');
-  git(f, ['switch', '--detach', base]);
-  git(f, ['merge', '--no-ff', '--no-edit', head]);
-  const input = event(f, base, head);
-  assert.equal((await planCiLint({ ...input, hasBaseline: async () => false })).mode, 'full');
-  const missing = 'f'.repeat(40);
-  assert.equal((await planCiLint({
-    ...input,
-    event: {
-      pull_request: {
-        base: { sha: missing, ref: 'main' }, head: { sha: head },
+test(
+  'configuration changes, missing history, mismatched parents and untrusted baselines require full checks',
+  async (t) => {
+    const f = await fixture(t);
+    const base = commit(f, 'initial');
+    git(f, ['switch', '-c', 'feature']);
+    await writeFile(path.join(f.temporary, 'apps/web/change.js'), "console.log('changed');\n");
+    const head = commit(f, 'change');
+    git(f, ['switch', '--detach', base]);
+    git(f, ['merge', '--no-ff', '--no-edit', head]);
+    const input = event(f, base, head);
+    assert.equal((await planCiLint({ ...input, hasBaseline: async () => false })).mode, 'full');
+    const missing = 'f'.repeat(40);
+    assert.equal((await planCiLint({
+      ...input,
+      event: {
+        pull_request: {
+          base: { sha: missing, ref: 'main' }, head: { sha: head },
+        },
       },
-    },
-  })).mode, 'full');
-  assert.equal((await planCiLint({ ...input, eventName: 'push' })).mode, 'full');
-  assert.equal((await planCiLint({ ...input, eventName: 'merge_group' })).mode, 'full');
-  await assert.rejects(planCiLint({ ...input, sha: 'a'.repeat(40) }), /检出的提交与预期提交不一致/);
-  assert.equal((await planCiLint({
-    ...input,
-    event: {
-      pull_request: {
-        base: { sha: head, ref: 'main' }, head: { sha: base },
+    })).mode, 'full');
+    assert.equal((await planCiLint({ ...input, eventName: 'push' })).mode, 'full');
+    assert.equal((await planCiLint({ ...input, eventName: 'merge_group' })).mode, 'full');
+    await assert.rejects(planCiLint({ ...input, sha: 'a'.repeat(40) }), /检出的提交与预期提交不一致/);
+    assert.equal((await planCiLint({
+      ...input,
+      event: {
+        pull_request: {
+          base: { sha: head, ref: 'main' }, head: { sha: base },
+        },
       },
-    },
-  })).mode, 'full');
-  const shallow = path.join(f.temporary, '.git/shallow');
-  await writeFile(shallow, `${input.sha}\n`);
-  assert.equal((await planCiLint(input)).mode, 'full');
-  await unlink(shallow);
-  git(f, ['switch', '--detach', head]);
-  await writeFile(path.join(f.temporary, 'apps/desktop/eslint.rules.mjs'), 'export const changed = true;\n');
-  const configHead = commit(f, 'change configuration');
-  git(f, ['switch', '--detach', base]);
-  git(f, ['merge', '--no-ff', '--no-edit', configHead]);
-  const configPlan = await planCiLint(event(f, base, configHead));
-  assert.equal(configPlan.mode, 'full');
-  assert.match(configPlan.reason, /eslint\.rules\.mjs/);
-});
+    })).mode, 'full');
+    const shallow = path.join(f.temporary, '.git/shallow');
+    await writeFile(shallow, `${input.sha}\n`);
+    assert.equal((await planCiLint(input)).mode, 'full');
+    await unlink(shallow);
+    git(f, ['switch', '--detach', head]);
+    await writeFile(path.join(f.temporary, 'apps/desktop/eslint.rules.mjs'), 'export const changed = true;\n');
+    const configHead = commit(f, 'change configuration');
+    git(f, ['switch', '--detach', base]);
+    git(f, ['merge', '--no-ff', '--no-edit', configHead]);
+    const configPlan = await planCiLint(event(f, base, configHead));
+    assert.equal(configPlan.mode, 'full');
+    assert.match(configPlan.reason, /eslint\.rules\.mjs/);
+  },
+);
 
 test('deleting or renaming a configuration or lock file forces a full check', async (t) => {
   const f = await fixture(t);
@@ -236,11 +239,16 @@ test('a baseline requires the matching successful push job and its full lint ste
   const request = async (/** @type {string} */ url) => ({
     ok: true,
     json: async () => (url.includes('/jobs?')
-      ? { jobs: [{ name: 'checks', conclusion: 'success', steps: [{ name: 'Run npm run lint', conclusion: 'success' }] }] }
+      ? {
+        jobs: [{ name: 'checks', conclusion: 'success', steps: [{ name: 'Run npm run lint', conclusion: 'success' }] }],
+      }
       : { workflow_runs: [run] }),
   });
   assert.equal(await hasPassedBaseline({ ...options, request }), true);
-  assert.equal(await hasPassedBaseline({ ...options, request: async () => ({ ok: false, json: async () => ({}) }) }), false);
+  assert.equal(
+    await hasPassedBaseline({ ...options, request: async () => ({ ok: false, json: async () => ({}) }) }),
+    false,
+  );
   assert.equal(await hasPassedBaseline({ ...options, token: '' }), false);
   assert.equal(await hasPassedBaseline({
     ...options,
@@ -276,7 +284,10 @@ async function ciEntryFixture(t, change) {
   git(f, ['merge', '--no-ff', '--no-edit', head]);
   const merge = git(f, ['rev-parse', 'HEAD']);
   const eventPath = path.join(f.temporary, 'event.json');
-  await writeFile(eventPath, JSON.stringify({ pull_request: { base: { sha: base, ref: 'main' }, head: { sha: head } } }));
+  await writeFile(
+    eventPath,
+    JSON.stringify({ pull_request: { base: { sha: base, ref: 'main' }, head: { sha: head } } }),
+  );
   const run = {
     id: 42,
     path: '.github/workflows/desktop.yml',
