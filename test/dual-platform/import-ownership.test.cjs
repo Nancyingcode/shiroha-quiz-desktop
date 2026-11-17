@@ -8,7 +8,9 @@ const { runWebScripts } = require('./source-tools.cjs');
 function deferred() {
   let resolve;
   let reject;
-  const promise = new Promise((ok, fail) => { resolve = ok;reject = fail; });
+  const promise = new Promise((ok, fail) => {
+    resolve = ok;reject = fail;
+  });
   return { promise, resolve, reject };
 }
 
@@ -40,7 +42,12 @@ function fixture() {
 
 for (const ext of ['txt', 'docx', 'pdf', 'csv', 'xlsx']) {
   test(`单文件 ${ext} 重选后旧成功与旧失败不能改写当前内容或提示`, async () => {
-    const { draft, fields, events, file } = fixture();
+    const {
+      draft,
+      fields,
+      events,
+      file,
+    } = fixture();
     const older = file(`旧.${ext}`);
     const newer = file('新.txt');
     const oldRead = draft.readImportFile(older.event);
@@ -69,7 +76,12 @@ for (const ext of ['txt', 'docx', 'pdf', 'csv', 'xlsx']) {
 }
 
 test('清空、手动编辑各自废弃单文件迟到结果，当前错误仍提示', async () => {
-  const { draft, fields, events, file } = fixture();
+  const {
+    draft,
+    fields,
+    events,
+    file,
+  } = fixture();
   const old = file('旧.pdf');
   const read = draft.readImportFile(old.event);
   fields['#import-text'].value = '';
@@ -99,7 +111,12 @@ test('清空、手动编辑各自废弃单文件迟到结果，当前错误仍�
 });
 
 test('双文件各槽位并行，同槽位重选、编辑和清空丢弃迟到结果', async () => {
-  const { draft, fields, events, file } = fixture();
+  const {
+    draft,
+    fields,
+    events,
+    file,
+  } = fixture();
   const oldQuestion = file('旧题.docx');
   const question = file('新题.docx');
   const answer = file('答案.pdf');
@@ -159,7 +176,12 @@ test('双文件清空后旧表格不能重新写入共享预览', async () => {
 });
 
 test('新单文件命名不被旧题文件覆盖，其他槽位仍可完成', async () => {
-  const { draft, fields, events, file } = fixture();
+  const {
+    draft,
+    fields,
+    events,
+    file,
+  } = fixture();
   const question = file('旧题目.docx');
   const newSingle = file('新单文件.txt');
   const qRead = draft.readDualFile(question.event, 'question');

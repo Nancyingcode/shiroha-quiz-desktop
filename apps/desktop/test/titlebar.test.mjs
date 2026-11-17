@@ -22,20 +22,32 @@ class Element {
   /** @type {Map<string, (event: EventInput) => void>} */
   listeners = new Map();
   /** @param {string} name @param {(event: EventInput) => void} listener */
-  addEventListener(name, listener) { this.listeners.set(name, listener); }
+  addEventListener(name, listener) {
+    this.listeners.set(name, listener);
+  }
   /** @param {string} name @param {string} value */
-  setAttribute(name, value) { this.attributes.set(name, value); }
+  setAttribute(name, value) {
+    this.attributes.set(name, value);
+  }
   /** @param {string} name @param {EventInput} [event] */
-  emit(name, event = {}) { this.listeners.get(name)?.(event); }
+  emit(name, event = {}) {
+    this.listeners.get(name)?.(event);
+  }
   /** @param {string} selector */
-  querySelector(selector) { return selector === 'span' ? this.label : null; }
-  getBoundingClientRect() { return { right: this.right }; }
+  querySelector(selector) {
+    return selector === 'span' ? this.label : null;
+  }
+  getBoundingClientRect() {
+    return { right: this.right };
+  }
 }
 
 function fixture() {
   const elements = new Map(['titlebar', 'window-drag', 'window-status', 'window-minimize', 'window-maximize', 'window-close'].map((name) => [`desktop-${name}`, new Element()]));
   /** @param {string} name */
-  const get = (name) => { const result = elements.get(`desktop-${name}`); assert(result); return result; };
+  const get = (name) => {
+    const result = elements.get(`desktop-${name}`); assert(result); return result;
+  };
   /** @type {string[]} */
   const calls = [];
   const label = new Element(); label.right = 112;
@@ -47,24 +59,51 @@ function fixture() {
   let resize = () => {};
   class ResizeObserver {
     /** @param {() => void} callback */
-    constructor(callback) { resize = callback; }
+    constructor(callback) {
+      resize = callback;
+    }
     /** @param {Element} element */
     // eslint-disable-next-line class-methods-use-this -- 模拟 ResizeObserver 实例接口；移除该模拟时同步删除例外。
-    observe(element) { observed.push(element); }
+    observe(element) {
+      observed.push(element);
+    }
   }
   let maximized = false;
   const api = {
-    minimize: async () => { calls.push('minimize'); },
-    toggleMaximize: async () => { calls.push('toggle'); maximized = !maximized; },
+    minimize: async () => {
+      calls.push('minimize');
+    },
+    toggleMaximize: async () => {
+      calls.push('toggle'); maximized = !maximized;
+    },
     isMaximized: async () => maximized,
-    close: async () => { calls.push('close'); },
-    startDragging: async () => { calls.push('drag'); },
+    close: async () => {
+      calls.push('close');
+    },
+    startDragging: async () => {
+      calls.push('drag');
+    },
   };
   /** @type {string[]} */ const events = [];
-  const host = { ShirohaDesktopHost: { window: api }, ResizeObserver, addEventListener() {}, dispatchEvent: (/** @type {Event} */ event) => { events.push(event.type); return true; }, setTimeout, clearTimeout };
+  const host = {
+    ShirohaDesktopHost: { window: api },
+    ResizeObserver,
+    addEventListener() {},
+    dispatchEvent: (/** @type {Event} */ event) => {
+      events.push(event.type); return true;
+    },
+    setTimeout,
+    clearTimeout,
+  };
   const document = {
     getElementById: (/** @type {string} */ id) => elements.get(id),
-    body: { style: { setProperty: (/** @type {string} */ name, /** @type {string} */ value) => { properties.set(name, value); } } },
+    body: {
+      style: {
+        setProperty: (/** @type {string} */ name, /** @type {string} */ value) => {
+          properties.set(name, value);
+        },
+      },
+    },
   };
   const start = () => vm.runInNewContext(source, { window: host, document, ResizeObserver, Event: globalThis.Event });
   return { get, calls, events, api, start, host, label, properties, observed, resize: () => resize() };
@@ -106,7 +145,9 @@ test('pending actions do not double-submit and failures restore controls with a 
   const f = fixture();
   /** @type {(reason: Error) => void} */
   let reject = () => {};
-  f.api.minimize = () => new Promise((_, rejectAction) => { reject = rejectAction; f.calls.push('minimize'); });
+  f.api.minimize = () => new Promise((_, rejectAction) => {
+    reject = rejectAction; f.calls.push('minimize');
+  });
   f.start(); await setImmediate();
   f.get('window-minimize').emit('click');
   f.get('window-minimize').emit('click');

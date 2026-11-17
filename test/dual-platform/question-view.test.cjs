@@ -15,16 +15,26 @@ test('MathJax 预热合并配置时保留已有赋值语义', () => {
   Object.defineProperty(options, '__proto__', { value: optionsPrototype, enumerable: true });
   Object.defineProperty(tex, 'customSetting', {
     enumerable: true,
-    get() { reads += 1; return 'preserved'; },
+    get() {
+      reads += 1; return 'preserved';
+    },
   });
   const scripts = [];
   const document = {
-    createElement(tag) { assert.equal(tag, 'script'); return {}; },
-    head: { appendChild(script) { scripts.push(script); } },
+    createElement(tag) {
+      assert.equal(tag, 'script'); return {};
+    },
+    head: {
+      appendChild(script) {
+        scripts.push(script);
+      },
+    },
   };
   const window = {
     MathJax: { tex, options },
-    requestIdleCallback(callback) { callback(); },
+    requestIdleCallback(callback) {
+      callback();
+    },
   };
   const context = vm.createContext({ window, document });
   runWebScripts(context, ['question-view.js']);

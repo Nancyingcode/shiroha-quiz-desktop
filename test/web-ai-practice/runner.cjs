@@ -4,9 +4,26 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const http = require('node:http');
 const path = require('node:path');
-const { analysis, MOCK_ENDPOINT, FAKE_KEY, MODEL } = require('./fixtures.cjs');
+const {
+  analysis,
+  MOCK_ENDPOINT,
+  FAKE_KEY,
+  MODEL,
+} = require('./fixtures.cjs');
 const { cases } = require('./cases.cjs');
-const { TEST_ROOT, WEB_ROOT, within, reportPath, storageKeys, loadPlaywright, startServer, baseUrl, setup, bounded, assertKeys } = require('./harness.cjs');
+const {
+  TEST_ROOT,
+  WEB_ROOT,
+  within,
+  reportPath,
+  storageKeys,
+  loadPlaywright,
+  startServer,
+  baseUrl,
+  setup,
+  bounded,
+  assertKeys,
+} = require('./harness.cjs');
 
 function argumentsFrom(argv) {
   const options = { timeout: 10000, headed: false, selfTest: false, list: false, filter: '' };
@@ -31,7 +48,9 @@ function rawGet(url, requestPath) {
     const request = http.request(new URL(url), { path: requestPath, method: 'GET' }, (response) => {
       let body = '';
       response.setEncoding('utf8');
-      response.on('data', (chunk) => { body += chunk; });
+      response.on('data', (chunk) => {
+        body += chunk;
+      });
       response.on('end', () => resolve({ status: response.statusCode, body }));
     });
     request.on('error', reject);
@@ -77,7 +96,9 @@ async function frameworkSelfTest(browser, url, keys, timeout, ownedServer) {
     assert.equal(JSON.parse(plain.payload.choices[0].message.content).revisedAnalysis, 'SELF_TEST_REVISION');
     const held = h.mock.enqueue('analysis', analysis('SELF_TEST_DELAY'), { hold: true });
     let settled = false;
-    const delayed = call().then((value) => { settled = true; return value; });
+    const delayed = call().then((value) => {
+      settled = true; return value;
+    });
     await h.waitCall(held);
     assert.equal(settled, false);
     held.release();
@@ -86,7 +107,9 @@ async function frameworkSelfTest(browser, url, keys, timeout, ownedServer) {
     assert.equal((await call()).status, 503);
     await h.waitCall(failure);
     for (const target of ['https://blocked-network.invalid/v1/chat/completions', new URL('unexpected-fetch', url).href]) {
-      assert.equal(await h.page.evaluate(async (target) => { try { await fetch(target); return false; } catch { return true; } }, target), true);
+      assert.equal(await h.page.evaluate(async (target) => {
+        try { await fetch(target); return false; } catch { return true; }
+      }, target), true);
     }
     assert.equal(h.blocked.length, 2);
     assert.equal(h.mock.violations.length, 0);
@@ -98,7 +121,9 @@ async function frameworkSelfTest(browser, url, keys, timeout, ownedServer) {
 
 async function main() {
   const events = [];
-  const emit = (event) => { events.push(event); process.stdout.write(`${JSON.stringify(event)}\n`); };
+  const emit = (event) => {
+    events.push(event); process.stdout.write(`${JSON.stringify(event)}\n`);
+  };
   let server;
   let browser;
   let options;
@@ -168,4 +193,6 @@ async function main() {
   }
 }
 
-main().catch((error) => { process.stderr.write(`${error.stack}\n`); process.exitCode = 2; });
+main().catch((error) => {
+  process.stderr.write(`${error.stack}\n`); process.exitCode = 2;
+});

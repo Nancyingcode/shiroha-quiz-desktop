@@ -74,9 +74,16 @@
     return value ? value.split(/\s*(?:\/|；|;)\s*/).map((part) => part.trim()).filter(Boolean) : [];
   }
 
-  function createRecordConverters({ makeId, now, serializeQuestion, toNativeQuestionType }) {
+  function createRecordConverters({
+    makeId,
+    now,
+    serializeQuestion,
+    toNativeQuestionType,
+  }) {
     const {
-      normalizeWebQuestionType, normalizeBlankAnswersV58914, cloneBlankAnswersV58914,
+      normalizeWebQuestionType,
+      normalizeBlankAnswersV58914,
+      cloneBlankAnswersV58914,
       isMultiBlankQuestionV58914,
     } = globalThis.ShirohaQuizCore;
 

@@ -46,22 +46,30 @@
   const run = async (action) => {
     if (actionPending) { return; }
     actionPending = true;
-    buttons.forEach((button) => { button.disabled = true; });
+    buttons.forEach((button) => {
+      button.disabled = true;
+    });
     status.hidden = true;
     try {
       await action();
       await syncMaximized();
     } catch { showError(); } finally {
       actionPending = false;
-      buttons.forEach((button) => { button.disabled = false; });
+      buttons.forEach((button) => {
+        button.disabled = false;
+      });
     }
   };
   minimize.addEventListener('click', () => {
     window.dispatchEvent(new Event('shiroha:practice-hidden'));
     void run(() => appWindow.minimize());
   });
-  maximize.addEventListener('click', () => { void run(() => appWindow.toggleMaximize()); });
-  close.addEventListener('click', () => { void run(() => appWindow.close()); });
+  maximize.addEventListener('click', () => {
+    void run(() => appWindow.toggleMaximize());
+  });
+  close.addEventListener('click', () => {
+    void run(() => appWindow.close());
+  });
   drag.addEventListener('mousedown', (event) => {
     if (event.button !== 0) { return; }
     event.preventDefault();
@@ -69,8 +77,12 @@
   });
   window.addEventListener('resize', () => {
     window.clearTimeout(resizeTimer);
-    resizeTimer = window.setTimeout(() => { void syncMaximized().catch(showError); }, 80);
+    resizeTimer = window.setTimeout(() => {
+      void syncMaximized().catch(showError);
+    }, 80);
   });
-  buttons.forEach((button) => { button.disabled = false; });
+  buttons.forEach((button) => {
+    button.disabled = false;
+  });
   void syncMaximized().catch(showError);
 })();

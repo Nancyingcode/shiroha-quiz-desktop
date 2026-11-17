@@ -55,17 +55,29 @@
     /** @type {ReturnType<typeof setTimeout>|undefined} */ let readTimer;
     let notice = '';
 
-    function stopPolling() { clearTimeout(timer); timer = undefined; }
+    function stopPolling() {
+      clearTimeout(timer); timer = undefined;
+    }
     /** @param {boolean} [blocked] */
     function notifyAccount(blocked = false) {
       if (current.revision >= 0) { scope.ShirohaPlatform?.harness?.codebuddyAccountChanged({ revision: current.revision, phase: current.phase, blocked }); }
     }
-    function pendingLogin() { return current.phase === 'authenticating' || current.phase === 'restoring' || action === 'login' || action === 'retry_restore'; }
-    function pendingStorage() { return current.persistenceState === 'saving' || current.persistenceState === 'clearing'; }
-    function storageBlocked() { return pendingStorage() || current.persistenceState === 'cleanup_required'; }
-    function usableLink() { return !cleanupPending && current.phase === 'authenticating' && !!current.loginUrl; }
+    function pendingLogin() {
+      return current.phase === 'authenticating' || current.phase === 'restoring' || action === 'login' || action === 'retry_restore';
+    }
+    function pendingStorage() {
+      return current.persistenceState === 'saving' || current.persistenceState === 'clearing';
+    }
+    function storageBlocked() {
+      return pendingStorage() || current.persistenceState === 'cleanup_required';
+    }
+    function usableLink() {
+      return !cleanupPending && current.phase === 'authenticating' && !!current.loginUrl;
+    }
     /** @param {number} epoch */
-    function isCurrentRequest(epoch) { return epoch === generation && !disposed; }
+    function isCurrentRequest(epoch) {
+      return epoch === generation && !disposed;
+    }
     function render() {
       if (!panel || disposed) { return; }
       const reading = refreshing && !pendingLogin();
@@ -138,7 +150,9 @@
       if (!pendingLogin()) { notifyAccount(true); }
       render();
       try {
-        const result = await Promise.race([host?.invoke('codebuddy_control', { request: { kind: 'status' } }), new Promise((_, reject) => { readTimer = setTimeout(() => reject(new Error('status_timeout')), statusTimeoutMs); })]);
+        const result = await Promise.race([host?.invoke('codebuddy_control', { request: { kind: 'status' } }), new Promise((_, reject) => {
+          readTimer = setTimeout(() => reject(new Error('status_timeout')), statusTimeoutMs);
+        })]);
         if (!isCurrentRequest(epoch)) { return; }
         if (accept(readStatus(result), requestSequence)) { notifyAccount(!!cleanupPending || storageBlocked()); }
       } catch {
@@ -206,14 +220,32 @@
     }
     /** @type {Array<[string,Action]>} */
     const actions = [['login', 'login'], ['open-login', 'open_login'], ['cancel', 'cancel'], ['logout', 'logout']];
-    for (const [name, kind] of actions) { button(name)?.addEventListener('click', () => { void perform(kind); }); }
-    button('refresh')?.addEventListener('click', () => { void refreshStatus(); });
-    button('copy-link')?.addEventListener('click', () => { void copyLink(); });
-    rememberField?.addEventListener('change', () => { rememberChoice = rememberField.checked; if (current.phase === 'signed_in') { void perform('set_remember'); } });
-    button('retry-restore')?.addEventListener('click', () => { void perform('retry_restore'); });
-    button('retry-save')?.addEventListener('click', () => { rememberChoice = true; void perform('set_remember'); });
-    document.addEventListener('shiroha-codebuddy-account-refresh', () => { void refreshStatus(); });
-    scope.addEventListener('pagehide', () => { disposed = true; generation += 1; stopPolling(); clearTimeout(readTimer); readTimer = undefined; }, { once: true });
+    for (const [name, kind] of actions) {
+      button(name)?.addEventListener('click', () => {
+        void perform(kind);
+      });
+    }
+    button('refresh')?.addEventListener('click', () => {
+      void refreshStatus();
+    });
+    button('copy-link')?.addEventListener('click', () => {
+      void copyLink();
+    });
+    rememberField?.addEventListener('change', () => {
+      rememberChoice = rememberField.checked; if (current.phase === 'signed_in') { void perform('set_remember'); }
+    });
+    button('retry-restore')?.addEventListener('click', () => {
+      void perform('retry_restore');
+    });
+    button('retry-save')?.addEventListener('click', () => {
+      rememberChoice = true; void perform('set_remember');
+    });
+    document.addEventListener('shiroha-codebuddy-account-refresh', () => {
+      void refreshStatus();
+    });
+    scope.addEventListener('pagehide', () => {
+      disposed = true; generation += 1; stopPolling(); clearTimeout(readTimer); readTimer = undefined;
+    }, { once: true });
     render();
     void refreshStatus();
   }
@@ -256,7 +288,9 @@
       if (refresh) { refresh.disabled = reading === 'refresh' || initialRead || current?.busy === true; refresh.textContent = '刷新登录状态'; }
     }
     /** @param {number} requestSequence */
-    function isCurrentCliRead(requestSequence) { return !disposed && requestSequence === sequence; }
+    function isCurrentCliRead(requestSequence) {
+      return !disposed && requestSequence === sequence;
+    }
     /** @param {'status'|'refresh'} [kind] */
     async function readCli(kind = 'status') {
       if (disposed) { return; }
@@ -274,7 +308,9 @@
         /** @type {import('../../web/platform/runtime').CodeBuddyCliControl} */
         const request = requestKind === 'refresh' && current
           ? { kind: requestKind, revision: current.revision } : { kind: 'status' };
-        const value = await Promise.race([host?.invoke('codebuddy_control', { request }), new Promise((_, reject) => { requestTimeout = setTimeout(() => reject(new Error('status_timeout')), statusTimeoutMs);readTimeouts.add(requestTimeout); })]);
+        const value = await Promise.race([host?.invoke('codebuddy_control', { request }), new Promise((_, reject) => {
+          requestTimeout = setTimeout(() => reject(new Error('status_timeout')), statusTimeoutMs);readTimeouts.add(requestTimeout);
+        })]);
         if (!isCurrentCliRead(requestSequence)) { return; }
         const next = /** @type {CliStatus} */ (readStatus(value));
         const cliPhase = ['signed_out', 'restoring', 'signed_in', 'expired', 'failed'].includes(next.phase);
@@ -300,12 +336,20 @@
           reading = undefined; renderCli();
           if (shouldAutoRefresh && scope.ShirohaPlatform?.harness?.ensureReady) {
             void scope.ShirohaPlatform.harness.ensureReady();
-            timer = setTimeout(() => { timer = undefined;void readCli(); }, pollIntervalMs);
-          } else if (shouldAutoRefresh) { void readCli('refresh'); } else { timer = setTimeout(() => { timer = undefined;void readCli(); }, pollIntervalMs); }
+            timer = setTimeout(() => {
+              timer = undefined;void readCli();
+            }, pollIntervalMs);
+          } else if (shouldAutoRefresh) { void readCli('refresh'); } else {
+            timer = setTimeout(() => {
+              timer = undefined;void readCli();
+            }, pollIntervalMs);
+          }
         }
       }
     }
-    refresh?.addEventListener('click', () => { void readCli('refresh'); });
+    refresh?.addEventListener('click', () => {
+      void readCli('refresh');
+    });
     async function copyCommand() {
       try {
         await navigator.clipboard.writeText('codebuddy');
@@ -315,9 +359,15 @@
       }
       if (!disposed) { renderCli(); }
     }
-    element('copy-command')?.addEventListener('click', () => { void copyCommand(); });
-    document.addEventListener('shiroha-codebuddy-account-refresh', () => { void readCli(); });
-    scope.addEventListener('pagehide', () => { disposed = true;sequence += 1;clearTimeout(timer);for (const pending of readTimeouts) { clearTimeout(pending); }readTimeouts.clear(); }, { once: true });
+    element('copy-command')?.addEventListener('click', () => {
+      void copyCommand();
+    });
+    document.addEventListener('shiroha-codebuddy-account-refresh', () => {
+      void readCli();
+    });
+    scope.addEventListener('pagehide', () => {
+      disposed = true;sequence += 1;clearTimeout(timer);for (const pending of readTimeouts) { clearTimeout(pending); }readTimeouts.clear();
+    }, { once: true });
     renderCli();
     void readCli();
   }

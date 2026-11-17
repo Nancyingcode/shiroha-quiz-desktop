@@ -30,14 +30,28 @@ function editorFixture() {
     escape: (value) => String(value),
     label: (value) => String(value),
     short: (value) => value,
-    parser: { countTypes: (items) => ({ single: items.length }), issueStatus: (question) => { diagnostics += 1;return question.issue; } },
+    parser: {
+      countTypes: (items) => ({ single: items.length }),
+      issueStatus: (question) => {
+        diagnostics += 1;return question.issue;
+      },
+    },
     suggestions: { renderRow: () => '', bind() {}, sync() {}, invalidateImport() {} },
     editor: { updateBankUi() {}, syncAppend() {} },
     practice: {},
     view: {},
     storage: {},
   });
-  return { editor, draft, nodes, checkbox, count: () => diagnostics, reset: () => { diagnostics = 0; } };
+  return {
+    editor,
+    draft,
+    nodes,
+    checkbox,
+    count: () => diagnostics,
+    reset: () => {
+      diagnostics = 0;
+    },
+  };
 }
 
 test('普通预览一轮复用诊断且编辑后重新计算排序和报告', () => {
@@ -66,8 +80,31 @@ function targetFixture() {
   let diagnostics = 0;
   const context = vm.createContext({});
   runWebScripts(context, ['ai-import-panel.js']);
-  const panel = context.ShirohaAiImportPanel.create({ draft, sessions: { importRequest: {}, previewRequest: {} }, platform: {}, select: (name) => nodes[name] || null, selectAll: () => [], settings: {}, requests: {}, editor: {}, preview: { status: (question) => { diagnostics += 1;return question.issue; } }, limits: {} });
-  return { draft, nodes, panel, count: () => diagnostics, reset: () => { diagnostics = 0; } };
+  const panel = context.ShirohaAiImportPanel.create({
+    draft,
+    sessions: { importRequest: {}, previewRequest: {} },
+    platform: {},
+    select: (name) => nodes[name] || null,
+    selectAll: () => [],
+    settings: {},
+    requests: {},
+    editor: {},
+    preview: {
+      status: (question) => {
+        diagnostics += 1;return question.issue;
+      },
+    },
+    limits: {},
+  });
+  return {
+    draft,
+    nodes,
+    panel,
+    count: () => diagnostics,
+    reset: () => {
+      diagnostics = 0;
+    },
+  };
 }
 
 function expectedTargets(draft, mode, scope, condition) {
@@ -139,7 +176,9 @@ function uiElement(hidden = false) {
       add: (name) => classes.add(name),
       remove: (name) => classes.delete(name),
       contains: (name) => classes.has(name),
-      toggle(name, enabled) { if (enabled) { classes.add(name); } else { classes.delete(name); } },
+      toggle(name, enabled) {
+        if (enabled) { classes.add(name); } else { classes.delete(name); }
+      },
     },
     setAttribute() {},
     scrollIntoView() {},
@@ -152,7 +191,12 @@ function panelUiFixture() {
   for (const name of ['ai-import-panel-v99', 'ai-preview-panel-v991', 'ai-import-provider-v99', 'ai-preview-title-v991', 'ai-preview-status-v991', 'ai-organize-import-btn-v99', 'ai-review-import-btn-v991', 'ai-analysis-import-btn-v991', 'ai-preview-range-start-v992', 'ai-preview-range-end-v992', 'ai-preview-condition-v992', 'ai-preview-batch-v991']) { nodes[`#${name}`] = uiElement(); }
   for (const [name, key] of [['#ai-import-provider-v99', 'import'], ['#ai-preview-title-v991', 'preview']]) {
     let value = '';
-    Object.defineProperty(nodes[name], 'textContent', { get: () => value, set: (next) => { value = next;counts[key] += 1; } });
+    Object.defineProperty(nodes[name], 'textContent', {
+      get: () => value,
+      set: (next) => {
+        value = next;counts[key] += 1;
+      },
+    });
   }
   function makeScope() {
     const node = uiElement();let html = '';
@@ -171,22 +215,37 @@ function panelUiFixture() {
   let selectedScope = 'all';
   const all = uiElement();const selection = uiElement();
   function bindRadio(node, scope) {
-    Object.defineProperty(node, 'checked', { get: () => selectedScope === scope, set: (value) => { if (value) { selectedScope = scope; } } });
+    Object.defineProperty(node, 'checked', {
+      get: () => selectedScope === scope,
+      set: (value) => {
+        if (value) { selectedScope = scope; }
+      },
+    });
   }
   bindRadio(all, 'all');bindRadio(selection, 'selection');
   nodes['#ai-import-scope-all-v992'] = all;nodes['#ai-import-scope-selection-v992'] = selection;
   const listeners = new Map();
   const field = uiElement();field.value = 'abcdefghij';field.selectionStart = 0;field.selectionEnd = 3;
-  field.addEventListener = (name, callback) => { if (!listeners.has(name)) { listeners.set(name, []); } listeners.get(name).push(callback); };
+  field.addEventListener = (name, callback) => {
+    if (!listeners.has(name)) { listeners.set(name, []); } listeners.get(name).push(callback);
+  };
   nodes['#import-text'] = field;
   const draft = { questions: [{ id: '1', analysis: '' }, { id: '2', analysis: '' }, { id: '3', analysis: '' }], selected: new Set(), filter: 'all', diagnostics: {} };
   const sessions = { importRequest: { running: false }, previewRequest: { running: false } };
-  let notification = () => { throw new Error('未绑定通知'); };
+  let notification = () => {
+    throw new Error('未绑定通知');
+  };
   const context = vm.createContext({});runWebScripts(context, ['ai-import-sessions.js', 'ai-import-panel.js']);
   const panel = context.ShirohaAiImportPanel.create({
     draft,
     sessions,
-    platform: { harness: { bind: (callback) => { notification = callback; } } },
+    platform: {
+      harness: {
+        bind: (callback) => {
+          notification = callback;
+        },
+      },
+    },
     select: (name) => nodes[name] || null,
     selectAll: (name) => (name === 'input[name="ai-import-scope-v992"]' ? [all, selection] : []),
     settings: {
@@ -197,16 +256,30 @@ function panelUiFixture() {
       isHarness: () => false,
       executionLabel: () => 'mock',
       localEndpoint: () => false,
-      updatePill: () => { counts.pill += 1; },
+      updatePill: () => {
+        counts.pill += 1;
+      },
       render() {},
     },
     requests: { busy: () => false, invalidateImport() {} },
     editor: { isEditing: () => false },
-    preview: { status: () => '正常', renderPracticeAi: () => { counts.practice += 1; }, updateReview: () => { counts.review += 1; } },
+    preview: {
+      status: () => '正常',
+      renderPracticeAi: () => {
+        counts.practice += 1;
+      },
+      updateReview: () => {
+        counts.review += 1;
+      },
+    },
     limits: { importChars: 50000, items: 200, analysisBatch: 10, reviewBatch: 20 },
   });
-  const reset = () => { for (const key of Object.keys(counts)) { counts[key] = 0; } };
-  const fire = (name) => { for (const callback of listeners.get(name) || []) { callback(); } };
+  const reset = () => {
+    for (const key of Object.keys(counts)) { counts[key] = 0; }
+  };
+  const fire = (name) => {
+    for (const callback of listeners.get(name) || []) { callback(); }
+  };
   return { panel, nodes, counts, reset, fire, notify: () => notification(), makeScope, field, all, selection };
 }
 
@@ -277,8 +350,12 @@ test('全局渲染只通过导入同步入口刷新一次预览面板', () => {
   const names = ['ensureBankGroupUiV58', 'ensurePracticeScopeV8916', 'updateAiConnectionPillV99', 'renderStats', 'renderBankSelect', 'renderMergeSelect', 'renderBankList', 'renderBankPreview', 'renderWrongBook', 'renderFavoritesPageV596', 'renderRecords', 'renderRecentTraining', 'renderBankInputs', 'renderBuiltInPanelV252', 'renderPracticeScopeUiV8916', 'renderExportBankSelectorV23', 'renderImportTargetBankOptionsV59', 'syncImportAppendUiV59', 'syncHomeVersionPromptV586', 'syncPracticeStartUiV58916'];
   const context = vm.createContext({
     ...Object.fromEntries(names.map((name) => [name, () => {}])),
-    syncAiImportActionV99() { counts.import += 1;counts.preview += 1; },
-    syncAiPreviewToolsV991() { counts.preview += 1; },
+    syncAiImportActionV99() {
+      counts.import += 1;counts.preview += 1;
+    },
+    syncAiPreviewToolsV991() {
+      counts.preview += 1;
+    },
   });
   vm.runInContext(`${loadWebSource().functionSource('renderAll')}\nrenderAll();`, context);
   assert.deepEqual(counts, { import: 1, preview: 1 });

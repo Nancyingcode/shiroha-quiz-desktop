@@ -205,7 +205,9 @@ async function runCase(executable, runRoot, scenario, guarded = false) {
       response.writeHead(404).end();
       return;
     }
-    response.on('close', () => { connectionClosed = true; });
+    response.on('close', () => {
+      connectionClosed = true;
+    });
     response.writeHead(200, { 'content-type': 'text/event-stream' });
     response.write(': synthetic local fixture\n\n');
     if (calls.length === 1) {
@@ -325,7 +327,11 @@ async function runCase(executable, runRoot, scenario, guarded = false) {
     if (usesControlProtocol) { sendControl('initialize'); } else { child.stdin.end(prompt); }
     exit = await closed;
     await cleanupPromise;
-    if (!connectionClosed) { await new Promise((resolve) => { setTimeout(resolve, 100); }); }
+    if (!connectionClosed) {
+      await new Promise((resolve) => {
+        setTimeout(resolve, 100);
+      });
+    }
     connectionClosedBeforeCleanup = connectionClosed;
   } finally {
     clearTimeout(timer);
@@ -334,7 +340,9 @@ async function runCase(executable, runRoot, scenario, guarded = false) {
     await cleanupPromise;
     await relay?.close();
     server.closeAllConnections();
-    await new Promise((resolve) => { server.close(resolve); });
+    await new Promise((resolve) => {
+      server.close(resolve);
+    });
   }
   for (const line of stdout.split(/\r?\n/).filter((line) => line.trim())) {
     try { events.push(JSON.parse(line)); } catch { events.push({ invalid: line }); }

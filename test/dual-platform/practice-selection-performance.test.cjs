@@ -60,7 +60,19 @@ function fixture() {
     },
     progress: { answer: () => ({}) },
   });
-  return { api, banks, nodes, state, start, from, continued, count: () => enumerated, reset: () => { enumerated = 0; } };
+  return {
+    api,
+    banks,
+    nodes,
+    state,
+    start,
+    from,
+    continued,
+    count: () => enumerated,
+    reset: () => {
+      enumerated = 0;
+    },
+  };
 }
 
 test('随机起点控件同步不枚举题目，顺序模式仍定位跨库进度', () => {

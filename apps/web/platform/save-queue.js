@@ -25,7 +25,9 @@
             blocked = true;
             throw error;
           }
-        }).finally(() => { pending -= 1; });
+        }).finally(() => {
+          pending -= 1;
+        });
         tail = next.catch(() => {});
         return next;
       },
@@ -39,7 +41,9 @@
         const idleState = blocked ? 'failed' : 'saved';
         return { state: pending ? 'pending' : idleState, revision: storage.revision() };
       },
-      async idle() { await tail; },
+      async idle() {
+        await tail;
+      },
     };
   }
   const api = { create };

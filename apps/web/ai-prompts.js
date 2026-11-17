@@ -1,7 +1,12 @@
 (() => {
   'use strict';
 
-  function create({ question: practiceQuestionV8916, importKey: aiQuestionKeyV991, validate: validateQuestion, maxChars: AI_IMPORT_MAX_CHARS_V99 }) {
+  function create({
+    question: practiceQuestionV8916,
+    importKey: aiQuestionKeyV991,
+    validate: validateQuestion,
+    maxChars: AI_IMPORT_MAX_CHARS_V99,
+  }) {
     function aiRefactorQuestionSnapshotV384(q, index) {
       const item = q && typeof q === 'object' ? q : {};
       return {
@@ -25,7 +30,12 @@
       };
     }
 
-    function buildAiMessagesV99(text, { requestedMode = 'direct_questions', fallbackReason = '', currentQuestions = [], warnings = [] } = {}) {
+    function buildAiMessagesV99(text, {
+      requestedMode = 'direct_questions',
+      fallbackReason = '',
+      currentQuestions = [],
+      warnings = [],
+    } = {}) {
       const schema = '{"mode":"direct_questions|clean_text","cleanedText":"","cleanedAnswerText":"","questions":[{"number":"1","type":"single|multiple|judge|blank|short","question":"原题干","options":[{"key":"A","text":"原选项"}],"answer":["A"],"blankAnswers":[["主答案","等价答案"]],"analysis":"原文解析","category":"原章节","score":null,"subject":"","grade":"","difficulty":"","knowledgePoints":[],"tags":[],"source":""}],"notes":[]}';
       const system = `你是 Shiroha Quiz 的题库 AI 结构化清洗助手。只依据收到的题库原文和客户端已有识别结果整理结构，不得重新解题、改写题意或补充原文不存在的内容。\n处理优先级：\n1. requestedMode=direct_questions 时优先返回结构化 questions，不要先把题目重新拼成文本再让客户端猜题块；只有原始信息不足以可靠结构化时才允许返回 clean_text。\n2. requestedMode=clean_text 时必须返回 cleanedText，作为结构化失败后的兼容兜底。\n3. direct_questions 要尽量逐字保留题干、选项、答案、解析、题号和章节关系，只清理无意义格式噪声。\n4. 同一题号在不同章节或题型分区重复时不得合并。独立答案区只有在题号、章节、题型分区等证据明确时才能合回题目；无法确认时答案保持为空并写 notes。\n5. [[SHIROHA_IMAGE:img_0001]] 这类图片占位符必须原样保留在对应题干、选项或解析中，不得删除、改写或移动到其他题。\n结构化要求：\n- type 只允许 single / multiple / judge / blank / short；question 必须非空。\n- options 仅允许 A-G 且键不重复；无选项返回 []。\n- 单选/多选 answer 用选项字母数组；判断题可用 正确/错误；无法确认返回 []。\n- 多空填空优先返回 blankAnswers；简答题只保留原文已有参考答案。\n- analysis 没有可靠原文来源时返回空字符串，不得生成新解析。\n- number、category 及 score/subject/grade/difficulty/knowledgePoints/tags/source 等已有元数据应尽量保留；没有时不要编造。\n严格要求：禁止凭空增加题目、选项、答案、数字、单位、人名、项目名或真实事件；碎片题只有原文证据明确时才能合并；怀疑漏题只写 notes，不得补写。只输出合法 JSON，不要 Markdown 或额外解释。输出结构：${schema}`;
       const payload = { task: 'refactor_questions', requestedMode, fallbackReason, sourceText: text, answerText: '', currentQuestionCount: currentQuestions.length, currentQuestions, warnings };

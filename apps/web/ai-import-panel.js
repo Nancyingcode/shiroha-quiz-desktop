@@ -1,9 +1,20 @@
 (() => {
   'use strict';
   function create({
-    draft: importDraft, sessions: aiImportSessions, platform: ShirohaPlatform,
-    select: $, selectAll: $$, escape: esc, label, toast, showNotice,
-    settings, requests, editor, preview, limits,
+    draft: importDraft,
+    sessions: aiImportSessions,
+    platform: ShirohaPlatform,
+    select: $,
+    selectAll: $$,
+    escape: esc,
+    label,
+    toast,
+    showNotice,
+    settings,
+    requests,
+    editor,
+    preview,
+    limits,
   }) {
     const {
       presets: AI_PROVIDER_PRESETS_V99,

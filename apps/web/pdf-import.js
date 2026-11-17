@@ -91,8 +91,12 @@
       }
       return cleanupPdfLiteText(text);
     }
-    function latin1(u8) { let out = '';const chunk = 0x8000;for (let i = 0;i < u8.length;i += chunk) { out += String.fromCharCode.apply(null, u8.slice(i, i + chunk)); } return out; }
-    function latin1ToBytes(s) { const out = new Uint8Array(s.length);for (let i = 0;i < s.length;i += 1) { out[i] = s.charCodeAt(i) & 255; } return out; }
+    function latin1(u8) {
+      let out = '';const chunk = 0x8000;for (let i = 0;i < u8.length;i += chunk) { out += String.fromCharCode.apply(null, u8.slice(i, i + chunk)); } return out;
+    }
+    function latin1ToBytes(s) {
+      const out = new Uint8Array(s.length);for (let i = 0;i < s.length;i += 1) { out[i] = s.charCodeAt(i) & 255; } return out;
+    }
     async function inflateBytes(u8) {
       if (!('DecompressionStream' in window)) { throw new Error('当前浏览器缺少 DecompressionStream，无法解压 PDF 压缩文本流'); }
       const tryOne = async (fmt) => new Uint8Array(await new globalThis.Response(new Blob([u8]).stream().pipeThrough(new globalThis.DecompressionStream(fmt))).arrayBuffer());

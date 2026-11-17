@@ -1,29 +1,69 @@
 (() => {
   'use strict';
   function create({
-    state, select: $, selectAll: $$, escape: esc, label, short, formatDate: fmt, toast,
-    platform: ShirohaPlatform, training: ShirohaTraining, paging, content, review, navigation, practice, actions = {},
+    state,
+    select: $,
+    selectAll: $$,
+    escape: esc,
+    label,
+    short,
+    formatDate: fmt,
+    toast,
+    platform: ShirohaPlatform,
+    training: ShirohaTraining,
+    paging,
+    content,
+    review,
+    navigation,
+    practice,
+    actions = {},
   }) {
     const {
-      visible: nativeViewVisible, begin: beginNativeRender, page: nativePage, versions: nativeRenderVersions,
-      pages: nativePages, openRecords: nativeOpenRecords, loadItems: loadNativeItems, read: readNative,
+      visible: nativeViewVisible,
+      begin: beginNativeRender,
+      page: nativePage,
+      versions: nativeRenderVersions,
+      pages: nativePages,
+      openRecords: nativeOpenRecords,
+      loadItems: loadNativeItems,
+      read: readNative,
     } = paging;
     const {
-      blankAnswers: blankAnswersFromDetailV58914, blankUserAnswers: blankUserAnswersFromDetailV58914,
-      normalizeType: normalizeWebQuestionType, questionContent: renderQuestionContent, questionBody: renderQuestionBodyV83,
-      isMultiBlank: isMultiBlankQuestionV58914, multiBlankComparison: renderMultiBlankComparisonV58914,
-      practiceAnswer: practiceReviewAnswerHtml, hasAnswer: hasAnswerValueV58914, options: renderReviewOptions,
+      blankAnswers: blankAnswersFromDetailV58914,
+      blankUserAnswers: blankUserAnswersFromDetailV58914,
+      normalizeType: normalizeWebQuestionType,
+      questionContent: renderQuestionContent,
+      questionBody: renderQuestionBodyV83,
+      isMultiBlank: isMultiBlankQuestionV58914,
+      multiBlankComparison: renderMultiBlankComparisonV58914,
+      practiceAnswer: practiceReviewAnswerHtml,
+      hasAnswer: hasAnswerValueV58914,
+      options: renderReviewOptions,
     } = content;
     const {
-      sessions: reviewAiSessions, analysis: renderReviewAnalysis, updatePanels: updateReviewAnalysisPanels,
+      sessions: reviewAiSessions,
+      analysis: renderReviewAnalysis,
+      updatePanels: updateReviewAnalysisPanels,
       typeset: scheduleMathJaxTypesetV56,
     } = review;
-    const { switchView: switchViewV45, exitPractice: exitPracticeFocus, exitExam: exitExamFocus, status: platformStatus } = navigation;
     const {
-      setup: openQuickPracticeSetup, groupName: bankGroupNameV58, setBank: setPracticeBankScopeV8916,
-      setGroup: setPracticeGroupScopeV8916, baseItems: practiceBaseItemsV58916, scope: practiceScopeV8916,
-      itemBankId: practiceItemBankIdV8916, question: practiceQuestionV8916, exactNumbers: formatExactPracticeNumbersV58916,
-      renderScope: renderPracticeScopeUiV8916, syncMode: syncPracticeStartModeFieldsV58916,
+      switchView: switchViewV45,
+      exitPractice: exitPracticeFocus,
+      exitExam: exitExamFocus,
+      status: platformStatus,
+    } = navigation;
+    const {
+      setup: openQuickPracticeSetup,
+      groupName: bankGroupNameV58,
+      setBank: setPracticeBankScopeV8916,
+      setGroup: setPracticeGroupScopeV8916,
+      baseItems: practiceBaseItemsV58916,
+      scope: practiceScopeV8916,
+      itemBankId: practiceItemBankIdV8916,
+      question: practiceQuestionV8916,
+      exactNumbers: formatExactPracticeNumbersV58916,
+      renderScope: renderPracticeScopeUiV8916,
+      syncMode: syncPracticeStartModeFieldsV58916,
     } = practice;
     const { transaction: runMutation, save: saveSilent, renderAll } = actions;
     // 复盘快照和请求序号仅属于当前页面；离开时释放引用并使迟到读取失效。
@@ -298,7 +338,9 @@
       }
       const renderVersion = beginNativeRender('training-review');
       const { record } = view; const rows = ShirohaTraining.reviewRows(record); const counts = { correct: 0, wrong: 0, unanswered: 0, unrecorded: 0 };
-      rows.forEach((row) => { counts[row.status] += 1; });
+      rows.forEach((row) => {
+        counts[row.status] += 1;
+      });
       const filtered = rows.filter((row) => view.filter === 'all' || row.status === view.filter);
       if (filtered.length && !filtered.some((row) => row.index === view.index)) {
         view.index = filtered[0].index;

@@ -110,6 +110,8 @@ const invalidCases = [
   ['@stylistic/no-mixed-operators', 'console.log(1 + 2 * 3);\n'],
   ['@stylistic/object-property-newline', 'const value = {\n  first: 1,\n  second: 2, third: 3,\n};\nconsole.log(value);\n'],
   ['@stylistic/object-curly-newline', 'const {\n  first } = { first: 1 };\nconsole.log(first);\n'],
+  ['@stylistic/curly-newline', 'function print() { console.log(1); }\nprint();\n'],
+  ['@stylistic/exp-list-style', 'const { a, b, c, d } = console;\nconsole.log(a, b, c, d);\n'],
 ];
 
 for (const filePath of probes) {
@@ -190,7 +192,9 @@ test('definition order rejects immediate reads but permits delayed closures and 
     'const read = () => value;',
     'const value = 1;',
     'console.log(read(), declared());',
-    'function declared() { return value; }',
+    'function declared() {',
+    '  return value;',
+    '}',
     '',
   ].join('\n');
   const [result] = await lint.lintText(delayed, { filePath });
@@ -321,6 +325,74 @@ test('object and destructuring layout rules apply to every handwritten file', as
     { filePath: 'apps/web/training.js' },
   );
   assert(outside.messages.some((message) => message.ruleId === '@stylistic/object-property-newline'));
+});
+
+test('function body layout expands nonempty bodies and accepts empty bodies and expression arrows', async () => {
+  const lint = linter();
+  const filePath = probes[0];
+  for (const source of [
+    'const obj = { save() { return this.value; } };',
+    'class Store { save() { return this.value; } }',
+    'const read = function () { return this.value; };',
+    'const print = (value) => { console.log(value); };',
+  ]) {
+    const [result] = await lint.lintText(source, { filePath });
+    assert(result.messages.some((message) => message.ruleId === '@stylistic/curly-newline'), source);
+  }
+  const [valid] = await lint.lintText(
+    'function noop() {}\nconst id = (item) => item.id;\nif (id) { noop(); }\n',
+    { filePath },
+  );
+  assert.equal(valid.errorCount, 0, JSON.stringify(valid.messages));
+});
+
+test('object destructuring wraps four bindings and preserves other short lists', async () => {
+  const lint = linter();
+  const filePath = probes[0];
+  const rule = '@stylistic/exp-list-style';
+  for (const source of [
+    'function print({ a, b: renamed, c = 1, ...rest }) {}',
+    'const { outer: { a, b, c, d } } = console;',
+    'const {\n  a, b,\n  c,\n  d,\n} = console;',
+  ]) {
+    const [result] = await lint.lintText(source, { filePath });
+    assert(result.messages.some((message) => message.ruleId === rule), source);
+  }
+  const valid = [
+    'const obj = { a: 1, b: 2, c: 3, d: 4 };',
+    'const { a, b, c } = obj;',
+    'const [first, second, third, fourth] = [a, b, c, obj.d];',
+    'console.log(first, second, third, fourth);',
+    '',
+  ].join('\n');
+  const [result] = await lint.lintText(valid, { filePath });
+  assert.equal(result.errorCount, 0, JSON.stringify(result.messages));
+});
+
+test('line length pilot accepts 120 characters and rejects 121 in selected modules', async () => {
+  const lint = linter();
+  const rule = '@stylistic/max-len';
+  const atLimit = `console.log('${'a'.repeat(104)}');`;
+  assert.equal(atLimit.length, 120);
+  const overLimit = atLimit.replace('aaa', 'aaaa');
+  const source = [
+    atLimit,
+    overLimit,
+    `// ${'a'.repeat(120)}`,
+    `console.log('https://example.invalid/${'a'.repeat(120)}');`,
+    `console.log(/${'a'.repeat(120)}/);`,
+    '',
+  ].join('\n');
+  for (const filePath of [
+    'apps/web/quiz-core.js', 'apps/web/text-answers.js', 'apps/web/training.js',
+    'apps/web/study-sessions.js', 'apps/web/zip.js', 'apps/web/platform/index.js',
+    'apps/web/platform/save-queue.js', 'apps/desktop/frontend/bridge.js',
+  ]) {
+    const [result] = await lint.lintText(source, { filePath });
+    assert.deepEqual(result.messages.filter((m) => m.ruleId === rule).map((m) => m.line), [2], filePath);
+  }
+  const [outside] = await lint.lintText(source, { filePath: 'apps/web/app.js' });
+  assert(!outside.messages.some((message) => message.ruleId === rule));
 });
 
 test('no-shadow pilot rejects local shadowing only in the AI import panel', async () => {

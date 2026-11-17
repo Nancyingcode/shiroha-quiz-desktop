@@ -18,7 +18,9 @@ function fixture() {
     settleTimeoutMs: 1000,
     stopChild: async (child) => {
       if (child.exitCode !== null || child.signalCode !== null) { return; }
-      const closed = new Promise((resolve) => { child.once('close', resolve); });
+      const closed = new Promise((resolve) => {
+        child.once('close', resolve);
+      });
       assert.equal(child.kill(), true);
       await closed;
     },
@@ -32,14 +34,18 @@ test('shutdown reports every child that failed to stop and retains the profile',
     checks: [],
     timeoutMs: 1000,
     settleTimeoutMs: 1000,
-    stopChild: async () => { attempts += 1; throw new Error(`stop failure ${attempts}`); },
+    stopChild: async () => {
+      attempts += 1; throw new Error(`stop failure ${attempts}`);
+    },
   });
   await control.launch(async (lifecycle) => {
     lifecycle.registerChild(/** @type {import('node:child_process').ChildProcess} */ (/** @type {unknown} */ (new EventEmitter())));
     lifecycle.registerChild(/** @type {import('node:child_process').ChildProcess} */ (/** @type {unknown} */ (new EventEmitter())));
   });
   let cleaned = false;
-  await assert.rejects(cleanupAfterShutdown(control, async () => { cleaned = true; }), (error) => {
+  await assert.rejects(cleanupAfterShutdown(control, async () => {
+    cleaned = true;
+  }), (error) => {
     assert(error instanceof Error);
     assert.match(error.message, /stop failure 1/);
     assert.match(error.message, /stop failure 2/);
@@ -54,12 +60,22 @@ test('an outer timeout stops the next shared check and waits for its late action
   /** @type {string[]} */
   const events = [];
   /** @type {() => void} */
-  let release = () => { throw new Error('gate not initialized'); };
+  let release = () => {
+    throw new Error('gate not initialized');
+  };
   /** @type {Promise<void>} */
-  const gate = new Promise((resolve) => { release = resolve; });
-  await assert.rejects(control.check('slow', async () => { await gate; events.push('late'); }), SmokeCheckAborted);
-  await assert.rejects(control.check('next', async () => { events.push('next'); }), /已停止/);
-  const cleaned = cleanupAfterShutdown(control, async () => { events.push('cleanup'); });
+  const gate = new Promise((resolve) => {
+    release = resolve;
+  });
+  await assert.rejects(control.check('slow', async () => {
+    await gate; events.push('late');
+  }), SmokeCheckAborted);
+  await assert.rejects(control.check('next', async () => {
+    events.push('next');
+  }), /已停止/);
+  const cleaned = cleanupAfterShutdown(control, async () => {
+    events.push('cleanup');
+  });
   await delay(20);
   assert.deepEqual(events, []);
   release();
@@ -72,8 +88,12 @@ test('an outer timeout stops the next shared check and waits for its late action
 test('an action failure stops the next check and retains the original failure', async () => {
   const { control, checks } = fixture();
   let next = false;
-  await assert.rejects(control.check('failed', async () => { throw new Error('step timed out'); }), SmokeCheckAborted);
-  await assert.rejects(control.check('next', async () => { next = true; }), /已停止/);
+  await assert.rejects(control.check('failed', async () => {
+    throw new Error('step timed out');
+  }), SmokeCheckAborted);
+  await assert.rejects(control.check('next', async () => {
+    next = true;
+  }), /已停止/);
   await control.shutdown();
   assert.equal(checks[0].error, 'step timed out');
   assert.equal(next, false);
@@ -82,9 +102,13 @@ test('an action failure stops the next check and retains the original failure', 
 test('a timeout before spawn rejects a late restart without starting a child', async () => {
   const { control, checks } = fixture();
   /** @type {() => void} */
-  let release = () => { throw new Error('gate not initialized'); };
+  let release = () => {
+    throw new Error('gate not initialized');
+  };
   /** @type {Promise<void>} */
-  const gate = new Promise((resolve) => { release = resolve; });
+  const gate = new Promise((resolve) => {
+    release = resolve;
+  });
   /** @type {import('node:child_process').ChildProcess | undefined} */
   let child;
   const run = control.check('restart', () => control.launch(async (lifecycle) => {
@@ -114,19 +138,29 @@ test('a timeout during launch stops only the owned child and waits before profil
   /** @type {{current?: import('node:child_process').ChildProcess, closed?: Promise<void>}} */
   const owned = {};
   /** @type {() => void} */
-  let release = () => { throw new Error('gate not initialized'); };
+  let release = () => {
+    throw new Error('gate not initialized');
+  };
   /** @type {() => void} */
-  let registered = () => { throw new Error('ready not initialized'); };
+  let registered = () => {
+    throw new Error('ready not initialized');
+  };
   /** @type {Promise<void>} */
-  const gate = new Promise((resolve) => { release = resolve; });
+  const gate = new Promise((resolve) => {
+    release = resolve;
+  });
   /** @type {Promise<void>} */
-  const ready = new Promise((resolve) => { registered = resolve; });
+  const ready = new Promise((resolve) => {
+    registered = resolve;
+  });
   const { control, checks } = fixture();
   try {
     const run = control.check('restart', () => control.launch(async (lifecycle) => {
       const child = spawnOwned(lifecycle, process.execPath, ['-e', 'setTimeout(() => {}, 30000)'], { windowsHide: true, stdio: 'ignore' });
       owned.current = child;
-      owned.closed = new Promise((resolve) => { child.once('close', () => resolve()); });
+      owned.closed = new Promise((resolve) => {
+        child.once('close', () => resolve());
+      });
       registered();
       await gate;
       lifecycle.assertActive();
@@ -142,7 +176,11 @@ test('a timeout during launch stops only the owned child and waits before profil
     assert(closed, 'owned child was not started');
     await new Promise((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error('owned child did not close in time')), 5000);
-      closed.then(() => { clearTimeout(timer); resolve(undefined); }, (error) => { clearTimeout(timer); reject(error); });
+      closed.then(() => {
+        clearTimeout(timer); resolve(undefined);
+      }, (error) => {
+        clearTimeout(timer); reject(error);
+      });
     });
     assert(owned.current, 'owned child was not started');
     assert(owned.current.exitCode !== null || owned.current.signalCode !== null, 'owned child was not stopped');
@@ -157,13 +195,17 @@ test('a timeout during launch stops only the owned child and waits before profil
     assert.match(checks[0].error ?? '', /操作超过 25 ms/);
   } finally {
     if (unrelated.exitCode === null && unrelated.signalCode === null) {
-      const closed = new Promise((resolve) => { unrelated.once('close', resolve); });
+      const closed = new Promise((resolve) => {
+        unrelated.once('close', resolve);
+      });
       unrelated.kill();
       await closed;
     }
     const child = owned.current;
     if (child && child.exitCode === null && child.signalCode === null) {
-      const closed = new Promise((resolve) => { child.once('close', resolve); });
+      const closed = new Promise((resolve) => {
+        child.once('close', resolve);
+      });
       child.kill();
       await closed;
     }
@@ -176,7 +218,9 @@ test('an unsettled action prevents profile cleanup and reports the cleanup timeo
   const control = createSmokeControl({ checks, timeoutMs: 10, settleTimeoutMs: 30, stopChild: async () => {} });
   await assert.rejects(control.check('stuck', () => new Promise(() => {})), SmokeCheckAborted);
   let cleaned = false;
-  await assert.rejects(cleanupAfterShutdown(control, async () => { cleaned = true; }), /操作未收敛.*操作超过 30 ms/);
+  await assert.rejects(cleanupAfterShutdown(control, async () => {
+    cleaned = true;
+  }), /操作未收敛.*操作超过 30 ms/);
   assert.equal(cleaned, false);
   assert.match(checks[0].error ?? '', /操作超过 10 ms/);
 });

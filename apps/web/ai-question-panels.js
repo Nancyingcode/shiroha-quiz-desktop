@@ -213,7 +213,11 @@
         };
       }
       const retry = $('#p-ai-v613 [data-ai-single-retry-v613]');
-      if (retry) { retry.onclick = () => { void retryReadiness(); }; }
+      if (retry) {
+        retry.onclick = () => {
+          void retryReadiness();
+        };
+      }
       const send = $('#p-ai-v613 [data-ai-single-send-v613]');
       if (send) {
         send.onclick = () => runAiSingleFollowUpV613();

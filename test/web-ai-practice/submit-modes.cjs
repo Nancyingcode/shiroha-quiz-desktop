@@ -2,7 +2,12 @@
 
 const assert = require('node:assert/strict');
 const { snapshot, SEL, assertPayload } = require('./harness.cjs');
-const { analysis, MOCK_ENDPOINT, MODEL, FAKE_KEY } = require('./fixtures.cjs');
+const {
+  analysis,
+  MOCK_ENDPOINT,
+  MODEL,
+  FAKE_KEY,
+} = require('./fixtures.cjs');
 
 async function startTotal(h) {
   await h.page.locator('.nav[data-view="practice"]').click();
@@ -191,14 +196,20 @@ const cases = [
       const before = await snapshot(h.page);
       await h.page.evaluate((key) => {
         const original = Storage.prototype.setItem;
-        window.__restoreSubmitStorage = () => { Storage.prototype.setItem = original; };
+        window.__restoreSubmitStorage = () => {
+          Storage.prototype.setItem = original;
+        };
         Storage.prototype.setItem = function (name, value) {
           if (name === key) { throw new DOMException('Synthetic quota failure', 'QuotaExceededError'); }
           return original.call(this, name, value);
         };
       }, h.keys.state);
-      await h.page.locator('#p-submit-all').evaluate((button) => { button.click(); button.click(); });
-      await h.page.locator('#p-self-wrong').evaluate((button) => { button.click(); button.click(); });
+      await h.page.locator('#p-submit-all').evaluate((button) => {
+        button.click(); button.click();
+      });
+      await h.page.locator('#p-self-wrong').evaluate((button) => {
+        button.click(); button.click();
+      });
       await h.page.locator('#platform-status.failed button').waitFor();
       await ready(h);
       const failed = await snapshot(h.page);

@@ -43,7 +43,11 @@ test('desktop AI cancellation keeps AbortError semantics when native IPC rejects
     ShirohaBrowser: {},
     ShirohaBrowserCredentials: {},
     ShirohaSaveQueue: { create: () => ({}) },
-    ShirohaDesktopHost: { invoke: async () => { throw { code: 'cancelled' }; } },
+    ShirohaDesktopHost: {
+      invoke: async () => {
+        throw { code: 'cancelled' };
+      },
+    },
   };
   vm.runInNewContext(await readFile(new URL('../frontend/adapter.js', import.meta.url), 'utf8'), scope);
   const network = vm.runInNewContext('ShirohaPlatform.network', scope);
@@ -65,7 +69,11 @@ test('desktop AI configuration and redirect failures have actionable messages', 
       ShirohaBrowser: {},
       ShirohaBrowserCredentials: {},
       ShirohaSaveQueue: { create: () => ({}) },
-      ShirohaDesktopHost: { invoke: async () => { throw { code }; } },
+      ShirohaDesktopHost: {
+        invoke: async () => {
+          throw { code };
+        },
+      },
     };
     vm.runInNewContext(await readFile(new URL('../frontend/adapter.js', import.meta.url), 'utf8'), scope);
     const network = vm.runInNewContext('ShirohaPlatform.network', scope);
@@ -166,7 +174,11 @@ test('desktop network maps DAV methods to limited operations and rejects arbitra
     ShirohaBrowserCredentials: {},
     ShirohaSaveQueue: { create: () => ({}) },
     localStorage: { getItem: () => null },
-    ShirohaDesktopHost: { invoke: async (/** @type {string} */ command, /** @type {{request:{kind:string,operation?:{kind:string}},secret?:string|null}} */ args) => { calls.push({ command, args }); return { status: 200, body: '{}' }; } },
+    ShirohaDesktopHost: {
+      invoke: async (/** @type {string} */ command, /** @type {{request:{kind:string,operation?:{kind:string}},secret?:string|null}} */ args) => {
+        calls.push({ command, args }); return { status: 200, body: '{}' };
+      },
+    },
   };
   vm.runInNewContext(await readFile(new URL('../frontend/adapter.js', import.meta.url), 'utf8'), scope);
   const network = vm.runInNewContext('ShirohaPlatform.network', scope);

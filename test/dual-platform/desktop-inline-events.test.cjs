@@ -18,7 +18,9 @@ test('实际 Web 七处内联事件生成桌面六个 click 并保留导航和�
   assert.doesNotMatch(generated.html, /\son(?:click|error)=/);
   const nodes = Array.from({ length: 6 }, () => ({
     handler: null,
-    addEventListener(_type, handler) { this.handler = handler; },
+    addEventListener(_type, handler) {
+      this.handler = handler;
+    },
   }));
   const targets = [];
   const collapsed = new Set();
@@ -31,13 +33,21 @@ test('实际 Web 七处内联事件生成桌面六个 click 并保留导航和�
       },
     },
   };
-  toggle.setAttribute = (name, value) => { toggle[name] = value; };
+  toggle.setAttribute = (name, value) => {
+    toggle[name] = value;
+  };
   const document = {
     querySelector(selector) {
       const event = selector.match(/data-desktop-event-(\d+)/);
       if (event) { return nodes[Number(event[1])]; }
       const nav = selector.match(/data-view="([^"]+)"/);
-      if (nav) { return { click() { targets.push(nav[1]); } }; }
+      if (nav) {
+        return {
+          click() {
+            targets.push(nav[1]);
+          },
+        };
+      }
       return null;
     },
   };

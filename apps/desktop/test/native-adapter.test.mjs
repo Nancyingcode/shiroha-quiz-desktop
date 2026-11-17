@@ -3,7 +3,9 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import vm from 'node:vm';
 /** @param {object} scope @returns {{storage:{initialize():Promise<{state:string,error?:Error & {code?:string}}>,write(data:unknown,id:string,revision:number):Promise<unknown>,revision():number,getOperation(id:string):Promise<{revision:number}>}}} */
-function platform(scope) { return vm.runInNewContext('ShirohaPlatform', scope); }
+function platform(scope) {
+  return vm.runInNewContext('ShirohaPlatform', scope);
+}
 
 test('复盘正文惰性读取与释放保留轻量摘要，重读不产生写入', async () => {
   const source = await readFile(new URL('../frontend/adapter.js', import.meta.url), 'utf8');
@@ -76,7 +78,11 @@ for (const code of ['unknown_failure', 'constructor', 'toString', '__proto__']) 
   test(`未知原生错误 ${code} 仅显示固定提示，不显示底层秘密`, async () => {
     const source = await readFile(new URL('../frontend/adapter.js', import.meta.url), 'utf8');
     const scope = {
-      ShirohaDesktopHost: { invoke: async () => { throw { code, message: 'fixture-secret-do-not-display' }; } },
+      ShirohaDesktopHost: {
+        invoke: async () => {
+          throw { code, message: 'fixture-secret-do-not-display' };
+        },
+      },
       ShirohaBrowser: {},
       ShirohaBrowserCredentials: {},
       ShirohaSaveQueue: { create: () => ({}) },
@@ -305,7 +311,9 @@ for (const collection of ['questions', 'records']) {
       crossPlatformMeta: {},
       activeBankId: 'b',
     };
-    /** @type {(value:unknown)=>void} */ let releaseOld = () => { throw new Error('old request was not started'); };
+    /** @type {(value:unknown)=>void} */ let releaseOld = () => {
+      throw new Error('old request was not started');
+    };
     let nativeRevision = 1;
     const scope = {
       ShirohaDesktopHost: {
@@ -318,7 +326,11 @@ for (const collection of ['questions', 'records']) {
             return { revision: nativeRevision };
           }
           if (args?.query?.kind === 'details') {
-            if (args.query.revision === 1) { return new Promise((resolve) => { releaseOld = resolve; }); }
+            if (args.query.revision === 1) {
+              return new Promise((resolve) => {
+                releaseOld = resolve;
+              });
+            }
             assert.equal(args.query.revision, 2);
             return collection === 'questions'
               ? [{ id: 'q', type: 'single', question: '恢复后的正文', options: [], answer: [] }]
@@ -374,9 +386,13 @@ test('恢复修订后拒绝迟到的完整数据读取并允许重新读取', as
     wrongBook: { b: [{ id: 'summary' }] },
     crossPlatformMeta: {},
   };
-  /** @type {(value:unknown)=>void} */ let releaseOld = () => { throw new Error('old request was not started'); };
+  /** @type {(value:unknown)=>void} */ let releaseOld = () => {
+    throw new Error('old request was not started');
+  };
   let markStarted = () => {};
-  const started = new Promise((resolve) => { markStarted = () => resolve(undefined); });
+  const started = new Promise((resolve) => {
+    markStarted = () => resolve(undefined);
+  });
   let nativeRevision = 1;
   let oldHydrates = 0;
   let freshHydrates = 0;
@@ -389,7 +405,11 @@ test('恢复修订后拒绝迟到的完整数据读取并允许重新读取', as
         if (args?.query?.kind === 'hydrate') {
           if (args.query.revision === 1) {
             oldHydrates += 1;
-            if (oldHydrates === 1) { return new Promise((resolve) => { releaseOld = resolve; markStarted(); }); }
+            if (oldHydrates === 1) {
+              return new Promise((resolve) => {
+                releaseOld = resolve; markStarted();
+              });
+            }
             return { stale: true };
           }
           assert.equal(args.query.revision, 2);
@@ -441,7 +461,13 @@ test('desktop save uses linear question identity work for a single favorite chan
       for (const bank of state?.banks || []) {
         for (const question of bank.questions) {
           const { id } = question;
-          Object.defineProperty(question, 'id', { enumerable: true, configurable: true, get() { counts.idReads += 1;return id; } });
+          Object.defineProperty(question, 'id', {
+            enumerable: true,
+            configurable: true,
+            get() {
+              counts.idReads += 1;return id;
+            },
+          });
         }
         const { questions } = bank;
         Object.defineProperty(questions, 'some', {
@@ -454,7 +480,9 @@ test('desktop save uses linear question identity work for a single favorite chan
       }
     }
     /** @template T @param {T} value @returns {T} */
-    function clone(value) { const copy = globalThis.structuredClone(value);instrument(copy);return copy; }
+    function clone(value) {
+      const copy = globalThis.structuredClone(value);instrument(copy);return copy;
+    }
     /** @type {Array<{command:string,args:Record<string,unknown>|undefined}>} */ const calls = [];
     const scope = {
       ShirohaDesktopHost: {
@@ -626,8 +654,12 @@ test('desktop save rechecks a replaced baseline while waiting for the receipt', 
   const original = { schemaVersion: 1, banks: [{ id: 'b', name: 'bank', questions: [{ id: 'old', type: 'single', question: '', options: [], answer: [] }] }], records: [], settings: {}, wrongBook: {}, favorites: {}, crossPlatformMeta: {}, activeBankId: 'b' };
   const replacement = globalThis.structuredClone(original);
   replacement.banks[0].questions.push({ id: 'new', type: 'single', question: '', options: [], answer: [] });
-  /** @type {(receipt:{revision:number})=>void} */ let release = () => { throw new Error('commit not started'); };
-  const pending = new Promise((resolve) => { release = resolve; });
+  /** @type {(receipt:{revision:number})=>void} */ let release = () => {
+    throw new Error('commit not started');
+  };
+  const pending = new Promise((resolve) => {
+    release = resolve;
+  });
   let reads = 0;let commits = 0;
   const scope = {
     ShirohaDesktopHost: {

@@ -136,7 +136,9 @@ if (complete) {
     /** @type {string[]} */
     const found = [];
     const processor = {
-      preprocess: (/** @type {string} */ _source, /** @type {string} */ filename) => { found.push(filename); return []; },
+      preprocess: (/** @type {string} */ _source, /** @type {string} */ filename) => {
+        found.push(filename); return [];
+      },
       postprocess: () => [],
     };
     const discovery = new ESLint({

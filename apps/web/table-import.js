@@ -1,10 +1,30 @@
 (() => {
   'use strict';
 
-  function create({ readText, readBuffer, parser, decodeXml, makeId }) {
+  function create({
+    readText,
+    readBuffer,
+    parser,
+    decodeXml,
+    makeId,
+  }) {
     const { parseZipEntries, unzipEntry } = globalThis.ShirohaZip;
     const { isTextType } = globalThis.ShirohaQuizCore;
-    const { parseTextQuestionsBase, normalizeQuestion, countTypes, extractInlineOptionsRich, normalizeOptionKey, normalizeType, mapType, splitTextAnswer, splitAnswerByType, parseOptionsText, mergeDuplicateOptions, repairEmbeddedOptions, splitSemicolonOptionsFromLine } = parser;
+    const {
+      parseTextQuestionsBase,
+      normalizeQuestion,
+      countTypes,
+      extractInlineOptionsRich,
+      normalizeOptionKey,
+      normalizeType,
+      mapType,
+      splitTextAnswer,
+      splitAnswerByType,
+      parseOptionsText,
+      mergeDuplicateOptions,
+      repairEmbeddedOptions,
+      splitSemicolonOptionsFromLine,
+    } = parser;
     async function readTableImportFileV49(file) {
       const lower = String(file.name || '').toLowerCase();
       let sheets;
@@ -129,7 +149,9 @@
       }
       return rows;
     }
-    function xlsxColToIndexV49(col) { let n = 0;for (const ch of String(col || '')) { n = (n * 26) + (ch.charCodeAt(0) - 64); } return Math.max(0, n - 1); }
+    function xlsxColToIndexV49(col) {
+      let n = 0;for (const ch of String(col || '')) { n = (n * 26) + (ch.charCodeAt(0) - 64); } return Math.max(0, n - 1);
+    }
     function xlsxCellValueV49(attrs, body, sharedStrings) {
       const type = (attrs.match(/t="([^"]+)"/) || [])[1] || '';
       if (type === 'inlineStr') {
@@ -203,7 +225,9 @@
       if (Object.keys(map.optionCols).length >= 2) { map.score += 2; }
       return map;
     }
-    function compactHeaderV49(s) { return String(s || '').trim().replace(/\s+/g, '').replace(/[：:\-_/（）()[\]【】]/g, '').toLowerCase(); }
+    function compactHeaderV49(s) {
+      return String(s || '').trim().replace(/\s+/g, '').replace(/[：:\-_/（）()[\]【】]/g, '').toLowerCase();
+    }
     function tableHeaderFieldV49(cell) {
       const raw = String(cell || '').trim();if (!raw) { return ''; }
       const h = compactHeaderV49(raw);
@@ -220,7 +244,9 @@
       if (['难度', 'difficulty', 'level'].includes(h)) { return 'difficulty'; }
       return '';
     }
-    function tableCellV49(row, idx) { return idx == null ? '' : normalizeTableCellTextV49(row[idx] || ''); }
+    function tableCellV49(row, idx) {
+      return idx == null ? '' : normalizeTableCellTextV49(row[idx] || '');
+    }
     function tableRowToQuestionV49(row, map, idx, sheetName = '') {
       const rawType = tableCellV49(row, map.type);
       const rawNumber = tableCellV49(row, map.number);

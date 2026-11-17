@@ -47,7 +47,14 @@ function memoryStorage(initial = {}) {
   };
 }
 
-function loadWeb({ state, local = {}, session = {}, scoreDefaults = {}, deterministicIds = false, parserSourceTransform } = {}) {
+function loadWeb({
+  state,
+  local = {},
+  session = {},
+  scoreDefaults = {},
+  deterministicIds = false,
+  parserSourceTransform,
+} = {}) {
   const storageKey = source.stringConstant('KEY');
   const logs = [];
   const document = {
@@ -60,7 +67,9 @@ function loadWeb({ state, local = {}, session = {}, scoreDefaults = {}, determin
       if (selector.startsWith('#score-')) { return { value: String(scoreDefaults[selector.slice(7)] ?? 1) }; }
       throw new Error(`业务特征测试意外依赖 DOM：${selector}`);
     },
-    querySelectorAll() { throw new Error('业务特征测试意外查询 DOM 集合。'); },
+    querySelectorAll() {
+      throw new Error('业务特征测试意外查询 DOM 集合。');
+    },
   };
   class TestFileReader {
     readAsDataURL(blob) {
@@ -73,7 +82,9 @@ function loadWeb({ state, local = {}, session = {}, scoreDefaults = {}, determin
   let nextId = 0;
   const sandbox = {
     // 字符串渲染测试不挂载 DOM；公式排版由浏览器回归验证。
-    requestAnimationFrame() { return 1; },
+    requestAnimationFrame() {
+      return 1;
+    },
     structuredClone,
     Blob,
     TextEncoder,
@@ -113,6 +124,8 @@ function loadWeb({ state, local = {}, session = {}, scoreDefaults = {}, determin
   return { api: context.__test, logs, context };
 }
 
-function plain(value) { return JSON.parse(JSON.stringify(value)); }
+function plain(value) {
+  return JSON.parse(JSON.stringify(value));
+}
 
 module.exports = { loadWeb, plain };

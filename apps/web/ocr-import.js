@@ -1,7 +1,12 @@
 (() => {
   'use strict';
 
-  function create({ pdf, readBuffer, toast, warnDev }) {
+  function create({
+    pdf,
+    readBuffer,
+    toast,
+    warnDev,
+  }) {
     const { loadLocalPdfJs, pdfDocumentOptions } = pdf;
     const $ = (selector) => document.querySelector(selector);
     // 本页面持有当前 OCR 文件及草稿；重选、清空时取消旧轮次并替换状态。
@@ -35,7 +40,11 @@
     function setOcrButtonsEnabled(hasText) {
       const running = !!ocrImportState.running;
       const cannotUseText = running || !hasText;
-      const cancel = $('#ocr-cancel-btn');if (cancel) { cancel.disabled = !running;cancel.onclick = () => { ocrImportState.cancel?.();setOcrStatus('OCR 已取消，已识别内容仍可核对。', 'warn'); }; }
+      const cancel = $('#ocr-cancel-btn');if (cancel) {
+        cancel.disabled = !running;cancel.onclick = () => {
+          ocrImportState.cancel?.();setOcrStatus('OCR 已取消，已识别内容仍可核对。', 'warn');
+        };
+      }
       const start = $('#ocr-start-btn');if (start) { start.disabled = running || !ocrImportState.file; }
       const use = $('#ocr-use-text-btn');if (use) { use.disabled = cannotUseText; }
       const copy = $('#ocr-copy-btn');if (copy) { copy.disabled = cannotUseText; }
@@ -89,7 +98,9 @@
       const cancelled = () => run.cancelled || run !== ocrImportState;
       // Tesseract 5.1.1 终止 Worker 不会结束识别 Promise；独立信号保证取消后仍能收尾，升级后若库支持中止可移除。
       let signalCancellation;
-      const cancellation = new Promise((resolve) => { signalCancellation = resolve; });
+      const cancellation = new Promise((resolve) => {
+        signalCancellation = resolve;
+      });
       run.cancel = () => {
         run.cancelled = true;
         signalCancellation();

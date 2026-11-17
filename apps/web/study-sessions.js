@@ -13,7 +13,9 @@
     }
     return {
       invalidatePending,
-      get current() { return current; },
+      get current() {
+        return current;
+      },
       set current(next) {
         if (timer !== null) {
           globalThis.clearInterval(timer);
@@ -27,12 +29,24 @@
         invalidatePending();
         current = next;
       },
-      get request() { return request; },
-      set request(value) { request = value; },
-      get timer() { return timer; },
-      set timer(value) { timer = value; },
-      get dialog() { return dialog; },
-      set dialog(value) { dialog = value; },
+      get request() {
+        return request;
+      },
+      set request(value) {
+        request = value;
+      },
+      get timer() {
+        return timer;
+      },
+      set timer(value) {
+        timer = value;
+      },
+      get dialog() {
+        return dialog;
+      },
+      set dialog(value) {
+        dialog = value;
+      },
     };
   }
 
@@ -46,7 +60,9 @@
     }
     return {
       invalidatePending,
-      get current() { return current; },
+      get current() {
+        return current;
+      },
       set current(next) {
         if (current.timer !== null) {
           globalThis.clearInterval(current.timer);
@@ -54,8 +70,12 @@
         invalidatePending();
         current = next;
       },
-      get request() { return request; },
-      set request(value) { request = value; },
+      get request() {
+        return request;
+      },
+      set request(value) {
+        request = value;
+      },
     };
   }
 

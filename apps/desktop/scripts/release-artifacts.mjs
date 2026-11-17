@@ -13,7 +13,13 @@ const notesName = 'release-notes.md';
 
 /** @param {{ ref?: string, commit?: string, repository?: string, runId?: string, runAttempt?: string }} input */
 export function releaseContext(input) {
-  const { ref = '', commit = '', repository = '', runId = '', runAttempt = '' } = input;
+  const {
+    ref = '',
+    commit = '',
+    repository = '',
+    runId = '',
+    runAttempt = '',
+  } = input;
   const match = /^refs\/tags\/desktop-v((?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*))$/.exec(ref);
   if (!match || match[0] !== ref) { throw new Error('Release 必须使用 desktop-v<major>.<minor>.<patch> 标签'); }
   if (!/^[a-f0-9]{40}$/.test(commit) || commit.length !== 40) { throw new Error('Release commit 必须是完整 SHA'); }

@@ -59,6 +59,8 @@ export const semanticRules = {
   'no-return-await': 'error',
 };
 
+const nonemptyFunctionBody = { minElements: 1, consistent: true };
+
 /** @type {import('eslint').Linter.RulesRecord} */
 export const styleRules = {
   '@stylistic/indent': ['error', 2, { SwitchCase: 1 }],
@@ -77,6 +79,15 @@ export const styleRules = {
   '@stylistic/object-curly-newline': ['error', {
     ObjectExpression: { multiline: true, consistent: true },
     ObjectPattern: { multiline: true, consistent: true },
+  }],
+  '@stylistic/exp-list-style': ['error', {
+    overrides: {
+      '()': 'off',
+      '[]': 'off',
+      '{}': 'off',
+      '<>': 'off',
+      ObjectPattern: { singleLine: { maxItems: 3, spacing: 'always' } },
+    },
   }],
   '@stylistic/array-bracket-spacing': ['error', 'never'],
   '@stylistic/space-in-parens': ['error', 'never'],
@@ -97,6 +108,13 @@ export const styleRules = {
   '@stylistic/function-paren-newline': ['error', 'multiline-arguments'],
   '@stylistic/operator-linebreak': ['error', 'before', { overrides: { '=': 'none' } }],
   '@stylistic/brace-style': ['error', '1tbs', { allowSingleLine: true }],
+  '@stylistic/curly-newline': ['error', {
+    consistent: true,
+    FunctionDeclaration: nonemptyFunctionBody,
+    FunctionExpression: nonemptyFunctionBody,
+    Property: nonemptyFunctionBody,
+    ArrowFunctionExpression: nonemptyFunctionBody,
+  }],
   '@stylistic/padded-blocks': ['error', 'never'],
   '@stylistic/no-multiple-empty-lines': ['error', { max: 1, maxEOF: 0, maxBOF: 0 }],
   '@stylistic/nonblock-statement-body-position': ['error', 'beside'],
@@ -210,6 +228,18 @@ export function createConfig({ desktop = false, debt = false, semanticOnly = fal
         'apps/web/platform/save-queue.js', 'apps/web/study-sessions.js',
       ].map(relative),
       rules: { '@stylistic/max-statements-per-line': ['error', { max: 1 }] },
+    },
+    {
+      files: [
+        'apps/web/quiz-core.js', 'apps/web/text-answers.js', 'apps/web/training.js',
+        'apps/web/study-sessions.js', 'apps/web/zip.js', 'apps/web/platform/index.js',
+        'apps/web/platform/save-queue.js', 'apps/desktop/frontend/bridge.js',
+      ].map(relative),
+      rules: {
+        '@stylistic/max-len': ['error', {
+          code: 120, tabWidth: 2, ignoreComments: true, ignoreUrls: true, ignoreRegExpLiterals: true,
+        }],
+      },
     },
     {
       files: [relative('apps/web/ai-import-panel.js')],

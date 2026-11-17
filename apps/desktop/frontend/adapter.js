@@ -127,13 +127,19 @@
       } catch (error) { return { state: 'recovery_required', error: error instanceof Error ? error : new Error('本地数据无法读取。') }; }
     },
     /** @returns {Promise<Snapshot|null>} */
-    async read() { if (!ready) { throw new Error('本地数据尚未就绪。'); } const result = /** @type {{revision:number,snapshot:Snapshot|null}} */ (await invoke('local_query', { query: { kind: 'summary' } })); if (result.revision !== revision) { throw new Error('数据修订已变化，请重新加载。'); } for (const bank of result.snapshot?.banks || []) { for (const q of bank.questions) { Object.assign(q, { type: questionType(q.type) }); } } loadedQuestions.clear();loadedRecords.clear();baseline = structuredClone(result.snapshot); return result.snapshot; },
+    async read() {
+      if (!ready) { throw new Error('本地数据尚未就绪。'); } const result = /** @type {{revision:number,snapshot:Snapshot|null}} */ (await invoke('local_query', { query: { kind: 'summary' } })); if (result.revision !== revision) { throw new Error('数据修订已变化，请重新加载。'); } for (const bank of result.snapshot?.banks || []) { for (const q of bank.questions) { Object.assign(q, { type: questionType(q.type) }); } } loadedQuestions.clear();loadedRecords.clear();baseline = structuredClone(result.snapshot); return result.snapshot;
+    },
     lazy: true,
     /** @param {string} bankId @param {string} questionId */
-    isQuestionLoaded(bankId, questionId) { return loadedQuestions.has(questionKey(bankId, questionId)) || !baseline?.banks.find((bank) => bank.id === bankId)?.questions.some((q) => q.id === questionId); },
+    isQuestionLoaded(bankId, questionId) {
+      return loadedQuestions.has(questionKey(bankId, questionId)) || !baseline?.banks.find((bank) => bank.id === bankId)?.questions.some((q) => q.id === questionId);
+    },
     checkpointView() {
       const saved = structuredClone(baseline); const questions = new Set(loadedQuestions); const records = new Set(loadedRecords);
-      return () => { baseline = saved; loadedQuestions = questions; loadedRecords = records; };
+      return () => {
+        baseline = saved; loadedQuestions = questions; loadedRecords = records;
+      };
     },
     /** @param {Snapshot} snapshot @param {{bankId:string,questionId:string}[]} refs */
     async ensureQuestions(snapshot, refs) {
@@ -237,19 +243,35 @@
       return receipt;
     },
     /** @param {string} operationId @returns {Promise<{revision:number}|null>} */
-    async getOperation(operationId) { return invoke('local_operation', { operationId }); },
+    async getOperation(operationId) {
+      return invoke('local_operation', { operationId });
+    },
     revision: () => revision,
-    invalidate() { ready = false; },
-    recoveryText() { const raw = localStorage.getItem(KEY); if (raw === null) { throw new Error('没有旧浏览器数据可导出，请使用已保留的本地恢复点。'); } return raw; },
-    async checkpoint() { await invoke('local_checkpoint'); },
+    invalidate() {
+      ready = false;
+    },
+    recoveryText() {
+      const raw = localStorage.getItem(KEY); if (raw === null) { throw new Error('没有旧浏览器数据可导出，请使用已保留的本地恢复点。'); } return raw;
+    },
+    async checkpoint() {
+      await invoke('local_checkpoint');
+    },
     /** @returns {Promise<string[]>} */
-    async snapshots() { return invoke('local_query', { query: { kind: 'snapshots' } }); },
+    async snapshots() {
+      return invoke('local_query', { query: { kind: 'snapshots' } });
+    },
     /** @returns {Promise<string[]>} */
-    async recoverySnapshots() { return invoke('local_query', { query: { kind: 'recovery_snapshots' } }); },
+    async recoverySnapshots() {
+      return invoke('local_query', { query: { kind: 'recovery_snapshots' } });
+    },
     /** @param {string} snapshotId */
-    async recover(snapshotId) { await invoke('local_query', { query: { kind: 'recover', snapshot_id: snapshotId } }); },
+    async recover(snapshotId) {
+      await invoke('local_query', { query: { kind: 'recover', snapshot_id: snapshotId } });
+    },
     /** @param {Snapshot} snapshot */
-    async recoverImport(snapshot) { await invoke('local_query', { query: { kind: 'recover_import', snapshot } }); },
+    async recoverImport(snapshot) {
+      await invoke('local_query', { query: { kind: 'recover_import', snapshot } });
+    },
     /** @param {string} snapshotId */
     async restoreSnapshot(snapshotId) {
       const receipt = await invoke('local_query', { query: { kind: 'restore', snapshot_id: snapshotId, expected_revision: revision, operation_id: `restore-${globalThis.crypto.randomUUID()}` } });
@@ -271,7 +293,9 @@
     },
   };
   /** @param {Record<string,unknown>} request */
-  async function file(request) { return invoke('local_file', { request }); }
+  async function file(request) {
+    return invoke('local_file', { request });
+  }
   /** @param {string} name @param {Blob} blob */
   async function download(name, blob) {
     const grant = await file({ kind: 'choose_export', name });
@@ -323,11 +347,17 @@
   let networkGeneration = 0;
   /** @type {Record<string,unknown>|null} */ let davConfig = null;
   /** @param {'ai'|'webdav'} service @param {ServiceConfig} config */
-  function nativeConfig(service, config) { return { service, endpoint: config.endpoint, username: config.username || '', remoteDir: service === 'webdav' ? config.remoteDir || 'ShirohaQuiz/Web' : '' }; }
+  function nativeConfig(service, config) {
+    return { service, endpoint: config.endpoint, username: config.username || '', remoteDir: service === 'webdav' ? config.remoteDir || 'ShirohaQuiz/Web' : '' };
+  }
   /** @param {'ai'|'webdav'} service @param {ServiceConfig} config */
-  function binding(service, config) { return JSON.stringify(nativeConfig(service, config)); }
+  function binding(service, config) {
+    return JSON.stringify(nativeConfig(service, config));
+  }
   /** @param {Record<string,unknown>} request */
-  async function credential(request) { return invoke('service_credential', { request }); }
+  async function credential(request) {
+    return invoke('service_credential', { request });
+  }
   /** @param {'ai'|'webdav'} service @param {ServiceConfig} config */
   async function refreshCredential(service, config) {
     if (!config.endpoint) { return; }
@@ -341,7 +371,9 @@
     const generation = networkGeneration;
     if (signal?.aborted) { throw Object.assign(new Error('请求已取消。'), { name: 'AbortError', code: 'cancelled' }); }
     const requestId = globalThis.crypto.randomUUID();
-    const abort = () => { void credential({ kind: 'cancel', request_id: requestId }).catch(() => {}); };
+    const abort = () => {
+      void credential({ kind: 'cancel', request_id: requestId }).catch(() => {});
+    };
     signal?.addEventListener('abort', abort, { once: true });
     try {
       const response = await invoke('service_request', { requestId, config: nativeConfig(service, config), secret: secret === MARKER ? null : secret, request });
@@ -350,9 +382,13 @@
     } finally { signal?.removeEventListener('abort', abort); }
   }
   const network = {
-    async cancelAll() { networkGeneration += 1; await credential({ kind: 'cancel_all' }); },
+    async cancelAll() {
+      networkGeneration += 1; await credential({ kind: 'cancel_all' });
+    },
     /** @param {ServiceConfig} config @param {unknown} payload @param {AbortSignal} [signal] */
-    ai(config, payload, signal) { return requestService('ai', config, config.apiKey || '', { kind: 'ai', payload }, signal); },
+    ai(config, payload, signal) {
+      return requestService('ai', config, config.apiKey || '', { kind: 'ai', payload }, signal);
+    },
     /** @param {ServiceConfig} config @param {string} password @param {string} path @param {Parameters<import('../../web/platform/runtime').BrowserNetwork['webdav']>[3]} [options] */
     async webdav(config, password, path, options = {}) {
       const directory = config.remoteDir || 'ShirohaQuiz/Web';
@@ -406,7 +442,9 @@
       }
     },
     /** @param {'ai'|'webdav'} service @param {ServiceConfig} config */
-    status(service, config) { return ['remembered', 'session'].includes(credentialStates.get(binding(service, config))) ? MARKER : ''; },
+    status(service, config) {
+      return ['remembered', 'session'].includes(credentialStates.get(binding(service, config))) ? MARKER : '';
+    },
     /** @param {'ai'|'webdav'} service @param {ServiceConfig} config @param {string} secret @param {boolean} remember */
     async set(service, config, secret, remember) {
       networkGeneration += 1;
@@ -419,12 +457,16 @@
         input = { kind: 'clear' };
       }
       const result = await credential({ kind: 'stage', config: nativeConfig(service, config), input, remember });
-      const undo = async () => { await credential({ kind: 'rollback', id: result.id }); staged.delete(undo); };
+      const undo = async () => {
+        await credential({ kind: 'rollback', id: result.id }); staged.delete(undo);
+      };
       staged.set(undo, { id: result.id, service, config });
       return undo;
     },
     /** @param {()=>void|Promise<void>} undo */
-    operationId(undo) { const pending = staged.get(undo); return pending ? `credential-${pending.id}` : undefined; },
+    operationId(undo) {
+      const pending = staged.get(undo); return pending ? `credential-${pending.id}` : undefined;
+    },
     /** @param {()=>void|Promise<void>} undo */
     async finalize(undo) {
       const pending = staged.get(undo); if (!pending) { return; }
@@ -432,10 +474,16 @@
       await refreshCredential(pending.service, pending.config); staged.delete(undo);
     },
     /** @param {ServiceConfig} _config @param {string} text */
-    redact(_config, text) { return text; },
+    redact(_config, text) {
+      return text;
+    },
     /** @param {[Storage,string][]} _entries */
-    checkpoint(_entries) { return () => {}; },
-    readDav() { return davConfig; },
+    checkpoint(_entries) {
+      return () => {};
+    },
+    readDav() {
+      return davConfig;
+    },
     /** @param {ServiceConfig} config @param {string} password @param {boolean} storePassword */
     async saveDav(config, password, storePassword) {
       if (!storePassword) { return; }
@@ -447,7 +495,9 @@
       return credentials.set('webdav', /** @type {ServiceConfig} */ (davConfig), '', false);
     },
     /** @param {Record<string,unknown>|null} config */
-    updateDav(config) { davConfig = config; },
+    updateDav(config) {
+      davConfig = config;
+    },
     async reset() {
       networkGeneration += 1; await credential({ kind: 'invalidate' }); credentialStates.clear(); davConfig = null;
       await scope.ShirohaPlatform?.harness?.initialize({ restored: true });

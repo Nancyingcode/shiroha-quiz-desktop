@@ -2,7 +2,12 @@
   'use strict';
 
   function parseAnswerEntries(normalizedText, rules) {
-    const { isImportNoiseLine, getHeadingType, splitAnswer, splitTextAnswer } = rules;
+    const {
+      isImportNoiseLine,
+      getHeadingType,
+      splitAnswer,
+      splitTextAnswer,
+    } = rules;
     const lines = normalizedText.split('\n')
       .map((line) => line.trim()).filter(Boolean).filter((line) => !isImportNoiseLine(line));
     const entries = [];

@@ -10,7 +10,12 @@ test('备份转换在无 DOM、存储和文件接口的环境中加载并保留�
   runWebScripts(context, ['backup-core.js']);
   const core = context.ShirohaBackupCore;
   assert.throws(() => core.assertSupportedBackup({ crossPlatformSchemaVersion: 2 }), /版本/);
-  const future = { crossPlatformSchemaVersion: 2, get kind() { throw new Error('多余读取'); } };
+  const future = {
+    crossPlatformSchemaVersion: 2,
+    get kind() {
+      throw new Error('多余读取');
+    },
+  };
   assert.throws(() => core.assertSupportedBackup(future), /版本/);
   assert.equal(core.backupMimeFromPath('assets/PHOTO.JPEG'), 'image/jpeg');
   assert.equal(core.backupMimeFromPath('assets/file.unknown'), 'application/octet-stream');

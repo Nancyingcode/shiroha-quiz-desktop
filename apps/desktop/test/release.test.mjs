@@ -209,7 +209,9 @@ test('API errors and malformed release lists cannot become permission to create'
   for (const response of ['not json', '{}', '[{}]']) {
     await assert.rejects(createReleaseDraft(f.root, f.context, async () => response));
   }
-  await assert.rejects(createReleaseDraft(f.root, f.context, async () => { throw new Error('HTTP 403'); }), /403/);
+  await assert.rejects(createReleaseDraft(f.root, f.context, async () => {
+    throw new Error('HTTP 403');
+  }), /403/);
 });
 
 test('moved remote tags and unsupported tag objects stop before creation', async (t) => {

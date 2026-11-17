@@ -11,7 +11,9 @@ test.before(async () => {
   server = await startServer(WEB_ROOT);
   browser = await chromium.launch({ headless: true, ...(process.env.SHIROHA_BROWSER_EXECUTABLE ? { executablePath: process.env.SHIROHA_BROWSER_EXECUTABLE } : { channel: 'msedge' }) });
 });
-test.after(async () => { await browser?.close(); await server?.close(); });
+test.after(async () => {
+  await browser?.close(); await server?.close();
+});
 async function component(t) {
   const page = await browser.newPage({ reducedMotion: 'reduce' }); t.after(() => page.close());
   await page.setContent('<button id="trigger">打开</button>');
@@ -54,7 +56,9 @@ test('确认框居中、取消无副作用、焦点循环恢复且按键不泄�
   await page.evaluate(() => {
     globalThis.keys = [];
     globalThis.document.addEventListener('keydown', (event) => globalThis.keys.push(event.key));
-    globalThis.ShirohaDialogs.confirm('危险操作').then((value) => { globalThis.result = value; });
+    globalThis.ShirohaDialogs.confirm('危险操作').then((value) => {
+      globalThis.result = value;
+    });
   });
   const box = await page.locator('#app-dialog').boundingBox();
   const viewport = page.viewportSize();
@@ -81,20 +85,30 @@ test('危险确认显示安全的记录摘要，普通确认不显示摘要', as
   assert.equal(await page.locator('#app-dialog').getAttribute('aria-describedby'), 'app-dialog-context app-dialog-message');
   assert.equal(await page.locator('#app-dialog [data-dialog-accept]').innerText(), '删除记录');
   await page.locator('#app-dialog [data-dialog-cancel]').click();
-  await page.evaluate(() => { globalThis.ShirohaDialogs.confirm('普通确认'); });
+  await page.evaluate(() => {
+    globalThis.ShirohaDialogs.confirm('普通确认');
+  });
   assert.equal(await page.locator('#app-dialog-context').isVisible(), false);
   assert.equal(await page.locator('#app-dialog').getAttribute('data-variant'), null);
   await page.locator('#app-dialog [data-dialog-cancel]').click();
 });
 test('输入保留默认值、空字符串和取消的区别，消息不执行 HTML', async (t) => {
   const page = await component(t);
-  await page.evaluate(() => { globalThis.ShirohaDialogs.prompt('<img src=x onerror=alert(1)>', '默认题库').then((value) => { globalThis.result = value; }); });
+  await page.evaluate(() => {
+    globalThis.ShirohaDialogs.prompt('<img src=x onerror=alert(1)>', '默认题库').then((value) => {
+      globalThis.result = value;
+    });
+  });
   assert.equal(await page.locator('#app-dialog input').inputValue(), '默认题库');
   assert.equal(await page.locator('#app-dialog img').count(), 0);
   await page.locator('#app-dialog input').fill('');
   await page.keyboard.press('Enter');
   assert.equal(await page.evaluate(() => globalThis.result), '');
-  await page.evaluate(() => { globalThis.ShirohaDialogs.prompt('名称', '默认').then((value) => { globalThis.result = value; }); });
+  await page.evaluate(() => {
+    globalThis.ShirohaDialogs.prompt('名称', '默认').then((value) => {
+      globalThis.result = value;
+    });
+  });
   await page.locator('[data-dialog-close]').click();
   assert.equal(await page.evaluate(() => globalThis.result), null);
 });
@@ -118,7 +132,9 @@ test('真实练习退出取消保留作答、确认保存；事务内输入弹�
   await context.addInitScript((data) => globalThis.localStorage.setItem('shiroha_quiz_state_v28_4_c1', JSON.stringify(data)), initial);
   const page = await context.newPage();
   const errors = []; page.on('pageerror', (error) => errors.push(error.message));
-  page.on('dialog', async (dialog) => { errors.push(`意外原生框：${dialog.message()}`); await dialog.dismiss(); });
+  page.on('dialog', async (dialog) => {
+    errors.push(`意外原生框：${dialog.message()}`); await dialog.dismiss();
+  });
   await context.route('**/*', (route) => (new URL(route.request().url()).origin === new URL(server.url).origin ? route.continue() : route.abort()));
   await page.goto(server.url);
   await page.locator('body[data-storage-state="ready"]').waitFor();
@@ -158,7 +174,9 @@ test('退出确认期间考试到时自动交卷，迟到的确认不清空成�
   await page.locator('#start-exam-btn').click();
   await page.locator('#exam-exit-focus').click();
   await page.locator('#app-dialog').waitFor();
-  await page.evaluate(() => { const now = Date.now(); Date.now = () => now + 120000; });
+  await page.evaluate(() => {
+    const now = Date.now(); Date.now = () => now + 120000;
+  });
   await page.locator('#exam-back-setup').waitFor({ state: 'attached' });
   await page.locator('[data-dialog-accept]').click();
   assert.equal(await page.locator('#exam-back-setup').isVisible(), true);

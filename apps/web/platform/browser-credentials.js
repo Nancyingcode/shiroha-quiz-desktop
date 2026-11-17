@@ -9,9 +9,13 @@
   const MARKER = '[已保存的凭据]';
   /** @typedef {{endpoint:string,username?:string,rememberKey?:boolean,rememberPassword?:boolean}} Config */
   /** @param {Config} config */
-  function binding(config) { return JSON.stringify([config.endpoint.replace(/\/+$/, ''), config.username || '']); }
+  function binding(config) {
+    return JSON.stringify([config.endpoint.replace(/\/+$/, ''), config.username || '']);
+  }
   /** @returns {Record<string,string>} */
-  function bindings() { return JSON.parse(localStorage.getItem(BINDINGS) || '{}'); }
+  function bindings() {
+    return JSON.parse(localStorage.getItem(BINDINGS) || '{}');
+  }
   /** @param {'ai'|'webdav'} service @param {Config} config */
   function read(service, config) {
     if (bindings()[service] !== binding(config)) { return ''; }
@@ -35,7 +39,9 @@
   /** @param {[Storage,string][]} entries */
   function checkpoint(entries) {
     const previous = entries.map(([store, key]) => ({ store, key, value: store.getItem(key) }));
-    return () => { for (const { store, key, value } of previous) { if (value === null) { store.removeItem(key); } else { store.setItem(key, value); } } };
+    return () => {
+      for (const { store, key, value } of previous) { if (value === null) { store.removeItem(key); } else { store.setItem(key, value); } }
+    };
   }
   /** @param {'ai'|'webdav'} service @param {Config} config @param {string} value @param {boolean} remember */
   function set(service, config, value, remember) {
@@ -60,9 +66,13 @@
     return undo;
   }
   /** @param {'ai'|'webdav'} service @param {Config} config */
-  function status(service, config) { return read(service, config) ? MARKER : ''; }
+  function status(service, config) {
+    return read(service, config) ? MARKER : '';
+  }
   /** @param {Config} config @param {string} text */
-  function redact(config, text) { const secret = read('ai', config); return secret ? text.split(secret).join('[API_KEY]') : text; }
+  function redact(config, text) {
+    const secret = read('ai', config); return secret ? text.split(secret).join('[API_KEY]') : text;
+  }
   /** @param {Config & {apiKey?:string}} config @param {unknown} payload @param {AbortSignal} [signal] */
   function ai(config, payload, signal) {
     return scope.ShirohaBrowserNetwork.ai({ ...config, apiKey: config.apiKey === MARKER ? read('ai', config) : config.apiKey }, payload, signal);
@@ -71,7 +81,9 @@
   function webdav(config, password, path, options) {
     return scope.ShirohaBrowserNetwork.webdav(config, password === MARKER ? read('webdav', config) : password, path, options);
   }
-  function readDav() { return JSON.parse(localStorage.getItem(DAV_CONFIG) || 'null'); }
+  function readDav() {
+    return JSON.parse(localStorage.getItem(DAV_CONFIG) || 'null');
+  }
   /** @param {Config} config @param {string} password @param {boolean} storePassword */
   function saveDav(config, password, storePassword) {
     const undo = checkpoint([[localStorage, DAV_CONFIG], [localStorage, DAV_LOCAL], [sessionStorage, DAV_SESSION], [localStorage, BINDINGS]]);

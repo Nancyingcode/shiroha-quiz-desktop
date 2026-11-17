@@ -46,7 +46,9 @@ test('AI 六个固定按钮直接绑定原处理器，缺节点和重复绑定�
       editor: { isEditing: () => true },
       preview: {},
       limits: {},
-      showNotice: () => { notices += 1; },
+      showNotice: () => {
+        notices += 1;
+      },
     });
     panel.bindAiImportEventsV99();
     panel.bindAiImportEventsV99();

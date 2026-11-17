@@ -9,7 +9,9 @@ export async function deadline(operation, timeoutMs) {
   try {
     return await Promise.race([
       operation,
-      new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(`操作超过 ${timeoutMs} ms`)), timeoutMs); }),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`操作超过 ${timeoutMs} ms`)), timeoutMs);
+      }),
     ]);
   } finally {
     clearTimeout(timer);

@@ -4,7 +4,9 @@
   const scope = /** @type {typeof globalThis & import('./runtime').BrowserGlobals} */ (globalThis);
   /** @typedef {import('./contracts').Snapshot} Snapshot */
   /** @param {import('./contracts').ErrorCode} code @param {string} message */
-  function failure(code, message) { return Object.assign(new Error(message), { code }); }
+  function failure(code, message) {
+    return Object.assign(new Error(message), { code });
+  }
   /** @param {unknown} error */
   function storageError(error) {
     return failure(error && typeof error === 'object' && 'name' in error && error.name === 'QuotaExceededError' ? 'quota_exceeded' : 'storage_unavailable', '浏览器存储失败，请检查存储权限和剩余空间后重试。');
@@ -41,7 +43,9 @@
         snapshot = parsed; ready = true; externallyChanged = false;
         return { state: 'ready', revision, hasData: raw !== null };
       },
-      async read() { if (!ready) { throw failure('not_ready', '数据尚未加载。'); } return structuredClone(snapshot); },
+      async read() {
+        if (!ready) { throw failure('not_ready', '数据尚未加载。'); } return structuredClone(snapshot);
+      },
       /** @param {Snapshot} next @param {string} operationId @param {number} expectedRevision */
       async write(next, operationId, expectedRevision) {
         if (!ready) { throw failure('not_ready', '数据尚未加载。'); }
@@ -73,10 +77,16 @@
         return receipt;
       },
       /** @param {string} id */
-      async getOperation(id) { return operations.get(id)?.receipt ?? null; },
+      async getOperation(id) {
+        return operations.get(id)?.receipt ?? null;
+      },
       revision: () => revision,
-      invalidate() { externallyChanged = true; },
-      recoveryText() { return storage.getItem(key) || ''; },
+      invalidate() {
+        externallyChanged = true;
+      },
+      recoveryText() {
+        return storage.getItem(key) || '';
+      },
     };
   }
   /** @param {string} name @param {Blob} blob */
@@ -89,7 +99,9 @@
   }
   const files = {
     /** 用户主动选择的 File 仍由 DOM 输入授权，适配层不按字符串路径读取文件。 @param {Blob} file */
-    async readBuffer(file) { return file.arrayBuffer(); },
+    async readBuffer(file) {
+      return file.arrayBuffer();
+    },
     /** @param {Blob} file */
     async readText(file) {
       if (typeof file.text === 'function') { return file.text(); }
@@ -102,13 +114,19 @@
     },
   };
   const preferences = {
-    sidebar() { return localStorage.getItem('shiroha-sidebar-collapsed') === '1'; },
+    sidebar() {
+      return localStorage.getItem('shiroha-sidebar-collapsed') === '1';
+    },
     /** @param {boolean} collapsed */
-    setSidebar(collapsed) { localStorage.setItem('shiroha-sidebar-collapsed', collapsed ? '1' : '0'); },
+    setSidebar(collapsed) {
+      localStorage.setItem('shiroha-sidebar-collapsed', collapsed ? '1' : '0');
+    },
   };
   const media = {
     /** Web 当前只显示随题库保存的内联位图；不扩大远程图片或可执行内容边界。 @param {string} resource */
-    display(resource) { return /^data:image\/(?:png|jpeg|jpg|gif|webp|bmp);base64,[A-Za-z0-9+/=\r\n]+$/i.test(resource) ? resource : ''; },
+    display(resource) {
+      return /^data:image\/(?:png|jpeg|jpg|gif|webp|bmp);base64,[A-Za-z0-9+/=\r\n]+$/i.test(resource) ? resource : '';
+    },
   };
   /** @param {string} url */
   async function resourceJson(url) {

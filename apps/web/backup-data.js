@@ -2,17 +2,32 @@
   'use strict';
 
   function create({
-    makeId, now, serializeBankForCrossExportV53, exportSettingsV1, buildRichContentCapabilitiesV57,
-    cleanFileNameV23, pickBankGroupNameFromJsonV58, normalizeQuestion, normalizeBankGroupNameV58,
-    bankNameKeyV58, backupRecordConverters, externalizeNativeBackupImagesV611,
-    APP_VERSION, CURRENT_SCHEMA_VERSION, RICH_CONTENT_VERSION_V57,
+    makeId,
+    now,
+    serializeBankForCrossExportV53,
+    exportSettingsV1,
+    buildRichContentCapabilitiesV57,
+    cleanFileNameV23,
+    pickBankGroupNameFromJsonV58,
+    normalizeQuestion,
+    normalizeBankGroupNameV58,
+    bankNameKeyV58,
+    backupRecordConverters,
+    externalizeNativeBackupImagesV611,
+    APP_VERSION,
+    CURRENT_SCHEMA_VERSION,
+    RICH_CONTENT_VERSION_V57,
   }) {
     const { parseCrossPlatformTime: parseCrossPlatformTimeV24, crossTimeToIso: crossTimeToIsoV24 } = globalThis.ShirohaBackupCore;
     const { zipStoreFiles } = globalThis.ShirohaZip;
     function buildBackupPayloadV23(state, banks, exportType = 'selected_banks', includeAll = false) {
       const bankIds = new Set((banks || []).map((b) => b.id));
-      const wrongBook = {};Object.keys(state.wrongBook || {}).forEach((id) => { if (includeAll || bankIds.has(id)) { wrongBook[id] = state.wrongBook[id]; } });
-      const favorites = {};Object.keys(state.favorites || {}).forEach((id) => { if (includeAll || bankIds.has(id)) { favorites[id] = state.favorites[id]; } });
+      const wrongBook = {};Object.keys(state.wrongBook || {}).forEach((id) => {
+        if (includeAll || bankIds.has(id)) { wrongBook[id] = state.wrongBook[id]; }
+      });
+      const favorites = {};Object.keys(state.favorites || {}).forEach((id) => {
+        if (includeAll || bankIds.has(id)) { favorites[id] = state.favorites[id]; }
+      });
       const exportedBanks = (banks || []).map(serializeBankForCrossExportV53);
       const webRecords = includeAll ? (state.records || []) : [];
       const webSettings = includeAll ? exportSettingsV1(state.settings) : {};
@@ -73,7 +88,9 @@
       Object.entries(state.favorites || {}).forEach(([bid, ids]) => {
         const bank = bankMap.get(bid);if (!bank) { return; }
         const questionMap = new Map((bank.questions || []).map((q) => [q.id, q]));
-        const favoriteMeta = (state.crossPlatformMeta && state.crossPlatformMeta.favoriteQuestions && state.crossPlatformMeta.favoriteQuestions[bid]) || {};(ids || []).forEach((qid) => { const q = questionMap.get(qid) || (favoriteMeta[qid] && favoriteMeta[qid].question);if (q) { nativeFavorites.push({ question: structuredClone(q), bankId: bid, bankName: bank.name || bank.title || '', favoritedAt: Number((favoriteMeta[qid] && favoriteMeta[qid].favoritedAt) || Date.now()) }); } });
+        const favoriteMeta = (state.crossPlatformMeta && state.crossPlatformMeta.favoriteQuestions && state.crossPlatformMeta.favoriteQuestions[bid]) || {};(ids || []).forEach((qid) => {
+          const q = questionMap.get(qid) || (favoriteMeta[qid] && favoriteMeta[qid].question);if (q) { nativeFavorites.push({ question: structuredClone(q), bankId: bid, bankName: bank.name || bank.title || '', favoritedAt: Number((favoriteMeta[qid] && favoriteMeta[qid].favoritedAt) || Date.now()) }); }
+        });
       });
       const nativeRecords = (state.records || []).map((record) => backupRecordConverters.toNative(record, bankMap));
       return { schemaVersion: 1, wrongBook: nativeWrongBook, favoriteQuestions: nativeFavorites, studyRecords: nativeRecords };

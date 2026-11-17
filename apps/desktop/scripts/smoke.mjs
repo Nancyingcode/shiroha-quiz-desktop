@@ -61,7 +61,9 @@ class SmokeLaunchCleanupError extends AggregateError {
 async function listen(server) {
   await new Promise((resolve, reject) => {
     server.once('error', reject);
-    server.listen(0, '127.0.0.1', () => { server.off('error', reject); resolve(undefined); });
+    server.listen(0, '127.0.0.1', () => {
+      server.off('error', reject); resolve(undefined);
+    });
   });
   const address = server.address();
   assert(address && typeof address !== 'string', '未取得回环端口');
@@ -71,7 +73,9 @@ async function listen(server) {
 async function availablePort() {
   const server = createServer();
   const port = await listen(server);
-  await new Promise((resolve, reject) => { server.close((error) => (error ? reject(error) : resolve(undefined))); });
+  await new Promise((resolve, reject) => {
+    server.close((error) => (error ? reject(error) : resolve(undefined)));
+  });
   return port;
 }
 
@@ -149,7 +153,9 @@ async function launch(executable, profile, proxyPort, lifecycle) {
   });
   /** @type {Error | undefined} */
   let launchError;
-  child.on('error', (error) => { launchError = error; });
+  child.on('error', (error) => {
+    launchError = error;
+  });
   /** @type {import('playwright-core').Browser | undefined} */
   let browser;
   try {
@@ -245,7 +251,9 @@ $smokeWidth=[int][Math]::Round(${size.width}*$smokeDpi/96)+($smokeOuter.Right-$s
 $smokeHeight=[int][Math]::Round(${size.height}*$smokeDpi/96)+($smokeOuter.Bottom-$smokeOuter.Top)-($smokeClient.Bottom-$smokeClient.Top)
 if(-not [SmokeWindow]::SetWindowPos($smokeWindow,[IntPtr]::Zero,0,0,$smokeWidth,$smokeHeight,0x0016)){throw '调整测试窗口失败'}
 `], { windowsHide: true, timeout: START_TIMEOUT_MS });
-  await runtime.page.evaluate(() => new Promise((resolve) => { window.requestAnimationFrame(() => window.requestAnimationFrame(resolve)); }));
+  await runtime.page.evaluate(() => new Promise((resolve) => {
+    window.requestAnimationFrame(() => window.requestAnimationFrame(resolve));
+  }));
 }
 
 /** @param {Page} page @param {string} screenshotName */
@@ -454,7 +462,9 @@ async function toggleNavigationMotion(page) {
     const animations = [...app.getAnimations(), ...main.getAnimations()];
     const end = window.performance.now() + 1_000;
     do {
-      await new Promise((resolve) => { window.requestAnimationFrame(resolve); });
+      await new Promise((resolve) => {
+        window.requestAnimationFrame(resolve);
+      });
       positions.push(main.getBoundingClientRect().left);
     } while (animations.some((animation) => animation.playState === 'running') && window.performance.now() < end);
     const finish = positions.at(-1) ?? start;
@@ -494,11 +504,15 @@ async function scrollbarSmoke(page) {
       assert(['transparent', 'rgba(0, 0, 0, 0)'].includes(style.track), `${style.element} 滚动轨道不透明`);
       assert.equal(style.buttonDisplay, 'none', `${style.element} 滚动条仍显示箭头按钮`);
     }
-    await input.evaluate((node) => { node.scrollTop = 0; });
+    await input.evaluate((node) => {
+      node.scrollTop = 0;
+    });
     await input.hover();
     await page.mouse.wheel(0, 360);
     await page.waitForFunction(() => (document.getElementById('import-text')?.scrollTop ?? 0) > 0);
-    await input.evaluate((node) => { node.scrollTop = 0; });
+    await input.evaluate((node) => {
+      node.scrollTop = 0;
+    });
     const bounds = await input.boundingBox();assert(bounds);
     await page.mouse.move(bounds.x + bounds.width - 6, bounds.y + 18);await page.mouse.down();
     await page.mouse.move(bounds.x + bounds.width - 6, bounds.y + 80, { steps: 8 });await page.mouse.up();
@@ -662,7 +676,9 @@ async function notificationVisualSmoke(page) {
       if (!platform) { throw new Error('平台状态提示缺失'); }
       platform.classList.add('failed'); platform.textContent = '保存失败：通知外观验证';
       const retry = document.createElement('button'); retry.textContent = '测试恢复';
-      retry.onclick = () => { retry.dataset.activated = 'true'; };
+      retry.onclick = () => {
+        retry.dataset.activated = 'true';
+      };
       document.getElementById('platform-status')?.append(retry);
     });
     const failed = await appearance('#platform-status.failed'); verify(failed);
@@ -674,7 +690,9 @@ async function notificationVisualSmoke(page) {
     await input.fill(importState.text); await mode.selectOption(importState.mode);
     await page.evaluate((saved) => {
       document.querySelectorAll('[data-visual-smoke]').forEach((node) => node.remove());
-      saved.forEach((state) => { const node = document.getElementById(state.id); if (node) { if (!state.exists) { node.remove(); } else { node.hidden = state.hidden; node.textContent = state.text; node.className = state.className; } } });
+      saved.forEach((state) => {
+        const node = document.getElementById(state.id); if (node) { if (!state.exists) { node.remove(); } else { node.hidden = state.hidden; node.textContent = state.text; node.className = state.className; } }
+      });
     }, original);
     if (importState.view) { await page.locator(`.nav[data-view="${importState.view}"]`).click(); }
   }
@@ -1118,7 +1136,9 @@ async function main() {
     },
   );
   // CDP 连接前也拒绝互联网流量；代理不转发任何请求，不依赖系统代理或用户网络设置。
-  const proxy = createServer((socket) => { socket.on('error', () => undefined); socket.end('HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n'); });
+  const proxy = createServer((socket) => {
+    socket.on('error', () => undefined); socket.end('HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n');
+  });
   const cleanup = () => cleaning ??= (async () => {
     try {
       await cleanupAfterShutdown(control, async () => {
@@ -1133,7 +1153,11 @@ async function main() {
       if (runtime) { await deadline(runtime.browser.close().catch(() => undefined), CLOSE_TIMEOUT_MS).catch(() => undefined); }
     }
   })();
-  const interrupt = () => { void cleanup().then(() => process.exit(130), (error) => { console.error(errorText(error)); process.exit(1); }); };
+  const interrupt = () => {
+    void cleanup().then(() => process.exit(130), (error) => {
+      console.error(errorText(error)); process.exit(1);
+    });
+  };
   process.once('SIGINT', interrupt); process.once('SIGTERM', interrupt);
   /** @param {string} name @param {() => Promise<unknown>} action */
   const check = async (name, action) => {
@@ -1360,7 +1384,9 @@ async function main() {
       const loginDeadline = Date.now() + 5000;
       while (!(await harnessStatus()).ready) {
         if (Date.now() >= loginDeadline) { throw new Error('恢复前假订阅未就绪'); }
-        await new Promise((resolve) => { setTimeout(resolve, 20); });
+        await new Promise((resolve) => {
+          setTimeout(resolve, 20);
+        });
       }
       await host.invoke('service_credential', { request: { kind: 'invalidate' } });
       if ((await harnessStatus()).ready) { throw new Error('覆盖导入的凭据失效入口未撤销 Harness 就绪状态'); }
@@ -1426,7 +1452,9 @@ async function main() {
         if (!data.banks[0].questions[0].extension.preserved || data.serviceConfigurations.webdav.endpoint !== 'https://fixture.invalid') { throw new Error('迁移丢失字段'); }
         if (!localStorage.getItem('shiroha_quiz_state_v28_4_c1') || localStorage.getItem('shiroha_webdav_password_local_v378') !== null || localStorage.getItem('unknown-legacy-key') !== 'preserve') { throw new Error('旧来源被清理'); }
       });
-      const credentialState = await migrated.page.evaluate(async () => { const host = (/** @type {NativeTestWindow} */(window)).ShirohaDesktopHost;if (!host) { throw new Error('bridge'); } return host.invoke('service_credential', { request: { kind: 'status', config: { service: 'webdav', endpoint: 'https://fixture.invalid', username: 'fixture', remoteDir: 'backup' } } }); });
+      const credentialState = await migrated.page.evaluate(async () => {
+        const host = (/** @type {NativeTestWindow} */(window)).ShirohaDesktopHost;if (!host) { throw new Error('bridge'); } return host.invoke('service_credential', { request: { kind: 'status', config: { service: 'webdav', endpoint: 'https://fixture.invalid', username: 'fixture', remoteDir: 'backup' } } });
+      });
       assert.deepEqual(credentialState, { state: 'remembered' });
       return { dataMigrated: true, credentialsMigrated: true, legacyDataPreserved: true };
     });
@@ -1454,7 +1482,9 @@ async function main() {
         Object.defineProperty(window, 'ShirohaDesktopHost', {
           configurable: true,
           set(host) {
-            const original = host.invoke;host.invoke = (/** @type {string} */command, /** @type {{query?:{kind?:string}}} */args) => { calls.push(`${command}:${args?.query?.kind || ''}`);return original(command, args); };
+            const original = host.invoke;host.invoke = (/** @type {string} */command, /** @type {{query?:{kind?:string}}} */args) => {
+              calls.push(`${command}:${args?.query?.kind || ''}`);return original(command, args);
+            };
             Object.defineProperty(window, 'ShirohaDesktopHost', { value: host, configurable: true });
           },
         });
@@ -1487,7 +1517,14 @@ async function main() {
       await migratedRestart.page.locator('[data-preview-question]').first().click();
       assert.equal(await migratedRestart.page.locator('#bank-question-detail .bank-detail-body').innerText(), 'lazy-a 正文 0');
       assert(await migratedRestart.page.locator('#bank-question-detail .bank-detail-option').count() > 0);
-      await migratedRestart.page.evaluate(() => Object.defineProperty(window.navigator, 'clipboard', { configurable: true, value: { writeText: async (/** @type {string} */ text) => { Reflect.set(window, '__previewCopied', text); } } }));
+      await migratedRestart.page.evaluate(() => Object.defineProperty(window.navigator, 'clipboard', {
+        configurable: true,
+        value: {
+          writeText: async (/** @type {string} */ text) => {
+            Reflect.set(window, '__previewCopied', text);
+          },
+        },
+      }));
       await migratedRestart.page.locator('[data-copy-question]').click();
       assert.equal(await migratedRestart.page.evaluate(() => Reflect.get(window, '__previewCopied')), 'lazy-a 正文 0');
       await previewPager.getByRole('button', { name: '下一页', exact: true }).click();

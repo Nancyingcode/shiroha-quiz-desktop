@@ -15,25 +15,37 @@ function payload(path = '') {
 function setup(entry, data, assets) {
   const calls = { apply: 0, unresolved: 0, imports: [], messages: [] };
   let finish;
-  const finished = new Promise((resolve) => { finish = resolve; });
+  const finished = new Promise((resolve) => {
+    finish = resolve;
+  });
   const elements = [];
   const context = vm.createContext({
     CURRENT_SCHEMA_VERSION: 1,
     readBackupFileV24: async () => ({ text: JSON.stringify(data), assets }),
-    applyBackupAssetsV24(value, map) { calls.apply += 1;api.applyBackupAssetsV24(value, map); },
-    countUnresolvedBackupImagesV24(value) { calls.unresolved += 1;return api.countUnresolvedBackupImagesV24(value); },
+    applyBackupAssetsV24(value, map) {
+      calls.apply += 1;api.applyBackupAssetsV24(value, map);
+    },
+    countUnresolvedBackupImagesV24(value) {
+      calls.unresolved += 1;return api.countUnresolvedBackupImagesV24(value);
+    },
     normalizeBackupPayloadV23: (value) => value,
     setBackupPreviewV23() {},
     backupImportModeV23: 'merge',
     mutationSaveError: null,
     runMutation: (action) => action(),
-    applyBackupImportV23: async (...args) => { calls.imports.push(args);finish(); },
-    toast: (message) => { calls.messages.push(message);finish(); },
+    applyBackupImportV23: async (...args) => {
+      calls.imports.push(args);finish();
+    },
+    toast: (message) => {
+      calls.messages.push(message);finish();
+    },
     ShirohaDialogs: { confirm: async () => true },
     ShirohaPlatform: {
       storage: {
         recoverySnapshots: async () => [],
-        recoverImport: async (snapshot) => { calls.imports.push([snapshot]); },
+        recoverImport: async (snapshot) => {
+          calls.imports.push([snapshot]);
+        },
       },
     },
     startApplication: async () => {},
@@ -94,7 +106,9 @@ test('恢复入口失败保留原数据和文件选择，修复后同文件可�
     if (attempts === 1) { throw new Error('模拟恢复失败'); }
     persisted = plain(snapshot);
   };
-  run.context.startApplication = async () => { starts += 1; };
+  run.context.startApplication = async () => {
+    starts += 1;
+  };
   run.context.offerNativeRecovery({ append() {} });
   const input = run.elements.find((element) => element.tag === 'input');
   const file = { name: 'fixture.json' };

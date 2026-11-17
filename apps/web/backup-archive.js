@@ -1,7 +1,13 @@
 (() => {
   'use strict';
 
-  function create({ readBuffer, cleanFileName, markdownImageRegex, questionImageDataUriRegex, safeImageId }) {
+  function create({
+    readBuffer,
+    cleanFileName,
+    markdownImageRegex,
+    questionImageDataUriRegex,
+    safeImageId,
+  }) {
     const { parseZipEntries, unzipEntry, unzipEntryBytes } = globalThis.ShirohaZip;
     const { backupMimeFromPath } = globalThis.ShirohaBackupCore;
 

@@ -1,11 +1,26 @@
 (() => {
   'use strict';
   function create({
-    select: $, selectAll: $$, escape: esc, warn: warnDev, platform: ShirohaPlatform,
-    normalizeJsonMultilineTextV5910, trimMultilineBoundaryV5910, displayOptionTextV589,
-    repairCircledCombinationQuestion, normalizeQuestionImagesForWebV83, questionImageDataUriRegexV83,
-    questionTextContainsDataUriV83, practiceSourceMeta, label, scoreOf, hasAnswerValueV58914,
-    isMultiBlankQuestionV58914, isTextType, normalizeWebQuestionType, normalizeBlankAnswersV58914,
+    select: $,
+    selectAll: $$,
+    escape: esc,
+    warn: warnDev,
+    platform: ShirohaPlatform,
+    normalizeJsonMultilineTextV5910,
+    trimMultilineBoundaryV5910,
+    displayOptionTextV589,
+    repairCircledCombinationQuestion,
+    normalizeQuestionImagesForWebV83,
+    questionImageDataUriRegexV83,
+    questionTextContainsDataUriV83,
+    practiceSourceMeta,
+    label,
+    scoreOf,
+    hasAnswerValueV58914,
+    isMultiBlankQuestionV58914,
+    isTextType,
+    normalizeWebQuestionType,
+    normalizeBlankAnswersV58914,
   }) {
     function ensureRichQuestionContentStylesV55() {
       if (typeof document === 'undefined' || document.getElementById('shiroha-rich-question-style-v55')) {

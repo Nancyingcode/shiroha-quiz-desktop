@@ -8,7 +8,12 @@ const button = (panel, action) => panel.locator(`[data-review-ai="${action}"]`);
 const stored = (h) => h.page.evaluate((key) => JSON.parse(globalThis.localStorage.getItem(key)), h.keys.state);
 
 async function seedReview(h, { unknownSource = false, changedSnapshot = false, crossBankCollision = false } = {}) {
-  await h.page.evaluate(({ key, unknown, changed, collision }) => {
+  await h.page.evaluate(({
+    key,
+    unknown,
+    changed,
+    collision,
+  }) => {
     const state = JSON.parse(globalThis.localStorage.getItem(key));
     const bank = state.banks[0];
     const source = unknown ? '' : bank.id;
@@ -131,7 +136,9 @@ const cases = [
       await h.waitCall(first);
       await h.page.evaluate(() => {
         globalThis.ShirohaPlatform.storage.ensureQuestions = async () => {
-          await new Promise((resolve) => { globalThis.__finishTrainingSourceRead = resolve; });
+          await new Promise((resolve) => {
+            globalThis.__finishTrainingSourceRead = resolve;
+          });
         };
       });
       await h.page.locator('[data-training-question="1"]').click();
@@ -201,7 +208,9 @@ const cases = [
         assert.match(await panel.innerText(), /TRAINING_QUOTA_DRAFT/);
         assert.deepEqual(await stored(h), before);
       } finally {
-        await h.page.evaluate(() => { globalThis.Storage.prototype.setItem = globalThis.__trainingOriginalSet; });
+        await h.page.evaluate(() => {
+          globalThis.Storage.prototype.setItem = globalThis.__trainingOriginalSet;
+        });
       }
       await button(panel, 'save').click();
       await panel.locator('.review-analysis-saved').waitFor();

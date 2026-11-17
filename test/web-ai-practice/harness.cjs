@@ -7,7 +7,13 @@ const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const http = require('node:http');
 const path = require('node:path');
-const { fixture, MOCK_ENDPOINT, FAKE_KEY, MODEL, BANK_ID } = require('./fixtures.cjs');
+const {
+  fixture,
+  MOCK_ENDPOINT,
+  FAKE_KEY,
+  MODEL,
+  BANK_ID,
+} = require('./fixtures.cjs');
 
 const TEST_ROOT = __dirname;
 const WEB_ROOT = path.resolve(TEST_ROOT, '../../apps/web');
@@ -97,8 +103,16 @@ async function startServer() {
       response.end();
     }
   });
-  await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
-  return { url: `http://127.0.0.1:${server.address().port}/`, root, close: () => new Promise((resolve, reject) => { server.close((error) => (error ? reject(error) : resolve())); server.closeIdleConnections(); }) };
+  await new Promise((resolve, reject) => {
+    server.once('error', reject); server.listen(0, '127.0.0.1', resolve);
+  });
+  return {
+    url: `http://127.0.0.1:${server.address().port}/`,
+    root,
+    close: () => new Promise((resolve, reject) => {
+      server.close((error) => (error ? reject(error) : resolve())); server.closeIdleConnections();
+    }),
+  };
 }
 
 function baseUrl(value) {
@@ -111,12 +125,16 @@ function baseUrl(value) {
 
 function deferred() {
   let resolve;
-  const promise = new Promise((done) => { resolve = done; });
+  const promise = new Promise((done) => {
+    resolve = done;
+  });
   return { promise, resolve };
 }
 
 class MockAi {
-  constructor() { this.queue = []; this.calls = []; this.violations = []; this.tasks = new Set(); this.entries = []; }
+  constructor() {
+    this.queue = []; this.calls = []; this.violations = []; this.tasks = new Set(); this.entries = [];
+  }
 
   enqueue(kind, content, { status = 200, hold = false, raw = false } = {}) {
     const arrived = deferred();
@@ -184,10 +202,20 @@ class MockAi {
 
 async function bounded(promise, timeout, message) {
   let timer;
-  try { return await Promise.race([promise, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(message)), timeout); })]); } finally { clearTimeout(timer); }
+  try {
+    return await Promise.race([promise, new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error(message)), timeout);
+    })]);
+  } finally { clearTimeout(timer); }
 }
 
-async function setup(browser, url, keys, { configured = true, rich = false, emptyAnalysis = false, ignoreAbort = false, timeout = 10000 } = {}) {
+async function setup(browser, url, keys, {
+  configured = true,
+  rich = false,
+  emptyAnalysis = false,
+  ignoreAbort = false,
+  timeout = 10000,
+} = {}) {
   const context = await browser.newContext({ serviceWorkers: 'block', viewport: { width: 1440, height: 1000 }, acceptDownloads: false });
   const mock = new MockAi();
   const blocked = [];
@@ -227,8 +255,17 @@ async function setup(browser, url, keys, { configured = true, rich = false, empt
   });
   // Last registered route wins; no fall-through to a real network request is permitted.
   await page.route('https://mock-ai.invalid/**', (route) => mock.handle(route));
-  if (typeof context.routeWebSocket === 'function') { await context.routeWebSocket('**/*', (socket) => { blocked.push({ url: socket.url(), type: 'websocket' }); socket.close(); }); }
-  await context.addInitScript(({ keys: storage, initial, key, ignoreAbort: ignore }) => {
+  if (typeof context.routeWebSocket === 'function') {
+    await context.routeWebSocket('**/*', (socket) => {
+      blocked.push({ url: socket.url(), type: 'websocket' }); socket.close();
+    });
+  }
+  await context.addInitScript(({
+    keys: storage,
+    initial,
+    key,
+    ignoreAbort: ignore,
+  }) => {
     if (!sessionStorage.getItem('__webAiPracticeSeeded')) {
       localStorage.clear();
       sessionStorage.clear();
@@ -254,7 +291,9 @@ async function setup(browser, url, keys, { configured = true, rich = false, empt
     pageErrors,
     timeout,
     keys,
-    get bridgeUsed() { return bridgeUsed; },
+    get bridgeUsed() {
+      return bridgeUsed;
+    },
     async boot() {
       await page.goto(url, { waitUntil: 'load' });
       await page.locator('body[data-storage-state="ready"]').waitFor();
@@ -275,17 +314,27 @@ async function setup(browser, url, keys, { configured = true, rich = false, empt
       await page.locator('#start-practice-btn').click();
       await page.locator('#p-next').waitFor();
     },
-    async jump(index) { await page.locator(`[data-practice-jump="${index}"]`).click(); },
-    async reveal() { await page.locator('#p-reveal').click(); },
-    async submitChoice(key = 'A') { await page.locator(`#practice-card .option[data-key="${key}"]`).click(); await page.locator('#p-submit').click(); },
-    async waitCall(entry) { return bounded(entry.received, timeout, 'Expected mocked AI request did not arrive.'); },
+    async jump(index) {
+      await page.locator(`[data-practice-jump="${index}"]`).click();
+    },
+    async reveal() {
+      await page.locator('#p-reveal').click();
+    },
+    async submitChoice(key = 'A') {
+      await page.locator(`#practice-card .option[data-key="${key}"]`).click(); await page.locator('#p-submit').click();
+    },
+    async waitCall(entry) {
+      return bounded(entry.received, timeout, 'Expected mocked AI request did not arrive.');
+    },
     async deliver(entry) {
       const response = page.waitForResponse((response) => response.request() === entry.entry.request, { timeout });
       entry.release();
       const received = await response;
       const error = await received.finished();
       assert.equal(error, null, 'Delayed response was not actually delivered.');
-      await page.evaluate(() => new Promise((resolve) => { setTimeout(resolve, 0); }));
+      await page.evaluate(() => new Promise((resolve) => {
+        setTimeout(resolve, 0);
+      }));
     },
     async idle() {
       await page.waitForFunction((selector) => {
@@ -302,7 +351,12 @@ async function setup(browser, url, keys, { configured = true, rich = false, empt
       await page.locator(regenerate ? SEL.regenerate : SEL.open).click();
       if (opensSaved) { await page.locator(SEL.regenerate).click(); }
     },
-    async generate(result, { regenerate = false, status = 200, raw = false, visibleText } = {}) {
+    async generate(result, {
+      regenerate = false,
+      status = 200,
+      raw = false,
+      visibleText,
+    } = {}) {
       const entry = mock.enqueue('analysis', result, { status, raw });
       await harness.requestAnalysis({ regenerate });
       const call = await harness.waitCall(entry);
@@ -334,7 +388,9 @@ async function setup(browser, url, keys, { configured = true, rich = false, empt
       await page.waitForTimeout(milliseconds);
       assert.equal(mock.calls.length, count, 'AI request occurred without a generate/send action.');
     },
-    async cleanup() { await context.close(); await mock.shutdown(); },
+    async cleanup() {
+      await context.close(); await mock.shutdown();
+    },
   };
   return harness;
 }

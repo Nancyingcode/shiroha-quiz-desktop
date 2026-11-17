@@ -43,7 +43,13 @@ function affectsLintConfiguration(file) {
  *   request?: (url: string, options: RequestInit) => Promise<ApiResponse> }} options
  */
 export async function hasPassedBaseline(options) {
-  const { baseSha, baseRef, repository, token, apiUrl } = options;
+  const {
+    baseSha,
+    baseRef,
+    repository,
+    token,
+    apiUrl,
+  } = options;
   if (!token || !shaPattern.test(baseSha) || !/^[^/]+\/[^/]+$/.test(repository)) { return false; }
   const request = options.request ?? fetch;
   const [owner, repo] = repository.split('/').map(encodeURIComponent);

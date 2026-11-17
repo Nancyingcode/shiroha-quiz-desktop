@@ -21,7 +21,9 @@ function fixture(overrides = {}) {
     aiImportSessions: { importRequest: { running: false }, previewRequest: { running: false } },
     practiceAiSessions: { isBusy: () => false },
     reviewAiSessions: { isBusy: () => false },
-    confirm: (message) => { prompts.push(message); return false; },
+    confirm: (message) => {
+      prompts.push(message); return false;
+    },
     platformStatus: (message) => status.push(message),
     ShirohaPlatform: { network: { cancelAll: async () => {} }, saves: { idle: async () => {} } },
     ...overrides,
@@ -57,21 +59,46 @@ test('确认退出时取消当前 OCR 并继续完成退出检查', async () => 
   let cancellations = 0;
   const f = fixture({
     confirm: () => true,
-    ocrSession: { isRunning: () => true, cancel: () => { cancellations += 1; } },
+    ocrSession: {
+      isRunning: () => true,
+      cancel: () => {
+        cancellations += 1;
+      },
+    },
   });
   assert.equal(await f.close(), true);
   assert.equal(cancellations, 1);
 });
 
 test('failed native cancellation keeps the window open and reports failure', async () => {
-  const f = fixture({ ShirohaPlatform: { network: { cancelAll: async () => { throw new Error('cancel failed'); } } } });
+  const f = fixture({
+    ShirohaPlatform: {
+      network: {
+        cancelAll: async () => {
+          throw new Error('cancel failed');
+        },
+      },
+    },
+  });
   assert.equal(await f.close(), false);
   assert.deepEqual(f.status, ['cancel failed']);
 });
 
 test('退出协调等待 Harness 取消，失败时保留窗口', async () => {
   let cancelled = false;
-  const f = fixture({ confirm: () => true, ShirohaPlatform: { harness: { status: () => ({ busy: true }), async cancelAll() { cancelled = true;throw new Error('Harness 尚未停止'); } }, network: {}, saves: { idle: async () => {} } } });
+  const f = fixture({
+    confirm: () => true,
+    ShirohaPlatform: {
+      harness: {
+        status: () => ({ busy: true }),
+        async cancelAll() {
+          cancelled = true;throw new Error('Harness 尚未停止');
+        },
+      },
+      network: {},
+      saves: { idle: async () => {} },
+    },
+  });
   assert.equal(await f.close(), false);
   assert.equal(cancelled, true);
   assert.deepEqual(f.status, ['Harness 尚未停止']);

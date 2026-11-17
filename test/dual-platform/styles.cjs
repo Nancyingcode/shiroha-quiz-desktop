@@ -26,7 +26,11 @@ async function addSharedStyles(page, source) {
       throw new Error(`Shared stylesheet is outside the Web directory: ${href}`);
     }
     const style = await page.addStyleTag({ path: file });
-    if (media) { await style.evaluate((element, value) => { element.media = value; }, media); }
+    if (media) {
+      await style.evaluate((element, value) => {
+        element.media = value;
+      }, media);
+    }
   }
 }
 

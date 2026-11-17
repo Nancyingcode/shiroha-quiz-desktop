@@ -25,7 +25,9 @@ const server = createServer(async (request, response) => {
   upstreamCount += 1;
   response.writeHead(200, { 'content-type': 'text/event-stream' });
   response.write(': synthetic AppContainer fixture\n\n');
-  await new Promise((resolve) => { setTimeout(resolve, 6_000); });
+  await new Promise((resolve) => {
+    setTimeout(resolve, 6_000);
+  });
   if (scenario === 'tool') {
     response.end(`${chunk({
       tool_calls: [{
@@ -40,7 +42,9 @@ const server = createServer(async (request, response) => {
   response.write(chunk({ role: 'assistant' }) + chunk({ content: '{"ok":true}' }));
   response.end(scenario === 'eof' ? '' : `${chunk({}, 'stop')}data: [DONE]\n\n`);
 });
-await new Promise((resolve) => { server.listen(0, '127.0.0.1', resolve); });
+await new Promise((resolve) => {
+  server.listen(0, '127.0.0.1', resolve);
+});
 const relay = await createGuardedRelay(`http://127.0.0.1:${server.address().port}`);
 await writeFile(path.join(directory, 'relay-ready.json'), JSON.stringify({
   endpoint: relay.endpoint,

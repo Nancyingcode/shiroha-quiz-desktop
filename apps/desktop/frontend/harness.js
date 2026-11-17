@@ -92,17 +92,37 @@
     'codebuddy_upstream_tool_call', 'codebuddy_upstream_unknown_field', 'codebuddy_upstream_unverified',
     'codebuddy_worker_environment', 'codebuddy_worker_failed', 'codebuddy_worker_path',
   ]);
-  function operationBusy() { return current.operationBusy ?? current.busy; }
-  function readinessFailed() { return readiness === 'error' || readiness === 'blocked'; }
-  function selectedAdapter() { return draftAdapter ?? current.adapter; }
-  function codexSelected() { return current.adapter === 'codex' && selectedAdapter() === 'codex' && draftAdapter === undefined && !selectingAdapter; }
-  function modelSelectionPending() { return current.adapter === 'codebuddy' && draftModel !== undefined; }
-  function supportedSelection() { return ['codex', 'codebuddy'].includes(current.adapter) && selectedAdapter() === current.adapter && draftAdapter === undefined && !selectingAdapter && !modelSelectionPending(); }
-  function providerLabel() { return current.adapter === 'codebuddy' ? 'CodeBuddy' : 'Codex'; }
-  function selectionReason() { return selectionFailure || '正在保存 Harness 提供方选择，请等待完成。'; }
-  function modelSelectionReason() { return modelSelectionFailure || '正在保存 CodeBuddy 模型选择，请等待完成。'; }
+  function operationBusy() {
+    return current.operationBusy ?? current.busy;
+  }
+  function readinessFailed() {
+    return readiness === 'error' || readiness === 'blocked';
+  }
+  function selectedAdapter() {
+    return draftAdapter ?? current.adapter;
+  }
+  function codexSelected() {
+    return current.adapter === 'codex' && selectedAdapter() === 'codex' && draftAdapter === undefined && !selectingAdapter;
+  }
+  function modelSelectionPending() {
+    return current.adapter === 'codebuddy' && draftModel !== undefined;
+  }
+  function supportedSelection() {
+    return ['codex', 'codebuddy'].includes(current.adapter) && selectedAdapter() === current.adapter && draftAdapter === undefined && !selectingAdapter && !modelSelectionPending();
+  }
+  function providerLabel() {
+    return current.adapter === 'codebuddy' ? 'CodeBuddy' : 'Codex';
+  }
+  function selectionReason() {
+    return selectionFailure || '正在保存 Harness 提供方选择，请等待完成。';
+  }
+  function modelSelectionReason() {
+    return modelSelectionFailure || '正在保存 CodeBuddy 模型选择，请等待完成。';
+  }
   /** @param {string} adapter */
-  function unavailableReason(adapter) { return adapter === 'codebuddy' ? '请准备 CodeBuddy 组件并完成个人账户登录，再使用连接测试、单题解析和追问。' : 'DeepSeek 订阅尚未接入，模型执行尚未开放。'; }
+  function unavailableReason(adapter) {
+    return adapter === 'codebuddy' ? '请准备 CodeBuddy 组件并完成个人账户登录，再使用连接测试、单题解析和追问。' : 'DeepSeek 订阅尚未接入，模型执行尚未开放。';
+  }
   function assertSupported() {
     if (modelSelectionPending()) { throw failure({ code: 'harness_unavailable', message: modelSelectionReason() }); }
     if (!supportedSelection()) { throw failure({ code: 'harness_unavailable', message: draftAdapter !== undefined ? selectionReason() : unavailableReason(selectedAdapter()) }); }
@@ -123,9 +143,13 @@
     if (result.code === 'cancelled') { result.name = 'AbortError'; }
     return result;
   }
-  function cancelled() { return failure({ code: 'cancelled', message: 'AI 请求已取消。' }); }
+  function cancelled() {
+    return failure({ code: 'cancelled', message: 'AI 请求已取消。' });
+  }
   /** @param {number} epoch @param {number} sequence */
-  function isCurrentCodexRead(epoch, sequence) { return epoch === generation && sequence === codexReadSequence; }
+  function isCurrentCodexRead(epoch, sequence) {
+    return epoch === generation && sequence === codexReadSequence;
+  }
   /** @param {string} command @param {Record<string,unknown>} request @returns {Promise<unknown>} */
   async function invoke(command, request) {
     try { return await scope.ShirohaDesktopHost?.invoke(command, { request }); } catch (error) { throw failure(error); }
@@ -146,7 +170,9 @@
     /** @type {ReturnType<typeof setTimeout>|undefined} */ let timeout;
     try {
       const pending = invoke('harness_control', request);
-      const response = observing ? await Promise.race([pending, new Promise((_, reject) => { timeout = setTimeout(() => reject(new Error('状态读取超时，请重新读取。')), statusTimeoutMs); })]) : await pending;
+      const response = observing ? await Promise.race([pending, new Promise((_, reject) => {
+        timeout = setTimeout(() => reject(new Error('状态读取超时，请重新读取。')), statusTimeoutMs);
+      })]) : await pending;
       next = /** @type {NativeHarnessStatus} */ (response);
     } finally { clearTimeout(timeout); if (!observing) { pendingMutations -= 1; observationEpoch += 1; } }
     if (epoch !== generation) { return current; }
@@ -290,19 +316,25 @@
           .then(() => ({ error: undefined }), (error) => ({ error }));
         const result = await Promise.race([
           checked,
-          new Promise((resolve) => { timer = setTimeout(() => resolve({ timedOut: true }), readinessTimeoutMs); }),
+          new Promise((resolve) => {
+            timer = setTimeout(() => resolve({ timedOut: true }), readinessTimeoutMs);
+          }),
         ]);
         if ('timedOut' in /** @type {{timedOut?:boolean;error?:unknown}} */ (result)) {
           clearTimeout(timer);
           const stopping = control({ kind: 'cancel', id }).then(() => true, () => false);
           const stopped = await Promise.race([
             stopping,
-            new Promise((resolve) => { timer = setTimeout(() => resolve(false), statusTimeoutMs); }),
+            new Promise((resolve) => {
+              timer = setTimeout(() => resolve(false), statusTimeoutMs);
+            }),
           ]);
           clearTimeout(timer);
           const settled = stopped && await Promise.race([
             checked,
-            new Promise((resolve) => { timer = setTimeout(() => resolve(false), statusTimeoutMs); }),
+            new Promise((resolve) => {
+              timer = setTimeout(() => resolve(false), statusTimeoutMs);
+            }),
           ]);
           if (!settled) {
             if (epoch === generation) { readiness = 'blocked'; readinessRetryable = false; readinessReason = '无法确认检查是否停止，请重新启动应用。'; current = { ...current, ready: false }; }
@@ -439,13 +471,17 @@
       /** @type {ReturnType<typeof setTimeout>|undefined} */ let timer;
       const cancelled = await Promise.race([
         control({ kind: 'cancel', id }).then(() => true, () => false),
-        new Promise((resolve) => { timer = setTimeout(() => resolve(false), statusTimeoutMs); }),
+        new Promise((resolve) => {
+          timer = setTimeout(() => resolve(false), statusTimeoutMs);
+        }),
       ]);
       clearTimeout(timer);
       if (!cancelled) { throw new Error('无法确认检查是否停止，请重新启动应用。'); }
       const stopped = await Promise.race([
         pending.then(() => true),
-        new Promise((resolve) => { timer = setTimeout(() => resolve(false), statusTimeoutMs); }),
+        new Promise((resolve) => {
+          timer = setTimeout(() => resolve(false), statusTimeoutMs);
+        }),
       ]);
       clearTimeout(timer);
       if (!stopped) { throw new Error('无法确认检查是否停止，请重新启动应用。'); }
@@ -694,7 +730,9 @@
       if (modelSelectionPending()) { return { ...result, model: draftModel ?? current.model, ready: false, reason: modelSelectionReason() }; }
       return result;
     },
-    snapshot() { return Object.freeze(api.status()); },
+    snapshot() {
+      return Object.freeze(api.status());
+    },
     isReadinessTransition(before, after) {
       const receipt = readinessReceipt;
       if (!receipt || receipt.epoch !== generation || !after.ready) { return false; }
@@ -707,7 +745,9 @@
       // 已确认的账户发生变化时必须重新发起任务，不能把换号当成就绪检查。
       return before.credentialStatus !== 'subscription' || before.accountRevision === after.accountRevision;
     },
-    ensureReady() { readinessRequested = true; return readinessRetry && readinessRetryEpoch === generation ? readinessRetry : checkReadiness(false); },
+    ensureReady() {
+      readinessRequested = true; return readinessRetry && readinessRetryEpoch === generation ? readinessRetry : checkReadiness(false);
+    },
     retryReadiness() {
       if (readinessPromise && readinessPromiseEpoch === generation) { return readinessPromise; }
       if (readinessRetry && readinessRetryEpoch === generation) { return readinessRetry; }
@@ -731,7 +771,9 @@
         readinessRequested = true;
         await checkReadiness(true);
       })();
-      const pending = operation.finally(() => { if (readinessRetry === pending) { readinessRetry = undefined; readinessRetryEpoch = -1; } });
+      const pending = operation.finally(() => {
+        if (readinessRetry === pending) { readinessRetry = undefined; readinessRetryEpoch = -1; }
+      });
       readinessRetry = pending;
       readinessRetryEpoch = epoch;
       return pending;
@@ -783,9 +825,13 @@
       let stopped = false;
       const wasCancelled = () => stopped || signal?.aborted || epoch !== generation;
       /** @type {Promise<unknown>|undefined} */ let stopping;
-      const abort = () => { stopped = true; stopping = control({ kind: 'cancel', id }).catch(() => undefined); };
+      const abort = () => {
+        stopped = true; stopping = control({ kind: 'cancel', id }).catch(() => undefined);
+      };
       let finished = () => {};
-      active.set(id, new Promise((resolve) => { finished = resolve; }));
+      active.set(id, new Promise((resolve) => {
+        finished = resolve;
+      }));
       signal?.addEventListener('abort', abort, { once: true });
       if (codebuddy) { render(false); changed(); }
       try {
@@ -811,10 +857,16 @@
         throw error;
       } finally { signal?.removeEventListener('abort', abort); active.delete(id); finished(); render(false); changed(); }
     },
-    async cancelAll() { invalidateSetup(); generation += 1; readiness = 'idle'; readinessReason = ''; readinessRequested = false; readinessDeferred = false; clearAuthorizationTimer(); if (!['codex', 'codebuddy'].includes(current.adapter)) { return; } const pending = [...active.values()]; await control({ kind: 'cancel_all' }); await Promise.all(pending); },
+    async cancelAll() {
+      invalidateSetup(); generation += 1; readiness = 'idle'; readinessReason = ''; readinessRequested = false; readinessDeferred = false; clearAuthorizationTimer(); if (!['codex', 'codebuddy'].includes(current.adapter)) { return; } const pending = [...active.values()]; await control({ kind: 'cancel_all' }); await Promise.all(pending);
+    },
     // 表单执行方式是待保存的选择；业务使用状态快照，未确认的选择保持不可执行。
-    formMode() { return input('ai-execution-harness')?.checked ? 'harness' : 'api'; },
-    formAdapter() { return selectedAdapter(); },
+    formMode() {
+      return input('ai-execution-harness')?.checked ? 'harness' : 'api';
+    },
+    formAdapter() {
+      return selectedAdapter();
+    },
     selectAdapter,
     selectModel,
     async saveMode(mode) {
@@ -834,7 +886,9 @@
       render(); changed();
       if (mode === 'harness' && modelSelectionPending()) { await selectModel(draftModel ?? current.model); }
     },
-    async clear() { assertCodex(); if (active.size || current.busy) { throw new Error('正在停止 Codex 任务，请等待结束后清除配置。'); } await endAuthorization('clear'); render(); },
+    async clear() {
+      assertCodex(); if (active.size || current.busy) { throw new Error('正在停止 Codex 任务，请等待结束后清除配置。'); } await endAuthorization('clear'); render();
+    },
     async test() {
       assertSupported();
       if (api.formMode() !== current.mode) { throw new Error('请先保存当前执行方式，再测试执行。'); }
@@ -851,15 +905,29 @@
         throw error;
       }
     },
-    render() { render(); if (element('ai-settings')?.classList.contains('active')) { activateRuntime(); } },
+    render() {
+      render(); if (element('ai-settings')?.classList.contains('active')) { activateRuntime(); }
+    },
     bind(onChanged, isBusy) {
       changed = onChanged; businessBusy = isBusy;
       const provider = input('ai-harness-adapter');
-      if (provider) { provider.onchange = () => { const adapter = provider.value; void uiAction(() => selectAdapter(adapter)); }; }
+      if (provider) {
+        provider.onchange = () => {
+          const adapter = provider.value; void uiAction(() => selectAdapter(adapter));
+        };
+      }
       const codebuddyModel = input('ai-codebuddy-model');
-      if (codebuddyModel) { codebuddyModel.onchange = () => { const model = codebuddyModel.value; void uiAction(() => selectModel(model)); }; }
+      if (codebuddyModel) {
+        codebuddyModel.onchange = () => {
+          const model = codebuddyModel.value; void uiAction(() => selectModel(model));
+        };
+      }
       const retryModel = element('ai-codebuddy-model-retry');
-      if (retryModel) { retryModel.onclick = () => { if (draftModel !== undefined) { const model = draftModel; void uiAction(() => selectModel(model)); } }; }
+      if (retryModel) {
+        retryModel.onclick = () => {
+          if (draftModel !== undefined) { const model = draftModel; void uiAction(() => selectModel(model)); }
+        };
+      }
       /** @param {string} mode */
       function handleModeChange(mode) {
         render(false);
@@ -872,20 +940,84 @@
         const radio = input(`ai-execution-${mode}`);
         if (radio) { radio.onchange = () => handleModeChange(mode); }
       }
-      const prepare = element('ai-harness-prepare'); if (prepare) { prepare.onclick = () => { void uiAction(() => ensurePrepared()); }; }
-      const codebuddyPrepare = element('ai-codebuddy-prepare'); if (codebuddyPrepare) { codebuddyPrepare.onclick = () => { void uiAction(() => ensurePrepared()); }; }
-      for (const id of ['ai-codebuddy-stop']) { const button = element(id); if (button) { button.onclick = () => { void uiAction(() => api.cancelAll()); }; } }
-      const cancelPrepare = element('ai-harness-prepare-cancel'); if (cancelPrepare) { cancelPrepare.onclick = () => { void uiAction(() => cancelComponent(current.componentTasks?.find((task) => task.adapter === 'codex'))); }; }
-      const cancelBuddy = element('ai-codebuddy-prepare-cancel'); if (cancelBuddy) { cancelBuddy.onclick = () => { void uiAction(() => cancelComponent(current.componentTasks?.find((task) => task.adapter === 'codebuddy'))); }; }
-      const backgroundView = element('ai-harness-background-view'); if (backgroundView) { backgroundView.onclick = () => { const task = current.componentTasks?.find((task) => task.adapter !== selectedAdapter()); if (task) { void uiAction(() => selectAdapter(task.adapter)); } }; }
-      const backgroundCancel = element('ai-harness-background-cancel'); if (backgroundCancel) { backgroundCancel.onclick = () => { void uiAction(() => cancelComponent(current.componentTasks?.find((task) => task.adapter !== selectedAdapter()))); }; }
-      const retrySettings = element('ai-harness-load-retry'); if (retrySettings) { retrySettings.onclick = () => { void api.initialize().then(() => { render();activateRuntime(); }); }; }
-      const managed = element('ai-harness-use-managed'); if (managed) { managed.onclick = () => { void uiAction(() => ensurePrepared('use_managed_runtime')); }; }
-      const choose = element('ai-harness-choose'); if (choose) { choose.onclick = () => { void uiAction(async () => { assertIdle();await control({ kind: 'choose_runtime' }); }); }; }
-      const inspect = element('ai-harness-inspect'); if (inspect) { inspect.onclick = () => { void uiAction(async () => { assertIdle();await control({ kind: 'inspect' }); }); }; }
-      const login = element('ai-harness-login'); if (login) { login.onclick = () => { void uiAction(loginSubscription); }; }
-      const refresh = element('ai-harness-auth-refresh'); if (refresh) { refresh.onclick = () => { void uiAction(() => (readiness === 'idle' ? refreshStatus() : api.retryReadiness())); }; }
-      const logout = element('ai-harness-logout'); if (logout) { logout.onclick = () => { void uiAction(() => endAuthorization('logout')); }; }
+      const prepare = element('ai-harness-prepare'); if (prepare) {
+        prepare.onclick = () => {
+          void uiAction(() => ensurePrepared());
+        };
+      }
+      const codebuddyPrepare = element('ai-codebuddy-prepare'); if (codebuddyPrepare) {
+        codebuddyPrepare.onclick = () => {
+          void uiAction(() => ensurePrepared());
+        };
+      }
+      for (const id of ['ai-codebuddy-stop']) {
+        const button = element(id); if (button) {
+          button.onclick = () => {
+            void uiAction(() => api.cancelAll());
+          };
+        }
+      }
+      const cancelPrepare = element('ai-harness-prepare-cancel'); if (cancelPrepare) {
+        cancelPrepare.onclick = () => {
+          void uiAction(() => cancelComponent(current.componentTasks?.find((task) => task.adapter === 'codex')));
+        };
+      }
+      const cancelBuddy = element('ai-codebuddy-prepare-cancel'); if (cancelBuddy) {
+        cancelBuddy.onclick = () => {
+          void uiAction(() => cancelComponent(current.componentTasks?.find((task) => task.adapter === 'codebuddy')));
+        };
+      }
+      const backgroundView = element('ai-harness-background-view'); if (backgroundView) {
+        backgroundView.onclick = () => {
+          const task = current.componentTasks?.find((task) => task.adapter !== selectedAdapter()); if (task) { void uiAction(() => selectAdapter(task.adapter)); }
+        };
+      }
+      const backgroundCancel = element('ai-harness-background-cancel'); if (backgroundCancel) {
+        backgroundCancel.onclick = () => {
+          void uiAction(() => cancelComponent(current.componentTasks?.find((task) => task.adapter !== selectedAdapter())));
+        };
+      }
+      const retrySettings = element('ai-harness-load-retry'); if (retrySettings) {
+        retrySettings.onclick = () => {
+          void api.initialize().then(() => {
+            render();activateRuntime();
+          });
+        };
+      }
+      const managed = element('ai-harness-use-managed'); if (managed) {
+        managed.onclick = () => {
+          void uiAction(() => ensurePrepared('use_managed_runtime'));
+        };
+      }
+      const choose = element('ai-harness-choose'); if (choose) {
+        choose.onclick = () => {
+          void uiAction(async () => {
+            assertIdle();await control({ kind: 'choose_runtime' });
+          });
+        };
+      }
+      const inspect = element('ai-harness-inspect'); if (inspect) {
+        inspect.onclick = () => {
+          void uiAction(async () => {
+            assertIdle();await control({ kind: 'inspect' });
+          });
+        };
+      }
+      const login = element('ai-harness-login'); if (login) {
+        login.onclick = () => {
+          void uiAction(loginSubscription);
+        };
+      }
+      const refresh = element('ai-harness-auth-refresh'); if (refresh) {
+        refresh.onclick = () => {
+          void uiAction(() => (readiness === 'idle' ? refreshStatus() : api.retryReadiness()));
+        };
+      }
+      const logout = element('ai-harness-logout'); if (logout) {
+        logout.onclick = () => {
+          void uiAction(() => endAuthorization('logout'));
+        };
+      }
       /** @param {string} field */
       function copyLoginInfo(field) {
         const value = field === 'loginUrl' ? current.loginUrl : current.userCode;
@@ -895,7 +1027,11 @@
         const copy = element(id);
         if (copy) { copy.onclick = () => copyLoginInfo(field); }
       }
-      const stop = element('ai-harness-stop'); if (stop) { stop.onclick = () => { void uiAction(() => api.cancelAll()); }; }
+      const stop = element('ai-harness-stop'); if (stop) {
+        stop.onclick = () => {
+          void uiAction(() => api.cancelAll());
+        };
+      }
       render();
     },
   };

@@ -5,7 +5,11 @@ const test = require('node:test');
 const vm = require('node:vm');
 const { runWebScripts } = require('./source-tools.cjs');
 
-function fixture({ readPdf = async () => { throw new Error('损坏'); } } = {}) {
+function fixture({
+  readPdf = async () => {
+    throw new Error('损坏');
+  },
+} = {}) {
   const events = [];
   const fields = {
     '#import-text': { value: '旧文本', dataset: { tableImportV49: '1' } },
@@ -57,8 +61,16 @@ test('PDF 读取失败保留原文本和题目草稿并提示 OCR；双文件按
 
 test('读取失败信息为对象时保留原来的默认类型转换', async () => {
   const hints = [];
-  const message = { [Symbol.toPrimitive](hint) { hints.push(hint);return hint === 'default' ? '原始错误' : '不同错误'; } };
-  const { draft, events } = fixture({ readPdf: async () => { throw { message }; } });
+  const message = {
+    [Symbol.toPrimitive](hint) {
+      hints.push(hint);return hint === 'default' ? '原始错误' : '不同错误';
+    },
+  };
+  const { draft, events } = fixture({
+    readPdf: async () => {
+      throw { message };
+    },
+  });
   await draft.readImportFile({ target: { files: [{ name: '损坏.pdf', size: 5 }] } });
   assert.match(events.find((event) => event[0] === 'ocr')[1], /原始错误/);
   assert.match(events.filter((event) => event[0] === 'toast').at(-1)[1], /原始错误/);

@@ -9,7 +9,9 @@ const test = require('node:test');
 const config = { provider: 'ollama', endpoint: 'http://127.0.0.1:11434/v1/chat/completions', model: 'test-model' };
 const browserAdvice = /CORS|跨域|Origin|浏览器|当前网页/;
 
-function harness(native, ai = async () => { throw new Error('未配置 mock 响应'); }) {
+function harness(native, ai = async () => {
+  throw new Error('未配置 mock 响应');
+}) {
   const timers = new Set();
   const context = vm.createContext({
     URL,
@@ -17,8 +19,12 @@ function harness(native, ai = async () => { throw new Error('未配置 mock 响�
     location: { origin: native ? 'http://tauri.localhost' : 'https://quiz.example.invalid' },
     AI_PROVIDER_PRESETS_V99: { ollama: { label: 'Ollama' }, custom: { label: '自定义接口' } },
     ShirohaPlatform: { network: { ai }, credentials: { native, redact: (_config, text) => text } },
-    setTimeout(callback) { const timer = { callback }; timers.add(timer); return timer; },
-    clearTimeout(timer) { timers.delete(timer); },
+    setTimeout(callback) {
+      const timer = { callback }; timers.add(timer); return timer;
+    },
+    clearTimeout(timer) {
+      timers.delete(timer);
+    },
   });
   installAiSettings(context);
   installAiTransport(context);
@@ -39,7 +45,9 @@ for (const [code, message, summary] of [
 ]) {
   test(`桌面 AI 保留 ${code} 原错误并给出对应诊断`, async () => {
     const failure = Object.assign(new Error(message), { code });
-    const { context } = harness(true, async () => { throw failure; });
+    const { context } = harness(true, async () => {
+      throw failure;
+    });
     await assert.rejects(context.requestAiChatV99(config, []), (error) => {
       assert.equal(error, failure);
       assert.equal(error.code, code);
@@ -55,7 +63,9 @@ for (const [code, message, summary] of [
 for (const endpoint of [config.endpoint, 'https://ai.example.invalid/v1/chat/completions']) {
   test(`桌面网络失败 ${endpoint} 不给出浏览器跨域建议`, async () => {
     const failure = Object.assign(new Error('无法连接服务，请检查地址、证书和网络。'), { code: 'network_unavailable' });
-    const { context } = harness(true, async () => { throw failure; });
+    const { context } = harness(true, async () => {
+      throw failure;
+    });
     const current = { ...config, endpoint };
     await assert.rejects(context.requestAiChatV99(current, []), (error) => {
       assert.equal(error, failure);
@@ -90,7 +100,9 @@ for (const [mode, error] of [['idle', null], ['ok', null], ['error', new Error('
 
 test('浏览器网络失败仍保留跨域诊断与 Ollama 命令', async () => {
   const failure = new TypeError('Failed to fetch');
-  const { context } = harness(false, async () => { throw failure; });
+  const { context } = harness(false, async () => {
+    throw failure;
+  });
   await assert.rejects(context.requestAiChatV99(config, []), (error) => {
     assert.equal(error.cause, failure);
     assert.equal(error.network, true);
@@ -140,7 +152,9 @@ for (const native of [false, true]) {
 
 test('桌面主动取消不会被诊断为连接或跨域失败', async () => {
   const failure = Object.assign(new Error('请求已取消。'), { name: 'AbortError', code: 'cancelled' });
-  const { context } = harness(true, async () => { throw failure; });
+  const { context } = harness(true, async () => {
+    throw failure;
+  });
   await assert.rejects(context.requestAiChatV99(config, []), (error) => {
     assert.equal(error, failure);
     assert.match(context.buildAiDiagnosticV375(error, config).summary, /取消/);
@@ -178,7 +192,13 @@ test('响应正文读取失败不触发格式兜底重试', async () => {
   const failure = new Error('正文读取失败');
   const { context } = harness(false, async () => {
     calls += 1;
-    return { ok: false, status: 400, text: async () => { throw failure; } };
+    return {
+      ok: false,
+      status: 400,
+      text: async () => {
+        throw failure;
+      },
+    };
   });
   await assert.rejects(context.requestAiChatV99(config, []), (error) => error === failure);
   assert.equal(calls, 1);
@@ -189,9 +209,19 @@ for (const status of [200, 400]) {
     let finish;
     let calls = 0;
     let reads = 0;
-    const delayed = new Promise((resolve) => { finish = resolve; });
-    const response = { ok: status === 200, status, text: async () => { reads += 1; return '{"choices":[{"message":{"content":"结果"}}]}'; } };
-    const { context } = harness(false, async () => { calls += 1; return calls === 1 ? delayed : response; });
+    const delayed = new Promise((resolve) => {
+      finish = resolve;
+    });
+    const response = {
+      ok: status === 200,
+      status,
+      text: async () => {
+        reads += 1; return '{"choices":[{"message":{"content":"结果"}}]}';
+      },
+    };
+    const { context } = harness(false, async () => {
+      calls += 1; return calls === 1 ? delayed : response;
+    });
     const controller = new AbortController();
     const pending = context.requestAiChatV99(config, [], { controller });
     controller.abort();

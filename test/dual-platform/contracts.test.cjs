@@ -79,7 +79,9 @@ test('入队载荷是独立的深冻结副本', () => {
   assert.equal(result.value.changes[0].bankId, 'bank-1');
   assert.equal(Object.isFrozen(result.value), true);
   assert.equal(Object.isFrozen(result.value.changes[0]), true);
-  assert.throws(() => { result.value.changes.push({ kind: 'select_bank', bankId: '' }); }, TypeError);
+  assert.throws(() => {
+    result.value.changes.push({ kind: 'select_bank', bankId: '' });
+  }, TypeError);
 });
 
 test('冻结拒绝循环对象和不能无损序列化的值', () => {
@@ -235,9 +237,18 @@ test('冻结拒绝会在 JSON 交换中丢失的稀疏数组和隐藏字段', ()
 test('校验拒绝访问器和类实例，不能在冻结时执行 getter', () => {
   let reads = 0;
   const request = commit();
-  Object.defineProperty(request.changes[0], 'bankId', { get() { reads += 1; return 'bank-1'; }, enumerable: true });
+  Object.defineProperty(request.changes[0], 'bankId', {
+    get() {
+      reads += 1; return 'bank-1';
+    },
+    enumerable: true,
+  });
   rejects(validation.freezeCommit(request, ready()), 'invalid_input');
   assert.equal(reads, 0);
-  class Setting { constructor() { this.value = '不能丢弃原型语义'; } }
+  class Setting {
+    constructor() {
+      this.value = '不能丢弃原型语义';
+    }
+  }
   rejects(validation.freezeCommit(commit({ changes: [{ kind: 'put_settings', settings: new Setting() }] }), ready()), 'invalid_input');
 });

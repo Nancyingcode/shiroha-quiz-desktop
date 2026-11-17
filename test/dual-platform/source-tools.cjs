@@ -74,7 +74,9 @@ function createWebSource(source) {
       assert(end > start, `函数边界顺序错误：${startName} / ${endName}`);
       return source.slice(start, end);
     },
-    functionSource(name) { return code.getText(declaration(name)); },
+    functionSource(name) {
+      return code.getText(declaration(name));
+    },
     stringConstant(name) {
       const declarations = body.filter((node) => node.type === 'VariableDeclaration'
         && node.kind === 'const').flatMap((node) => node.declarations);

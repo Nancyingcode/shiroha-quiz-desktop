@@ -31,11 +31,19 @@
     });
   }
 
-  function attachTrainingReview(record, items, metadata) { record.review = ShirohaTraining.buildReview(items, record.details || [], metadata);record.reviewSummary = ShirohaTraining.reviewSummary(record.review, record.details || []); }
+  function attachTrainingReview(record, items, metadata) {
+    record.review = ShirohaTraining.buildReview(items, record.details || [], metadata);record.reviewSummary = ShirohaTraining.reviewSummary(record.review, record.details || []);
+  }
 
-  function ensureDefaultBank() { if (!state.banks.length && !state.settings?.suppressDefaultBank) { state.banks.push(defaultBank()); } if (!state.activeBankId) { state.activeBankId = state.banks[0]?.id || ''; } }
-  function blankState() { return { schemaVersion: CURRENT_SCHEMA_VERSION, banks: [], activeBankId: '', wrongBook: {}, favorites: {}, records: [], settings: {}, crossPlatformMeta: { favoriteQuestions: {} } }; }
-  function warnDev(message, error) { try { console.warn('[Shiroha Quiz]', message, error || ''); } catch { /* 日志不可用时不能阻断题库操作。 */ } }
+  function ensureDefaultBank() {
+    if (!state.banks.length && !state.settings?.suppressDefaultBank) { state.banks.push(defaultBank()); } if (!state.activeBankId) { state.activeBankId = state.banks[0]?.id || ''; }
+  }
+  function blankState() {
+    return { schemaVersion: CURRENT_SCHEMA_VERSION, banks: [], activeBankId: '', wrongBook: {}, favorites: {}, records: [], settings: {}, crossPlatformMeta: { favoriteQuestions: {} } };
+  }
+  function warnDev(message, error) {
+    try { console.warn('[Shiroha Quiz]', message, error || ''); } catch { /* 日志不可用时不能阻断题库操作。 */ }
+  }
   async function loadState() {
     const result = await ShirohaPlatform.storage.initialize();
     if (result.state !== 'ready') { throw result.error; }
@@ -54,9 +62,17 @@
     if (sourceKey && sourceKey !== KEY) { migrated.settings = { ...(migrated.settings || {}), migratedFromStorageKey: sourceKey }; }
     return migrated;
   }
-  async function clearStoredState() { await ShirohaPlatform.harness?.cancelAll();if (ShirohaPlatform.storage.reset) { await ShirohaPlatform.storage.reset(); } else { await ShirohaPlatform.credentials.reset(); } await ShirohaPlatform.harness?.initialize({ restored: true }); }
-  async function saveState() { return runMutation(async () => { await saveSilent();toast(ShirohaPlatform.storage.checkpoint ? '已保存到本机数据库。' : '已保存到浏览器本地。', 'ok'); }); }
-  function now() { return new Date().toISOString(); }
+  async function clearStoredState() {
+    await ShirohaPlatform.harness?.cancelAll();if (ShirohaPlatform.storage.reset) { await ShirohaPlatform.storage.reset(); } else { await ShirohaPlatform.credentials.reset(); } await ShirohaPlatform.harness?.initialize({ restored: true });
+  }
+  async function saveState() {
+    return runMutation(async () => {
+      await saveSilent();toast(ShirohaPlatform.storage.checkpoint ? '已保存到本机数据库。' : '已保存到浏览器本地。', 'ok');
+    });
+  }
+  function now() {
+    return new Date().toISOString();
+  }
   function makeId(prefix = 'id', ...parts) {
     const base = parts.filter((v) => v != null && String(v).trim()).map((v) => String(v).replace(/[^A-Za-z0-9_-]+/g, '_').slice(0, 32)).filter(Boolean).join('_');
     const random = (globalThis.crypto && globalThis.crypto.randomUUID) ? globalThis.crypto.randomUUID() : `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
@@ -73,17 +89,35 @@
   let dueReviewTimer = null;
   let dueReviewVisibilityBound = false;
 
-  function beginNativeRender(view) { const version = (nativeRenderVersions.get(view) || 0) + 1;nativeRenderVersions.set(view, version);return version; }
+  function beginNativeRender(view) {
+    const version = (nativeRenderVersions.get(view) || 0) + 1;nativeRenderVersions.set(view, version);return version;
+  }
 
-  async function readNative(action, shouldReport = () => true) { const task = Promise.resolve().then(action);nativeReads.add(task);try { await task;return true; } catch (error) { if (shouldReport()) { platformStatus(error.message || '读取本地数据失败，请重试。', true); } return false; } finally { nativeReads.delete(task); } }
-  async function loadNativeItems(items, shouldReport) { if (!ShirohaPlatform.storage.ensureQuestions) { return true; } return readNative(() => ShirohaPlatform.storage.ensureQuestions(state, items.map((item) => ({ bankId: practiceItemBankIdV8916(item), questionId: practiceQuestionV8916(item).id }))), shouldReport); }
-  async function loadNativeBanks(ids, shouldReport) { return loadNativeItems(practiceSessionItemsForBanksV8916(state.banks.filter((bank) => ids.includes(bank.id))), shouldReport); }
-  async function loadNativeAll() { if (!ShirohaPlatform.storage.ensureAll) { return true; } return readNative(() => ShirohaPlatform.storage.ensureAll(state)); }
-  function nativeViewVisible(id) { return !ShirohaPlatform.storage.lazy || (!mutationBusy && document.getElementById(id)?.classList.contains('active')); }
+  async function readNative(action, shouldReport = () => true) {
+    const task = Promise.resolve().then(action);nativeReads.add(task);try { await task;return true; } catch (error) { if (shouldReport()) { platformStatus(error.message || '读取本地数据失败，请重试。', true); } return false; } finally { nativeReads.delete(task); }
+  }
+  async function loadNativeItems(items, shouldReport) {
+    if (!ShirohaPlatform.storage.ensureQuestions) { return true; } return readNative(() => ShirohaPlatform.storage.ensureQuestions(state, items.map((item) => ({ bankId: practiceItemBankIdV8916(item), questionId: practiceQuestionV8916(item).id }))), shouldReport);
+  }
+  async function loadNativeBanks(ids, shouldReport) {
+    return loadNativeItems(practiceSessionItemsForBanksV8916(state.banks.filter((bank) => ids.includes(bank.id))), shouldReport);
+  }
+  async function loadNativeAll() {
+    if (!ShirohaPlatform.storage.ensureAll) { return true; } return readNative(() => ShirohaPlatform.storage.ensureAll(state));
+  }
+  function nativeViewVisible(id) {
+    return !ShirohaPlatform.storage.lazy || (!mutationBusy && document.getElementById(id)?.classList.contains('active'));
+  }
   const {
-    listPageRange, listPageNumbers, normalizeWebQuestionType, isTextType,
-    normalizeBlankAnswersV58914, isMultiBlankQuestionV58914,
-    primaryBlankAnswerV58914, cloneBlankAnswersV58914, sameAnswerForQuestion,
+    listPageRange,
+    listPageNumbers,
+    normalizeWebQuestionType,
+    isTextType,
+    normalizeBlankAnswersV58914,
+    isMultiBlankQuestionV58914,
+    primaryBlankAnswerV58914,
+    cloneBlankAnswersV58914,
+    sameAnswerForQuestion,
   } = globalThis.ShirohaQuizCore;
   const { parsePracticeNumberRangeV58916, formatExactPracticeNumbersV58916 } = globalThis.ShirohaTraining;
   const { extractDocxText, docxXmlToText, decodeXml } = globalThis.ShirohaDocx.create({
@@ -96,7 +130,12 @@
   const ocrSession = globalThis.ShirohaOcrImport.create({
     pdf: pdfImport, readBuffer: (file) => ShirohaPlatform.files.readBuffer(file), toast, warnDev,
   });
-  const { resetOcrImportState, setOcrStatus, startPdfOcrImport, currentOcrText } = ocrSession;
+  const {
+    resetOcrImportState,
+    setOcrStatus,
+    startPdfOcrImport,
+    currentOcrText,
+  } = ocrSession;
   const textParser = globalThis.ShirohaTextParser.create({
     makeId,
     warnDev,
@@ -108,22 +147,53 @@
     injectQuestionImagesForWebV83,
   });
   const {
-    cleanImportedQuestion, collectImportWarnings, collectSoftRiskWarnings, countTypes,
-    displayOptionTextV589, escapeRegExpV51, getHeadingType,
-    importIssueStatus, isImportNoiseLine,
-    isJudgeSymbolAnswer, isRawJudgeSymbolAnswer, mapType,
-    normalizeAnswer, normalizeImportText, normalizeJsonMultilineTextV5910,
-    normalizeQuestion, normalizeText, normalizeType, parseAnswerAnalysisEntries, parseOptionsText,
+    cleanImportedQuestion,
+    collectImportWarnings,
+    collectSoftRiskWarnings,
+    countTypes,
+    displayOptionTextV589,
+    escapeRegExpV51,
+    getHeadingType,
+    importIssueStatus,
+    isImportNoiseLine,
+    isJudgeSymbolAnswer,
+    isRawJudgeSymbolAnswer,
+    mapType,
+    normalizeAnswer,
+    normalizeImportText,
+    normalizeJsonMultilineTextV5910,
+    normalizeQuestion,
+    normalizeText,
+    normalizeType,
+    parseAnswerAnalysisEntries,
+    parseOptionsText,
     parseTextQuestions: parseTextQuestionsDetailed,
-    repairCircledCombinationQuestion, splitAnswer,
-    splitTextAnswer, trimMultilineBoundaryV5910, validateQuestion,
+    repairCircledCombinationQuestion,
+    splitAnswer,
+    splitTextAnswer,
+    trimMultilineBoundaryV5910,
+    validateQuestion,
   } = textParser;
   const {
-    renderQuestionContent, prewarmMathJaxV56, scheduleMathJaxTypesetV56, parseDocxMarkdownTableBlockV55,
-    renderQuestionBodyV83, questionHtml, bindAnswerOptionControls, refreshAnswerOptionControls,
-    collectTextAnswerFromElementV58914, collectAnswer, answerDisplay, blankAnswersFromDetailV58914,
-    blankUserAnswersFromDetailV58914, renderMultiBlankComparisonV58914, feedbackAnswerHtmlV58914,
-    markOptions, practiceReviewAnswerHtml, renderReviewAnswerSummary, renderReviewOptions,
+    renderQuestionContent,
+    prewarmMathJaxV56,
+    scheduleMathJaxTypesetV56,
+    parseDocxMarkdownTableBlockV55,
+    renderQuestionBodyV83,
+    questionHtml,
+    bindAnswerOptionControls,
+    refreshAnswerOptionControls,
+    collectTextAnswerFromElementV58914,
+    collectAnswer,
+    answerDisplay,
+    blankAnswersFromDetailV58914,
+    blankUserAnswersFromDetailV58914,
+    renderMultiBlankComparisonV58914,
+    feedbackAnswerHtmlV58914,
+    markOptions,
+    practiceReviewAnswerHtml,
+    renderReviewAnswerSummary,
+    renderReviewOptions,
     applyAnswerStateV26,
   } = globalThis.ShirohaQuestionView.create({
     select: $,
@@ -148,9 +218,17 @@
     normalizeBlankAnswersV58914,
   });
   const {
-    readCustomCountV60, syncLimitControlV60, bindLimitControlsV60, filteredPracticeItemsV8916, dueReviewItems,
-    practiceBaseItemsV58916, syncPracticeStartModeFieldsV58916, syncPracticeStartUiV58916,
-    bindPracticeStartControlsV58916, buildPracticeSelectionV58916, updatePracticeProgressV58916,
+    readCustomCountV60,
+    syncLimitControlV60,
+    bindLimitControlsV60,
+    filteredPracticeItemsV8916,
+    dueReviewItems,
+    practiceBaseItemsV58916,
+    syncPracticeStartModeFieldsV58916,
+    syncPracticeStartUiV58916,
+    bindPracticeStartControlsV58916,
+    buildPracticeSelectionV58916,
+    updatePracticeProgressV58916,
   } = globalThis.ShirohaPracticeSelection.create({
     state,
     session: practiceSession,
@@ -175,9 +253,17 @@
     progress: { answer: (...args) => getPracticeAnswerStateV26(...args) },
   });
   const {
-    closeBankQuestionDetail, renderBankSelect, renderMergeSelect, renderBankInputs, renderBankList,
-    renderBankToolbarV28, renderBankPreview, bankQuestionCopyText, openBankQuestionDetail,
-    resetBankQuestionSelection, cancelPendingBankPreview,
+    closeBankQuestionDetail,
+    renderBankSelect,
+    renderMergeSelect,
+    renderBankInputs,
+    renderBankList,
+    renderBankToolbarV28,
+    renderBankPreview,
+    bankQuestionCopyText,
+    openBankQuestionDetail,
+    resetBankQuestionSelection,
+    cancelPendingBankPreview,
   } = globalThis.ShirohaBankPage.create({
     state,
     select: $,
@@ -210,7 +296,12 @@
       itemsForBanks: practiceSessionItemsForBanksV8916,
     },
     rendering: { all: renderAll, exportSummary: renderExportBankSummaryV23, toast },
-    selection: { get: () => exportBankSelectedV23, set: (value) => { exportBankSelectedV23 = value; } },
+    selection: {
+      get: () => exportBankSelectedV23,
+      set: (value) => {
+        exportBankSelectedV23 = value;
+      },
+    },
     actions: {
       activeBank,
       transaction: runMutation,
@@ -235,7 +326,17 @@
       answerDisplay,
     },
   });
-  const { parseAiRefactorPayloadV384, aiResponseContentV99, aiResultArrayV991, normalizeAiReviewResultV991, normalizeAiAnalysisResultV991, parseAiSingleFollowUpV381, mergeAiSingleWarningV381, parseAiSingleAnalysisV613, aiHttpErrorMessage } = globalThis.ShirohaAiResults.create({
+  const {
+    parseAiRefactorPayloadV384,
+    aiResponseContentV99,
+    aiResultArrayV991,
+    normalizeAiReviewResultV991,
+    normalizeAiAnalysisResultV991,
+    parseAiSingleFollowUpV381,
+    mergeAiSingleWarningV381,
+    parseAiSingleAnalysisV613,
+    aiHttpErrorMessage,
+  } = globalThis.ShirohaAiResults.create({
     normalizeType, normalizeQuestion, makeId, trimMultilineBoundaryV5910, splitAnswer,
   });
   const { readTableImportFileV49, tableImportPreviewTextV49 } = globalThis.ShirohaTableImport.create({
@@ -260,13 +361,48 @@
     readKey: readStoredAiKeyV99,
     view: { select: $, escape: esc, copy: copyTextV23, toast },
   });
-  const { defaultAiConfigV99, normalizeAiConfigV99, isAiHarnessExecutionV99, aiHarnessLabelV99, aiHarnessTaskReasonV99, aiUnavailableReasonV99, aiHarnessPrivacyV99, aiExecutionConfigV99, aiConfiguredV99, aiAvailabilityV99, aiExecutionLabelV99, aiRequestConfigV99, isLocalAiEndpointV99, readAiFormV99, setAiSettingsStatusV99, sanitizeAiDiagnosticDetailV375, buildAiDiagnosticV375, renderAiDiagnosticV375, setAiDiagnosticV375, toggleAiDiagnosticV375, copyAiDiagnosticV375, copyAiOllamaCorsCommandV375, updateAiConnectionPillV99, renderAiSettingsV99 } = aiSettings;
+  const {
+    defaultAiConfigV99,
+    normalizeAiConfigV99,
+    isAiHarnessExecutionV99,
+    aiHarnessLabelV99,
+    aiHarnessTaskReasonV99,
+    aiUnavailableReasonV99,
+    aiHarnessPrivacyV99,
+    aiExecutionConfigV99,
+    aiConfiguredV99,
+    aiAvailabilityV99,
+    aiExecutionLabelV99,
+    aiRequestConfigV99,
+    isLocalAiEndpointV99,
+    readAiFormV99,
+    setAiSettingsStatusV99,
+    sanitizeAiDiagnosticDetailV375,
+    buildAiDiagnosticV375,
+    renderAiDiagnosticV375,
+    setAiDiagnosticV375,
+    toggleAiDiagnosticV375,
+    copyAiDiagnosticV375,
+    copyAiOllamaCorsCommandV375,
+    updateAiConnectionPillV99,
+    renderAiSettingsV99,
+  } = aiSettings;
   const { requestAiChatV99, withAiTimeoutV99 } = globalThis.ShirohaAiTransport.create({
     platform: ShirohaPlatform,
     harness: { isHarness: isAiHarnessExecutionV99, taskReason: aiHarnessTaskReasonV99, configured: aiConfiguredV99, unavailableReason: aiUnavailableReasonV99 },
     response: { content: aiResponseContentV99, httpErrorMessage: aiHttpErrorMessage },
   });
-  const { aiRefactorQuestionSnapshotV384, buildAiMessagesV99, aiQuestionPayloadV991, buildAiReviewMessagesV991, buildAiAnalysisMessagesV991, aiSingleFingerprintV613, aiSingleHasImagesV613, buildAiSingleAnalysisMessagesV613, buildAiSingleFollowUpMessagesV613 } = globalThis.ShirohaAiPrompts.create({
+  const {
+    aiRefactorQuestionSnapshotV384,
+    buildAiMessagesV99,
+    aiQuestionPayloadV991,
+    buildAiReviewMessagesV991,
+    buildAiAnalysisMessagesV991,
+    aiSingleFingerprintV613,
+    aiSingleHasImagesV613,
+    buildAiSingleAnalysisMessagesV613,
+    buildAiSingleFollowUpMessagesV613,
+  } = globalThis.ShirohaAiPrompts.create({
     question: practiceQuestionV8916, importKey: aiQuestionKeyV991, validate: validateQuestion, maxChars: AI_IMPORT_MAX_CHARS_V99,
   });
   const aiImportSessions = globalThis.ShirohaAiImportSessions.create({
@@ -315,7 +451,15 @@
     transport: { request: requestAiChatV99, timeout: withAiTimeoutV99 },
     limits: { importChars: AI_IMPORT_MAX_CHARS_V99, previewItems: AI_PREVIEW_MAX_ITEMS_V991, analysisBatch: AI_ANALYSIS_DEFAULT_BATCH_V991, reviewBatch: AI_REVIEW_DEFAULT_BATCH_V991 },
   });
-  const { cancelAiImportRequestV99, invalidateAiImportRequestV99, cancelAiPreviewRequestV991, startAiPreviewTaskV991, startAiImportV99, resetAiSuggestionsV991, removeAiSuggestionsForQuestionV991 } = aiImportSessions;
+  const {
+    cancelAiImportRequestV99,
+    invalidateAiImportRequestV99,
+    cancelAiPreviewRequestV991,
+    startAiPreviewTaskV991,
+    startAiImportV99,
+    resetAiSuggestionsV991,
+    removeAiSuggestionsForQuestionV991,
+  } = aiImportSessions;
   const practiceAiSessions = globalThis.ShirohaAiQuestionSessions.createPractice({
     practice: { current: () => practiceSession.current },
     question: { current: currentPracticeItemV8916, allowed: (...args) => aiSingleAllowedV613(...args), key: practiceItemKeyV8916, fingerprint: aiSingleFingerprintV613, answer: (...args) => getPracticeAnswerStateV26(...args), hasImages: aiSingleHasImagesV613 },
@@ -324,7 +468,12 @@
     view: { render: (...args) => renderPracticeAiPanelV613(...args), sanitize: sanitizeAiDiagnosticDetailV375, notice: showNotice },
     maxFollowUps: AI_SINGLE_FOLLOW_UP_MAX_V613,
   });
-  const { reset: resetAiSinglePracticeV613, getSession: aiSingleSessionV613, runAnalysis: runAiSingleAnalysisV613, runFollowUp: runAiSingleFollowUpV613 } = practiceAiSessions;
+  const {
+    reset: resetAiSinglePracticeV613,
+    getSession: aiSingleSessionV613,
+    runAnalysis: runAiSingleAnalysisV613,
+    runFollowUp: runAiSingleFollowUpV613,
+  } = practiceAiSessions;
   const reviewAiSessions = globalThis.ShirohaAiQuestionSessions.createReview({
     question: { source: reviewAnalysisSource, fingerprint: aiSingleFingerprintV613, hasImages: aiSingleHasImagesV613 },
     request: { config: (...args) => aiSingleConfigV613(...args), timeout: withAiTimeoutV99, chat: requestAiChatV99, analysisMessages: buildAiSingleAnalysisMessagesV613 },
@@ -333,7 +482,12 @@
     view: { render: (...args) => updateReviewAnalysisPanels(...args), sanitize: sanitizeAiDiagnosticDetailV375 },
   });
   const { run: runReviewAnalysis, save: saveReviewAnalysis } = reviewAiSessions;
-  const { renderFavoritesPageV596, renderWrongBook, cancelFavoritePractice, cancelPendingSavedReads } = globalThis.ShirohaSavedQuestionsPage.create({
+  const {
+    renderFavoritesPageV596,
+    renderWrongBook,
+    cancelFavoritePractice,
+    cancelPendingSavedReads,
+  } = globalThis.ShirohaSavedQuestionsPage.create({
     select: $,
     selectAll: $$,
     escape: esc,
@@ -434,8 +588,12 @@
     actions: { transaction: runMutation, save: saveSilent, renderAll },
   });
   const {
-    renderRecords, trainingCompletion, renderRecentTraining, openTrainingReview,
-    leaveTrainingReview, bindTrainingReviewEvents,
+    renderRecords,
+    trainingCompletion,
+    renderRecentTraining,
+    openTrainingReview,
+    leaveTrainingReview,
+    bindTrainingReviewEvents,
   } = trainingReviewPage;
   const bankEditor = globalThis.ShirohaBankEditor.create({
     state,
@@ -476,8 +634,19 @@
       canStartEdit: () => applicationReady && !mutationBusy,
     },
   });
-  const { updateBankEditUiV45, editBankByIdV45, saveBankEditSessionV45, cancelPendingBankEdit } = bankEditor;
-  const { exitExamFocus, startExam, startExamTicker, submitExam, examQuestionV113 } = globalThis.ShirohaExamPage.create({
+  const {
+    updateBankEditUiV45,
+    editBankByIdV45,
+    saveBankEditSessionV45,
+    cancelPendingBankEdit,
+  } = bankEditor;
+  const {
+    exitExamFocus,
+    startExam,
+    startExamTicker,
+    submitExam,
+    examQuestionV113,
+  } = globalThis.ShirohaExamPage.create({
     session: examSession,
     state,
     select: $,
@@ -624,10 +793,21 @@
     storage: { loadItems: loadNativeItems, isBusy: () => mutationBusy, isReady: () => applicationReady, transaction: runMutation, save: saveSilent },
   });
   const {
-    startPracticeClockTicker, startWrongPractice,
-    enterPracticeFocus, exitPracticeFocus, startPractice, totalPracticeFilledCount, canLeaveTotalPractice,
-    renderPracticeQuestion, getPracticeAnswerStateV26, showAnsweredStateV26, showSubjectiveFeedback,
-    openQuickPracticeSetup, switchPracticeSourceV27, resetPractice, bindPracticeClockLifecycle,
+    startPracticeClockTicker,
+    startWrongPractice,
+    enterPracticeFocus,
+    exitPracticeFocus,
+    startPractice,
+    totalPracticeFilledCount,
+    canLeaveTotalPractice,
+    renderPracticeQuestion,
+    getPracticeAnswerStateV26,
+    showAnsweredStateV26,
+    showSubjectiveFeedback,
+    openQuickPracticeSetup,
+    switchPracticeSourceV27,
+    resetPractice,
+    bindPracticeClockLifecycle,
   } = practicePage;
   const aiImportPanel = globalThis.ShirohaAiImportPanel.create({
     draft: importDraft,
@@ -684,12 +864,29 @@
     },
   });
   const {
-    bindAiImportEventsV99, syncAiImportActionV99, closeAiImportPanelV99, aiImportRangeV992,
-    refreshAiImportPanelV99, setAiImportStatusV99, closeAiPreviewPanelV991, aiPreviewModeLabelV991,
-    collectAiPreviewTargetDetailsV992, refreshAiPreviewPanelV991, setAiPreviewStatusV991,
-    syncAiPreviewToolsV991, renderAiSuggestionRowV991, bindAiSuggestionActionsV991,
+    bindAiImportEventsV99,
+    syncAiImportActionV99,
+    closeAiImportPanelV99,
+    aiImportRangeV992,
+    refreshAiImportPanelV99,
+    setAiImportStatusV99,
+    closeAiPreviewPanelV991,
+    aiPreviewModeLabelV991,
+    collectAiPreviewTargetDetailsV992,
+    refreshAiPreviewPanelV991,
+    setAiPreviewStatusV991,
+    syncAiPreviewToolsV991,
+    renderAiSuggestionRowV991,
+    bindAiSuggestionActionsV991,
   } = aiImportPanel;
-  const { aiSingleAllowedV613, aiSingleConfigV613, renderPracticeAiPanelV613, renderReviewAnalysis, updateReviewAnalysisPanels, bindReviewAnalysisEvents } = globalThis.ShirohaAiQuestionPanels.create({
+  const {
+    aiSingleAllowedV613,
+    aiSingleConfigV613,
+    renderPracticeAiPanelV613,
+    renderReviewAnalysis,
+    updateReviewAnalysisPanels,
+    bindReviewAnalysisEvents,
+  } = globalThis.ShirohaAiQuestionPanels.create({
     session: practiceSession,
     practiceAi: practiceAiSessions,
     reviewAi: reviewAiSessions,
@@ -729,8 +926,14 @@
     },
   });
   const {
-    renderImportPreview, batchDeleteImportSelected, bindMultiBlankEditorV58914, openEditQuestion,
-    closeEditModal, saveEditQuestion, deleteEditQuestion, findPracticeQuestionLocationV120,
+    renderImportPreview,
+    batchDeleteImportSelected,
+    bindMultiBlankEditorV58914,
+    openEditQuestion,
+    closeEditModal,
+    saveEditQuestion,
+    deleteEditQuestion,
+    findPracticeQuestionLocationV120,
     openPracticeEditQuestionV120,
   } = globalThis.ShirohaQuestionEditor.create({
     state,
@@ -811,7 +1014,9 @@
         });
         const name = $('#import-bank-name');if (name) { name.dataset.autoName = '0'; }
       },
-      render: () => { renderImportPreview(importDraft.questions);syncAiImportActionV99(); },
+      render: () => {
+        renderImportPreview(importDraft.questions);syncAiImportActionV99();
+      },
     },
   });
   function parseTextQuestions(text, strategy = 'auto') {
@@ -826,7 +1031,12 @@
     let entry = nativePages.get(target.id);
     if (!entry) { entry = { key, page: 0, size: LIST_PAGE_SIZES[0] };nativePages.set(target.id, entry); }
     if (entry.key !== key) { entry.key = key;entry.page = 0; }
-    const { page, pages, start, end } = listPageRange(rows.length, entry.page, entry.size);
+    const {
+      page,
+      pages,
+      start,
+      end,
+    } = listPageRange(rows.length, entry.page, entry.size);
     entry.page = page;
     const id = `${target.id}-pager`;let controls = document.getElementById(id);
     if (!controls) {
@@ -872,9 +1082,15 @@
     }
     return rows.slice(start, end);
   }
-  function releaseNativeView() { if (nativeReads.size || mutationBusy) { return; }ShirohaPlatform.storage.releaseView?.(state, [...(practiceSession.current.items || []), ...(examSession.current.items || [])].map((item) => ({ bankId: practiceItemBankIdV8916(item), questionId: practiceQuestionV8916(item).id })));nativeOpenRecords.clear(); }
-  function renderNativeView() { if (!ShirohaPlatform.storage.lazy) { if ($('#banks')?.classList.contains('active') && $('#bank-preview [data-bank-preview-loading]')) { renderBankPreview(); } return; }renderBankPreview();renderWrongBook();renderFavoritesPageV596();renderRecords(); }
-  function activeBank() { return state.banks.find((b) => b.id === state.activeBankId) || state.banks[0] || { questions: [] }; }
+  function releaseNativeView() {
+    if (nativeReads.size || mutationBusy) { return; }ShirohaPlatform.storage.releaseView?.(state, [...(practiceSession.current.items || []), ...(examSession.current.items || [])].map((item) => ({ bankId: practiceItemBankIdV8916(item), questionId: practiceQuestionV8916(item).id })));nativeOpenRecords.clear();
+  }
+  function renderNativeView() {
+    if (!ShirohaPlatform.storage.lazy) { if ($('#banks')?.classList.contains('active') && $('#bank-preview [data-bank-preview-loading]')) { renderBankPreview(); } return; }renderBankPreview();renderWrongBook();renderFavoritesPageV596();renderRecords();
+  }
+  function activeBank() {
+    return state.banks.find((b) => b.id === state.activeBankId) || state.banks[0] || { questions: [] };
+  }
 
   function normalizePracticeScopeV8916(scope) {
     const raw = scope && typeof scope === 'object' ? scope : {};
@@ -894,7 +1110,9 @@
     state.settings.practiceScope = scope;
     return scope;
   }
-  function practiceScopeV8916() { return ensurePracticeScopeV8916(); }
+  function practiceScopeV8916() {
+    return ensurePracticeScopeV8916();
+  }
   function practiceScopeBanksV8916(scopeOverride) {
     const scope = scopeOverride ? normalizePracticeScopeV8916(scopeOverride) : practiceScopeV8916();
     if (scope.type === PRACTICE_SCOPE_GROUP_V8916) { const group = normalizeBankGroupNameV58(scope.value);return (state.banks || []).filter((b) => bankGroupNameV58(b) === group); }
@@ -932,11 +1150,21 @@
     }));
     return out;
   }
-  function currentPracticeItemV8916() { return (practiceSession.current && practiceSession.current.items && practiceSession.current.items[practiceSession.current.idx]) || null; }
-  function practiceQuestionV8916(item) { return item && item.question && typeof item.question === 'object' ? item.question : item; }
-  function practiceItemKeyV8916(item) { const q = practiceQuestionV8916(item);return (item && item.sessionKey) || `${(item && item.bankId) || activeBank().id}#${(q && q.id) || ''}`; }
-  function practiceItemBankIdV8916(item) { return (item && item.bankId) || activeBank().id; }
-  function practiceItemBankNameV8916(item) { return (item && item.bankName) || state.banks.find((b) => b.id === practiceItemBankIdV8916(item))?.name || activeBank().name || ''; }
+  function currentPracticeItemV8916() {
+    return (practiceSession.current && practiceSession.current.items && practiceSession.current.items[practiceSession.current.idx]) || null;
+  }
+  function practiceQuestionV8916(item) {
+    return item && item.question && typeof item.question === 'object' ? item.question : item;
+  }
+  function practiceItemKeyV8916(item) {
+    const q = practiceQuestionV8916(item);return (item && item.sessionKey) || `${(item && item.bankId) || activeBank().id}#${(q && q.id) || ''}`;
+  }
+  function practiceItemBankIdV8916(item) {
+    return (item && item.bankId) || activeBank().id;
+  }
+  function practiceItemBankNameV8916(item) {
+    return (item && item.bankName) || state.banks.find((b) => b.id === practiceItemBankIdV8916(item))?.name || activeBank().name || '';
+  }
   function practiceSourceMeta(item) {
     const bank = state.banks.find((value) => value.id === practiceItemBankIdV8916(item));
     const index = bank ? bank.questions.findIndex((question) => question.id === practiceQuestionV8916(item).id) : -1;
@@ -1027,11 +1255,25 @@
     $('#delete-import-draft-btn').onclick = importDraftPersistence.remove;
     $('#start-due-review').onclick = startDueReview;
     if (!dueReviewVisibilityBound) {
-      document.addEventListener('visibilitychange', () => { if (!document.hidden && applicationReady) { renderStats(); } });
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden && applicationReady) { renderStats(); }
+      });
       dueReviewVisibilityBound = true;
     }
-    $('#active-bank-select').onchange = async (e) => runMutation(async () => { setPracticeBankScopeV8916(e.target.value, true);await saveSilent();renderAll(); });const importNameInput = $('#import-bank-name');if (importNameInput && !importNameInput.dataset.autoNameBound) { importNameInput.dataset.autoNameBound = '1';importNameInput.addEventListener('input', () => { importDraft.invalidateBankName();importNameInput.dataset.autoName = '0'; }); };$('#save-all-btn').onclick = saveState;
-    $('#load-sample-btn').onclick = loadSample;$('#import-file').onchange = readImportFile;$('#parse-import-btn').onclick = parseImport;$('#confirm-import-btn').onclick = confirmImport;const findReplaceBtnV51 = $('#find-replace-import-btn');if (findReplaceBtnV51) { findReplaceBtnV51.onclick = openImportFindReplaceV51; } const dualConfirmBtn = $('#dual-confirm-import-btn');if (dualConfirmBtn) { dualConfirmBtn.onclick = confirmImport; } const importTextAreaV49 = $('#import-text');if (importTextAreaV49 && !importTextAreaV49.dataset.sourceBoundV49) { importTextAreaV49.dataset.sourceBoundV49 = '1';importTextAreaV49.addEventListener('input', () => { importDraft.invalidateRead('single');if (importTextAreaV49.dataset.tableImportV49 === '1') { importDraft.tableResult = null;delete importTextAreaV49.dataset.tableImportV49; }importDraft.sourceMeta = { name: '手动文本', size: new Blob([importTextAreaV49.value || '']).size, type: 'text' }; }); };const ocrStartBtn = $('#ocr-start-btn');if (ocrStartBtn) { ocrStartBtn.onclick = startPdfOcrImport; } const ocrUseBtn = $('#ocr-use-text-btn');if (ocrUseBtn) { ocrUseBtn.onclick = applyOcrTextToImport; } const ocrCopyBtn = $('#ocr-copy-btn');if (ocrCopyBtn) { ocrCopyBtn.onclick = copyOcrText; } const ocrDocxBtn = $('#ocr-download-docx-btn');if (ocrDocxBtn) { ocrDocxBtn.onclick = downloadOcrDocx; }$('#clear-import-btn').onclick = () => { cancelAiImportRequestV99(true);cancelAiPreviewRequestV991(true);closeAiImportPanelV99();closeAiPreviewPanelV991();resetAiSuggestionsV991();$('#import-text').value = '';if ($('#import-text')) { delete $('#import-text').dataset.tableImportV49; }importDraft.clearSingle();resetOcrImportState();renderImportPreview([]);syncAiImportActionV99(); };
+    $('#active-bank-select').onchange = async (e) => runMutation(async () => {
+      setPracticeBankScopeV8916(e.target.value, true);await saveSilent();renderAll();
+    });const importNameInput = $('#import-bank-name');if (importNameInput && !importNameInput.dataset.autoNameBound) {
+      importNameInput.dataset.autoNameBound = '1';importNameInput.addEventListener('input', () => {
+        importDraft.invalidateBankName();importNameInput.dataset.autoName = '0';
+      });
+    };$('#save-all-btn').onclick = saveState;
+    $('#load-sample-btn').onclick = loadSample;$('#import-file').onchange = readImportFile;$('#parse-import-btn').onclick = parseImport;$('#confirm-import-btn').onclick = confirmImport;const findReplaceBtnV51 = $('#find-replace-import-btn');if (findReplaceBtnV51) { findReplaceBtnV51.onclick = openImportFindReplaceV51; } const dualConfirmBtn = $('#dual-confirm-import-btn');if (dualConfirmBtn) { dualConfirmBtn.onclick = confirmImport; } const importTextAreaV49 = $('#import-text');if (importTextAreaV49 && !importTextAreaV49.dataset.sourceBoundV49) {
+      importTextAreaV49.dataset.sourceBoundV49 = '1';importTextAreaV49.addEventListener('input', () => {
+        importDraft.invalidateRead('single');if (importTextAreaV49.dataset.tableImportV49 === '1') { importDraft.tableResult = null;delete importTextAreaV49.dataset.tableImportV49; }importDraft.sourceMeta = { name: '手动文本', size: new Blob([importTextAreaV49.value || '']).size, type: 'text' };
+      });
+    };const ocrStartBtn = $('#ocr-start-btn');if (ocrStartBtn) { ocrStartBtn.onclick = startPdfOcrImport; } const ocrUseBtn = $('#ocr-use-text-btn');if (ocrUseBtn) { ocrUseBtn.onclick = applyOcrTextToImport; } const ocrCopyBtn = $('#ocr-copy-btn');if (ocrCopyBtn) { ocrCopyBtn.onclick = copyOcrText; } const ocrDocxBtn = $('#ocr-download-docx-btn');if (ocrDocxBtn) { ocrDocxBtn.onclick = downloadOcrDocx; }$('#clear-import-btn').onclick = () => {
+      cancelAiImportRequestV99(true);cancelAiPreviewRequestV991(true);closeAiImportPanelV99();closeAiPreviewPanelV991();resetAiSuggestionsV991();$('#import-text').value = '';if ($('#import-text')) { delete $('#import-text').dataset.tableImportV49; }importDraft.clearSingle();resetOcrImportState();renderImportPreview([]);syncAiImportActionV99();
+    };
     $('#dual-question-file').onchange = (e) => readDualFile(e, 'question');$('#dual-answer-file').onchange = (e) => readDualFile(e, 'answer');
     [['#dual-question-text', 'question'], ['#dual-answer-text', 'answer']].forEach(([selector, slot]) => {
       const field = $(selector);
@@ -1039,11 +1281,35 @@
         field.dataset.readBoundV4 = '1';
         field.addEventListener('input', () => importDraft.invalidateRead(slot));
       }
-    });$('#parse-dual-import-btn').onclick = parseDualImport;$('#clear-dual-import-btn').onclick = () => { invalidateAiImportRequestV99();cancelAiPreviewRequestV991(true);resetAiSuggestionsV991();$('#dual-question-text').value = '';$('#dual-answer-text').value = '';importDraft.clearDual();renderImportPreview([]); };$('#dual-load-sample-btn').onclick = loadDualSample;$('#revalidate-import-btn').onclick = () => renderImportPreview(importDraft.questions);
-    $('#edit-close-btn').onclick = closeEditModal;$('#edit-save-btn').onclick = saveEditQuestion;$('#edit-delete-btn').onclick = deleteEditQuestion;const pf = $('#import-preview-filter');if (pf) { pf.onchange = (e) => { invalidateAiImportRequestV99();if (importDraft.filter !== e.target.value) { importDraft.invalidatePreview(); }importDraft.filter = e.target.value;renderImportPreview(importDraft.questions); }; } const bid = $('#batch-delete-import-btn');if (bid) { bid.onclick = batchDeleteImportSelected; } const cis = $('#clear-import-selection-btn');if (cis) { cis.onclick = () => { invalidateAiImportRequestV99();if (importDraft.selected.size) { importDraft.invalidatePreview(); }importDraft.selected.clear();renderImportPreview(importDraft.questions); }; }
+    });$('#parse-dual-import-btn').onclick = parseDualImport;$('#clear-dual-import-btn').onclick = () => {
+      invalidateAiImportRequestV99();cancelAiPreviewRequestV991(true);resetAiSuggestionsV991();$('#dual-question-text').value = '';$('#dual-answer-text').value = '';importDraft.clearDual();renderImportPreview([]);
+    };$('#dual-load-sample-btn').onclick = loadDualSample;$('#revalidate-import-btn').onclick = () => renderImportPreview(importDraft.questions);
+    $('#edit-close-btn').onclick = closeEditModal;$('#edit-save-btn').onclick = saveEditQuestion;$('#edit-delete-btn').onclick = deleteEditQuestion;const pf = $('#import-preview-filter');if (pf) {
+      pf.onchange = (e) => {
+        invalidateAiImportRequestV99();if (importDraft.filter !== e.target.value) { importDraft.invalidatePreview(); }importDraft.filter = e.target.value;renderImportPreview(importDraft.questions);
+      };
+    } const bid = $('#batch-delete-import-btn');if (bid) { bid.onclick = batchDeleteImportSelected; } const cis = $('#clear-import-selection-btn');if (cis) {
+      cis.onclick = () => {
+        invalidateAiImportRequestV99();if (importDraft.selected.size) { importDraft.invalidatePreview(); }importDraft.selected.clear();renderImportPreview(importDraft.questions);
+      };
+    }
     $('#dedupe-btn').onclick = dedupeActiveBank;$('#rename-bank-btn').onclick = renameActiveBank;$('#duplicate-bank-btn').onclick = duplicateActiveBank;$('#new-empty-bank-btn').onclick = newEmptyBank;$('#merge-bank-btn').onclick = mergeBankIntoActive;$('#bank-sort-mode').onchange = renderBankList;$('#start-practice-btn').onclick = startPractice;$('#reset-practice-btn').onclick = resetPractice;
-    $('#start-exam-btn').onclick = startExam;$('#submit-exam-btn').onclick = () => submitExam(false);$('#clear-wrong-btn').onclick = async () => runMutation(async () => { if (await ShirohaDialogs.confirm('确定清空当前题库错题本？')) { state.wrongBook[activeBank().id] = [];await saveSilent();renderAll(); } });
-    $('#clear-records-btn').onclick = async () => runMutation(async () => { if (await ShirohaDialogs.confirm('确定清空全部练习与考试记录？')) { state.records = [];await saveSilent();renderAll(); } });$('#export-records-btn').onclick = exportRecords;$('#record-mode-filter').onchange = renderRecords;const recordDetailFilterV385 = $('#record-detail-filter-v385');if (recordDetailFilterV385) { recordDetailFilterV385.onchange = renderRecords; }$('#record-limit').onchange = renderRecords;$('#record-refresh-btn').onclick = renderRecords;$('#wrong-status-filter').onchange = renderWrongBook;$('#wrong-sort-mode').onchange = renderWrongBook;$('#practice-wrong-btn').onclick = () => { cancelPendingViewActions('practice');startWrongPractice(); };const practiceFavBtnV596 = $('#practice-favorites-btn-v596');if (practiceFavBtnV596) { practiceFavBtnV596.onclick = () => { cancelPendingViewActions('practice');switchPracticeSourceV27('favorite'); }; } const clearFavBtnV596 = $('#clear-favorites-btn-v596');if (clearFavBtnV596) { clearFavBtnV596.onclick = clearCurrentFavoritesV596; } const exportJsonBtn = $('#export-json-btn');if (exportJsonBtn) { exportJsonBtn.onclick = exportCurrentBank; } const exportAllBtn = $('#export-all-btn');if (exportAllBtn) { exportAllBtn.onclick = exportAll; } const importBackupQuickBtnV598 = $('#import-backup-quick-btn-v598');if (importBackupQuickBtnV598) { importBackupQuickBtnV598.onclick = () => { backupImportModeV23 = $('#settings-backup-mode-v23')?.value || 'overwrite';$('#backup-json-file-v23')?.click(); }; }$('#reset-data-btn').onclick = resetData;bindLimitControlsV60();bindPracticeStartControlsV58916();bindAiImportEventsV99();
+    $('#start-exam-btn').onclick = startExam;$('#submit-exam-btn').onclick = () => submitExam(false);$('#clear-wrong-btn').onclick = async () => runMutation(async () => {
+      if (await ShirohaDialogs.confirm('确定清空当前题库错题本？')) { state.wrongBook[activeBank().id] = [];await saveSilent();renderAll(); }
+    });
+    $('#clear-records-btn').onclick = async () => runMutation(async () => {
+      if (await ShirohaDialogs.confirm('确定清空全部练习与考试记录？')) { state.records = [];await saveSilent();renderAll(); }
+    });$('#export-records-btn').onclick = exportRecords;$('#record-mode-filter').onchange = renderRecords;const recordDetailFilterV385 = $('#record-detail-filter-v385');if (recordDetailFilterV385) { recordDetailFilterV385.onchange = renderRecords; }$('#record-limit').onchange = renderRecords;$('#record-refresh-btn').onclick = renderRecords;$('#wrong-status-filter').onchange = renderWrongBook;$('#wrong-sort-mode').onchange = renderWrongBook;$('#practice-wrong-btn').onclick = () => {
+      cancelPendingViewActions('practice');startWrongPractice();
+    };const practiceFavBtnV596 = $('#practice-favorites-btn-v596');if (practiceFavBtnV596) {
+      practiceFavBtnV596.onclick = () => {
+        cancelPendingViewActions('practice');switchPracticeSourceV27('favorite');
+      };
+    } const clearFavBtnV596 = $('#clear-favorites-btn-v596');if (clearFavBtnV596) { clearFavBtnV596.onclick = clearCurrentFavoritesV596; } const exportJsonBtn = $('#export-json-btn');if (exportJsonBtn) { exportJsonBtn.onclick = exportCurrentBank; } const exportAllBtn = $('#export-all-btn');if (exportAllBtn) { exportAllBtn.onclick = exportAll; } const importBackupQuickBtnV598 = $('#import-backup-quick-btn-v598');if (importBackupQuickBtnV598) {
+      importBackupQuickBtnV598.onclick = () => {
+        backupImportModeV23 = $('#settings-backup-mode-v23')?.value || 'overwrite';$('#backup-json-file-v23')?.click();
+      };
+    }$('#reset-data-btn').onclick = resetData;bindLimitControlsV60();bindPracticeStartControlsV58916();bindAiImportEventsV99();
   }
 
   function cleanImportBankNameFromFile(fileName) {
@@ -1063,7 +1329,9 @@
     }
   }
 
-  async function saveSilent(operationId) { try { await ShirohaPlatform.saves.save(JSON.parse(serializeState()), operationId); } catch (error) { mutationSaveError = error;throw error; } }
+  async function saveSilent(operationId) {
+    try { await ShirohaPlatform.saves.save(JSON.parse(serializeState()), operationId); } catch (error) { mutationSaveError = error;throw error; }
+  }
 
   /* SHIROHA_WEB_ISSUE_99_AI_IMPORT_START */
 
@@ -1072,10 +1340,14 @@
     state.settings.aiImportV99 = normalizeAiConfigV99(state.settings.aiImportV99);
     return state.settings.aiImportV99;
   }
-  function readStoredAiKeyV99(configOverride) { return ShirohaPlatform.credentials.status('ai', configOverride || ensureAiImportStateV99()); }
+  function readStoredAiKeyV99(configOverride) {
+    return ShirohaPlatform.credentials.status('ai', configOverride || ensureAiImportStateV99());
+  }
 
   // 按钮未就绪也会禁用，只有连接测试的在途标记才代表业务占用。
-  function aiTasksBusyV99() { return aiImportSessions.importRequest.running || aiImportSessions.previewRequest.running || practiceAiSessions.isBusy() || reviewAiSessions.isBusy() || !!ShirohaPlatform.harness?.status().busy || $('#ai-test-connection-v99')?.getAttribute?.('aria-busy') === 'true'; }
+  function aiTasksBusyV99() {
+    return aiImportSessions.importRequest.running || aiImportSessions.previewRequest.running || practiceAiSessions.isBusy() || reviewAiSessions.isBusy() || !!ShirohaPlatform.harness?.status().busy || $('#ai-test-connection-v99')?.getAttribute?.('aria-busy') === 'true';
+  }
 
   async function saveAiSettingsV99() {
     if (aiTasksBusyV99()) { setAiSettingsStatusV99('AI 任务仍在执行或停止中，请等待结束后保存设置。', 'warn');return; }
@@ -1179,7 +1451,9 @@
     return key;
   }
 
-  function aiQuestionFingerprintV991(q) { return JSON.stringify(q); }
+  function aiQuestionFingerprintV991(q) {
+    return JSON.stringify(q);
+  }
 
   function findImportIndexByAiKeyV991(key) {
     if (!key) { return -1; }
@@ -1337,7 +1611,9 @@
     const todayPractice = practiceRecords.filter((r) => localDateKeyV36(r.date) === today);
     const todayAnswered = todayPractice.reduce((n, r) => n + Number(r.answered || 0), 0);
     const todayCorrect = todayPractice.reduce((n, r) => n + Number(r.correct || 0), 0);
-    const setText = (id, val) => { const el = $(id);if (el) { el.textContent = val; } };
+    const setText = (id, val) => {
+      const el = $(id);if (el) { el.textContent = val; }
+    };
     setText('#stat-today-count', todayAnswered);
     setText('#stat-today-rate', todayAnswered ? `${Math.round(todayCorrect / todayAnswered * 100)}%` : '—');
     const dueCount = dueReviewItems(undefined, current).length;
@@ -1409,10 +1685,16 @@
     });
   }
 
-  function label(t) { return TYPE_LABEL[t] || t || '未知'; }
+  function label(t) {
+    return TYPE_LABEL[t] || t || '未知';
+  }
   /* SHIROHA_WEB_V58_9_14_MULTI_BLANK_SYNC_START */
-  function hasAnswerValueV58914(values) { return Array.isArray(values) && values.some((value) => String(value ?? '').trim()); }
-  function explicitBlankCountV58914(value) { return (String(value || '').match(/（\s*）|\(\s*\)|_{3,}/g) || []).length; }
+  function hasAnswerValueV58914(values) {
+    return Array.isArray(values) && values.some((value) => String(value ?? '').trim());
+  }
+  function explicitBlankCountV58914(value) {
+    return (String(value || '').match(/（\s*）|\(\s*\)|_{3,}/g) || []).length;
+  }
   /* SHIROHA_WEB_V58_9_14_MULTI_BLANK_SYNC_END */
 
   function toNativeQuestionType(type) {
@@ -1441,9 +1723,15 @@
     return out;
   }
 
-  function stripQuestionImages(s) { return String(s || '').replace(/!\[[^\]]*\]\(data:image\/[^)]+\)/g, '[图片]'); }
-  function short(s, n) { const text = stripQuestionImages(String(s || ''));return text.length > n ? `${text.slice(0, n)}…` : text; }
-  function esc(s) { return String(s ?? '').replace(/[&<>"']/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m])); }
+  function stripQuestionImages(s) {
+    return String(s || '').replace(/!\[[^\]]*\]\(data:image\/[^)]+\)/g, '[图片]');
+  }
+  function short(s, n) {
+    const text = stripQuestionImages(String(s || ''));return text.length > n ? `${text.slice(0, n)}…` : text;
+  }
+  function esc(s) {
+    return String(s ?? '').replace(/[&<>"']/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+  }
   function toast(msg, type = 'warn', title = '提示') {
     const n = $('#import-summary');
     if (n) { n.textContent = msg;n.className = `notice ${type}`; }
@@ -1457,7 +1745,9 @@
     item.innerHTML = `<div><b>${esc(title || '提示')}</b><p>${esc(msg || '')}</p></div><button type="button" aria-label="关闭">×</button>`;
     item.querySelector('button').onclick = () => item.remove();
     box.appendChild(item);
-    setTimeout(() => { item.classList.add('hide');setTimeout(() => item.remove(), 260); }, type === 'danger' ? 6500 : 4200);
+    setTimeout(() => {
+      item.classList.add('hide');setTimeout(() => item.remove(), 260);
+    }, type === 'danger' ? 6500 : 4200);
   }
   function summarizeImportResult(arr, warnings = []) {
     const stats = countTypes(arr || []);
@@ -1558,12 +1848,18 @@
     </div>`;
     document.body.appendChild(panel);
     panel.querySelector('.import-find-close-v51').onclick = closeImportFindReplaceV51;
-    panel.addEventListener('click', (e) => { if (e.target === panel) { closeImportFindReplaceV51(); } });
+    panel.addEventListener('click', (e) => {
+      if (e.target === panel) { closeImportFindReplaceV51(); }
+    });
     $('#import-find-next-v51').onclick = findNextImportTextV51;
     $('#import-replace-current-v51').onclick = replaceCurrentImportTextV51;
     $('#import-replace-all-v51').onclick = replaceAllImportTextV51;
     const pattern = panel.querySelector('#import-find-pattern-v51');
-    if (pattern) { pattern.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault();findNextImportTextV51(); } }); }
+    if (pattern) {
+      pattern.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault();findNextImportTextV51(); }
+      });
+    }
     return panel;
   }
   function openImportFindReplaceV51() {
@@ -1572,7 +1868,9 @@
     const text = $('#import-text');
     const pattern = $('#import-find-pattern-v51');
     if (text && text.selectionStart !== text.selectionEnd && !pattern.value) { pattern.value = text.value.slice(text.selectionStart, text.selectionEnd); }
-    setTimeout(() => { (pattern || $('#import-replace-value-v51'))?.focus(); }, 0);
+    setTimeout(() => {
+      (pattern || $('#import-replace-value-v51'))?.focus();
+    }, 0);
   }
   function closeImportFindReplaceV51() {
     const panel = $('#import-find-replace-panel-v51');
@@ -1638,7 +1936,9 @@
       const re = buildFindRegExpV51(cfg.pattern, { useRegex: cfg.useRegex, caseSensitive: cfg.caseSensitive, global: true });
       const text = textEl.value || '';
       let count = 0;
-      text.replace(re, () => { count += 1;return ''; });
+      text.replace(re, () => {
+        count += 1;return '';
+      });
       if (!count) { setFindStatusV51('没有找到匹配内容。', 'warn');return; }
       textEl.value = text.replace(re, cfg.replacement);
       markImportTextEditedV51(textEl);
@@ -1666,7 +1966,9 @@ B、加大跟车距离(正确答案)
 C、避免急刹急打方向(正确答案)
 D、高速通过积水路段`;
   }
-  async function readPlainTextFileV49(file) { return ShirohaPlatform.files.readText(file); }
+  async function readPlainTextFileV49(file) {
+    return ShirohaPlatform.files.readText(file);
+  }
   function applyTableImportResultV49(result, fileName) {
     invalidateAiImportRequestV99();
     cancelAiPreviewRequestV991(true);
@@ -1883,7 +2185,9 @@ D. 高速通过积水路段`;
     }
     if ((standardEntries.length || analysisEntries.length) && fullParsed.entries.length) {
       const merged = [];const seen = new Set();
-      const add = (e) => { const key = `${String(e.number || '')}|${String(e.group || '')}|${(e.answer || []).join('')}`;if (seen.has(key)) { return; }seen.add(key);merged.push(e); };
+      const add = (e) => {
+        const key = `${String(e.number || '')}|${String(e.group || '')}|${(e.answer || []).join('')}`;if (seen.has(key)) { return; }seen.add(key);merged.push(e);
+      };
       standardEntries.forEach(add);analysisEntries.forEach(add);fullParsed.entries.forEach(add);
       candidates.push({ key: 'hybrid', name: '答案表提取 + 完整题库解析兜底', entries: merged, detail: `混合提取${merged.length}条（答案表${standardEntries.length} + 答案解析${analysisEntries.length} + 完整题库${fullParsed.entries.length}）` });
     }
@@ -1927,7 +2231,9 @@ D. 高速通过积水路段`;
     const qs = questions.map((q, i) => ({ ...q, answer: [], number: q.number || i + 1 }));
     const normGroup = (s) => mapType(s) || mapType(String(s || '').replace(/题$/, '')) || String(s || '').replace(/\s/g, '');
     if (mode === 'order') {
-      qs.forEach((q, i) => { if (answers[i]) { q.answer = normalizeAnswer(answers[i].answer, q.options, q.type); } });
+      qs.forEach((q, i) => {
+        if (answers[i]) { q.answer = normalizeAnswer(answers[i].answer, q.options, q.type); }
+      });
     } else if (mode === 'group') {
       const used = new Set();
       qs.forEach((q) => {
@@ -1940,7 +2246,9 @@ D. 高速通过积水路段`;
     // 按题号对应时也要兼容“每个题型都从 1 重新编号”的答案表。
     // 如果同一题号在单选/多选/判断区重复出现，优先按题目自身题型匹配答案分组，避免判断题误取单选题的 C/D 答案。
       const byNumber = new Map();const dup = new Set();
-      answers.forEach((a, idx) => { if (!a.number) { return; } const key = String(a.number);if (!byNumber.has(key)) { byNumber.set(key, []); } else { dup.add(key); }byNumber.get(key).push({ ...a, idx }); });
+      answers.forEach((a, idx) => {
+        if (!a.number) { return; } const key = String(a.number);if (!byNumber.has(key)) { byNumber.set(key, []); } else { dup.add(key); }byNumber.get(key).push({ ...a, idx });
+      });
       if (dup.size) { warnings.push(`答案文件存在重复题号：${[...dup].slice(0, 10).join('、')}。已优先按题型分组匹配；如仍有异常，请使用“按题型分组 + 组内题号对应”。`); }
       qs.forEach((q, i) => {
         const candidates = byNumber.get(String(q.number)) || [];
@@ -2080,17 +2388,47 @@ D. 高速通过积水路段`;
     });
   }
 
-  async function renameActiveBank() { return runMutation(async () => { const b = activeBank();const val = $('#bank-rename-input').value.trim();if (!val) { await ShirohaDialogs.alert('请输入新的题库名称。');return; } const oldGroup = bankGroupNameV58(b);b.name = val;b.groupName = normalizeBankGroupNameV58($('#bank-group-rename-input-v58')?.value || b.groupName);b.updatedAt = now();const scope = practiceScopeV8916();if (scope.type === PRACTICE_SCOPE_GROUP_V8916 && scope.value === oldGroup && state.banks.every((x) => x.id === b.id || bankGroupNameV58(x) !== oldGroup)) { ensurePracticeScopeV8916();toast('原练习分组已无题库，已切换为当前题库。', 'warn'); } const g = $('#bank-group-rename-input-v58');if (g) { g.dataset.lastBankIdV58 = ''; } await saveSilent();renderAll(); }); }
-  function duplicateActiveBank() { duplicateBankById(activeBank().id); }
-  // eslint-disable-next-line prefer-template -- 历史数据字段可能是对象，保留 + 的默认转换；字段类型受约束后移除此例外。
-  async function duplicateBankById(id) { if (!await loadNativeBanks([id])) { return; } return runMutation(async () => { const b = state.banks.find((x) => x.id === id);if (!b) { return; } const copy = JSON.parse(JSON.stringify(b));copy.id = makeId('bank');copy.name = b.name + ' - 副本';copy.createdAt = now();copy.updatedAt = now();copy.questions = (copy.questions || []).map((q, i) => ({ ...q, id: makeId('q', i), number: i + 1 }));state.banks.push(copy);setPracticeBankScopeV8916(copy.id, true);await saveSilent();renderAll(); }); }
-  async function newEmptyBank() { return runMutation(async () => { const name = await ShirohaDialogs.prompt('请输入新题库名称：', '新建空题库');if (!name) { return; } const groupName = normalizeBankGroupNameV58(await ShirohaDialogs.prompt('请输入一级分组名称，可留空：', '') || '');const bank = { id: makeId('bank'), name: name.trim() || '新建空题库', groupName, createdAt: now(), updatedAt: now(), questions: [] };state.banks.push(bank);setPracticeBankScopeV8916(bank.id, true);await saveSilent();renderAll(); }); }
-  async function mergeBankIntoActive() { if (!await loadNativeBanks([activeBank().id, $('#merge-bank-select').value])) { return; } return runMutation(async () => { const sourceId = $('#merge-bank-select').value;const target = activeBank();const src = state.banks.find((b) => b.id === sourceId);if (!src) { await ShirohaDialogs.alert('没有可合并的来源题库。');return; } if (!await ShirohaDialogs.confirm(`将“${src.name}”的 ${src.questions.length} 道题合并到当前题库“${target.name}”？`)) { return; } const before = target.questions.length;const existing = new Set(target.questions.map((q) => normalizeText(q.question)));let added = 0; let skipped = 0;src.questions.forEach((q) => { const k = normalizeText(q.question);if (existing.has(k)) { skipped += 1;return; }existing.add(k);target.questions.push({ ...JSON.parse(JSON.stringify(q)), id: makeId('q', target.questions.length + 1), number: target.questions.length + 1 });added += 1; });target.updatedAt = now();await saveSilent();renderAll();await ShirohaDialogs.alert(`合并完成：新增 ${added} 题，跳过重复 ${skipped} 题。合并前 ${before} 题，当前 ${target.questions.length} 题。`); }); }
-  // eslint-disable-next-line prefer-template -- 历史数据字段可能是对象，保留 + 的默认转换；字段类型受约束后移除此例外。
-  async function exportBankById(id) { try { if (!await loadNativeBanks([id])) { return; } const b = state.banks.find((x) => x.id === id);if (!b) { return; } const text = JSON.stringify(serializeBankForCrossExportV53(b), null, 2);const output = $('#export-output');if (output) { output.value = text; } await download((b.name || '题库') + '.json', text); } catch (error) { platformStatus('导出失败：' + error.message, true);return false; } }
+  async function renameActiveBank() {
+    return runMutation(async () => {
+      const b = activeBank();const val = $('#bank-rename-input').value.trim();if (!val) { await ShirohaDialogs.alert('请输入新的题库名称。');return; } const oldGroup = bankGroupNameV58(b);b.name = val;b.groupName = normalizeBankGroupNameV58($('#bank-group-rename-input-v58')?.value || b.groupName);b.updatedAt = now();const scope = practiceScopeV8916();if (scope.type === PRACTICE_SCOPE_GROUP_V8916 && scope.value === oldGroup && state.banks.every((x) => x.id === b.id || bankGroupNameV58(x) !== oldGroup)) { ensurePracticeScopeV8916();toast('原练习分组已无题库，已切换为当前题库。', 'warn'); } const g = $('#bank-group-rename-input-v58');if (g) { g.dataset.lastBankIdV58 = ''; } await saveSilent();renderAll();
+    });
+  }
+  function duplicateActiveBank() {
+    duplicateBankById(activeBank().id);
+  }
+  async function duplicateBankById(id) {
+    if (!await loadNativeBanks([id])) { return; } return runMutation(async () => {
+      // eslint-disable-next-line prefer-template -- 历史数据字段可能是对象，保留 + 的默认转换；字段类型受约束后移除此例外。
+      const b = state.banks.find((x) => x.id === id);if (!b) { return; } const copy = JSON.parse(JSON.stringify(b));copy.id = makeId('bank');copy.name = b.name + ' - 副本';copy.createdAt = now();copy.updatedAt = now();copy.questions = (copy.questions || []).map((q, i) => ({ ...q, id: makeId('q', i), number: i + 1 }));state.banks.push(copy);setPracticeBankScopeV8916(copy.id, true);await saveSilent();renderAll();
+    });
+  }
+  async function newEmptyBank() {
+    return runMutation(async () => {
+      const name = await ShirohaDialogs.prompt('请输入新题库名称：', '新建空题库');if (!name) { return; } const groupName = normalizeBankGroupNameV58(await ShirohaDialogs.prompt('请输入一级分组名称，可留空：', '') || '');const bank = { id: makeId('bank'), name: name.trim() || '新建空题库', groupName, createdAt: now(), updatedAt: now(), questions: [] };state.banks.push(bank);setPracticeBankScopeV8916(bank.id, true);await saveSilent();renderAll();
+    });
+  }
+  async function mergeBankIntoActive() {
+    if (!await loadNativeBanks([activeBank().id, $('#merge-bank-select').value])) { return; } return runMutation(async () => {
+      const sourceId = $('#merge-bank-select').value;const target = activeBank();const src = state.banks.find((b) => b.id === sourceId);if (!src) { await ShirohaDialogs.alert('没有可合并的来源题库。');return; } if (!await ShirohaDialogs.confirm(`将“${src.name}”的 ${src.questions.length} 道题合并到当前题库“${target.name}”？`)) { return; } const before = target.questions.length;const existing = new Set(target.questions.map((q) => normalizeText(q.question)));let added = 0; let skipped = 0;src.questions.forEach((q) => {
+        const k = normalizeText(q.question);if (existing.has(k)) { skipped += 1;return; }existing.add(k);target.questions.push({ ...JSON.parse(JSON.stringify(q)), id: makeId('q', target.questions.length + 1), number: target.questions.length + 1 });added += 1;
+      });target.updatedAt = now();await saveSilent();renderAll();await ShirohaDialogs.alert(`合并完成：新增 ${added} 题，跳过重复 ${skipped} 题。合并前 ${before} 题，当前 ${target.questions.length} 题。`);
+    });
+  }
+  async function exportBankById(id) {
+    // eslint-disable-next-line prefer-template -- 历史数据字段可能是对象，保留 + 的默认转换；字段类型受约束后移除此例外。
+    try { if (!await loadNativeBanks([id])) { return; } const b = state.banks.find((x) => x.id === id);if (!b) { return; } const text = JSON.stringify(serializeBankForCrossExportV53(b), null, 2);const output = $('#export-output');if (output) { output.value = text; } await download((b.name || '题库') + '.json', text); } catch (error) { platformStatus('导出失败：' + error.message, true);return false; }
+  }
 
-  async function dedupeActiveBank() { if (!await loadNativeBanks([activeBank().id])) { return; } return runMutation(async () => { const b = activeBank();const map = new Map(); const dups = [];b.questions.forEach((q) => { const k = normalizeText(q.question);if (map.has(k)) { dups.push(q); } else { map.set(k, q); } });b.questions = [...map.values()].map((q, i) => ({ ...q, number: i + 1 }));await saveSilent();renderAll();await ShirohaDialogs.alert(`去重完成：删除 ${dups.length} 道重复题，剩余 ${b.questions.length} 道。`); }); }
-  function shuffle(a) { const shuffled = [...a];for (let i = shuffled.length - 1;i > 0;i -= 1) { const j = Math.floor(Math.random() * (i + 1));[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]; } return shuffled; }
+  async function dedupeActiveBank() {
+    if (!await loadNativeBanks([activeBank().id])) { return; } return runMutation(async () => {
+      const b = activeBank();const map = new Map(); const dups = [];b.questions.forEach((q) => {
+        const k = normalizeText(q.question);if (map.has(k)) { dups.push(q); } else { map.set(k, q); }
+      });b.questions = [...map.values()].map((q, i) => ({ ...q, number: i + 1 }));await saveSilent();renderAll();await ShirohaDialogs.alert(`去重完成：删除 ${dups.length} 道重复题，剩余 ${b.questions.length} 道。`);
+    });
+  }
+  function shuffle(a) {
+    const shuffled = [...a];for (let i = shuffled.length - 1;i > 0;i -= 1) { const j = Math.floor(Math.random() * (i + 1));[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]; } return shuffled;
+  }
 
   function pickRichTextFieldV57(q, field, fallback = '') {
     const rich = q && q.richContent;
@@ -2179,11 +2517,21 @@ D. 高速通过积水路段`;
     return caps;
   }
 
-  function questionImageDataUriRegexV83() { return /^data:image\/(?:png|jpeg|jpg|gif|webp|bmp);base64,[A-Za-z0-9+/=\r\n]+$/i; }
-  function markdownImageRegexV83() { return /!\[([^\]]{0,120})\]\((data:image\/(?:png|jpeg|jpg|gif|webp|bmp);base64,[^)]+)\)/gi; }
-  function dataUriMimeExtV83(dataUri) { const m = String(dataUri || '').match(/^data:image\/([^;]+);base64,/i);const t = ((m && m[1]) || 'webp').toLowerCase();if (t === 'jpeg' || t === 'jpg') { return 'jpg'; } return t.replace(/[^a-z0-9]+/g, '') || 'webp'; }
-  function dataUriSizeBytesV83(dataUri) { const b64 = String(dataUri || '').split(',')[1] || '';return Math.max(0, Math.floor(b64.replace(/\s/g, '').length * 3 / 4)); }
-  function safeImageIdV83(prefix, a, b) { return `${String(prefix || 'img')}_${String(a || 'q').replace(/[^A-Za-z0-9_-]+/g, '_').slice(0, 32)}_${String(b || 1).replace(/[^A-Za-z0-9_-]+/g, '_')}`; }
+  function questionImageDataUriRegexV83() {
+    return /^data:image\/(?:png|jpeg|jpg|gif|webp|bmp);base64,[A-Za-z0-9+/=\r\n]+$/i;
+  }
+  function markdownImageRegexV83() {
+    return /!\[([^\]]{0,120})\]\((data:image\/(?:png|jpeg|jpg|gif|webp|bmp);base64,[^)]+)\)/gi;
+  }
+  function dataUriMimeExtV83(dataUri) {
+    const m = String(dataUri || '').match(/^data:image\/([^;]+);base64,/i);const t = ((m && m[1]) || 'webp').toLowerCase();if (t === 'jpeg' || t === 'jpg') { return 'jpg'; } return t.replace(/[^a-z0-9]+/g, '') || 'webp';
+  }
+  function dataUriSizeBytesV83(dataUri) {
+    const b64 = String(dataUri || '').split(',')[1] || '';return Math.max(0, Math.floor(b64.replace(/\s/g, '').length * 3 / 4));
+  }
+  function safeImageIdV83(prefix, a, b) {
+    return `${String(prefix || 'img')}_${String(a || 'q').replace(/[^A-Za-z0-9_-]+/g, '_').slice(0, 32)}_${String(b || 1).replace(/[^A-Za-z0-9_-]+/g, '_')}`;
+  }
   function stripUnsafeImageDataUrisV83(text) {
     return String(text || '')
       .replace(/!\[[^\]]{0,120}\]\((data:image\/[^;)\s]+;base64,[^)]+)\)/gi, (m, src) => (questionImageDataUriRegexV83().test(src) ? m : '[图片已移除]'))
@@ -2199,12 +2547,16 @@ D. 高速通过积水路段`;
       return { id: String(img.id || safeImageIdV83('img', sourceName, i + 1)), localPath: src, dataUrl: src, sourceName, order: Number(img.order || i + 1) || i + 1, width: img.width ?? null, height: img.height ?? null, sizeBytes: Number(img.sizeBytes || dataUriSizeBytesV83(src)) || 0 };
     }).filter(Boolean);
   }
-  function questionTextContainsDataUriV83(question, dataUri) { return !!dataUri && String(question || '').includes(String(dataUri).slice(0, 80)); }
+  function questionTextContainsDataUriV83(question, dataUri) {
+    return !!dataUri && String(question || '').includes(String(dataUri).slice(0, 80));
+  }
   function injectQuestionImagesForWebV83(question, images) {
     let text = String(question || '').trim();
     const imgs = normalizeQuestionImagesForWebV83(images).filter((img) => questionImageDataUriRegexV83().test(img.dataUrl || img.localPath || ''));
     const additions = [];
-    imgs.forEach((img, i) => { const src = img.dataUrl || img.localPath;if (!questionTextContainsDataUriV83(text, src)) { const alt = (img.sourceName || (`题目图片${i + 1}`)).replace(/[\]\n\r]/g, '').slice(0, 80) || '题目图片';additions.push(`![${alt}](${src})`); } });
+    imgs.forEach((img, i) => {
+      const src = img.dataUrl || img.localPath;if (!questionTextContainsDataUriV83(text, src)) { const alt = (img.sourceName || (`题目图片${i + 1}`)).replace(/[\]\n\r]/g, '').slice(0, 80) || '题目图片';additions.push(`![${alt}](${src})`); }
+    });
     if (additions.length) { text = [text, ...additions].filter(Boolean).join('\n'); }
     return text;
   }
@@ -2242,13 +2594,27 @@ D. 高速通过积水路段`;
     return !answer.answered && !answer.revealed;
   }
 
-  function getWrongEntries(bid = activeBank().id) { const v = state.wrongBook[bid] || [];if (!Array.isArray(v)) { return []; } return v.map((x) => (typeof x === 'string' ? { id: x, wrongCount: 1, rightCount: 0, reviewRightCount: 0, streakCorrectCount: 0, lastWrongAt: '', lastCorrectAt: '', lastReviewedAt: '', nextReviewAt: '', reviewLevel: 0, lastAnswer: [], source: 'web', timestamp: 0, status: '未掌握' } : { ...x, id: x.id, wrongCount: Number(x.wrongCount || 0), rightCount: Number(x.rightCount || 0), reviewRightCount: Number(x.reviewRightCount || 0), streakCorrectCount: Number(x.streakCorrectCount || 0), lastWrongAt: x.lastWrongAt || '', lastCorrectAt: x.lastCorrectAt || '', lastReviewedAt: x.lastReviewedAt || '', nextReviewAt: x.nextReviewAt || '', reviewLevel: Number(x.reviewLevel || 0), lastAnswer: Array.isArray(x.lastAnswer) ? x.lastAnswer : [], source: x.source || 'web', timestamp: Number(x.timestamp || 0), status: x.status || '未掌握' })).filter((x) => x.id); }
-  function setWrongEntries(entries, bid = activeBank().id) { state.wrongBook[bid] = entries; }
-  function nextWrongReviewIsoV24(level, base = Date.now()) { const days = [1, 1, 3, 7, 14, 30, 60][Math.max(0, Math.min(6, Number(level || 0)))] || 1;return new Date(base + (days * 86400000)).toISOString(); }
-  function addWrong(id, bid = activeBank().id, chosen = []) { const arr = getWrongEntries(bid);let e = arr.find((x) => x.id === id);if (!e) { e = { id, wrongCount: 0, rightCount: 0, reviewRightCount: 0, streakCorrectCount: 0, lastWrongAt: '', lastCorrectAt: '', lastReviewedAt: '', nextReviewAt: '', reviewLevel: 0, lastAnswer: [], source: 'web', timestamp: 0, status: '未掌握' };arr.push(e); } const ts = Date.now();e.lastAnswer = [...chosen];e.wrongCount += 1;e.rightCount = 0;e.reviewRightCount = 0;e.streakCorrectCount = 0;e.reviewLevel = 0;e.lastWrongAt = new Date(ts).toISOString();e.lastReviewedAt = e.lastWrongAt;e.nextReviewAt = nextWrongReviewIsoV24(0, ts);e.timestamp = ts;e.source = 'web';e.status = '未掌握';setWrongEntries(arr, bid); }
-  function markRight(id, bid = activeBank().id) { const arr = getWrongEntries(bid);const e = arr.find((x) => x.id === id);if (!e) { return; } const ts = Date.now();e.rightCount += 1;e.reviewRightCount = Number(e.reviewRightCount || 0) + 1;e.streakCorrectCount = Number(e.streakCorrectCount || 0) + 1;const mastered = e.streakCorrectCount >= 2;e.reviewLevel = mastered ? Math.max(2, Number(e.reviewLevel || 0) + 1) : Math.max(1, Number(e.reviewLevel || 0));e.lastCorrectAt = new Date(ts).toISOString();e.lastReviewedAt = e.lastCorrectAt;e.nextReviewAt = nextWrongReviewIsoV24(e.reviewLevel, ts);e.timestamp = ts;e.status = mastered ? '已掌握' : '复习中';setWrongEntries(arr, bid); }
-  function removeWrong(id) { const bid = activeBank().id;setWrongEntries(getWrongEntries(bid).filter((x) => x.id !== id), bid); }
-  function makeAnswerDetail(item, chosen, ok, score, _totalScore) { const q = practiceQuestionV8916(item);const values = Array.isArray(chosen) ? [...chosen] : [];const detail = { questionId: q.id, question: short(q.question, 120), type: q.type, category: q.category || '', chosen: values, userAnswer: [...values], answer: [...q.answer], correct: !!ok, score: ok ? score : 0, fullScore: score, time: now(), sourceBankId: practiceItemBankIdV8916(item), sourceBankName: practiceItemBankNameV8916(item), nativeQuestion: JSON.parse(JSON.stringify(q)) };if (isMultiBlankQuestionV58914(q)) { detail.blankAnswers = cloneBlankAnswersV58914(q.blankAnswers);detail.userBlankAnswers = [...values]; } return detail; }
+  function getWrongEntries(bid = activeBank().id) {
+    const v = state.wrongBook[bid] || [];if (!Array.isArray(v)) { return []; } return v.map((x) => (typeof x === 'string' ? { id: x, wrongCount: 1, rightCount: 0, reviewRightCount: 0, streakCorrectCount: 0, lastWrongAt: '', lastCorrectAt: '', lastReviewedAt: '', nextReviewAt: '', reviewLevel: 0, lastAnswer: [], source: 'web', timestamp: 0, status: '未掌握' } : { ...x, id: x.id, wrongCount: Number(x.wrongCount || 0), rightCount: Number(x.rightCount || 0), reviewRightCount: Number(x.reviewRightCount || 0), streakCorrectCount: Number(x.streakCorrectCount || 0), lastWrongAt: x.lastWrongAt || '', lastCorrectAt: x.lastCorrectAt || '', lastReviewedAt: x.lastReviewedAt || '', nextReviewAt: x.nextReviewAt || '', reviewLevel: Number(x.reviewLevel || 0), lastAnswer: Array.isArray(x.lastAnswer) ? x.lastAnswer : [], source: x.source || 'web', timestamp: Number(x.timestamp || 0), status: x.status || '未掌握' })).filter((x) => x.id);
+  }
+  function setWrongEntries(entries, bid = activeBank().id) {
+    state.wrongBook[bid] = entries;
+  }
+  function nextWrongReviewIsoV24(level, base = Date.now()) {
+    const days = [1, 1, 3, 7, 14, 30, 60][Math.max(0, Math.min(6, Number(level || 0)))] || 1;return new Date(base + (days * 86400000)).toISOString();
+  }
+  function addWrong(id, bid = activeBank().id, chosen = []) {
+    const arr = getWrongEntries(bid);let e = arr.find((x) => x.id === id);if (!e) { e = { id, wrongCount: 0, rightCount: 0, reviewRightCount: 0, streakCorrectCount: 0, lastWrongAt: '', lastCorrectAt: '', lastReviewedAt: '', nextReviewAt: '', reviewLevel: 0, lastAnswer: [], source: 'web', timestamp: 0, status: '未掌握' };arr.push(e); } const ts = Date.now();e.lastAnswer = [...chosen];e.wrongCount += 1;e.rightCount = 0;e.reviewRightCount = 0;e.streakCorrectCount = 0;e.reviewLevel = 0;e.lastWrongAt = new Date(ts).toISOString();e.lastReviewedAt = e.lastWrongAt;e.nextReviewAt = nextWrongReviewIsoV24(0, ts);e.timestamp = ts;e.source = 'web';e.status = '未掌握';setWrongEntries(arr, bid);
+  }
+  function markRight(id, bid = activeBank().id) {
+    const arr = getWrongEntries(bid);const e = arr.find((x) => x.id === id);if (!e) { return; } const ts = Date.now();e.rightCount += 1;e.reviewRightCount = Number(e.reviewRightCount || 0) + 1;e.streakCorrectCount = Number(e.streakCorrectCount || 0) + 1;const mastered = e.streakCorrectCount >= 2;e.reviewLevel = mastered ? Math.max(2, Number(e.reviewLevel || 0) + 1) : Math.max(1, Number(e.reviewLevel || 0));e.lastCorrectAt = new Date(ts).toISOString();e.lastReviewedAt = e.lastCorrectAt;e.nextReviewAt = nextWrongReviewIsoV24(e.reviewLevel, ts);e.timestamp = ts;e.status = mastered ? '已掌握' : '复习中';setWrongEntries(arr, bid);
+  }
+  function removeWrong(id) {
+    const bid = activeBank().id;setWrongEntries(getWrongEntries(bid).filter((x) => x.id !== id), bid);
+  }
+  function makeAnswerDetail(item, chosen, ok, score, _totalScore) {
+    const q = practiceQuestionV8916(item);const values = Array.isArray(chosen) ? [...chosen] : [];const detail = { questionId: q.id, question: short(q.question, 120), type: q.type, category: q.category || '', chosen: values, userAnswer: [...values], answer: [...q.answer], correct: !!ok, score: ok ? score : 0, fullScore: score, time: now(), sourceBankId: practiceItemBankIdV8916(item), sourceBankName: practiceItemBankNameV8916(item), nativeQuestion: JSON.parse(JSON.stringify(q)) };if (isMultiBlankQuestionV58914(q)) { detail.blankAnswers = cloneBlankAnswersV58914(q.blankAnswers);detail.userBlankAnswers = [...values]; } return detail;
+  }
 
   function scoreOf(q) {
     if (q.score) {
@@ -2267,13 +2633,21 @@ D. 高速通过积水路段`;
     return Number($(selector).value) || 0;
   }
 
-  // eslint-disable-next-line prefer-template -- 异常信息可能是对象，保留 + 的默认转换；统一异常类型后移除此例外。
-  async function exportRecords() { try { if (ShirohaPlatform.storage.ensureRecords && !await readNative(() => ShirohaPlatform.storage.ensureRecords(state, state.records.map((r) => r.id)))) { return; } const text = JSON.stringify(state.records || [], null, 2);const output = $('#export-output');if (output) { output.value = text; } await download('学习记录.json', text); } catch (error) { platformStatus('导出失败：' + error.message, true);return false; } }
-  function fmt(s) { return new Date(s).toLocaleString('zh-CN', { hour12: false }); }
+  async function exportRecords() {
+    // eslint-disable-next-line prefer-template -- 异常信息可能是对象，保留 + 的默认转换；统一异常类型后移除此例外。
+    try { if (ShirohaPlatform.storage.ensureRecords && !await readNative(() => ShirohaPlatform.storage.ensureRecords(state, state.records.map((r) => r.id)))) { return; } const text = JSON.stringify(state.records || [], null, 2);const output = $('#export-output');if (output) { output.value = text; } await download('学习记录.json', text); } catch (error) { platformStatus('导出失败：' + error.message, true);return false; }
+  }
+  function fmt(s) {
+    return new Date(s).toLocaleString('zh-CN', { hour12: false });
+  }
 
-  // eslint-disable-next-line prefer-template -- 历史数据字段可能是对象，保留 + 的默认转换；字段类型受约束后移除此例外。
-  async function exportCurrentBank() { try { if (!await loadNativeBanks([activeBank().id])) { return; } const text = JSON.stringify(serializeBankForCrossExportV53(activeBank()), null, 2);$('#export-output').value = text;await download(activeBank().name + '.json', text); } catch (error) { platformStatus('导出失败：' + error.message, true);return false; } }
-  function exportAll() { exportAllBackupV23(); }
+  async function exportCurrentBank() {
+    // eslint-disable-next-line prefer-template -- 历史数据字段可能是对象，保留 + 的默认转换；字段类型受约束后移除此例外。
+    try { if (!await loadNativeBanks([activeBank().id])) { return; } const text = JSON.stringify(serializeBankForCrossExportV53(activeBank()), null, 2);$('#export-output').value = text;await download(activeBank().name + '.json', text); } catch (error) { platformStatus('导出失败：' + error.message, true);return false; }
+  }
+  function exportAll() {
+    exportAllBackupV23();
+  }
 
   /* SHIROHA_V23_DATA_TOOLS_PATCH_START
    v23: 题库管理页批量选择导出 + 导入页/设置页备份 JSON 导入恢复
@@ -2313,10 +2687,20 @@ D. 高速通过积水路段`;
     </div>
     <div id="export-bank-summary-v23" class="notice warn">请选择需要管理的题库。</div>
   </div>`);
-    $('#bank-current-select-v28').onchange = async (e) => runMutation(async () => { if (e.target.value) { state.activeBankId = e.target.value;await saveSilent();renderAll(); } });
-    $('#export-bank-all-v23').onchange = (e) => { exportBankSelectedV23 = e.target.checked ? new Set(state.banks.map((b) => b.id)) : new Set();renderBankList(); };
-    $('#export-bank-invert-v23').onclick = () => { const next = new Set();state.banks.forEach((b) => { if (!exportBankSelectedV23.has(b.id)) { next.add(b.id); } });exportBankSelectedV23 = next;renderBankList(); };
-    $('#export-bank-current-v23').onclick = () => { exportBankSelectedV23 = new Set([activeBank().id]);renderBankList(); };
+    $('#bank-current-select-v28').onchange = async (e) => runMutation(async () => {
+      if (e.target.value) { state.activeBankId = e.target.value;await saveSilent();renderAll(); }
+    });
+    $('#export-bank-all-v23').onchange = (e) => {
+      exportBankSelectedV23 = e.target.checked ? new Set(state.banks.map((b) => b.id)) : new Set();renderBankList();
+    };
+    $('#export-bank-invert-v23').onclick = () => {
+      const next = new Set();state.banks.forEach((b) => {
+        if (!exportBankSelectedV23.has(b.id)) { next.add(b.id); }
+      });exportBankSelectedV23 = next;renderBankList();
+    };
+    $('#export-bank-current-v23').onclick = () => {
+      exportBankSelectedV23 = new Set([activeBank().id]);renderBankList();
+    };
     $('#export-selected-banks-v23').onclick = exportSelectedBanksV23;
     const deleteSelectedBtnV32 = $('#delete-selected-banks-v32');if (deleteSelectedBtnV32) { deleteSelectedBtnV32.onclick = deleteSelectedBanksV32; }
     renderBankToolbarV28();
@@ -2330,8 +2714,12 @@ D. 高速通过积水路段`;
     const refresh = document.createElement('button');refresh.textContent = '读取恢复点';
     const restore = document.createElement('button');restore.textContent = '恢复选中的数据';restore.disabled = true;
     const status = document.createElement('p');status.setAttribute('role', 'status');
-    refresh.onclick = async () => { refresh.disabled = true;try { const names = await ShirohaPlatform.storage.snapshots();select.replaceChildren();for (const name of names) { const option = document.createElement('option');option.value = name;option.textContent = name;select.appendChild(option); }restore.disabled = !names.length;status.textContent = names.length ? '恢复前会再次保留当前数据。' : '尚无恢复点。'; } catch (error) { status.textContent = error.message; } finally { refresh.disabled = false; } };
-    restore.onclick = () => runMutation(async () => { if (!select.value || !await ShirohaDialogs.confirm('用选中的恢复点替换当前题库和学习数据？当前数据会先保留为新的恢复点。')) { return; } await ShirohaPlatform.harness?.cancelAll();await ShirohaPlatform.saves.idle();await ShirohaPlatform.storage.restoreSnapshot(select.value);location.reload(); });
+    refresh.onclick = async () => {
+      refresh.disabled = true;try { const names = await ShirohaPlatform.storage.snapshots();select.replaceChildren();for (const name of names) { const option = document.createElement('option');option.value = name;option.textContent = name;select.appendChild(option); }restore.disabled = !names.length;status.textContent = names.length ? '恢复前会再次保留当前数据。' : '尚无恢复点。'; } catch (error) { status.textContent = error.message; } finally { refresh.disabled = false; }
+    };
+    restore.onclick = () => runMutation(async () => {
+      if (!select.value || !await ShirohaDialogs.confirm('用选中的恢复点替换当前题库和学习数据？当前数据会先保留为新的恢复点。')) { return; } await ShirohaPlatform.harness?.cancelAll();await ShirohaPlatform.saves.idle();await ShirohaPlatform.storage.restoreSnapshot(select.value);location.reload();
+    });
     panel.append(title, refresh, select, restore, status);document.getElementById('settings').appendChild(panel);
     const repair = document.createElement('details');const summary = document.createElement('summary');summary.textContent = '数据无法读取时修复';repair.appendChild(summary);offerNativeRecovery(repair);panel.appendChild(repair);
   }
@@ -2356,7 +2744,9 @@ D. 高速通过积水路段`;
   </div>`);
     $('#settings-export-native-backup-v611').onclick = exportNativeCompatibleBackupZipV611;
     $('#settings-copy-all-backup-v23').onclick = copyAllBackupJsonV23;
-    $('#settings-import-backup-v23').onclick = () => { backupImportModeV23 = $('#settings-backup-mode-v23')?.value || 'overwrite';$('#backup-json-file-v23').click(); };
+    $('#settings-import-backup-v23').onclick = () => {
+      backupImportModeV23 = $('#settings-backup-mode-v23')?.value || 'overwrite';$('#backup-json-file-v23').click();
+    };
     const oldAll = $('#export-all-btn');if (oldAll) { oldAll.onclick = exportAllBackupV23; }
     webdavPanel.mount(settingsCard);
   }
@@ -2387,8 +2777,12 @@ D. 高速通过积水路段`;
     const btn = $('#export-selected-banks-v23');if (btn) { btn.disabled = !selected.length; }
     const del = $('#delete-selected-banks-v32');if (del) { del.disabled = !selected.length; }
   }
-  function selectedBanksV23() { return state.banks.filter((b) => exportBankSelectedV23.has(b.id)); }
-  function deleteSelectedBanksV32() { deleteBanksV32([...exportBankSelectedV23]); }
+  function selectedBanksV23() {
+    return state.banks.filter((b) => exportBankSelectedV23.has(b.id));
+  }
+  function deleteSelectedBanksV32() {
+    deleteBanksV32([...exportBankSelectedV23]);
+  }
   async function deleteBanksV32(ids) {
     return runMutation(async () => {
       const unique = [...new Set((ids || []).filter(Boolean))];
@@ -2399,7 +2793,9 @@ D. 高速通过积水路段`;
       if (!await ShirohaDialogs.confirm(`确定删除 ${targets.length} 个题库：${preview}？删除后不会影响已导出的备份，但本机数据不可恢复。`)) { return; }
       const delIds = new Set(targets.map((b) => b.id));
       state.banks = state.banks.filter((b) => !delIds.has(b.id));
-      delIds.forEach((id) => { delete state.wrongBook[id];if (state.favorites) { delete state.favorites[id]; } if (state.crossPlatformMeta && state.crossPlatformMeta.favoriteQuestions) { delete state.crossPlatformMeta.favoriteQuestions[id]; }exportBankSelectedV23.delete(id); });
+      delIds.forEach((id) => {
+        delete state.wrongBook[id];if (state.favorites) { delete state.favorites[id]; } if (state.crossPlatformMeta && state.crossPlatformMeta.favoriteQuestions) { delete state.crossPlatformMeta.favoriteQuestions[id]; }exportBankSelectedV23.delete(id);
+      });
       if (!state.banks.length) { state.activeBankId = '';state.settings = { ...(state.settings || {}), suppressDefaultBank: true }; } else if (!state.banks.some((b) => b.id === state.activeBankId)) { state.activeBankId = state.banks[0]?.id || ''; }
       const beforeScope = normalizePracticeScopeV8916(state.settings && state.settings.practiceScope);ensurePracticeScopeV8916();const afterScope = practiceScopeV8916();
       await saveSilent();renderAll();
@@ -2407,8 +2803,12 @@ D. 高速通过积水路段`;
       toast(groupWasCleared ? `已删除 ${targets.length} 个题库。原练习分组已无题库，已切换为当前题库。` : `已删除 ${targets.length} 个题库。`, groupWasCleared ? 'warn' : 'ok');
     });
   }
-  function cleanFileNameV23(s) { return String(s || '').replace(/[\\/:*?"<>|]/g, '_').replace(/\s+/g, '_').slice(0, 80) || 'bank'; }
-  function todayV23() { return new Date().toISOString().slice(0, 10); }
+  function cleanFileNameV23(s) {
+    return String(s || '').replace(/[\\/:*?"<>|]/g, '_').replace(/\s+/g, '_').slice(0, 80) || 'bank';
+  }
+  function todayV23() {
+    return new Date().toISOString().slice(0, 10);
+  }
   function buildQuestionBanksExportPayloadV598(banks) {
     const exported = (banks || []).map(serializeBankForCrossExportV53);
     if (exported.length === 1) { return exported[0]; }
@@ -2454,8 +2854,12 @@ D. 高速通过积水路段`;
     const text = JSON.stringify(buildBackupPayloadV23(state.banks || [], 'all_data', true), null, 2);setBackupPreviewV23(text);
     await copyTextV23(text, '已复制全部数据备份文本。');
   }
-  async function copyTextV23(text, okMsg) { try { await navigator.clipboard.writeText(text);toast(okMsg, 'ok'); } catch { toast('浏览器不允许自动复制，请手动复制下方文本。', 'warn'); } }
-  function setBackupPreviewV23(text) { const out = $('#export-output');if (out) { out.value = text; } }
+  async function copyTextV23(text, okMsg) {
+    try { await navigator.clipboard.writeText(text);toast(okMsg, 'ok'); } catch { toast('浏览器不允许自动复制，请手动复制下方文本。', 'warn'); }
+  }
+  function setBackupPreviewV23(text) {
+    const out = $('#export-output');if (out) { out.value = text; }
+  }
   /* SHIROHA_V23_DATA_TOOLS_PATCH_END */
 
   /* SHIROHA_V25_2_TO_V28_ENHANCEMENTS_START
@@ -2483,7 +2887,9 @@ D. 高速通过积水路段`;
       });
     } catch { /* 版本提示同步失败不应阻断页面启动。 */ }
   }
-  function init() { upgradeState();ensureAiImportStateV99();ensureDefaultBank();ensureBankGroupUiV58();bindNav();bindEvents();bindMultiBlankEditorV58914();bindV25ToV28Events();ensureV25ToV28Panels();setupSidebarCollapse();setupEnhancedDataToolsV23();renderAll();updateShellLayoutByView();syncHomeVersionPromptV586();setTimeout(syncHomeVersionPromptV586, 80);setTimeout(syncHomeVersionPromptV586, 300); }
+  function init() {
+    upgradeState();ensureAiImportStateV99();ensureDefaultBank();ensureBankGroupUiV58();bindNav();bindEvents();bindMultiBlankEditorV58914();bindV25ToV28Events();ensureV25ToV28Panels();setupSidebarCollapse();setupEnhancedDataToolsV23();renderAll();updateShellLayoutByView();syncHomeVersionPromptV586();setTimeout(syncHomeVersionPromptV586, 80);setTimeout(syncHomeVersionPromptV586, 300);
+  }
   function defaultBank() {
     const qb = window.questionBank || { meta: { title: '内置题库（按需加载）' }, questions: [] };
     const qs = Array.isArray(qb.questions) ? qb.questions : [];
@@ -2515,10 +2921,16 @@ D. 高速通过积水路段`;
     for (const bid of Object.keys(state.favorites)) { state.favorites[bid] = Array.isArray(state.favorites[bid]) ? [...new Set(state.favorites[bid].filter(Boolean))] : []; }
     ensurePracticeScopeV8916();
   }
-  function serializeState() { return JSON.stringify({ ...state, schemaVersion: CURRENT_SCHEMA_VERSION, favorites: state.favorites || {} }); }
-  function renderAll() { ensureBankGroupUiV58();ensurePracticeScopeV8916();updateAiConnectionPillV99();syncAiImportActionV99();renderStats();renderBankSelect();renderMergeSelect();renderBankList();renderBankPreview();renderWrongBook();renderFavoritesPageV596();renderRecords();renderRecentTraining();renderBankInputs();renderBuiltInPanelV252();renderPracticeScopeUiV8916();if (typeof renderExportBankSelectorV23 === 'function') { renderExportBankSelectorV23(); }renderImportTargetBankOptionsV59();syncImportAppendUiV59();syncHomeVersionPromptV586();syncPracticeStartUiV58916(true); }
+  function serializeState() {
+    return JSON.stringify({ ...state, schemaVersion: CURRENT_SCHEMA_VERSION, favorites: state.favorites || {} });
+  }
+  function renderAll() {
+    ensureBankGroupUiV58();ensurePracticeScopeV8916();updateAiConnectionPillV99();syncAiImportActionV99();renderStats();renderBankSelect();renderMergeSelect();renderBankList();renderBankPreview();renderWrongBook();renderFavoritesPageV596();renderRecords();renderRecentTraining();renderBankInputs();renderBuiltInPanelV252();renderPracticeScopeUiV8916();if (typeof renderExportBankSelectorV23 === 'function') { renderExportBankSelectorV23(); }renderImportTargetBankOptionsV59();syncImportAppendUiV59();syncHomeVersionPromptV586();syncPracticeStartUiV58916(true);
+  }
   function bindV25ToV28Events() {
-    ['#load-built-in-bank-btn', '#load-built-in-bank-btn-banks'].forEach((sel) => { const btn = $(sel);if (btn) { btn.onclick = () => loadBuiltInBankV252(); } });
+    ['#load-built-in-bank-btn', '#load-built-in-bank-btn-banks'].forEach((sel) => {
+      const btn = $(sel);if (btn) { btn.onclick = () => loadBuiltInBankV252(); }
+    });
   }
   function ensureV25ToV28Panels() {
     ensureBuiltInPanelV252();
@@ -2537,7 +2949,9 @@ D. 高速通过积水路段`;
     if (panel) { panel.hidden = !!has; }
     el.textContent = has ? '已加载，可直接使用。' : '当前未加入 C1 题库。';
   }
-  async function fetchJsonLocalV252(url) { return ShirohaPlatform.resourceJson(url); }
+  async function fetchJsonLocalV252(url) {
+    return ShirohaPlatform.resourceJson(url);
+  }
   async function loadBuiltInBankV252() {
     return runMutation(async () => {
       try {
@@ -2593,12 +3007,20 @@ D. 高速通过积水路段`;
       if (aiSingleFingerprintV613(target) !== session.fingerprint) { session.error = '来源题目已发生变化，请重新生成后再保存。';render();return false; }
       if (String(target.analysis || '').trim() && target.analysis !== text && !await ShirohaDialogs.confirm('这道题已有解析，是否用当前 AI 草稿替换？题干、选项和答案不会改变。')) { return false; }
       const patches = []; const seen = new WeakMap();
-      const patch = (object, property, value) => { if (!object) { return; } let keys = seen.get(object);if (!keys) { keys = new Set();seen.set(object, keys); } if (keys.has(property)) { return; }keys.add(property);patches.push({ object, property, had: Object.prototype.hasOwnProperty.call(object, property), old: object[property] });object[property] = value; };
+      const patch = (object, property, value) => {
+        if (!object) { return; } let keys = seen.get(object);if (!keys) { keys = new Set();seen.set(object, keys); } if (keys.has(property)) { return; }keys.add(property);patches.push({ object, property, had: Object.prototype.hasOwnProperty.call(object, property), old: object[property] });object[property] = value;
+      };
       const next = aiSingleWithAnalysisV613(target, text);
       patch(loc.bank.questions, loc.index, next);patch(loc.bank, 'updatedAt', now());
-      (practiceSession.current.items || []).forEach((value, index) => { const q = practiceQuestionV8916(value);if (practiceItemBankIdV8916(value) === loc.bankId && q?.id === target.id) { if (value.question && typeof value.question === 'object') { patch(value, 'question', aiSingleWithAnalysisV613(q, text)); } else { patch(practiceSession.current.items, index, aiSingleWithAnalysisV613(q, text)); } } });
-      (examSession.current.items || []).forEach((value, index) => { const q = examQuestionV113(value);if (practiceItemBankIdV8916(value) === loc.bankId && q?.id === target.id) { if (value.question && typeof value.question === 'object') { patch(value, 'question', aiSingleWithAnalysisV613(q, text)); } else { patch(examSession.current.items, index, aiSingleWithAnalysisV613(q, text)); } } });
-      (state.wrongBook[loc.bankId] || []).forEach((entry) => { if (entry.id === target.id && entry.nativeQuestion) { patch(entry, 'nativeQuestion', aiSingleWithAnalysisV613(entry.nativeQuestion, text)); } });
+      (practiceSession.current.items || []).forEach((value, index) => {
+        const q = practiceQuestionV8916(value);if (practiceItemBankIdV8916(value) === loc.bankId && q?.id === target.id) { if (value.question && typeof value.question === 'object') { patch(value, 'question', aiSingleWithAnalysisV613(q, text)); } else { patch(practiceSession.current.items, index, aiSingleWithAnalysisV613(q, text)); } }
+      });
+      (examSession.current.items || []).forEach((value, index) => {
+        const q = examQuestionV113(value);if (practiceItemBankIdV8916(value) === loc.bankId && q?.id === target.id) { if (value.question && typeof value.question === 'object') { patch(value, 'question', aiSingleWithAnalysisV613(q, text)); } else { patch(examSession.current.items, index, aiSingleWithAnalysisV613(q, text)); } }
+      });
+      (state.wrongBook[loc.bankId] || []).forEach((entry) => {
+        if (entry.id === target.id && entry.nativeQuestion) { patch(entry, 'nativeQuestion', aiSingleWithAnalysisV613(entry.nativeQuestion, text)); }
+      });
       const favorite = state.crossPlatformMeta?.favoriteQuestions?.[loc.bankId]?.[target.id];
       if (favorite?.question) { patch(favorite, 'question', aiSingleWithAnalysisV613(favorite.question, text)); }
       try { await saveSilent(); } catch { for (const change of patches.reverse()) { if (change.had) { change.object[change.property] = change.old; } else { delete change.object[change.property]; } }session.error = '保存失败，本地题库改动已回滚，AI 草稿仍保留。请检查本地存储空间后重试。';session.notice = '';render();return false; }
@@ -2619,13 +3041,33 @@ D. 高速通过积水路段`;
     return { q, bankId, bank, index: bank ? (bank.questions || []).findIndex((value) => value.id === q.id) : -1 };
   }
 
-  function getFavoriteIdsV27(bid = activeBank().id) { state.favorites = state.favorites || {};return Array.isArray(state.favorites[bid]) ? state.favorites[bid] : []; }
-  function setFavoriteIdsV27(ids, bid = activeBank().id) { state.favorites = state.favorites || {};state.crossPlatformMeta = state.crossPlatformMeta && typeof state.crossPlatformMeta === 'object' ? state.crossPlatformMeta : { favoriteQuestions: {} };state.crossPlatformMeta.favoriteQuestions = state.crossPlatformMeta.favoriteQuestions && typeof state.crossPlatformMeta.favoriteQuestions === 'object' ? state.crossPlatformMeta.favoriteQuestions : {};const next = [...new Set((ids || []).filter(Boolean))];state.favorites[bid] = next;const meta = state.crossPlatformMeta.favoriteQuestions[bid] && typeof state.crossPlatformMeta.favoriteQuestions[bid] === 'object' ? state.crossPlatformMeta.favoriteQuestions[bid] : {};Object.keys(meta).forEach((qid) => { if (!next.includes(qid)) { delete meta[qid]; } });next.forEach((qid) => { if (!meta[qid]) { meta[qid] = { favoritedAt: Date.now() }; } });state.crossPlatformMeta.favoriteQuestions[bid] = meta; }
-  function isFavoriteV27(id, bid = activeBank().id) { return getFavoriteIdsV27(bid).includes(id); }
-  async function toggleFavoriteV27(id, bid = activeBank().id) { return runMutation(async () => { const ids = getFavoriteIdsV27(bid);if (ids.includes(id)) { setFavoriteIdsV27(ids.filter((x) => x !== id), bid); } else { setFavoriteIdsV27([...ids, id], bid); } await saveSilent();toast(ids.includes(id) ? '已取消收藏。' : '已收藏题目。', 'ok'); }); }
-  function ensureFavoritePanelV27() { return; }
+  function getFavoriteIdsV27(bid = activeBank().id) {
+    state.favorites = state.favorites || {};return Array.isArray(state.favorites[bid]) ? state.favorites[bid] : [];
+  }
+  function setFavoriteIdsV27(ids, bid = activeBank().id) {
+    state.favorites = state.favorites || {};state.crossPlatformMeta = state.crossPlatformMeta && typeof state.crossPlatformMeta === 'object' ? state.crossPlatformMeta : { favoriteQuestions: {} };state.crossPlatformMeta.favoriteQuestions = state.crossPlatformMeta.favoriteQuestions && typeof state.crossPlatformMeta.favoriteQuestions === 'object' ? state.crossPlatformMeta.favoriteQuestions : {};const next = [...new Set((ids || []).filter(Boolean))];state.favorites[bid] = next;const meta = state.crossPlatformMeta.favoriteQuestions[bid] && typeof state.crossPlatformMeta.favoriteQuestions[bid] === 'object' ? state.crossPlatformMeta.favoriteQuestions[bid] : {};Object.keys(meta).forEach((qid) => {
+      if (!next.includes(qid)) { delete meta[qid]; }
+    });next.forEach((qid) => {
+      if (!meta[qid]) { meta[qid] = { favoritedAt: Date.now() }; }
+    });state.crossPlatformMeta.favoriteQuestions[bid] = meta;
+  }
+  function isFavoriteV27(id, bid = activeBank().id) {
+    return getFavoriteIdsV27(bid).includes(id);
+  }
+  async function toggleFavoriteV27(id, bid = activeBank().id) {
+    return runMutation(async () => {
+      const ids = getFavoriteIdsV27(bid);if (ids.includes(id)) { setFavoriteIdsV27(ids.filter((x) => x !== id), bid); } else { setFavoriteIdsV27([...ids, id], bid); } await saveSilent();toast(ids.includes(id) ? '已取消收藏。' : '已收藏题目。', 'ok');
+    });
+  }
+  function ensureFavoritePanelV27() {
+    return;
+  }
 
-  async function clearCurrentFavoritesV596() { return runMutation(async () => { const count = getFavoriteIdsV27().length;if (!count) { toast('当前题库暂无收藏题。', 'warn');return; } if (await ShirohaDialogs.confirm(`确定清空当前题库的 ${count} 道收藏题？`)) { setFavoriteIdsV27([]);await saveSilent();renderAll();toast('已清空当前题库收藏。', 'ok'); } }); }
+  async function clearCurrentFavoritesV596() {
+    return runMutation(async () => {
+      const count = getFavoriteIdsV27().length;if (!count) { toast('当前题库暂无收藏题。', 'warn');return; } if (await ShirohaDialogs.confirm(`确定清空当前题库的 ${count} 道收藏题？`)) { setFavoriteIdsV27([]);await saveSilent();renderAll();toast('已清空当前题库收藏。', 'ok'); }
+    });
+  }
 
   function exportSettingsV1(settings) {
     const result = {};
@@ -2638,8 +3080,10 @@ D. 高速通过积水路段`;
     makeId, now, serializeQuestion: serializeQuestionForCrossExportV53, toNativeQuestionType,
   });
   const {
-    externalizeImages: externalizeNativeBackupImagesV611, readBackupFile: readBackupFileV24,
-    applyAssets: applyBackupAssetsV24, countUnresolvedImages: countUnresolvedBackupImagesV24,
+    externalizeImages: externalizeNativeBackupImagesV611,
+    readBackupFile: readBackupFileV24,
+    applyAssets: applyBackupAssetsV24,
+    countUnresolvedImages: countUnresolvedBackupImagesV24,
   } =    globalThis.ShirohaBackupArchive.create({
     readBuffer: (file) => ShirohaPlatform.files.readBuffer(file),
     cleanFileName: cleanFileNameV23,
@@ -2672,7 +3116,9 @@ D. 高速通过积水路段`;
     const out = $('#export-output');if (out) { out.value = text; }
     return ShirohaPlatform.download(name, new Blob([text], { type: 'application/json;charset=utf-8' }));
   }
-  function downloadBlob(name, blob) { return ShirohaPlatform.download(name || 'download.bin', blob); }
+  function downloadBlob(name, blob) {
+    return ShirohaPlatform.download(name || 'download.bin', blob);
+  }
   function createOcrDocxBlob(text, sourceName) {
     const title = 'Shiroha Quiz OCR 识别结果';
     const paragraphs = [
@@ -2697,7 +3143,9 @@ D. 高速通过积水路段`;
     const text = String(line ?? '');
     return `<w:p><w:r><w:t xml:space="preserve">${xmlEscape(text)}</w:t></w:r></w:p>`;
   }
-  function xmlEscape(s) { return String(s ?? '').replace(/[&<>"']/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' }[m])); }
+  function xmlEscape(s) {
+    return String(s ?? '').replace(/[&<>"']/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' }[m]));
+  }
   // 调用方须先进入页面写入事务，确保两个导入入口共用保存和失败回滚边界。
   async function applyBackupImportV23(normalized, mode, unresolvedImageCount = 0) {
     if (unresolvedImageCount && ShirohaPlatform.storage.checkpoint) { throw new Error('备份缺少图片，尚未更改本地数据。请补齐原始图片后重试。'); }
@@ -2868,7 +3316,9 @@ D. 高速通过积水路段`;
     const schedule = () => {
       if (ticking) { return; }
       ticking = true;
-      requestAnimationFrame(() => { ticking = false;syncFocusRailTopV35(); });
+      requestAnimationFrame(() => {
+        ticking = false;syncFocusRailTopV35();
+      });
     };
     window.addEventListener('resize', schedule, { passive: true });
     window.addEventListener('scroll', schedule, { passive: true });
@@ -2933,12 +3383,18 @@ D. 高速通过积水路段`;
     el.textContent = message;el.className = `platform-status${failed ? ' failed' : ''}`;el.hidden = !message;
     if (failed && retryMutation) { const retry = document.createElement('button');retry.textContent = '重试';retry.onclick = () => retryMutation();el.appendChild(retry); }
   }
-  function lockApplication(locked) { document.querySelector('.app')?.toggleAttribute('inert', locked);document.body.dataset.storageState = locked ? 'pending' : 'ready';refreshAnswerOptionControls(); }
+  function lockApplication(locked) {
+    document.querySelector('.app')?.toggleAttribute('inert', locked);document.body.dataset.storageState = locked ? 'pending' : 'ready';refreshAnswerOptionControls();
+  }
   function mutationCheckpoint(roots) {
     const seen = new Set(); const entries = [];
-    const visit = (value) => { if (!value || typeof value !== 'object' || seen.has(value) || (!Array.isArray(value) && Object.getPrototypeOf(value) !== Object.prototype)) { return; }seen.add(value);const fields = Object.entries(value);entries.push({ value, fields, length: Array.isArray(value) ? value.length : null });fields.forEach(([,child]) => visit(child)); };
+    const visit = (value) => {
+      if (!value || typeof value !== 'object' || seen.has(value) || (!Array.isArray(value) && Object.getPrototypeOf(value) !== Object.prototype)) { return; }seen.add(value);const fields = Object.entries(value);entries.push({ value, fields, length: Array.isArray(value) ? value.length : null });fields.forEach(([,child]) => visit(child));
+    };
     roots.forEach(visit);
-    return () => { for (const { value, fields, length } of entries) { Object.keys(value).forEach((key) => delete value[key]);if (length !== null) { value.length = length; } for (const [key, child] of fields) { value[key] = child; } } };
+    return () => {
+      for (const { value, fields, length } of entries) { Object.keys(value).forEach((key) => delete value[key]);if (length !== null) { value.length = length; } for (const [key, child] of fields) { value[key] = child; } }
+    };
   }
   async function runMutation(action) {
     if (enteringMutation) { return action(); }
@@ -2964,7 +3420,9 @@ D. 高速通过积水路段`;
       rollback();
       if (practiceSession.current !== practiceBefore) { practiceSession.current = practiceBefore;if (practiceBefore.clock?.state === 'running') { startPracticeClockTicker(); } }
       if (examSession.current !== examBefore) { examSession.current = examBefore;startExamTicker(examBefore); }
-      rollbackView?.();exportBankSelectedV23 = exportSelectionBefore;disabledBefore.forEach(([el, disabled]) => { if (el.isConnected) { el.disabled = disabled; } });
+      rollbackView?.();exportBankSelectedV23 = exportSelectionBefore;disabledBefore.forEach(([el, disabled]) => {
+        if (el.isConnected) { el.disabled = disabled; }
+      });
       retryMutation = () => runMutation(action);
       platformStatus(error?.message || '保存失败，原数据与编辑内容已保留，请重试。', true);
       return false;
@@ -2976,8 +3434,12 @@ D. 高速通过积水路段`;
     const select = document.createElement('select');select.setAttribute('aria-label', '修复使用的恢复点');select.hidden = true;
     const repair = document.createElement('button');repair.textContent = '从恢复点修复数据';repair.type = 'button';repair.disabled = true;
     const message = document.createElement('p');message.setAttribute('role', 'status');
-    load.onclick = async () => { load.disabled = true;try { const names = await ShirohaPlatform.storage.recoverySnapshots();select.replaceChildren();for (const name of names) { const option = document.createElement('option');option.value = name;option.textContent = name;select.appendChild(option); }select.hidden = !names.length;repair.disabled = !names.length;message.textContent = names.length ? '修复会先校验恢复副本；原数据库、日志和媒体均会保留。' : '没有可用的本机恢复点。请保留完整数据目录，使用已有兼容备份恢复。'; } catch (error) { message.textContent = error.message; } finally { load.disabled = false; } };
-    repair.onclick = async () => { if (!select.value || !await ShirohaDialogs.confirm('用所选恢复点修复本地数据？恢复副本通过校验后才会切换，原数据文件不会删除。')) { return; }repair.disabled = true;load.disabled = true;try { await ShirohaPlatform.storage.recover(select.value);await startApplication(); } catch (error) { message.textContent = error.message;repair.disabled = false;load.disabled = false; } };
+    load.onclick = async () => {
+      load.disabled = true;try { const names = await ShirohaPlatform.storage.recoverySnapshots();select.replaceChildren();for (const name of names) { const option = document.createElement('option');option.value = name;option.textContent = name;select.appendChild(option); }select.hidden = !names.length;repair.disabled = !names.length;message.textContent = names.length ? '修复会先校验恢复副本；原数据库、日志和媒体均会保留。' : '没有可用的本机恢复点。请保留完整数据目录，使用已有兼容备份恢复。'; } catch (error) { message.textContent = error.message; } finally { load.disabled = false; }
+    };
+    repair.onclick = async () => {
+      if (!select.value || !await ShirohaDialogs.confirm('用所选恢复点修复本地数据？恢复副本通过校验后才会切换，原数据文件不会删除。')) { return; }repair.disabled = true;load.disabled = true;try { await ShirohaPlatform.storage.recover(select.value);await startApplication(); } catch (error) { message.textContent = error.message;repair.disabled = false;load.disabled = false; }
+    };
     const backup = document.createElement('input');backup.type = 'file';backup.accept = '.json,.zip';backup.setAttribute('aria-label', '选择兼容备份修复数据');
     backup.onchange = async () => {
       const file = backup.files?.[0];if (!file) { return; }backup.disabled = true;try {
@@ -3004,29 +3466,41 @@ D. 高速通过积水路段`;
         void harnessInitialization.then(() => {
           if (coldStart && generation === applicationGeneration && applicationReady) { return ShirohaPlatform.harness?.ensureReady(); }
           return undefined;
-        }).catch(() => { if (generation === applicationGeneration) { platformStatus('AI 状态检查未完成，请在 AI 设置中重试。', true); } });
+        }).catch(() => {
+          if (generation === applicationGeneration) { platformStatus('AI 状态检查未完成，请在 AI 设置中重试。', true); }
+        });
       }
       if (ShirohaPlatform.credentials.migrateLegacy) {
-        const retryCredentials = async () => { try { await ShirohaPlatform.credentials.migrateLegacy();renderAiSettingsV99();renderWebdavPanelV378(true);platformStatus(''); } catch { platformStatus('旧凭据迁移未完成，旧值已保留，可独立重试。', true);const retry = document.createElement('button');retry.textContent = '重试凭据迁移';retry.onclick = retryCredentials;document.getElementById('platform-status').appendChild(retry); } };
+        const retryCredentials = async () => {
+          try { await ShirohaPlatform.credentials.migrateLegacy();renderAiSettingsV99();renderWebdavPanelV378(true);platformStatus(''); } catch { platformStatus('旧凭据迁移未完成，旧值已保留，可独立重试。', true);const retry = document.createElement('button');retry.textContent = '重试凭据迁移';retry.onclick = retryCredentials;document.getElementById('platform-status').appendChild(retry); }
+        };
         await retryCredentials();
       }
     } catch (error) {
       applicationReady = false;document.body.dataset.storageState = 'recovery_required';
       retryMutation = startApplication;platformStatus(error?.message || '数据加载失败，原数据已保留。', true);
       const button = document.createElement('button');button.textContent = '导出原始数据';
-      button.onclick = async () => { try { await ShirohaPlatform.download('shiroha-recovery.json', new Blob([ShirohaPlatform.storage.recoveryText()], { type: 'application/json' })); } catch { platformStatus('无法读取原始数据，请检查浏览器存储权限。', true); } };
+      button.onclick = async () => {
+        try { await ShirohaPlatform.download('shiroha-recovery.json', new Blob([ShirohaPlatform.storage.recoveryText()], { type: 'application/json' })); } catch { platformStatus('无法读取原始数据，请检查浏览器存储权限。', true); }
+      };
       document.getElementById('platform-status').appendChild(button);
       if (error?.code !== 'migration_required') { offerNativeRecovery(document.getElementById('platform-status')); }
       if (error?.code === 'migration_required' && ShirohaPlatform.storage.migrate) {
         const migrate = document.createElement('button');migrate.textContent = '确认迁移旧原型数据';
-        migrate.onclick = async () => { if (!await ShirohaDialogs.confirm('将旧题库和学习记录迁移到本机数据库，并保留原始数据。凭据会单独迁移，只有保存成功才清理对应旧值；失败仍保留。是否继续？')) { return; }migrate.disabled = true;try { await ShirohaPlatform.storage.migrate();await startApplication(); } catch (error) { platformStatus(error.message, true); } finally { migrate.disabled = false; } };
+        migrate.onclick = async () => {
+          if (!await ShirohaDialogs.confirm('将旧题库和学习记录迁移到本机数据库，并保留原始数据。凭据会单独迁移，只有保存成功才清理对应旧值；失败仍保留。是否继续？')) { return; }migrate.disabled = true;try { await ShirohaPlatform.storage.migrate();await startApplication(); } catch (error) { platformStatus(error.message, true); } finally { migrate.disabled = false; }
+        };
         document.getElementById('platform-status').appendChild(migrate);
       }
     }
   }
-  function blockInteractionDuringMutation(event) { if (mutationBusy && !event.target.closest?.('#platform-status,#desktop-titlebar,#app-dialog')) { event.preventDefault();event.stopImmediatePropagation(); } }
+  function blockInteractionDuringMutation(event) {
+    if (mutationBusy && !event.target.closest?.('#platform-status,#desktop-titlebar,#app-dialog')) { event.preventDefault();event.stopImmediatePropagation(); }
+  }
   for (const type of ['click', 'change', 'input', 'keydown']) { document.addEventListener(type, blockInteractionDuringMutation, true); }
-  window.addEventListener('beforeunload', (event) => { if (mutationBusy || mutationSaveError || (practiceSession.current.submitMode === 'total' && !practiceSession.current.completed && (practiceSession.current.totalLocked || totalPracticeFilledCount() > 0))) { event.preventDefault();event.returnValue = ''; } });
+  window.addEventListener('beforeunload', (event) => {
+    if (mutationBusy || mutationSaveError || (practiceSession.current.submitMode === 'total' && !practiceSession.current.completed && (practiceSession.current.totalLocked || totalPracticeFilledCount() > 0))) { event.preventDefault();event.returnValue = ''; }
+  });
   // HTML 文件拖放只读取用户交付的 File，不接收本机路径；与选择文件共用解析和确认流程。
   function createFileDragHandler(type) {
     return (event) => {

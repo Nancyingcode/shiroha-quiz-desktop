@@ -2,7 +2,13 @@
 
 const assert = require('node:assert/strict');
 const { analysis, FORMULA_ANALYSIS } = require('./fixtures.cjs');
-const { SEL, snapshot, assertOnlyAnalysis, assertPayload, assertKeys } = require('./harness.cjs');
+const {
+  SEL,
+  snapshot,
+  assertOnlyAnalysis,
+  assertPayload,
+  assertKeys,
+} = require('./harness.cjs');
 
 async function collapsed(h) {
   await h.page.locator(SEL.open).waitFor();
@@ -335,7 +341,9 @@ const cases = [
       const raw = await h.page.evaluate((key) => localStorage.getItem(key), h.keys.state);
       let confirmationSeen = false;
       h.page.removeAllListeners('app-dialog');
-      h.page.on('app-dialog', (dialog) => { confirmationSeen = dialog.type() === 'confirm'; return dialog.dismiss(); });
+      h.page.on('app-dialog', (dialog) => {
+        confirmationSeen = dialog.type() === 'confirm'; return dialog.dismiss();
+      });
       await h.page.locator(SEL.save).click();
       await h.page.locator('body[data-storage-state="ready"]').waitFor();
       assert.equal(confirmationSeen, true, 'Existing local analysis was overwritten without confirmation.');
@@ -429,7 +437,9 @@ const cases = [
         assert.equal(await h.page.locator(SEL.chat).textContent(), history);
         assert(await h.page.locator(SEL.save).isEnabled(), 'Quota failure incorrectly marked the draft saved.');
       } finally {
-        await h.page.evaluate(() => { Storage.prototype.setItem = window.__webAiQuotaTest.original; delete window.__webAiQuotaTest; });
+        await h.page.evaluate(() => {
+          Storage.prototype.setItem = window.__webAiQuotaTest.original; delete window.__webAiQuotaTest;
+        });
       }
       await saveAndCheck(h, 'QUOTA_DRAFT_TO_RETRY');
       assert.equal(h.pageErrors.length, 0, 'Quota exception escaped the save handler.');

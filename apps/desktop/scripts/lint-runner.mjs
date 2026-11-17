@@ -20,7 +20,9 @@ export async function runChecks(checks, options = {}) {
     });
     /** @type {Error | undefined} */
     let spawnError;
-    child.once('error', (error) => { spawnError = error; });
+    child.once('error', (error) => {
+      spawnError = error;
+    });
     child.once('close', (code, signal) => {
       if (spawnError) {
         reportFailure(`${check.name} 无法启动：${spawnError.message}`);

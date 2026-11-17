@@ -4,7 +4,9 @@
 async function observeAppDialogs(page) {
   await page.exposeBinding('__testAppDialogOpened', async (_source, kind, message) => {
     const operations = [];
-    const act = (action) => { const pending = action(); operations.push(pending); return pending; };
+    const act = (action) => {
+      const pending = action(); operations.push(pending); return pending;
+    };
     page.emit('app-dialog', {
       type: () => kind,
       message: () => message,

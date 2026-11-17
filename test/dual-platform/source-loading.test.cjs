@@ -237,7 +237,9 @@ test('共享脚本在同一沙箱按显式次序加载，不允许越界路径',
 test('页面工厂装配不访问 DOM，事件绑定留给页面初始化', () => {
   const context = vm.createContext({});
   Object.defineProperty(context, 'document', {
-    get() { throw new Error('页面工厂在装配时访问了 DOM'); },
+    get() {
+      throw new Error('页面工厂在装配时访问了 DOM');
+    },
   });
   runWebScripts(context, [
     'question-view.js', 'bank-page.js', 'saved-questions-page.js', 'training-review-page.js',

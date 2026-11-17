@@ -7,7 +7,9 @@ const test = require('node:test');
 const { loadWeb, plain } = require('./web-source.cjs');
 const { questions, webState, IMAGE } = require('./fixtures/dataset.cjs');
 
-function textFixture(name) { return readFileSync(path.join(__dirname, 'fixtures', name), 'utf8'); }
+function textFixture(name) {
+  return readFileSync(path.join(__dirname, 'fixtures', name), 'utf8');
+}
 
 test('查找表达式、文本截断与随机排序保留输入和原有规则', () => {
   const { api } = loadWeb();

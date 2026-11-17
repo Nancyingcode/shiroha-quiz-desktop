@@ -16,10 +16,16 @@ class Element {
   /** @type {Map<string,string>} */ attributes = new Map();
   /** @type {Map<string,()=>void>} */ listeners = new Map();
   /** @param {string} name @param {()=>void} callback */
-  addEventListener(name, callback) { this.listeners.set(name, callback); }
+  addEventListener(name, callback) {
+    this.listeners.set(name, callback);
+  }
   /** @param {string} name @param {string} value */
-  setAttribute(name, value) { this.attributes.set(name, value); }
-  click() { this.listeners.get('click')?.(); }
+  setAttribute(name, value) {
+    this.attributes.set(name, value);
+  }
+  click() {
+    this.listeners.get('click')?.();
+  }
 }
 
 /** @param {string} [phase] @param {number} [revision] */
@@ -32,7 +38,9 @@ function fixture(options = {}) {
   const names = ['settings', 'phase', 'status', 'login', 'details', 'login-url', 'browser-status', 'open-login', 'copy-link', 'refresh', 'cancel', 'logout', 'remember', 'retry-restore', 'retry-save', 'cli-guide', 'copy-command'];
   const elements = new Map(names.map((name) => [`ai-codebuddy-${name}`, new Element()]));
   /** @param {string} name */
-  const get = (name) => { const element = elements.get(`ai-codebuddy-${name}`); assert(element); return element; };
+  const get = (name) => {
+    const element = elements.get(`ai-codebuddy-${name}`); assert(element); return element;
+  };
   if (options.cli) { get('settings').dataset.authSource = 'cli'; }
   /** @type {Array<{command:string,request:Record<string,unknown>}>} */ const calls = [];
   /** @type {string[]} */ const copied = [];
@@ -44,15 +52,25 @@ function fixture(options = {}) {
   /** @type {(kind:string)=>Promise<unknown>} */ let respond = async () => status();
   const host = {
     /** @param {string} command @param {{request:Record<string,unknown>}} args */
-    async invoke(command, args) { calls.push({ command, request: args.request }); return respond(String(args.request.kind)); },
+    async invoke(command, args) {
+      calls.push({ command, request: args.request }); return respond(String(args.request.kind));
+    },
   };
   const context = {
     ShirohaDesktopHost: options.desktop === false ? undefined : host,
     ShirohaPlatform: {
       harness: {
-        status() { return { adapter: options.cliSelected ? 'codebuddy' : 'codex', mode: 'harness' }; },
-        codebuddyAccountChanged(/** @type {{revision:number,phase:string,blocked:boolean}} */ account) { accounts.push(account); },
-        ...(options.sharedReadiness ? { ensureReady: async () => { checks.push('readiness'); } } : {}),
+        status() {
+          return { adapter: options.cliSelected ? 'codebuddy' : 'codex', mode: 'harness' };
+        },
+        codebuddyAccountChanged(/** @type {{revision:number,phase:string,blocked:boolean}} */ account) {
+          accounts.push(account);
+        },
+        ...(options.sharedReadiness ? {
+          ensureReady: async () => {
+            checks.push('readiness');
+          },
+        } : {}),
       },
     },
     document: {
@@ -60,8 +78,16 @@ function fixture(options = {}) {
       getElementById: (/** @type {string} */ id) => elements.get(id),
       addEventListener: (/** @type {string} */ name, /** @type {()=>void} */ callback) => events.set(name, callback),
     },
-    navigator: options.clipboard === false ? {} : { clipboard: { async writeText(/** @type {string} */ text) { copied.push(text); } } },
-    setTimeout: (/** @type {()=>void|Promise<void>} */ callback) => { timerId += 1; const id = timerId; timers.set(id, callback); return id; },
+    navigator: options.clipboard === false ? {} : {
+      clipboard: {
+        async writeText(/** @type {string} */ text) {
+          copied.push(text);
+        },
+      },
+    },
+    setTimeout: (/** @type {()=>void|Promise<void>} */ callback) => {
+      timerId += 1; const id = timerId; timers.set(id, callback); return id;
+    },
     clearTimeout: (/** @type {number} */ id) => timers.delete(id),
     addEventListener: (/** @type {string} */ name, /** @type {()=>void} */ callback) => events.set(name, callback),
   };
@@ -75,14 +101,20 @@ function fixture(options = {}) {
     events,
     start: () => vm.runInNewContext(source, context),
     /** @param {(kind:string)=>Promise<unknown>} response */
-    respond(response) { respond = response; },
-    async tick() { const next = timers.entries().next().value; assert(next, '等待授权时应安排状态轮询'); timers.delete(next[0]); await next[1](); await setImmediate(); },
+    respond(response) {
+      respond = response;
+    },
+    async tick() {
+      const next = timers.entries().next().value; assert(next, '等待授权时应安排状态轮询'); timers.delete(next[0]); await next[1](); await setImmediate();
+    },
   };
 }
 
 test('initial account query shows loading rather than signed out', async () => {
   /** @type {(value:unknown)=>void} */ let resolve = () => {};
-  const promise = new Promise((accept) => { resolve = accept; });
+  const promise = new Promise((accept) => {
+    resolve = accept;
+  });
   const f = fixture(); f.respond(() => promise); f.start();
   assert.equal(f.get('phase').textContent, '读取中');
   assert.equal(f.get('login').disabled, true);
@@ -137,7 +169,9 @@ test('save errors retain current login and allow explicit save retry', async () 
 
 test('account read timeout permits retry and ignores the late original response', async () => {
   /** @type {(value:unknown)=>void} */ let resolveOld = () => {};
-  const pending = new Promise((resolve) => { resolveOld = resolve; });
+  const pending = new Promise((resolve) => {
+    resolveOld = resolve;
+  });
   const f = fixture(); f.respond(() => pending); f.start();
   await f.tick();
   assert.equal(f.get('phase').textContent, '读取失败');
@@ -202,7 +236,9 @@ test('login uses only fixed account actions, prevents double submit and stops po
 test('login freezes the observed revision and a new login after cancellation uses the new revision', async () => {
   const f = fixture(); f.respond(async () => status('signed_out', 7)); f.start(); await setImmediate();
   /** @type {(value:unknown)=>void} */ let resolveOld = () => {};
-  f.respond((kind) => (kind === 'login' ? new Promise((resolve) => { resolveOld = resolve; }) : Promise.resolve(status('cancelled', 8))));
+  f.respond((kind) => (kind === 'login' ? new Promise((resolve) => {
+    resolveOld = resolve;
+  }) : Promise.resolve(status('cancelled', 8))));
   f.get('login').click();
   assert.equal(f.calls.at(-1)?.request.revision, 7);
   f.get('cancel').click(); await setImmediate();
@@ -218,7 +254,9 @@ test('login freezes the observed revision and a new login after cancellation use
 test('cancel invalidates an unresolved login and late success cannot revive the account', async () => {
   const f = fixture(); f.start(); await setImmediate();
   /** @type {(value:unknown)=>void} */ let resolveLogin = () => {};
-  f.respond((kind) => (kind === 'login' ? new Promise((resolve) => { resolveLogin = resolve; }) : Promise.resolve(status('cancelled', 2))));
+  f.respond((kind) => (kind === 'login' ? new Promise((resolve) => {
+    resolveLogin = resolve;
+  }) : Promise.resolve(status('cancelled', 2))));
   f.get('login').click();
   assert.equal(f.get('cancel').disabled, false);
   f.get('cancel').click(); await setImmediate();
@@ -231,7 +269,9 @@ test('cancel invalidates an unresolved login and late success cannot revive the 
 test('logout discards an older status result, including a reply with a newer revision', async () => {
   const f = fixture(); f.respond(async () => status('signed_in', 1)); f.start(); await setImmediate();
   /** @type {(value:unknown)=>void} */ let resolveStatus = () => {};
-  f.respond((kind) => (kind === 'status' ? new Promise((resolve) => { resolveStatus = resolve; }) : Promise.resolve(status('signed_out', 2))));
+  f.respond((kind) => (kind === 'status' ? new Promise((resolve) => {
+    resolveStatus = resolve;
+  }) : Promise.resolve(status('signed_out', 2))));
   f.get('refresh').click(); f.get('logout').click(); await setImmediate();
   resolveStatus(status('signed_in', 99)); await setImmediate();
   assert.equal(f.get('settings').dataset.phase, 'signed_out');
@@ -241,7 +281,9 @@ test('logout discards an older status result, including a reply with a newer rev
 
 test('failed logout keeps authorization blocked until cleanup succeeds and never displays raw errors', async () => {
   const f = fixture(); f.respond(async () => status('signed_in', 1)); f.start(); await setImmediate();
-  f.respond(async (kind) => { if (kind === 'logout') { throw new Error('secret-token-from-native'); } return status('signed_in', 1); });
+  f.respond(async (kind) => {
+    if (kind === 'logout') { throw new Error('secret-token-from-native'); } return status('signed_in', 1);
+  });
   f.get('logout').click(); await setImmediate();
   assert.equal(f.get('login').disabled, true);
   assert.equal(f.get('logout').hidden, false);
@@ -290,7 +332,9 @@ test('account mutations invalidate execution before IPC, including failed logout
   assert.equal(f.accounts.at(-1)?.blocked, true);
   await setImmediate();await f.tick();
   assert.deepEqual(f.accounts.slice(-2).map((value) => [value.revision, value.phase, value.blocked]), [[1, 'authenticating', false], [1, 'signed_in', false]]);
-  f.respond(async () => { throw new Error('secret'); });f.get('logout').click();await setImmediate();
+  f.respond(async () => {
+    throw new Error('secret');
+  });f.get('logout').click();await setImmediate();
   assert.equal(f.accounts.at(-1)?.blocked, true);
   f.respond(async () => status('signed_out', 2));f.get('logout').click();await setImmediate();
   assert.deepEqual(JSON.parse(JSON.stringify(f.accounts.at(-1))), { revision: 2, phase: 'signed_out', blocked: false });
@@ -354,7 +398,9 @@ test('CLI refresh binds the observed account revision and never starts an app lo
 
 test('CLI refresh without an observed account retries the read before requesting refresh', async () => {
   const f = fixture({ cli: true });
-  f.respond(async () => { throw new Error('offline'); });
+  f.respond(async () => {
+    throw new Error('offline');
+  });
   f.start(); await setImmediate();
   f.respond(async () => ({ ...status('signed_out', 4), authSource: 'cli', cliLoginAvailable: false }));
   f.get('refresh').click(); await setImmediate();
@@ -417,7 +463,9 @@ test('background CLI reads keep the current label and refresh keyboard access st
   const signedIn = { ...status('signed_in', 2), authSource: 'cli', cliLoginAvailable: true };
   f.respond(async () => signedIn); f.start(); await setImmediate();
   /** @type {(value:unknown)=>void} */ let resolve = () => {};
-  const response = new Promise((accept) => { resolve = accept; });
+  const response = new Promise((accept) => {
+    resolve = accept;
+  });
   f.respond(() => response);
   const pending = f.tick();
   assert.equal(f.get('phase').textContent, '个人账户已登录');
@@ -431,7 +479,9 @@ test('manual CLI refresh supersedes a stalled read and ignores its late account 
   f.respond(async () => ({ ...status('signed_in', 2), authSource: 'cli', cliLoginAvailable: true }));
   f.start(); await setImmediate();
   /** @type {(value:unknown)=>void} */ let resolve = () => {};
-  const response = new Promise((accept) => { resolve = accept; });
+  const response = new Promise((accept) => {
+    resolve = accept;
+  });
   f.respond(() => response);
   const pending = f.tick();
   f.respond(async () => ({ ...status('signed_out', 4), authSource: 'cli', cliLoginAvailable: false }));

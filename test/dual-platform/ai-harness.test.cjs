@@ -10,14 +10,27 @@ const test = require('node:test');
 
 const status = { mode: 'harness', adapter: 'codex', model: 'mock-model', timeoutSeconds: 120, credentialStatus: 'subscription', runtimePath: 'fixture.exe', runtimeVersion: 'mock', runtimeSource: 'custom', runtimeState: 'ready', runtimeReceivedBytes: 0, runtimeTotalBytes: 0, ready: true, reason: '', revision: 4, busy: false };
 function client(invoke, elements = {}, clock = { setTimeout, clearTimeout }) {
-  const context = vm.createContext({ AbortController: globalThis.AbortController, document: { getElementById(id) { return elements[id] || null; } }, ShirohaPlatform: {}, ShirohaDesktopHost: { invoke }, crypto: { randomUUID: () => 'fixture-request' }, ...clock });
+  const context = vm.createContext({
+    AbortController: globalThis.AbortController,
+    document: {
+      getElementById(id) {
+        return elements[id] || null;
+      },
+    },
+    ShirohaPlatform: {},
+    ShirohaDesktopHost: { invoke },
+    crypto: { randomUUID: () => 'fixture-request' },
+    ...clock,
+  });
   vm.runInContext(readFileSync(require.resolve('../../apps/desktop/frontend/harness.js'), 'utf8'), context);
   return context.ShirohaPlatform.harness;
 }
 function deferred() {
   let resolve;
   let reject;
-  const promise = new Promise((accept, fail) => { resolve = accept; reject = fail; });
+  const promise = new Promise((accept, fail) => {
+    resolve = accept; reject = fail;
+  });
   return { promise, resolve, reject };
 }
 const settleUi = () => new Promise(globalThis.setImmediate);
@@ -30,13 +43,31 @@ function settingsElements() {
   for (const id of ['ai-harness-settings', 'ai-codex-settings', 'ai-codebuddy-settings', 'ai-deepseek-settings', 'ai-api-settings-fields', 'ai-settings-actions', 'ai-save-settings-v99', 'ai-test-connection-v99', 'ai-clear-settings-v99', 'ai-settings-status-v99']) { elements[id] = {}; }
   elements['ai-harness-adapter'] = { value: 'codex' };
   let selected = 'api';
-  function bindModeSelection(mode) { Object.defineProperty(elements[`ai-execution-${mode}`], 'checked', { get: () => selected === mode, set: (value) => { if (value) { selected = mode; } } }); }
+  function bindModeSelection(mode) {
+    Object.defineProperty(elements[`ai-execution-${mode}`], 'checked', {
+      get: () => selected === mode,
+      set: (value) => {
+        if (value) { selected = mode; }
+      },
+    });
+  }
   for (const mode of ['api', 'harness']) { bindModeSelection(mode); }
   return elements;
 }
 function pollingClock() {
   const timers = new Map();let id = 0;
-  return { setTimeout(callback) { timers.set((id += 1), callback);return id; }, clearTimeout(key) { timers.delete(key); }, async tick() { const entry = timers.entries().next().value;assert(entry, '缺少状态轮询');timers.delete(entry[0]);await entry[1](); }, timers };
+  return {
+    setTimeout(callback) {
+      timers.set((id += 1), callback);return id;
+    },
+    clearTimeout(key) {
+      timers.delete(key);
+    },
+    async tick() {
+      const entry = timers.entries().next().value;assert(entry, '缺少状态轮询');timers.delete(entry[0]);await entry[1]();
+    },
+    timers,
+  };
 }
 const managedStatus = { ...status, mode: 'api', model: '', credentialStatus: 'missing', runtimePath: '', runtimeVersion: '', runtimeSource: 'managed', runtimeState: 'unprepared', ready: false };
 
@@ -47,7 +78,9 @@ test('冷启动无需进入设置页即可确认已保存的 Codex 订阅', asyn
     if (request.kind === 'check_readiness') { return pending.promise; }
     return { ...status, credentialStatus: 'missing', ready: false };
   });
-  await api.initialize(); api.bind(() => { updates += 1; }, () => false);
+  await api.initialize(); api.bind(() => {
+    updates += 1;
+  }, () => false);
   const checking = api.ensureReady();
   assert.equal(api.snapshot().readiness, 'checking');
   assert.deepEqual(calls.map((call) => call.kind), ['status', 'check_readiness']);
@@ -106,7 +139,9 @@ test('等待期间已有状态变为就绪时结束等待，不重复检查', as
     calls.push(request.kind);
     return busy ? { ...status, ready: false, credentialStatus: 'missing', busy: true } : { ...status };
   }, {}, clock);
-  await api.initialize(); api.bind(() => { updates.push(api.snapshot().ready); }, () => false); await api.ensureReady();
+  await api.initialize(); api.bind(() => {
+    updates.push(api.snapshot().ready);
+  }, () => false); await api.ensureReady();
   busy = false; await clock.tick(); await settleUi();
   assert.equal(api.snapshot().ready, true);
   assert.equal(updates.at(-1), true);
@@ -178,12 +213,17 @@ test('AI 设置读取缓慢时题库先可用，核验完成后再启动后台�
     ShirohaPlatform: {
       credentials: { initialize: async () => {} },
       harness: {
-        initialize: () => pending.promise, ensureReady: async () => { checks += 1; },
+        initialize: () => pending.promise,
+        ensureReady: async () => {
+          checks += 1;
+        },
       },
     },
     loadState: async () => ({}),
     ensureAiImportStateV99: () => ({}),
-    lockApplication: (locked) => { unlocked = !locked; },
+    lockApplication: (locked) => {
+      unlocked = !locked;
+    },
     platformStatus() {},
     init() {},
     warnDev() {},
@@ -211,8 +251,12 @@ test('恢复发生在旧启动读取期间时，不启动旧生命周期的自�
     ShirohaPlatform: {
       credentials: { initialize: async () => {} },
       harness: {
-        initialize: () => { calls += 1; return calls === 1 ? first.promise : restored.promise; },
-        ensureReady: async () => { checks += 1; },
+        initialize: () => {
+          calls += 1; return calls === 1 ? first.promise : restored.promise;
+        },
+        ensureReady: async () => {
+          checks += 1;
+        },
       },
     },
     loadState: async () => ({}),
@@ -242,7 +286,9 @@ test('多个 AI 入口共享检查，直接 API 启动不核验 Harness', async 
   assert.equal(calls.filter((kind) => kind === 'check_readiness').length, 1);
 
   const apiCalls = [];
-  const direct = client(async (_command, { request }) => { apiCalls.push(request.kind); return { ...managedStatus }; });
+  const direct = client(async (_command, { request }) => {
+    apiCalls.push(request.kind); return { ...managedStatus };
+  });
   await direct.initialize(); await direct.ensureReady();
   assert.deepEqual(apiCalls, ['status']);
 });
@@ -574,7 +620,9 @@ test('请求撞上就绪检查时等待，输入变化后不发送旧题目', as
       status: () => ({ ...status, readiness: 'checking', ready: false }),
       snapshot: () => ({ ...status }),
       ensureReady: () => pending.promise,
-      execute: async () => { calls += 1; return { content: 'fixture' }; },
+      execute: async () => {
+        calls += 1; return { content: 'fixture' };
+      },
     },
   };
   const context = vm.createContext({ ShirohaPlatform: platform, URL });
@@ -687,7 +735,9 @@ test('单题请求等待期间切题，不发送原题内容', async () => {
     request: {
       config: () => ({ configured: true, requestConfig: { timeoutSeconds: 120 } }),
       timeout: (_seconds, run) => run(new AbortController()),
-      chat: async (_config, _messages, options) => { await pending.promise; if (!options.isCurrent()) { throw new Error('题目已变化'); } sends += 1; return { content: 'fixture' }; },
+      chat: async (_config, _messages, options) => {
+        await pending.promise; if (!options.isCurrent()) { throw new Error('题目已变化'); } sends += 1; return { content: 'fixture' };
+      },
       analysisMessages: () => [],
     },
     result: { analysis: () => ({ analysis: 'fixture' }) },
@@ -702,7 +752,16 @@ test('复制登录信息的回调读取绑定后更新的状态', async () => {
   elements['ai-harness-copy-url'] = {};
   elements['ai-harness-copy-code'] = {};
   const copied = [];
-  const clock = { ...pollingClock(), navigator: { clipboard: { writeText: async (value) => { copied.push(value); } } } };
+  const clock = {
+    ...pollingClock(),
+    navigator: {
+      clipboard: {
+        writeText: async (value) => {
+          copied.push(value);
+        },
+      },
+    },
+  };
   let native = { ...status, loginUrl: 'https://auth.example.invalid/old', userCode: 'OLD' };
   const api = client(async () => ({ ...native }), elements, clock);
   await api.initialize();
@@ -781,7 +840,9 @@ test('本地组件检查不显示下载字节，初始化延迟显示设置加�
 for (const adapter of ['codex', 'codebuddy', 'deepseek']) {
   test(`Harness选择${adapter}时仅显示对应面板，API模式隐藏所有订阅面板`, async () => {
     const elements = settingsElements();const calls = [];
-    const api = client(async (_command, { request }) => { calls.push(request.kind);return { ...status, adapter, ready: adapter === 'codex' }; }, elements);
+    const api = client(async (_command, { request }) => {
+      calls.push(request.kind);return { ...status, adapter, ready: adapter === 'codex' };
+    }, elements);
     await api.initialize();api.bind(() => {}, () => false);api.render();await settleUi();
     assert.equal(elements['ai-harness-adapter'].value, adapter);
     for (const name of ['codex', 'codebuddy', 'deepseek']) { assert.equal(elements[`ai-${name}-settings`].hidden, name !== adapter); }
@@ -903,7 +964,9 @@ test('任务忙碌拒绝切换，返回Codex保留登录并刷新环境', async 
 for (const adapter of ['codebuddy', 'deepseek']) {
   test(`${adapter}即使收到伪造ready也不能执行或触发Codex专属操作`, async () => {
     const elements = settingsElements();for (const id of ['ai-harness-choose', 'ai-harness-inspect', 'ai-harness-logout', 'ai-harness-auth-refresh', 'ai-harness-stop']) { elements[id] = {}; }
-    const calls = [];const api = client(async (command, { request }) => { calls.push({ command, ...request });return { ...status, adapter }; }, elements);
+    const calls = [];const api = client(async (command, { request }) => {
+      calls.push({ command, ...request });return { ...status, adapter };
+    }, elements);
     await api.initialize();api.bind(() => {}, () => false);
     assert.equal(api.snapshot().ready, false);
     for (const task of ['connection_test', 'import_organize', 'batch_review', 'batch_analysis', 'question_analysis', 'question_followup']) { await assert.rejects(api.execute({ ...status, adapter }, task, [])); }
@@ -935,7 +998,17 @@ test('共享清除入口在非Codex提供方不确认或清理Codex授权', asyn
   const source = loadWebSource();
   for (const adapter of ['codebuddy', 'deepseek']) {
     const calls = [];
-    const context = vm.createContext({ ShirohaPlatform: { harness: { formMode: () => 'harness', formAdapter: () => adapter, snapshot: () => ({ ...status, adapter }), cancelAll: async () => calls.push('cancel'), clear: async () => calls.push('clear') } }, ShirohaDialogs: { confirm: async () => { calls.push('confirm');return true; } }, setAiSettingsStatusV99() {}, updateAiConnectionPillV99() {}, syncAiImportActionV99() {} });
+    const context = vm.createContext({
+      ShirohaPlatform: { harness: { formMode: () => 'harness', formAdapter: () => adapter, snapshot: () => ({ ...status, adapter }), cancelAll: async () => calls.push('cancel'), clear: async () => calls.push('clear') } },
+      ShirohaDialogs: {
+        confirm: async () => {
+          calls.push('confirm');return true;
+        },
+      },
+      setAiSettingsStatusV99() {},
+      updateAiConnectionPillV99() {},
+      syncAiImportActionV99() {},
+    });
     installAiSettings(context);
     vm.runInContext(source.functionSource('clearAiSettingsV99'), context);
     await context.clearAiSettingsV99();assert.deepEqual(calls, []);
@@ -966,7 +1039,9 @@ test('共享测试与统一请求入口拒绝缺少账户修订的CodeBuddy和�
 
 test('Harness 每次操作冻结已保存配置并分派任务，不接触 API 设置', async () => {
   const calls = [];
-  const api = client(async (command, args) => { calls.push({ command, request: args.request }); return command === 'harness_execute' ? { content: '{"analysis":"候选"}' } : { ...status }; });
+  const api = client(async (command, args) => {
+    calls.push({ command, request: args.request }); return command === 'harness_execute' ? { content: '{"analysis":"候选"}' } : { ...status };
+  });
   await api.initialize();
   const snapshot = api.snapshot();
   assert.equal(Object.isFrozen(snapshot), true);
@@ -984,7 +1059,11 @@ test('取消后等待原生终态，迟到结果不能返回给业务', async ()
   const calls = [];
   const api = client(async (command, args) => {
     calls.push(args.request);
-    if (command === 'harness_execute') { return new Promise((resolve) => { finish = resolve; }); }
+    if (command === 'harness_execute') {
+      return new Promise((resolve) => {
+        finish = resolve;
+      });
+    }
     return { ...status };
   });
   await api.initialize();
@@ -1002,7 +1081,9 @@ test('取消后等待原生终态，迟到结果不能返回给业务', async ()
 for (const task of ['connection_test', 'import_organize', 'batch_review', 'batch_analysis', 'question_analysis', 'question_followup']) {
   test(`统一执行器发送明确任务种类：${task}`, async () => {
     const requests = [];
-    const api = client(async (command, args) => { requests.push(args.request); return command === 'harness_execute' ? { content: '{"ok":true}' } : { ...status }; });
+    const api = client(async (command, args) => {
+      requests.push(args.request); return command === 'harness_execute' ? { content: '{"ok":true}' } : { ...status };
+    });
     await api.initialize();
     await api.execute(api.snapshot(), task, [{ role: 'user', content: '自建测试数据' }]);
     assert.equal(requests[1].task, task);
@@ -1014,7 +1095,27 @@ test('保存 Harness 绕过 API 表单与题库设置写入，原 API 配置原�
   const original = { provider: 'ollama', endpoint: 'http://127.0.0.1:11434/v1/chat/completions', model: '旧模型', rememberKey: true, timeoutSeconds: 60 };
   const state = { settings: { aiImportV99: { ...original } } };
   const modes = [];
-  const context = vm.createContext({ state, aiTasksBusyV99: () => false, ShirohaPlatform: { harness: { formMode: () => 'harness', async saveMode(mode) { modes.push(mode); } } }, readAiFormV99() { throw new Error('不得读取 API 表单'); }, runMutation() { throw new Error('不得写入题库配置'); }, setAiSettingsStatusV99() {}, syncAiImportActionV99() {}, updateAiConnectionPillV99() {} });
+  const context = vm.createContext({
+    state,
+    aiTasksBusyV99: () => false,
+    ShirohaPlatform: {
+      harness: {
+        formMode: () => 'harness',
+        async saveMode(mode) {
+          modes.push(mode);
+        },
+      },
+    },
+    readAiFormV99() {
+      throw new Error('不得读取 API 表单');
+    },
+    runMutation() {
+      throw new Error('不得写入题库配置');
+    },
+    setAiSettingsStatusV99() {},
+    syncAiImportActionV99() {},
+    updateAiConnectionPillV99() {},
+  });
   vm.runInContext(source.between('saveAiSettingsV99', 'clearAiSettingsV99'), context);
   await context.saveAiSettingsV99();
   assert.deepEqual(modes, ['harness']);
@@ -1023,7 +1124,9 @@ test('保存 Harness 绕过 API 表单与题库设置写入，原 API 配置原�
 
 test('切回直接 API 时只改变路由，保留 Codex 运行配置及订阅授权', async () => {
   const requests = [];
-  const api = client(async (_command, args) => { requests.push(args.request); return { ...status, mode: args.request.mode || status.mode }; });
+  const api = client(async (_command, args) => {
+    requests.push(args.request); return { ...status, mode: args.request.mode || status.mode };
+  });
   await api.initialize();
   await api.saveMode('api');
   assert.equal(requests[1].mode, 'api');
@@ -1064,7 +1167,9 @@ for (const available of [false, true]) {
 test('配置更新后拒绝旧快照，未授权不能执行，不静默回退', async () => {
   let current = { ...status };
   let executions = 0;
-  const api = client(async (command) => { if (command === 'harness_execute') { executions += 1; } return current; });
+  const api = client(async (command) => {
+    if (command === 'harness_execute') { executions += 1; } return current;
+  });
   await api.initialize();
   const frozen = api.snapshot();
   current = { ...status, revision: 5 };
@@ -1077,7 +1182,9 @@ test('配置更新后拒绝旧快照，未授权不能执行，不静默回退',
 });
 
 test('Harness 初始化失败只关闭 AI 执行，不影响题库初始化', async () => {
-  const api = client(async () => { throw { code: 'storage_unavailable', message: '设置读取失败' }; });
+  const api = client(async () => {
+    throw { code: 'storage_unavailable', message: '设置读取失败' };
+  });
   await api.initialize();
   assert.equal(api.status().ready, false);
   assert.match(api.status().reason, /设置读取失败/);
@@ -1102,7 +1209,16 @@ test('订阅授权只轮询已有登录状态，完成或取消后释放计时�
   let timerId = 0;
   const requests = [];
   let authorization = 'authenticating';
-  const api = client(async (_command, args) => { requests.push(args.request.kind);return { ...status, credentialStatus: authorization, ready: authorization === 'subscription' }; }, {}, { setTimeout(callback, delay) { assert([1000, 15000].includes(delay));timers.set((timerId += 1), callback);return timerId; }, clearTimeout(id) { timers.delete(id); } });
+  const api = client(async (_command, args) => {
+    requests.push(args.request.kind);return { ...status, credentialStatus: authorization, ready: authorization === 'subscription' };
+  }, {}, {
+    setTimeout(callback, delay) {
+      assert([1000, 15000].includes(delay));timers.set((timerId += 1), callback);return timerId;
+    },
+    clearTimeout(id) {
+      timers.delete(id);
+    },
+  });
   await api.initialize();
   assert.equal(timers.size, 1);
   const [id, callback] = [...timers][0];timers.delete(id);
@@ -1129,18 +1245,33 @@ test('较早发出的 status 迟到不能覆盖登录的新修订或停止授权
     if (args.request.kind === 'login') { return signingIn; }
     if (args.request.kind === 'save') { return initial; }
     if ((reads += 1) === 1) { return initial; }
-    return new Promise((resolve) => { resolveStatus = resolve; });
-  }, elements, { setTimeout(callback) { timers.set((timerId += 1), callback);return timerId; }, clearTimeout(id) { timers.delete(id); } });
+    return new Promise((resolve) => {
+      resolveStatus = resolve;
+    });
+  }, elements, {
+    setTimeout(callback) {
+      timers.set((timerId += 1), callback);return timerId;
+    },
+    clearTimeout(id) {
+      timers.delete(id);
+    },
+  });
   await api.initialize();
   let changed;
   api.bind(() => changed?.(), () => false);
   elements['ai-harness-auth-refresh'].onclick();
-  const loggedIn = new Promise((resolve) => { changed = () => { if (api.status().revision === 5) { resolve(); } }; });
+  const loggedIn = new Promise((resolve) => {
+    changed = () => {
+      if (api.status().revision === 5) { resolve(); }
+    };
+  });
   elements['ai-harness-login'].onclick();
   await loggedIn;
   assert.equal(api.status().revision, 5);
   assert.equal(timers.size, 2, '登录轮询与在途读取的超时各有一个计时器');
-  const refreshed = new Promise((resolve) => { changed = resolve; });
+  const refreshed = new Promise((resolve) => {
+    changed = resolve;
+  });
   resolveStatus(initial);
   await refreshed;
   assert.equal(api.status().revision, 5, '旧 status 覆盖了已接受的新修订');
@@ -1159,19 +1290,27 @@ for (const action of ['cancel_all', 'logout']) {
       if (args.request.kind === 'logout') { return ended; }
       if (args.request.kind === 'cancel_all') { return action === 'logout' ? status : ended; }
       if ((reads += 1) === 1) { return status; }
-      return new Promise((resolve) => { resolveStatus = resolve; });
+      return new Promise((resolve) => {
+        resolveStatus = resolve;
+      });
     }, elements);
     await api.initialize();
     let changed;
     api.bind(() => changed?.(), () => false);
     elements['ai-harness-auth-refresh'].onclick();
     if (action === 'logout') {
-      const loggedOut = new Promise((resolve) => { changed = () => { if (api.status().revision === 5) { resolve(); } }; });
+      const loggedOut = new Promise((resolve) => {
+        changed = () => {
+          if (api.status().revision === 5) { resolve(); }
+        };
+      });
       elements['ai-harness-logout'].onclick();
       await loggedOut;
     } else { await api.cancelAll(); }
     assert.equal(api.status().credentialStatus, 'missing');
-    const refreshed = new Promise((resolve) => { changed = resolve; });
+    const refreshed = new Promise((resolve) => {
+      changed = resolve;
+    });
     resolveStatus(status);
     await refreshed;
     assert.equal(api.status().revision, 5);
@@ -1182,12 +1321,16 @@ for (const action of ['cancel_all', 'logout']) {
 
 test('取消全部任务等待在途执行终态，再允许保存配置', async () => {
   let finish;
-  const api = client(async (command) => (command === 'harness_execute' ? new Promise((resolve) => { finish = resolve; }) : { ...status }));
+  const api = client(async (command) => (command === 'harness_execute' ? new Promise((resolve) => {
+    finish = resolve;
+  }) : { ...status }));
   await api.initialize();
   const pending = api.execute(api.snapshot(), 'question_analysis', []);
   const rejected = assert.rejects(pending, (error) => error.name === 'AbortError');
   let stopped = false;
-  const stopping = api.cancelAll().then(() => { stopped = true; });
+  const stopping = api.cancelAll().then(() => {
+    stopped = true;
+  });
   await Promise.resolve();
   await Promise.resolve();
   assert.equal(stopped, false);
@@ -1201,7 +1344,21 @@ test('取消全部任务等待在途执行终态，再允许保存配置', async
 test('统一入口返回 Harness 内容，失败不走 API response_format 重试', async () => {
   let apiCalls = 0;
   let harnessCalls = 0;
-  const context = vm.createContext({ ShirohaPlatform: { credentials: { native: true }, network: { ai() { apiCalls += 1; } }, harness: { async execute(snapshot, task) { harnessCalls += 1; assert.equal(snapshot.revision, 4); assert.equal(task, 'import_organize'); throw Object.assign(new Error('额度不足'), { code: 'quota_exceeded' }); } } } });
+  const context = vm.createContext({
+    ShirohaPlatform: {
+      credentials: { native: true },
+      network: {
+        ai() {
+          apiCalls += 1;
+        },
+      },
+      harness: {
+        async execute(snapshot, task) {
+          harnessCalls += 1; assert.equal(snapshot.revision, 4); assert.equal(task, 'import_organize'); throw Object.assign(new Error('额度不足'), { code: 'quota_exceeded' });
+        },
+      },
+    },
+  });
   installAiSettings(context);
   installAiTransport(context);
   await assert.rejects(context.requestAiChatV99({ execution: status }, [], { task: 'import_organize' }), /额度不足/);
@@ -1399,7 +1556,9 @@ test('退出失败且状态读取失败后仍可重试退出，新的登录不�
 test('初始化与 API 页面不准备组件，选择 Harness 后自动单次准备且展示真实字节', async () => {
   const calls = [];const elements = settingsElements();const clock = pollingClock();
   const preparing = { ...managedStatus, runtimeState: 'preparing', runtimeReceivedBytes: 1024, runtimeTotalBytes: 341270320, busy: true, revision: 5 };
-  const api = client(async (_command, { request }) => { calls.push(request.kind);return request.kind === 'prepare_runtime' ? preparing : managedStatus; }, elements, clock);
+  const api = client(async (_command, { request }) => {
+    calls.push(request.kind);return request.kind === 'prepare_runtime' ? preparing : managedStatus;
+  }, elements, clock);
   await api.initialize();api.bind(() => {}, () => false);api.render();await settleUi();
   assert.deepEqual(calls, ['status']);
   elements['ai-execution-harness'].checked = true;elements['ai-execution-harness'].onchange();
@@ -1434,7 +1593,9 @@ test('登录加入准备任务，组件就绪后才自动保存并登录，不�
 for (const outcome of ['failed', 'cancelled']) {
   test(`准备 ${outcome} 后不继续登录或自动重试，显式重试才重新准备`, async () => {
     const calls = [];const elements = settingsElements();const clock = pollingClock();let native = { ...managedStatus };
-    const api = client(async (_command, { request }) => { calls.push(request.kind);if (request.kind === 'prepare_runtime') { native = { ...native, runtimeState: 'preparing', busy: true, revision: native.revision + 1 }; } return { ...native }; }, elements, clock);
+    const api = client(async (_command, { request }) => {
+      calls.push(request.kind);if (request.kind === 'prepare_runtime') { native = { ...native, runtimeState: 'preparing', busy: true, revision: native.revision + 1 }; } return { ...native };
+    }, elements, clock);
     await api.initialize();api.bind(() => {}, () => false);elements['ai-execution-harness'].checked = true;
     elements['ai-harness-login'].onclick();await settleUi();
     native = { ...native, runtimeState: outcome, busy: false, reason: '组件准备未完成' };
@@ -1467,7 +1628,9 @@ test('切回 API 取消准备和待续登录，迟到的已准备状态不能重
 test('自定义组件保留来源，只有高级恢复自动管理操作才请求切换', async () => {
   const elements = settingsElements();const clock = pollingClock();const calls = [];
   let native = { ...status, credentialStatus: 'missing', ready: false };
-  const api = client(async (_command, { request }) => { calls.push(request.kind);if (request.kind === 'use_managed_runtime') { native = { ...native, runtimeState: 'preparing', busy: true, revision: 5 }; } return { ...native }; }, elements, clock);
+  const api = client(async (_command, { request }) => {
+    calls.push(request.kind);if (request.kind === 'use_managed_runtime') { native = { ...native, runtimeState: 'preparing', busy: true, revision: 5 }; } return { ...native };
+  }, elements, clock);
   await api.initialize();api.bind(() => {}, () => false);api.render();await settleUi();
   assert.deepEqual(calls, ['status', 'inspect']);assert.equal(api.status().runtimeSource, 'custom');
   elements['ai-harness-use-managed'].onclick();await settleUi();assert.equal(calls.includes('use_managed_runtime'), true);
@@ -1477,7 +1640,9 @@ test('自定义组件保留来源，只有高级恢复自动管理操作才请�
 
 test('准备就绪进入 Harness 时只显式检查一次，刷新状态可重新核验订阅', async () => {
   const elements = settingsElements();elements['ai-harness-auth-refresh'] = {};const calls = [];
-  const api = client(async (_command, { request }) => { calls.push(request.kind);return { ...status, credentialStatus: request.kind === 'inspect' ? 'subscription' : 'missing', ready: request.kind === 'inspect' }; }, elements);
+  const api = client(async (_command, { request }) => {
+    calls.push(request.kind);return { ...status, credentialStatus: request.kind === 'inspect' ? 'subscription' : 'missing', ready: request.kind === 'inspect' };
+  }, elements);
   await api.initialize();assert.deepEqual(calls, ['status']);api.bind(() => {}, () => false);
   api.render();await settleUi();api.render();await settleUi();
   assert.deepEqual(calls, ['status', 'inspect']);
@@ -1487,7 +1652,9 @@ test('准备就绪进入 Harness 时只显式检查一次，刷新状态可重�
 
 test('自动保存发现现有订阅时直接就绪，不重复启动登录', async () => {
   const elements = settingsElements();const calls = [];
-  const api = client(async (_command, { request }) => { calls.push(request.kind);return { ...status, credentialStatus: request.kind === 'save' ? 'subscription' : 'missing', ready: request.kind === 'save' }; }, elements);
+  const api = client(async (_command, { request }) => {
+    calls.push(request.kind);return { ...status, credentialStatus: request.kind === 'save' ? 'subscription' : 'missing', ready: request.kind === 'save' };
+  }, elements);
   await api.initialize();api.bind(() => {}, () => false);elements['ai-harness-login'].onclick();await settleUi();
   assert.deepEqual(calls, ['status', 'save']);assert.equal(api.status().credentialStatus, 'subscription');
 });
@@ -1508,7 +1675,9 @@ test('自动保存尚未返回时切 API 不能继续登录或把界面切回 Ha
 
 test('恢复初始化废弃等待准备的登录流程，初始化本身不重启准备', async () => {
   const elements = settingsElements();const clock = pollingClock();const calls = [];let native = { ...managedStatus };
-  const api = client(async (_command, { request }) => { calls.push(request.kind);if (request.kind === 'prepare_runtime') { native = { ...native, runtimeState: 'preparing', busy: true, revision: 5 }; } return { ...native }; }, elements, clock);
+  const api = client(async (_command, { request }) => {
+    calls.push(request.kind);if (request.kind === 'prepare_runtime') { native = { ...native, runtimeState: 'preparing', busy: true, revision: 5 }; } return { ...native };
+  }, elements, clock);
   await api.initialize();api.bind(() => {}, () => false);elements['ai-execution-harness'].checked = true;elements['ai-harness-login'].onclick();await settleUi();
   native = { ...managedStatus, revision: 6 };await api.initialize();await settleUi();
   assert.equal(calls.filter((kind) => kind === 'prepare_runtime').length, 1);assert.equal(calls.includes('save'), false);assert.equal(calls.includes('login'), false);assert.equal(clock.timers.size, 0);
@@ -1516,7 +1685,9 @@ test('恢复初始化废弃等待准备的登录流程，初始化本身不重�
 
 test('恢复后仍停留在 Harness 页面时渲染不重新准备，重新选择才激活', async () => {
   const elements = settingsElements();const clock = pollingClock();const calls = [];let native = { ...status };
-  const api = client(async (_command, { request }) => { calls.push(request.kind);if (request.kind === 'prepare_runtime') { native = { ...native, runtimeState: 'preparing', busy: true }; } return { ...native }; }, elements, clock);
+  const api = client(async (_command, { request }) => {
+    calls.push(request.kind);if (request.kind === 'prepare_runtime') { native = { ...native, runtimeState: 'preparing', busy: true }; } return { ...native };
+  }, elements, clock);
   await api.initialize();api.bind(() => {}, () => false);api.render();await settleUi();
   assert.equal(elements['ai-execution-harness'].checked, true);
   native = { ...native, runtimeState: 'unprepared', ready: false, revision: 5 };

@@ -1,14 +1,29 @@
 (() => {
   'use strict';
-  function create({ state, session: practiceSession, select: $, now, scope, questions, progress }) {
+  function create({
+    state,
+    session: practiceSession,
+    select: $,
+    now,
+    scope,
+    questions,
+    progress,
+  }) {
     const {
-      banks: practiceScopeBanksV8916, current: practiceScopeV8916,
-      normalize: normalizePracticeScopeV8916, fromStart: PRACTICE_START_FROM_V58916,
-      continueMode: PRACTICE_START_CONTINUE_V58916, custom: PRACTICE_START_CUSTOM_V58916,
+      banks: practiceScopeBanksV8916,
+      current: practiceScopeV8916,
+      normalize: normalizePracticeScopeV8916,
+      fromStart: PRACTICE_START_FROM_V58916,
+      continueMode: PRACTICE_START_CONTINUE_V58916,
+      custom: PRACTICE_START_CUSTOM_V58916,
     } = scope;
     const {
-      itemsForBanks: practiceSessionItemsForBanksV8916, key: practiceItemKeyV8916,
-      wrongEntries: getWrongEntries, favorites: getFavoriteIdsV27, shuffle, parseNumbers: parsePracticeNumberRangeV58916,
+      itemsForBanks: practiceSessionItemsForBanksV8916,
+      key: practiceItemKeyV8916,
+      wrongEntries: getWrongEntries,
+      favorites: getFavoriteIdsV27,
+      shuffle,
+      parseNumbers: parsePracticeNumberRangeV58916,
     } = questions;
     const { answer: getPracticeAnswerStateV26 } = progress;
     function readCustomCountV60(selector, fallback = 20) {

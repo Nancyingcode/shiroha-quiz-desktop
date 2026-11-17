@@ -122,7 +122,11 @@ const cases = [
         assert.deepEqual(await snapshot(h.page), before);
         assert.deepEqual(await stored(h), savedBefore);
         assert(await button(panel, 'save').isEnabled());
-      } finally { await h.page.evaluate(() => { Storage.prototype.setItem = window.__reviewOriginalSet; }); }
+      } finally {
+        await h.page.evaluate(() => {
+          Storage.prototype.setItem = window.__reviewOriginalSet;
+        });
+      }
       await save(h, panel);
       assert.equal((await stored(h)).banks[0].questions[0].analysis, 'QUOTA_REVIEW_DRAFT');
     },

@@ -113,12 +113,16 @@ async function availablePort() {
   });
   const address = server.address();
   assert(address && typeof address !== 'string', '无法取得调试端口');
-  await new Promise((resolve, reject) => { server.close((error) => (error ? reject(error) : resolve(undefined))); });
+  await new Promise((resolve, reject) => {
+    server.close((error) => (error ? reject(error) : resolve(undefined)));
+  });
   return address.port;
 }
 
 /** @param {string} value */
-function quotePs(value) { return `'${value.replaceAll("'", "''")}'`; }
+function quotePs(value) {
+  return `'${value.replaceAll("'", "''")}'`;
+}
 
 /** @param {OwnedProcess} owned */
 function verifyRoot(owned) {
@@ -212,7 +216,9 @@ async function measure(executable, profile, index, fixture) {
   });
   /** @type {Error | undefined} */
   let launchError;
-  child.on('error', (error) => { launchError = error; });
+  child.on('error', (error) => {
+    launchError = error;
+  });
   /** @type {import('playwright-core').Browser | undefined} */
   let browser;
   const owned = { child, executable, earliest, latest: new Date(Date.now() + START_TIMEOUT_MS).toISOString() };

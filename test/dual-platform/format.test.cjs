@@ -3,7 +3,16 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const { loadWeb, plain } = require('./web-source.cjs');
-const { webState, androidBackup, IMAGE, PNG_BASE64, TIME, MILLIS, FAKE_SECRETS, fakeStorage } = require('./fixtures/dataset.cjs');
+const {
+  webState,
+  androidBackup,
+  IMAGE,
+  PNG_BASE64,
+  TIME,
+  MILLIS,
+  FAKE_SECRETS,
+  fakeStorage,
+} = require('./fixtures/dataset.cjs');
 
 function assertNoSecrets(value) {
   const text = typeof value === 'string' ? value : JSON.stringify(value);
@@ -27,7 +36,11 @@ for (const outcome of ['saved', 'cancelled', 'failed']) {
       return output;
     };
     let bridgeCalls = 0;
-    context.ShirohaAndroid = { saveJsonFile() { bridgeCalls += 1; throw new Error('旧桥接不得调用'); } };
+    context.ShirohaAndroid = {
+      saveJsonFile() {
+        bridgeCalls += 1; throw new Error('旧桥接不得调用');
+      },
+    };
     const calls = [];
     const error = new Error(outcome === 'cancelled' ? '已取消保存。' : '合成写入失败');
     context.ShirohaPlatform.download = async (name, blob) => {

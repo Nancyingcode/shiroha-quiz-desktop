@@ -2,8 +2,19 @@
   'use strict';
   const AI_PROVIDER_PRESETS_V99 = { ollama: { label: 'Ollama', endpoint: 'http://127.0.0.1:11434/v1/chat/completions' }, lmstudio: { label: 'LM Studio', endpoint: 'http://127.0.0.1:1234/v1/chat/completions' }, custom: { label: '自定义接口', endpoint: '' } };
 
-  function create({ presets: AI_PROVIDER_PRESETS_V99 = AI_PROVIDER_PRESETS_V99_DEFAULT, platform: ShirohaPlatform, config: ensureAiImportStateV99, readKey: readStoredAiKeyV99, view }) {
-    const { select: $, escape: esc, copy: copyTextV23, toast } = view;
+  function create({
+    presets: AI_PROVIDER_PRESETS_V99 = AI_PROVIDER_PRESETS_V99_DEFAULT,
+    platform: ShirohaPlatform,
+    config: ensureAiImportStateV99,
+    readKey: readStoredAiKeyV99,
+    view,
+  }) {
+    const {
+      select: $,
+      escape: esc,
+      copy: copyTextV23,
+      toast,
+    } = view;
     // 连接展示与诊断仅属于当前页面；清除配置时一并重置。
     let aiConnectionStateV99 = 'idle';
     let aiDiagnosticsVisibleV375 = false;

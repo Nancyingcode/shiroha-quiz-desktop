@@ -1,8 +1,19 @@
 (() => {
   'use strict';
 
-  function create({ readers, ocr, setBankName, applyTable, toast }) {
-    const { readText, readTable: readTableImportFileV49, readDocx: extractDocxText, readPdf: extractPdfText } = readers;
+  function create({
+    readers,
+    ocr,
+    setBankName,
+    applyTable,
+    toast,
+  }) {
+    const {
+      readText,
+      readTable: readTableImportFileV49,
+      readDocx: extractDocxText,
+      readPdf: extractPdfText,
+    } = readers;
     const { setOcrImportSource, setOcrStatus } = ocr;
     const setImportBankNameFromFile = setBankName;
     const applyTableImportResultV49 = applyTable;
@@ -22,13 +33,19 @@
     const readGenerations = { single: 0, question: 0, answer: 0 };
     let bankNameGeneration = 0;
     let previewGeneration = 0;
-    function invalidatePreview() { previewGeneration += 1; }
-    function invalidateBankName() { bankNameGeneration += 1; }
+    function invalidatePreview() {
+      previewGeneration += 1;
+    }
+    function invalidateBankName() {
+      bankNameGeneration += 1;
+    }
     function invalidateRead(slot) {
       readGenerations[slot] += 1;
       return readGenerations[slot];
     }
-    function isCurrentRead(slot, generation) { return readGenerations[slot] === generation; }
+    function isCurrentRead(slot, generation) {
+      return readGenerations[slot] === generation;
+    }
     async function readImportFile(e) {
       const file = e.target.files[0];
       if (!file) { return; }
@@ -156,9 +173,13 @@
         const request = indexedDb.open(DATABASE_NAME, 1);
         let blocked = false;
         request.onupgradeneeded = () => request.result.createObjectStore(STORE_NAME);
-        request.onblocked = () => { blocked = true;reject(new Error('草稿存储被其他窗口占用，请关闭其他窗口后重试。')); };
+        request.onblocked = () => {
+          blocked = true;reject(new Error('草稿存储被其他窗口占用，请关闭其他窗口后重试。'));
+        };
         request.onerror = () => reject(request.error || new Error('打开草稿存储失败。'));
-        request.onsuccess = () => { if (blocked) { request.result.close(); } else { resolve(request.result); } };
+        request.onsuccess = () => {
+          if (blocked) { request.result.close(); } else { resolve(request.result); }
+        };
       });
     }
     async function access(mode, operation) {
@@ -174,8 +195,12 @@
           request.onsuccess = () => {
             try { result = operation(store, request.result); } catch (error) { failure = error;tx.abort(); }
           };
-          tx.oncomplete = () => { db.close();resolve(result); };
-          tx.onabort = () => { db.close();reject(failure || tx.error || new Error('草稿事务未完成。')); };
+          tx.oncomplete = () => {
+            db.close();resolve(result);
+          };
+          tx.onabort = () => {
+            db.close();reject(failure || tx.error || new Error('草稿事务未完成。'));
+          };
           tx.onerror = () => { /* 事务中止回调负责关闭连接并报告错误。 */ };
         } catch (error) { db.close();reject(error); }
       });
@@ -188,8 +213,12 @@
         if (record === undefined) { return null; }
         return record && typeof record === 'object' ? record : { invalid: true };
       }),
-      replace: (record, expected) => access('readwrite', (store, existing) => { checkRevision(existing, expected);store.put(record, RECORD_KEY); }),
-      remove: (expected) => access('readwrite', (store, existing) => { checkRevision(existing, expected);store.delete(RECORD_KEY); }),
+      replace: (record, expected) => access('readwrite', (store, existing) => {
+        checkRevision(existing, expected);store.put(record, RECORD_KEY);
+      }),
+      remove: (expected) => access('readwrite', (store, existing) => {
+        checkRevision(existing, expected);store.delete(RECORD_KEY);
+      }),
     };
   }
 
@@ -215,17 +244,27 @@
       && data.suggestions && validSuggestions(data.suggestions.review, true) && validSuggestions(data.suggestions.analysis, false);
   }
 
-  function createPersistence({ draft, select: $, store, suggestions, actions }) {
+  function createPersistence({
+    draft,
+    select: $,
+    store,
+    suggestions,
+    actions,
+  }) {
     // 此页面仅记住亲自保存或恢复的修订；成功入库后只能清理同一修订。
     let owned = null;
     let busy = false;
-    function status(message) { const el = $('#import-draft-status');if (el) { el.textContent = message; } }
+    function status(message) {
+      const el = $('#import-draft-status');if (el) { el.textContent = message; }
+    }
     function setBusy(value) {
       busy = value;
       ['save-import-draft-btn', 'restore-import-draft-btn', 'delete-import-draft-btn'].forEach((id) => {
         const button = $(`#${id}`);if (button) { button.disabled = value; }
       });
-      document.querySelectorAll('[data-save-import-draft]').forEach((button) => { button.disabled = value; });
+      document.querySelectorAll('[data-save-import-draft]').forEach((button) => {
+        button.disabled = value;
+      });
     }
     function position(anchor) {
       const buttons = [...document.querySelectorAll('#import-preview [data-edit-import]')];
@@ -252,18 +291,24 @@
         position: position(anchor),
       };
     }
-    function fingerprint(data) { const content = { ...data };delete content.position;return JSON.stringify(content); }
+    function fingerprint(data) {
+      const content = { ...data };delete content.position;return JSON.stringify(content);
+    }
     function contentFingerprint(data) {
       const content = { ...data };delete content.position;delete content.filter;delete content.selected;
       return JSON.stringify(content);
     }
-    function isEditing() { return actions.isEditing() || !$('#edit-modal')?.classList.contains('hidden'); }
+    function isEditing() {
+      return actions.isEditing() || !$('#edit-modal')?.classList.contains('hidden');
+    }
     function canOperate() {
       if (busy) { return false; }
       if (isEditing()) { status('请先保存或关闭题目编辑，退出题库二次编辑后再操作草稿。');return false; }
       return true;
     }
-    function changedSince(before) { return isEditing() || fingerprint(capture()) !== before; }
+    function changedSince(before) {
+      return isEditing() || fingerprint(capture()) !== before;
+    }
     function savedRecord(record) {
       if (record && !validRecord(record)) { throw new Error('已保存草稿损坏或版本不受支持，原数据已保留。'); }
       return record;

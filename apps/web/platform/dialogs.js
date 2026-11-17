@@ -59,10 +59,14 @@
         if (previousFocus instanceof window.HTMLElement && previousFocus.isConnected) { previousFocus.focus({ preventScroll: true }); }
         resolve(value);
       };
-      form.addEventListener('submit', (event) => { event.preventDefault(); finish(true); });
+      form.addEventListener('submit', (event) => {
+        event.preventDefault(); finish(true);
+      });
       cancel.addEventListener('click', () => finish(false));
       close.addEventListener('click', () => finish(false));
-      dialog.addEventListener('cancel', (event) => { event.preventDefault(); finish(false); });
+      dialog.addEventListener('cancel', (event) => {
+        event.preventDefault(); finish(false);
+      });
       dialog.addEventListener('keydown', (event) => {
         // 模态框内的快捷键不应切题、作答或触发页面保存；Tab 循环不将焦点交给浏览器工具栏。
         event.stopPropagation();
@@ -85,9 +89,13 @@
   }
   const api = {
     /** @param {string} message @param {DialogOptions} [options] */
-    async alert(message, options = {}) { await enqueue('alert', message, '', options); },
+    async alert(message, options = {}) {
+      await enqueue('alert', message, '', options);
+    },
     /** @param {string} message @param {DialogOptions} [options] */
-    async confirm(message, options = {}) { return (await enqueue('confirm', message, '', options)) === true; },
+    async confirm(message, options = {}) {
+      return (await enqueue('confirm', message, '', options)) === true;
+    },
     /** @param {string} message @param {string} [initial] @param {DialogOptions} [options] */
     async prompt(message, initial = '', options = {}) {
       const value = await enqueue('prompt', message, initial, options);

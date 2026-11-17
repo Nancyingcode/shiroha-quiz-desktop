@@ -40,7 +40,9 @@ test('a failing or unavailable lint check fails the combined result', async () =
   const failing = { name: 'fail', command: process.execPath, args: ['-e', 'process.exit(7)'] };
   /** @type {string[]} */
   const failures = [];
-  const reportFailure = (/** @type {string} */ message) => { failures.push(message); };
+  const reportFailure = (/** @type {string} */ message) => {
+    failures.push(message);
+  };
   assert.equal(await runChecks([passing, failing], { stdio: 'ignore', reportFailure }), false);
   assert.equal(await runChecks([{ name: 'missing', command: 'shiroha-nonexistent-command', args: [] }], {
     stdio: 'ignore', reportFailure,

@@ -31,7 +31,11 @@ function fixture(existingPlatform) {
     ShirohaPlatform: existingPlatform,
     ShirohaBrowser: browser,
     ShirohaBrowserCredentials: credentials,
-    ShirohaSaveQueue: { create: (received) => { calls.push(received); return saves; } },
+    ShirohaSaveQueue: {
+      create: (received) => {
+        calls.push(received); return saves;
+      },
+    },
     localStorage: {
       getItem: (key) => values.get(key) ?? null,
       setItem: (key, value) => values.set(key, value),

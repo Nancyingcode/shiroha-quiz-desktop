@@ -242,7 +242,12 @@ test('a baseline requires the matching successful push job and its full lint ste
   assert.equal(await hasPassedBaseline({ ...options, request }), true);
   assert.equal(await hasPassedBaseline({ ...options, request: async () => ({ ok: false, json: async () => ({}) }) }), false);
   assert.equal(await hasPassedBaseline({ ...options, token: '' }), false);
-  assert.equal(await hasPassedBaseline({ ...options, request: async () => { throw new Error('offline'); } }), false);
+  assert.equal(await hasPassedBaseline({
+    ...options,
+    request: async () => {
+      throw new Error('offline');
+    },
+  }), false);
   assert.equal(await hasPassedBaseline({
     ...options,
     request: async () => ({

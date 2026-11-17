@@ -11,7 +11,9 @@ test.before(async () => {
   server = await startServer(WEB_ROOT);
   browser = await chromium.launch({ headless: true, ...(process.env.SHIROHA_BROWSER_EXECUTABLE ? { executablePath: process.env.SHIROHA_BROWSER_EXECUTABLE } : { channel: 'msedge' }) });
 });
-test.after(async () => { await browser?.close(); await server?.close(); });
+test.after(async () => {
+  await browser?.close(); await server?.close();
+});
 
 async function component(t, desktop = false) {
   const page = await browser.newPage({ reducedMotion: 'reduce' }); t.after(() => page.close());
@@ -50,7 +52,9 @@ for (const desktop of [false, true]) {
     assert.equal(await select.inputValue(), 'single');
     assert.equal(await select.evaluate((el) => el.matches(':open')), false);
     assert.equal(await select.evaluate((el) => el === globalThis.document.activeElement), true);
-    await select.evaluate((el) => { el.disabled = true; });
+    await select.evaluate((el) => {
+      el.disabled = true;
+    });
     assert.equal(await select.isDisabled(), true);
     assert.equal(await select.evaluate((el) => globalThis.getComputedStyle(el).cursor), 'not-allowed');
   });
@@ -115,7 +119,9 @@ test('下拉菜单优先向下展开，靠近视口底部时向上避让', async
   let first = await select.getByRole('option').first().boundingBox();
   assert.ok(first.y >= control.y + control.height);
   await page.keyboard.press('Escape');
-  await select.evaluate((el) => { el.style.cssText = 'position:fixed;bottom:8px;left:16px;width:240px'; });
+  await select.evaluate((el) => {
+    el.style.cssText = 'position:fixed;bottom:8px;left:16px;width:240px';
+  });
   await select.click();
   control = await select.boundingBox();
   first = await select.getByRole('option').first().boundingBox();

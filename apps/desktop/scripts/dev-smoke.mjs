@@ -44,7 +44,9 @@ function running(child) {
 async function listen(server, port = 0) {
   await new Promise((resolve, reject) => {
     server.once('error', reject);
-    server.listen(port, '127.0.0.1', () => { server.off('error', reject); resolve(undefined); });
+    server.listen(port, '127.0.0.1', () => {
+      server.off('error', reject); resolve(undefined);
+    });
   });
   const address = server.address();
   assert(address && typeof address !== 'string', '未取得回环端口');
@@ -54,7 +56,9 @@ async function listen(server, port = 0) {
 /** @param {import('node:net').Server} server */
 async function closeServer(server) {
   if (!server.listening) { return; }
-  await new Promise((resolve, reject) => { server.close((error) => (error ? reject(error) : resolve(undefined))); });
+  await new Promise((resolve, reject) => {
+    server.close((error) => (error ? reject(error) : resolve(undefined)));
+  });
 }
 
 async function availablePort() {
@@ -126,13 +130,17 @@ async function stopDevelopment(child, page) {
   // 先让本次窗口完成正常关闭；随后只结束本脚本持有的 npm PID 及其子进程树。
   if (page && !page.isClosed()) {
     await Promise.race([
-      page.evaluate(async () => { await (/** @type {TestWindow} */ (window)).ShirohaDesktopHost?.window.close(); }).catch(() => undefined),
+      page.evaluate(async () => {
+        await (/** @type {TestWindow} */ (window)).ShirohaDesktopHost?.window.close();
+      }).catch(() => undefined),
       delay(CLOSE_TIMEOUT_MS, undefined, { ref: false }),
     ]);
   }
   if (!running(child)) { return; }
   await execute('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true, timeout: CLOSE_TIMEOUT_MS })
-    .catch((error) => { if (running(child)) { throw error; } });
+    .catch((error) => {
+      if (running(child)) { throw error; }
+    });
   const deadline = Date.now() + CLOSE_TIMEOUT_MS;
   while (running(child) && Date.now() < deadline) { await delay(POLL_MS); }
   assert(!running(child), '本次开发进程尚未退出，保留隔离目录');
@@ -179,7 +187,9 @@ async function main() {
   let developmentLog = '';
   let cleanupError = '';
   // 在 CDP 接入之前也拦截浏览器外网请求；Rust native-test 使用隔离标记提供假凭据并拒绝真实网络。
-  const proxy = createServer((socket) => { socket.on('error', () => undefined); socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\nContent-Length: 0\r\n\r\n'); });
+  const proxy = createServer((socket) => {
+    socket.on('error', () => undefined); socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\nContent-Length: 0\r\n\r\n');
+  });
   const stop = () => stopping ??= child ? stopDevelopment(child, page) : Promise.resolve();
   const cleanup = () => cleaning ??= (async () => {
     let stopped = false;
@@ -194,7 +204,9 @@ async function main() {
   })();
   const interrupt = () => {
     interrupted = true;
-    void stop().catch((error) => { cleanupError = errorText(error); });
+    void stop().catch((error) => {
+      cleanupError = errorText(error);
+    });
   };
   process.once('SIGINT', interrupt);
   process.once('SIGTERM', interrupt);
@@ -223,7 +235,9 @@ async function main() {
     });
     /** @type {Error|undefined} */
     let launchError;
-    child.on('error', (error) => { launchError = error; });
+    child.on('error', (error) => {
+      launchError = error;
+    });
     /** @param {Buffer|string} chunk */
     function captureDevelopmentOutput(chunk) {
       const text = String(chunk);
@@ -288,7 +302,9 @@ async function main() {
     assert(!interrupted, '开发模式回归已中断');
     complete = true;
   } finally {
-    await cleanup().catch((error) => { cleanupError = errorText(error); });
+    await cleanup().catch((error) => {
+      cleanupError = errorText(error);
+    });
     process.removeListener('SIGINT', interrupt);
     process.removeListener('SIGTERM', interrupt);
     await mkdir(path.dirname(REPORT_PATH), { recursive: true });
@@ -311,4 +327,6 @@ async function main() {
   if (cleanupError) { throw new Error(`清理未完成：${cleanupError}`); }
 }
 
-main().catch((error) => { console.error(errorText(error)); process.exitCode = 1; });
+main().catch((error) => {
+  console.error(errorText(error)); process.exitCode = 1;
+});

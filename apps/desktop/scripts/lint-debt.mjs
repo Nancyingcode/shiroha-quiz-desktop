@@ -54,7 +54,12 @@ const report = results.map((result, index) => {
     kind: index < semanticResultCount ? 'semantic' : 'format',
     file: path.relative(root, result.filePath).replaceAll('\\', '/'),
     counts,
-    diagnostics: result.messages.map(({ ruleId, line, column, message }) => ({
+    diagnostics: result.messages.map(({
+      ruleId,
+      line,
+      column,
+      message,
+    }) => ({
       rule: ruleId, line, column, message,
     })),
   };

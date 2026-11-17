@@ -4,7 +4,12 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { chromium } = require('../../apps/desktop/node_modules/playwright-core');
 const { startServer, WEB_ROOT } = require('../web-ai-practice/harness.cjs');
-const { webState, androidBackup, PNG_BASE64, IMAGE } = require('./fixtures/dataset.cjs');
+const {
+  webState,
+  androidBackup,
+  PNG_BASE64,
+  IMAGE,
+} = require('./fixtures/dataset.cjs');
 const { sampleComputedStyles } = require('./css-computed-style.cjs');
 const { loadWeb, plain } = require('./web-source.cjs');
 const { createWebSource } = require('./source-tools.cjs');
@@ -16,10 +21,14 @@ test.before(async () => {
   server = await startServer(WEB_ROOT);
   browser = await chromium.launch({ headless: true, ...(process.env.SHIROHA_BROWSER_EXECUTABLE ? { executablePath: process.env.SHIROHA_BROWSER_EXECUTABLE } : { channel: 'msedge' }) });
 });
-test.after(async () => { await browser?.close(); await server?.close(); });
+test.after(async () => {
+  await browser?.close(); await server?.close();
+});
 async function pageFor(t, raw, injection = '', appTransform = null, sourceTransforms = {}, clockTime = null) {
   const context = await browser.newContext(); t.after(() => context.close());
-  await context.addInitScript(({ raw, key }) => { if (!globalThis.sessionStorage.getItem('__stage_b_seed')) { if (raw !== null) { globalThis.localStorage.setItem(key, raw); }globalThis.sessionStorage.setItem('__stage_b_seed', '1'); } }, { raw, key: KEY });
+  await context.addInitScript(({ raw, key }) => {
+    if (!globalThis.sessionStorage.getItem('__stage_b_seed')) { if (raw !== null) { globalThis.localStorage.setItem(key, raw); }globalThis.sessionStorage.setItem('__stage_b_seed', '1'); }
+  }, { raw, key: KEY });
   await context.route('**/*', async (route) => {
     const url = new URL(route.request().url());
     if (url.origin !== new URL(server.url).origin) { return route.abort(); }
@@ -149,15 +158,21 @@ test('题库搜索：桌面摘要分批补读并覆盖分页之外，失败可�
   await page.locator('body[data-storage-state="ready"]').waitFor();
   await page.locator('.nav[data-view="banks"]').click();
   await page.locator('[data-preview-question="search-lazy-0"]').waitFor();
-  await page.evaluate(() => { globalThis.__searchReads = []; });
+  await page.evaluate(() => {
+    globalThis.__searchReads = [];
+  });
   await page.locator('#bank-search-type').selectOption('single');
   await page.locator('[data-preview-question="search-lazy-0"]').waitFor();
   assert.deepEqual(await page.evaluate(() => globalThis.__searchReads.map((refs) => refs.length)), [10]);
-  await page.evaluate(() => { globalThis.__searchReads = [];globalThis.__searchFailure = true; });
+  await page.evaluate(() => {
+    globalThis.__searchReads = [];globalThis.__searchFailure = true;
+  });
   await page.locator('#bank-search-query').fill('分批搜索命中');
   await page.locator('#retry-bank-preview').waitFor();
   assert.match(await page.locator('#bank-preview').innerText(), /加载失败/);
-  await page.evaluate(() => { globalThis.__searchReads = [];globalThis.__searchFailure = false; });
+  await page.evaluate(() => {
+    globalThis.__searchReads = [];globalThis.__searchFailure = false;
+  });
   await page.locator('#retry-bank-preview').click();
   await page.locator('[data-preview-question="search-lazy-230"]').waitFor();
   assert.deepEqual(await page.locator('#bank-preview tbody tr > td:nth-child(2)').allInnerTexts(), ['231']);
@@ -180,7 +195,9 @@ test('题库搜索：较旧查询失败不会覆盖新结果或显示旧错误',
     globalThis.ShirohaPlatform.storage.ensureQuestions = async (_snapshot, refs) => {
       if (refs.length > 10 && !globalThis.__oldSearchStarted) {
         globalThis.__oldSearchStarted = true;
-        await new Promise((_resolve, reject) => { globalThis.__failOldSearch = () => reject(new Error('旧搜索失败')); });
+        await new Promise((_resolve, reject) => {
+          globalThis.__failOldSearch = () => reject(new Error('旧搜索失败'));
+        });
       }
     };
   });
@@ -209,7 +226,9 @@ test('题库搜索：离开页面后旧读取失败不干扰，返回时恢复�
     globalThis.ShirohaPlatform.storage.ensureQuestions = async (_snapshot, refs) => {
       if (refs.length > 10 && !globalThis.__returnSearchStarted) {
         globalThis.__returnSearchStarted = true;
-        await new Promise((_resolve, reject) => { globalThis.__failReturnSearch = () => reject(new Error('离页旧搜索失败')); });
+        await new Promise((_resolve, reject) => {
+          globalThis.__failReturnSearch = () => reject(new Error('离页旧搜索失败'));
+        });
       }
     };
   });
@@ -241,7 +260,9 @@ test('题库搜索：切库等待旧读取后取消后续批次并查询新库',
     storage.ensureQuestions = async (_snapshot, refs) => {
       globalThis.__switchReads.push(refs.map((ref) => ref.questionId));
       if (refs[0]?.questionId === 'search-switch-0' && refs.length > 10) {
-        await new Promise((_resolve, reject) => { globalThis.__failSwitchSearch = () => reject(new Error('切库旧搜索失败')); });
+        await new Promise((_resolve, reject) => {
+          globalThis.__failSwitchSearch = () => reject(new Error('切库旧搜索失败'));
+        });
       }
     };
   });
@@ -474,8 +495,12 @@ test('训练记录删除：保存失败回滚，重试只删除原目标', async
   const before = JSON.parse(await saved(page));
   await page.evaluate(() => {
     const original = globalThis.ShirohaPlatform.storage.write;
-    globalThis.__restoreRecordWrite = () => { globalThis.ShirohaPlatform.storage.write = original; };
-    globalThis.ShirohaPlatform.storage.write = async () => { throw new Error('模拟记录保存失败'); };
+    globalThis.__restoreRecordWrite = () => {
+      globalThis.ShirohaPlatform.storage.write = original;
+    };
+    globalThis.ShirohaPlatform.storage.write = async () => {
+      throw new Error('模拟记录保存失败');
+    };
   });
   await page.locator('.nav[data-view="records"]').click();
   await page.locator('[data-training-delete="delete-target"]').click();
@@ -602,7 +627,12 @@ test('导航、首页与练习 AI 面板的响应式间距保持一致', async (
     { width: 1280, nav: all('10px'), main: ['18px', '0px', '34px', '0px'], gap: ['normal', 'normal'] },
     { width: 1281, nav: all('11px'), main: ['18px', '0px', '34px', '0px'], gap: ['normal', 'normal'] },
   ];
-  for (const { width, nav, main, gap } of layouts) {
+  for (const {
+    width,
+    nav,
+    main,
+    gap,
+  } of layouts) {
     await page.setViewportSize({ width, height: 900 });
     for (const collapsed of [false, true]) {
       await page.evaluate((value) => globalThis.document.body.classList.toggle('side-collapsed', value), collapsed);
@@ -824,8 +854,12 @@ for (const mode of ['merge', 'overwrite']) {
     await page.locator('#webdav-restore-mode-v378').selectOption(mode);
     await page.evaluate(() => {
       const { write } = globalThis.ShirohaPlatform.storage;
-      globalThis.__resumeDavWrite = () => { globalThis.ShirohaPlatform.storage.write = write; };
-      globalThis.ShirohaPlatform.storage.write = async () => { throw new Error('Synthetic WebDAV restore failure'); };
+      globalThis.__resumeDavWrite = () => {
+        globalThis.ShirohaPlatform.storage.write = write;
+      };
+      globalThis.ShirohaPlatform.storage.write = async () => {
+        throw new Error('Synthetic WebDAV restore failure');
+      };
     });
     await page.locator('#webdav-restore-confirm-v378').click();
     await page.locator('#platform-status.failed').waitFor();
@@ -922,8 +956,12 @@ for (const mode of ['merge', 'overwrite']) {
     const backup = importBackupFixture();
     await page.evaluate(() => {
       const { write } = globalThis.ShirohaPlatform.storage;
-      globalThis.__resumeLocalBackupWrite = () => { globalThis.ShirohaPlatform.storage.write = write; };
-      globalThis.ShirohaPlatform.storage.write = async () => { throw new Error('Synthetic local backup failure'); };
+      globalThis.__resumeLocalBackupWrite = () => {
+        globalThis.ShirohaPlatform.storage.write = write;
+      };
+      globalThis.ShirohaPlatform.storage.write = async () => {
+        throw new Error('Synthetic local backup failure');
+      };
     });
     await page.locator('.nav[data-view="settings"]').click();
     await page.locator('#settings-backup-mode-v23').selectOption(mode);
@@ -946,7 +984,9 @@ test('需要原生检查点时缺少备份图片不会开始替换', async (t) =
   await page.locator('body[data-storage-state="ready"]').waitFor();
   const before = await saved(page);
   await page.evaluate(() => {
-    globalThis.ShirohaPlatform.storage.checkpoint = async () => { throw new Error('缺失图片时不应进入检查点'); };
+    globalThis.ShirohaPlatform.storage.checkpoint = async () => {
+      throw new Error('缺失图片时不应进入检查点');
+    };
   });
   await page.locator('.nav[data-view="settings"]').click();
   await page.locator('#settings-backup-mode-v23').selectOption('overwrite');
@@ -1032,8 +1072,12 @@ test('开始识别中的备份保存失败保全原数据，重试成功只合�
   const text = JSON.stringify(importBackupFixture());
   await page.evaluate(() => {
     const { write } = globalThis.ShirohaPlatform.storage;
-    globalThis.__resumeBackupWrite = () => { globalThis.ShirohaPlatform.storage.write = write; };
-    globalThis.ShirohaPlatform.storage.write = async () => { throw new Error('Synthetic backup save failure'); };
+    globalThis.__resumeBackupWrite = () => {
+      globalThis.ShirohaPlatform.storage.write = write;
+    };
+    globalThis.ShirohaPlatform.storage.write = async () => {
+      throw new Error('Synthetic backup save failure');
+    };
   });
   await page.locator('.nav[data-view="import"]').click();
   await page.locator('#import-text').fill(text);
@@ -1062,7 +1106,9 @@ test('训练复盘：按选题补读保存解析，离开页面后忽略迟到�
     globalThis.__reviewReads = [];
     globalThis.ShirohaPlatform.storage.ensureQuestions = async (snapshot, refs) => {
       globalThis.__reviewReads.push(refs);
-      await new Promise((resolve) => { globalThis.__finishReviewRead = resolve; });
+      await new Promise((resolve) => {
+        globalThis.__finishReviewRead = resolve;
+      });
       for (const ref of refs) { snapshot.banks.find((bank) => bank.id === ref.bankId).questions.find((q) => q.id === ref.questionId).analysis = `已保存的来源解析：${ref.questionId}`; }
     };
   });
@@ -1091,7 +1137,9 @@ test('训练复盘：未知来源不读取当前题库的同 ID 解析', async (
   await page.locator('body[data-storage-state="ready"]').waitFor();
   await page.evaluate(() => {
     globalThis.__unknownSourceReads = 0;
-    globalThis.ShirohaPlatform.storage.ensureQuestions = async () => { globalThis.__unknownSourceReads += 1; throw new Error('未知来源不能补读当前库'); };
+    globalThis.ShirohaPlatform.storage.ensureQuestions = async () => {
+      globalThis.__unknownSourceReads += 1; throw new Error('未知来源不能补读当前库');
+    };
   });
   await page.locator('.nav[data-view="records"]').click();
   await page.locator('#records [data-training-review]').click();
@@ -1179,7 +1227,11 @@ test('练习：旧题量确认迟到时不能重置已开始的新一轮', async
     let calls = 0;
     globalThis.ShirohaDialogs.confirm = () => {
       calls += 1;
-      if (calls === 1) { return new Promise((resolve) => { globalThis.__resolveOldPracticeConfirm = resolve; }); }
+      if (calls === 1) {
+        return new Promise((resolve) => {
+          globalThis.__resolveOldPracticeConfirm = resolve;
+        });
+      }
       return Promise.resolve(true);
     };
   });
@@ -1271,7 +1323,13 @@ for (const mode of ['single', 'total']) {
     await page.locator('#practice-resume').click();
     assert(await page.locator('#practice-card input[value="B"]').isChecked());
     assert(!(await page.locator('#practice-card input[value="B"]').isDisabled()));
-    await page.evaluate(() => { const { write } = globalThis.ShirohaPlatform.storage;globalThis.__resumeTrainingWrite = () => { globalThis.ShirohaPlatform.storage.write = write; };globalThis.ShirohaPlatform.storage.write = async () => { throw new Error('Synthetic training failure'); }; });
+    await page.evaluate(() => {
+      const { write } = globalThis.ShirohaPlatform.storage;globalThis.__resumeTrainingWrite = () => {
+        globalThis.ShirohaPlatform.storage.write = write;
+      };globalThis.ShirohaPlatform.storage.write = async () => {
+        throw new Error('Synthetic training failure');
+      };
+    });
     await page.clock.fastForward(1000);
     await page.locator(mode === 'single' ? '#p-next' : '#p-submit-all').click();
     await page.locator('#platform-status.failed button').waitFor();
@@ -1458,7 +1516,9 @@ for (const mode of ['total', 'exam']) {
     const first = mode === 'exam' ? page.locator('#exam-card .exam-q').nth(0) : page.locator('#practice-card');
     await first.locator('.option[data-key="A"]').click();
     if (mode === 'total') {
-      await first.locator('[data-clear-answer-options]').evaluate((node) => { globalThis.__oldClearOptions = node; });
+      await first.locator('[data-clear-answer-options]').evaluate((node) => {
+        globalThis.__oldClearOptions = node;
+      });
       await page.locator('#p-next').click();
       await page.evaluate(() => globalThis.__oldClearOptions.click());
     }
@@ -1486,11 +1546,17 @@ test('清空选项：考试到时交卷及保存失败重试保留空答案，�
   await page.locator('#start-exam-btn').click();
   await page.locator('#exam-card .option[data-key="A"]').click();
   await page.locator('[data-clear-answer-options]').click();
-  await page.locator('[data-clear-answer-options]').evaluate((node) => { globalThis.__oldClearOptions = node; });
+  await page.locator('[data-clear-answer-options]').evaluate((node) => {
+    globalThis.__oldClearOptions = node;
+  });
   await page.evaluate(() => {
     const { write } = globalThis.ShirohaPlatform.storage;
-    globalThis.__resumeExamWrite = () => { globalThis.ShirohaPlatform.storage.write = write; };
-    globalThis.ShirohaPlatform.storage.write = () => new Promise((_resolve, reject) => { globalThis.__failExamWrite = () => reject(new Error('Synthetic exam write failure')); });
+    globalThis.__resumeExamWrite = () => {
+      globalThis.ShirohaPlatform.storage.write = write;
+    };
+    globalThis.ShirohaPlatform.storage.write = () => new Promise((_resolve, reject) => {
+      globalThis.__failExamWrite = () => reject(new Error('Synthetic exam write failure'));
+    });
   });
   await page.clock.fastForward(60001);
   await page.locator('body[data-storage-state="pending"]').waitFor();
@@ -1639,7 +1705,11 @@ test('列表分页：快速翻页拒绝迟到正文，加载失败可在当前�
     globalThis.__pageLoads = [];
     globalThis.ShirohaPlatform.storage.ensureQuestions = async (_snapshot, refs) => {
       globalThis.__pageLoads.push(refs.map((ref) => ref.questionId));
-      if (refs[0]?.questionId === 'delay-10') { await new Promise((resolve) => { globalThis.__finishPageLoad = resolve; }); }
+      if (refs[0]?.questionId === 'delay-10') {
+        await new Promise((resolve) => {
+          globalThis.__finishPageLoad = resolve;
+        });
+      }
       if (refs[0]?.questionId === 'delay-30' && !globalThis.__allowRetry) { throw Error('分页加载模拟失败'); }
     };
   });
@@ -1654,7 +1724,9 @@ test('列表分页：快速翻页拒绝迟到正文，加载失败可在当前�
   await page.locator('#retry-bank-preview').waitFor();
   assert.match(await page.locator('#bank-preview').innerText(), /题目加载失败/);
   assert.equal(await page.locator('[data-select-bank-question]').count(), 0);
-  await page.evaluate(() => { globalThis.__allowRetry = true; });
+  await page.evaluate(() => {
+    globalThis.__allowRetry = true;
+  });
   await page.locator('#retry-bank-preview').click();
   await page.locator('[data-select-bank-question="delay-30"]').waitFor();
   assert.equal(await pager.locator('[aria-current="page"]:visible').innerText(), '4');
@@ -2058,7 +2130,9 @@ for (const scenario of singleStartCases) {
     if (scenario.count) { await page.locator('#practice-custom-count').fill(scenario.count); }
     await page.locator('#practice-start-mode-v58916').selectOption('custom');
     await page.locator('#practice-number-range-v58916').fill(scenario.start);
-    await page.evaluate(() => { Math.random = () => 0; });
+    await page.evaluate(() => {
+      Math.random = () => 0;
+    });
     await page.locator('#start-practice-btn').click();
     await page.locator('[data-practice-jump="0"]').waitFor();
     assert.equal(await page.locator('[data-practice-jump]').count(), scenario.expected.length);
@@ -2129,7 +2203,9 @@ for (const order of ['sequence', 'random']) {
       if (limit === 'custom') { await page.locator('#practice-custom-count').fill('2'); }
       await page.locator('#practice-start-mode-v58916').selectOption('custom');
       await page.locator('#practice-number-range-v58916').fill('2,4-7,4');
-      await page.evaluate(() => { Math.random = () => 0; });
+      await page.evaluate(() => {
+        Math.random = () => 0;
+      });
       await page.locator('#start-practice-btn').click();
       await page.locator('[data-practice-jump="0"]').waitFor();
       assert.equal(await page.locator('[data-practice-jump]').count(), expectedCount);
@@ -2246,7 +2322,11 @@ test('收藏详情：迟到正文不覆盖当前页，失败可重试', async (t
   await page.locator('.nav[data-view="favorites"]').click();
   await page.evaluate(() => {
     globalThis.ShirohaPlatform.storage.ensureQuestions = async (_snapshot, refs) => {
-      if (refs[0]?.questionId === 'favorite-load-10') { await new Promise((resolve) => { globalThis.__finishFavoriteLoad = resolve; }); }
+      if (refs[0]?.questionId === 'favorite-load-10') {
+        await new Promise((resolve) => {
+          globalThis.__finishFavoriteLoad = resolve;
+        });
+      }
       if (refs[0]?.questionId === 'favorite-load-20' && !globalThis.__favoriteRetry) { throw Error('收藏加载模拟失败'); }
     };
   });
@@ -2256,7 +2336,9 @@ test('收藏详情：迟到正文不覆盖当前页，失败可重试', async (t
   await pager.getByRole('button', { name: '第 3 页', exact: true }).click();
   await page.locator('#retry-favorites').waitFor();
   assert.match(await page.locator('#favorites-list-v596').innerText(), /收藏题加载失败/);
-  await page.evaluate(() => { globalThis.__favoriteRetry = true; });
+  await page.evaluate(() => {
+    globalThis.__favoriteRetry = true;
+  });
   await page.locator('#retry-favorites').click();
   await page.locator('[data-preview-question="favorite-load-20"]').waitFor();
   await page.evaluate(() => globalThis.__finishFavoriteLoad());
@@ -2329,7 +2411,13 @@ test('题库删除：切库清空选择、写入失败保留选择、重试删�
   await page.locator('[data-openbank="bank-b"]').click();
   assert.match(await page.locator('#bank-question-selection').textContent(), /已选择 0/);
   await page.locator('#select-bank-question-page').click();
-  await page.evaluate(() => { const { write } = globalThis.ShirohaPlatform.storage;globalThis.__resumeWrite = () => { globalThis.ShirohaPlatform.storage.write = write; };globalThis.ShirohaPlatform.storage.write = async () => { throw new Error('Synthetic deletion failure'); }; });
+  await page.evaluate(() => {
+    const { write } = globalThis.ShirohaPlatform.storage;globalThis.__resumeWrite = () => {
+      globalThis.ShirohaPlatform.storage.write = write;
+    };globalThis.ShirohaPlatform.storage.write = async () => {
+      throw new Error('Synthetic deletion failure');
+    };
+  });
   await page.locator('#delete-selected-questions').click();await page.locator('#platform-status.failed').waitFor();
   assert.equal(JSON.parse(await saved(page)).banks[1].questions.length, 1);
   assert.equal(await page.locator('[data-select-bank-question="same-id"]').isChecked(), true);
@@ -2347,10 +2435,16 @@ test('题库删除：二次编辑删除保留未编辑题目，允许保存空�
   await page.locator('body[data-storage-state="ready"]').waitFor();
   await page.locator('#save-all-btn').click();await page.locator('body[data-storage-state="ready"]').waitFor();
   const baseline = JSON.parse(await saved(page));
-  const edit = async () => { await page.locator('.nav[data-view="banks"]').click();await page.locator('[data-editbank-v45="bank-a"]').locator('..').locator('..').locator('summary').click();await page.locator('[data-editbank-v45="bank-a"]').click(); };
+  const edit = async () => {
+    await page.locator('.nav[data-view="banks"]').click();await page.locator('[data-editbank-v45="bank-a"]').locator('..').locator('..').locator('summary').click();await page.locator('[data-editbank-v45="bank-a"]').click();
+  };
   await edit();
   // 桌面释放正文再加载会重建对象；属性插入顺序变化不代表题目被修改。
-  await page.evaluate(() => { globalThis.ShirohaPlatform.storage.ensureQuestions = async (snapshot) => { for (const bank of snapshot.banks) { bank.questions = bank.questions.map((q) => Object.fromEntries(Object.entries(q).reverse())); } }; });
+  await page.evaluate(() => {
+    globalThis.ShirohaPlatform.storage.ensureQuestions = async (snapshot) => {
+      for (const bank of snapshot.banks) { bank.questions = bank.questions.map((q) => Object.fromEntries(Object.entries(q).reverse())); }
+    };
+  });
   await page.locator('[data-delete-import="0"]').click();await page.locator('#bank-edit-save-v45').click();
   await page.locator('body[data-storage-state="ready"]').waitFor();
   assert.deepEqual(JSON.parse(await saved(page)).banks[0].questions, baseline.banks[0].questions.slice(1));
@@ -2416,11 +2510,23 @@ test('题库删除：失效 ID 不写入，重复点击只删除一次，旧编�
   await page.locator('[data-editbank-v45="bank-a"]').locator('..').locator('..').locator('summary').click();
   await page.locator('[data-editbank-v45="bank-a"]').click();
   await page.locator('.nav[data-view="banks"]').click();
-  const before = await saved(page);let confirmations = 0;page.on('app-dialog', () => { confirmations += 1; });
-  await page.locator('[data-delete-bank-question="same-id"]').evaluate((button) => { button.dataset.deleteBankQuestion = 'missing-id';button.click(); });
+  const before = await saved(page);let confirmations = 0;page.on('app-dialog', () => {
+    confirmations += 1;
+  });
+  await page.locator('[data-delete-bank-question="same-id"]').evaluate((button) => {
+    button.dataset.deleteBankQuestion = 'missing-id';button.click();
+  });
   assert.equal(await saved(page), before);assert.equal(confirmations, 0);
-  await page.evaluate(() => { const { write } = globalThis.ShirohaPlatform.storage;globalThis.ShirohaPlatform.storage.write = async (...args) => { await new Promise((resolve) => { setTimeout(resolve, 150); });return write(...args); }; });
-  await page.locator('[data-delete-bank-question="missing-id"]').evaluate((button) => { button.dataset.deleteBankQuestion = 'same-id';button.click();button.click(); });
+  await page.evaluate(() => {
+    const { write } = globalThis.ShirohaPlatform.storage;globalThis.ShirohaPlatform.storage.write = async (...args) => {
+      await new Promise((resolve) => {
+        setTimeout(resolve, 150);
+      });return write(...args);
+    };
+  });
+  await page.locator('[data-delete-bank-question="missing-id"]').evaluate((button) => {
+    button.dataset.deleteBankQuestion = 'same-id';button.click();button.click();
+  });
   await page.locator('body[data-storage-state="ready"]').waitFor();
   assert.equal(confirmations, 1);assert.equal(JSON.parse(await saved(page)).banks[0].questions.length, 6);
   await page.locator('.nav[data-view="import"]').click();await page.locator('#bank-edit-save-v45').click();
@@ -2511,7 +2617,13 @@ test('容量不足不清空编辑内容，重试成功后再离开编辑态', as
   await page.locator('body[data-storage-state="ready"]').waitFor();
   await page.locator('.nav[data-view="banks"]').click();
   await page.locator('#bank-rename-input').fill('保存失败时保留名称');
-  await page.evaluate(() => { const original = globalThis.Storage.prototype.setItem;globalThis.__restoreStorage = () => { globalThis.Storage.prototype.setItem = original; };globalThis.Storage.prototype.setItem = function (key, value) { if (key === 'shiroha_quiz_state_v28_4_c1') { throw new globalThis.DOMException('Synthetic quota', 'QuotaExceededError'); } return original.call(this, key, value); }; });
+  await page.evaluate(() => {
+    const original = globalThis.Storage.prototype.setItem;globalThis.__restoreStorage = () => {
+      globalThis.Storage.prototype.setItem = original;
+    };globalThis.Storage.prototype.setItem = function (key, value) {
+      if (key === 'shiroha_quiz_state_v28_4_c1') { throw new globalThis.DOMException('Synthetic quota', 'QuotaExceededError'); } return original.call(this, key, value);
+    };
+  });
   await page.locator('#rename-bank-btn').click();
   await page.locator('#platform-status.failed').waitFor();
   assert.equal(await page.locator('#bank-rename-input').inputValue(), '保存失败时保留名称');
@@ -2544,13 +2656,17 @@ test('考试：旧倒计时回调不能交新一轮的试卷', async (t) => {
     globalThis.clearInterval = (id) => {
       if (id < 1000000) { clearTimer(id); }
     };
-    globalThis.__expireExams = () => { current = start + 61000; };
+    globalThis.__expireExams = () => {
+      current = start + 61000;
+    };
   });
   await page.locator('#start-exam-btn').click();
   await page.waitForFunction(() => globalThis.__examTicks.length === 1);
   await page.locator('#start-exam-btn').evaluate((button) => button.click());
   await page.waitForFunction(() => globalThis.__examTicks.length === 2);
-  await page.evaluate(() => { globalThis.__expireExams(); globalThis.__examTicks[0](); });
+  await page.evaluate(() => {
+    globalThis.__expireExams(); globalThis.__examTicks[0]();
+  });
   await page.waitForTimeout(100);
   assert.equal(JSON.parse(await saved(page)).records.length, 0);
   assert.equal(await page.locator('#exam-submit-focus').isDisabled(), false);
@@ -2564,12 +2680,20 @@ test('考试提交失败保全记录，重试与重复点击只新增一次', as
   await page.locator('body[data-storage-state="ready"]').waitFor();
   await page.locator('.nav[data-view="exam"]').click();
   await page.locator('#start-exam-btn').click();
-  await page.evaluate(() => { const { write } = globalThis.ShirohaPlatform.storage;globalThis.__resumeWrite = () => { globalThis.ShirohaPlatform.storage.write = write; };globalThis.ShirohaPlatform.storage.write = async () => { throw new Error('Synthetic disk failure'); }; });
+  await page.evaluate(() => {
+    const { write } = globalThis.ShirohaPlatform.storage;globalThis.__resumeWrite = () => {
+      globalThis.ShirohaPlatform.storage.write = write;
+    };globalThis.ShirohaPlatform.storage.write = async () => {
+      throw new Error('Synthetic disk failure');
+    };
+  });
   await page.locator('#exam-submit-focus').click();
   await page.locator('#platform-status.failed').waitFor();
   assert.equal(JSON.parse(await saved(page)).records.length, initial.records.length);
   assert.equal(await page.locator('#submit-exam-btn').isDisabled(), false);
-  await page.evaluate(() => { globalThis.__resumeWrite();globalThis.document.querySelector('#submit-exam-btn').click();globalThis.document.querySelector('#submit-exam-btn').click(); });
+  await page.evaluate(() => {
+    globalThis.__resumeWrite();globalThis.document.querySelector('#submit-exam-btn').click();globalThis.document.querySelector('#submit-exam-btn').click();
+  });
   await page.locator('body[data-storage-state="ready"]').waitFor();
   assert.equal(JSON.parse(await saved(page)).records.length, initial.records.length + 1);
   assert.equal(await page.locator('#submit-exam-btn').isDisabled(), true);
@@ -2649,7 +2773,13 @@ test('file URL 支持 ZIP 与文本导入且不依赖可选 PDF/OCR', async (t) 
 test('恢复写入失败保留原库与文件选择，重试才提交恢复', async (t) => {
   const original = JSON.stringify(webState());const page = await pageFor(t, original);
   await page.locator('body[data-storage-state="ready"]').waitFor();
-  await page.evaluate(() => { const { write } = globalThis.ShirohaPlatform.storage;globalThis.__resumeWrite = () => { globalThis.ShirohaPlatform.storage.write = write; };globalThis.ShirohaPlatform.storage.write = async () => { throw new Error('Synthetic restore failure'); }; });
+  await page.evaluate(() => {
+    const { write } = globalThis.ShirohaPlatform.storage;globalThis.__resumeWrite = () => {
+      globalThis.ShirohaPlatform.storage.write = write;
+    };globalThis.ShirohaPlatform.storage.write = async () => {
+      throw new Error('Synthetic restore failure');
+    };
+  });
   const backup = webState();backup.banks[0].name = '恢复测试新题库';
   await page.locator('#backup-json-file-v23').setInputFiles({ name: 'backup.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(backup)) });
   await page.locator('#platform-status.failed').waitFor();
@@ -2664,12 +2794,20 @@ test('导出与重置失败可见，取消文件选择不修改数据', async (t
   const original = JSON.stringify(webState());const page = await pageFor(t, original);
   await page.locator('body[data-storage-state="ready"]').waitFor();
   await page.locator('#import-file').dispatchEvent('change');assert.equal(await saved(page), original);
-  await page.evaluate(() => { globalThis.ShirohaPlatform.download = () => { throw new Error('Synthetic export failure'); }; });
+  await page.evaluate(() => {
+    globalThis.ShirohaPlatform.download = () => {
+      throw new Error('Synthetic export failure');
+    };
+  });
   await page.locator('.nav[data-view="settings"]').click();
   await page.locator('#export-all-btn').click();await page.locator('#platform-status.failed').waitFor();
   assert.match(await page.locator('#platform-status').textContent(), /导出失败/);
   await page.locator('.nav[data-view="settings"]').click();
-  await page.evaluate(() => { globalThis.ShirohaPlatform.credentials.reset = () => { throw new Error('Synthetic reset failure'); }; });
+  await page.evaluate(() => {
+    globalThis.ShirohaPlatform.credentials.reset = () => {
+      throw new Error('Synthetic reset failure');
+    };
+  });
   await page.locator('#reset-data-btn').click();await page.locator('#platform-status.failed').waitFor();
   assert.equal(await saved(page), original);
   assert.match(await page.locator('#platform-status').textContent(), /reset failure/);
@@ -2692,10 +2830,21 @@ test('题库详情：旧组合题的陈述、选项和复制一致且不改写�
   for (const statement of statements) { assert.ok(body.includes(statement), body); }
   assert.deepEqual(await page.locator('.bank-detail-option > div').allTextContents(), combinations);
   assert.match(await page.locator('.bank-detail-option.is-answer').innerText(), /D/);
-  await page.evaluate(() => Object.defineProperty(globalThis.navigator, 'clipboard', { configurable: true, value: { writeText: async (text) => { globalThis.__copied = text; } } }));
+  await page.evaluate(() => Object.defineProperty(globalThis.navigator, 'clipboard', {
+    configurable: true,
+    value: {
+      writeText: async (text) => {
+        globalThis.__copied = text;
+      },
+    },
+  }));
   await page.locator('[data-copy-question]').click();
   assert.equal(await page.evaluate(() => globalThis.__copied), [question.question, ...statements].join('\n'));
-  await page.evaluate(() => { globalThis.navigator.clipboard.writeText = async () => { throw Error('denied'); }; });
+  await page.evaluate(() => {
+    globalThis.navigator.clipboard.writeText = async () => {
+      throw Error('denied');
+    };
+  });
   await page.locator('[data-copy-question]').click();
   assert.equal(await page.locator('#bank-question-manual-copy').inputValue(), [question.question, ...statements].join('\n'));
   assert.equal(await saved(page), before);
@@ -2719,12 +2868,23 @@ test('题库详情：完整长题干复制、拒绝回退与选择隔离', async
   assert.ok(body.startsWith('长题干材料。'.repeat(2000)));
   assert.ok(body.includes('第二段'));
   assert.equal(await page.locator('#bank-question-detail .bank-detail-option').count(), 2);
-  await page.evaluate(() => Object.defineProperty(globalThis.navigator, 'clipboard', { configurable: true, value: { writeText: async (text) => { globalThis.__copied = text; } } }));
+  await page.evaluate(() => Object.defineProperty(globalThis.navigator, 'clipboard', {
+    configurable: true,
+    value: {
+      writeText: async (text) => {
+        globalThis.__copied = text;
+      },
+    },
+  }));
   await page.locator('[data-copy-question]').click();
   assert.equal(await page.evaluate(() => globalThis.__copied), full);
   await page.locator('[data-select-bank-question="same-id"]').check();
   assert.equal(await page.locator('#bank-question-detail').count(), 1);
-  await page.evaluate(() => { globalThis.navigator.clipboard.writeText = async () => { throw Error('denied'); }; });
+  await page.evaluate(() => {
+    globalThis.navigator.clipboard.writeText = async () => {
+      throw Error('denied');
+    };
+  });
   await page.locator('[data-copy-question]').click();
   assert.equal(await page.locator('#bank-question-manual-copy').inputValue(), full);
   await page.locator('[data-preview-question="multiple"]').click();
@@ -2744,14 +2904,25 @@ test('题库详情：富内容复制、分页重置与异步反馈隔离', async
   await page.locator('body[data-storage-state="ready"]').waitFor();
   await page.locator('.nav[data-view="banks"]').click();
   await page.locator('[data-preview-question="rich"]').click();
-  await page.evaluate(() => Object.defineProperty(globalThis.navigator, 'clipboard', { configurable: true, value: { writeText: async (text) => { globalThis.__copied = text; } } }));
+  await page.evaluate(() => Object.defineProperty(globalThis.navigator, 'clipboard', {
+    configurable: true,
+    value: {
+      writeText: async (text) => {
+        globalThis.__copied = text;
+      },
+    },
+  }));
   await page.locator('[data-copy-question]').click();
   const copied = await page.evaluate(() => globalThis.__copied);
   assert.match(copied, /\$x\^2\$/);
   assert.match(copied, /\[图片：题干图\]/);
   assert.equal((copied.match(/\[图片/g) || []).length, 1);
   assert.doesNotMatch(copied, /base64|data:image|选项图|解析图/);
-  await page.evaluate(() => { globalThis.navigator.clipboard.writeText = () => new Promise((resolve) => { globalThis.__finishCopy = resolve; }); });
+  await page.evaluate(() => {
+    globalThis.navigator.clipboard.writeText = () => new Promise((resolve) => {
+      globalThis.__finishCopy = resolve;
+    });
+  });
   await page.locator('[data-copy-question]').click();
   await page.locator('[data-preview-question="multiple"]').click();
   await page.evaluate(() => globalThis.__finishCopy());
@@ -2774,7 +2945,14 @@ test('题库详情：段落、表格和代码复制保留原意', async (t) => {
   await page.locator('body[data-storage-state="ready"]').waitFor();
   await page.locator('.nav[data-view="banks"]').click();
   await page.locator('[data-preview-question="same-id"]').click();
-  await page.evaluate(() => Object.defineProperty(globalThis.navigator, 'clipboard', { configurable: true, value: { writeText: async (text) => { globalThis.__copied = text; } } }));
+  await page.evaluate(() => Object.defineProperty(globalThis.navigator, 'clipboard', {
+    configurable: true,
+    value: {
+      writeText: async (text) => {
+        globalThis.__copied = text;
+      },
+    },
+  }));
   await page.locator('[data-copy-question]').click();
   assert.equal(await page.evaluate(() => globalThis.__copied), '第一段 & 条件。\n\n第二段 $x^2$。\n项目\t值\n甲\t乙\n```html\n<div>代码原文</div>\n```');
   await page.setViewportSize({ width: 480, height: 900 });
@@ -2931,13 +3109,19 @@ test('AI 整理期间选区变更后复原仍令旧请求失效', async (t) => {
   await seedImportQuestions(page, 1);
   const input = page.locator('#import-text');
   await input.fill('相同 x 相同');
-  await input.evaluate((element) => { element.setSelectionRange(0, 2);element.dispatchEvent(new globalThis.Event('select')); });
+  await input.evaluate((element) => {
+    element.setSelectionRange(0, 2);element.dispatchEvent(new globalThis.Event('select'));
+  });
   await page.locator('#ai-organize-import-btn-v99').click();
   await page.locator('#ai-import-scope-selection-v992').check();
   await page.locator('#ai-import-start-btn-v99').click();
   await page.waitForFunction(() => globalThis.__batchRequests.length === 1);
-  await input.evaluate((element) => { element.setSelectionRange(5, 7);element.dispatchEvent(new globalThis.Event('select')); });
-  await input.evaluate((element) => { element.setSelectionRange(0, 2);element.dispatchEvent(new globalThis.Event('select')); });
+  await input.evaluate((element) => {
+    element.setSelectionRange(5, 7);element.dispatchEvent(new globalThis.Event('select'));
+  });
+  await input.evaluate((element) => {
+    element.setSelectionRange(0, 2);element.dispatchEvent(new globalThis.Event('select'));
+  });
   assert.equal(await page.locator('#ai-import-start-btn-v99').isEnabled(), true);
   assert.match(await page.locator('#ai-import-status-v99').innerText(), /变化.*停止/);
   const before = await page.locator('#import-summary').innerText();
@@ -2960,7 +3144,9 @@ test('AI 全文整理期间仅移动光标或高亮不取消请求', async (t) =
   await page.locator('#ai-organize-import-btn-v99').click();
   await page.locator('#ai-import-start-btn-v99').click();
   await page.waitForFunction(() => globalThis.__batchRequests.length === 1);
-  await input.evaluate((element) => { element.setSelectionRange(0, 2);element.dispatchEvent(new globalThis.Event('select')); });
+  await input.evaluate((element) => {
+    element.setSelectionRange(0, 2);element.dispatchEvent(new globalThis.Event('select'));
+  });
   await page.evaluate(() => globalThis.__batchRequests[0].resolve({
     mode: 'direct_questions', questions: [{ type: 'short', question: '全文整理结果', options: [], answer: [] }],
   }));
@@ -3119,23 +3305,31 @@ test('AI 整理输入先清除旧选区，隐藏面板也立即回到全文', as
   await configureMockImportAi(page);
   const input = page.locator('#import-text');
   await input.fill('原始题库文本');
-  await input.evaluate((element) => { element.setSelectionRange(0, 2);element.dispatchEvent(new globalThis.Event('select')); });
+  await input.evaluate((element) => {
+    element.setSelectionRange(0, 2);element.dispatchEvent(new globalThis.Event('select'));
+  });
   await page.locator('#ai-organize-import-btn-v99').click();
   await page.locator('#ai-import-scope-selection-v992').check();
   await page.evaluate(() => {
     globalThis.__batch2PanelWrites = 0;
     const provider = globalThis.document.querySelector('#ai-import-provider-v99');
-    globalThis.__batch2PanelObserver = new globalThis.MutationObserver((records) => { globalThis.__batch2PanelWrites += records.length; });
+    globalThis.__batch2PanelObserver = new globalThis.MutationObserver((records) => {
+      globalThis.__batch2PanelWrites += records.length;
+    });
     globalThis.document.querySelector('#import-text').addEventListener('input', () => {
       globalThis.__batch2PanelObserver.observe(provider, { childList: true, subtree: true, characterData: true });
     }, { capture: true, once: true });
   });
-  await input.evaluate((element) => { element.value = '更新后的完整文本';element.dispatchEvent(new globalThis.Event('input', { bubbles: true })); });
+  await input.evaluate((element) => {
+    element.value = '更新后的完整文本';element.dispatchEvent(new globalThis.Event('input', { bubbles: true }));
+  });
   assert.equal(await page.locator('#ai-import-scope-all-v992').isChecked(), true);
   assert.match(await page.locator('#ai-import-range-hint-v992').innerText(), /全部原始文本/);
   assert.equal(await page.evaluate(() => globalThis.__batch2PanelWrites), 1);
   await page.evaluate(() => globalThis.__batch2PanelObserver.disconnect());
-  await input.evaluate((element) => { element.setSelectionRange(0, 2);element.dispatchEvent(new globalThis.Event('select')); });
+  await input.evaluate((element) => {
+    element.setSelectionRange(0, 2);element.dispatchEvent(new globalThis.Event('select'));
+  });
   await page.locator('#ai-import-scope-selection-v992').check();
   await page.locator('#ai-import-cancel-btn-v99').click();
   await input.fill('隐藏时替换的新全文');
@@ -3143,10 +3337,14 @@ test('AI 整理输入先清除旧选区，隐藏面板也立即回到全文', as
   await page.locator('#ai-organize-import-btn-v99').click();
   assert.equal(await page.locator('#ai-import-scope-all-v992').isChecked(), true);
   assert.match(await page.locator('#ai-import-range-hint-v992').innerText(), /全部原始文本/);
-  await input.evaluate((element) => { element.setSelectionRange(0, 2);element.dispatchEvent(new globalThis.Event('select')); });
+  await input.evaluate((element) => {
+    element.setSelectionRange(0, 2);element.dispatchEvent(new globalThis.Event('select'));
+  });
   await page.locator('#ai-import-scope-selection-v992').check();
   await page.locator('#ai-import-cancel-btn-v99').click();
-  await input.evaluate((element) => { element.setSelectionRange(1, 1);element.dispatchEvent(new globalThis.Event('select')); });
+  await input.evaluate((element) => {
+    element.setSelectionRange(1, 1);element.dispatchEvent(new globalThis.Event('select'));
+  });
   assert.equal(await page.locator('#ai-import-scope-all-v992').isChecked(), true);
   await page.locator('#ai-organize-import-btn-v99').click();
   assert.equal(await page.locator('#ai-import-scope-all-v992').isChecked(), true);
@@ -3170,17 +3368,25 @@ test('AI 成功结束只同步一次，中间批次仍立即展示建议', async
       const node = globalThis.document.querySelector(selector);
       Object.defineProperty(node, 'textContent', {
         configurable: true,
-        get() { return text.get.call(this); },
-        set(value) { globalThis.__batch2Refreshes[key] += 1;text.set.call(this, value); },
+        get() {
+          return text.get.call(this);
+        },
+        set(value) {
+          globalThis.__batch2Refreshes[key] += 1;text.set.call(this, value);
+        },
       });
     }
   });
-  await page.evaluate(() => { const request = globalThis.__batchRequests[0];request.resolve({ results: [{ id: request.input.questions[0].id, analysis: '第一批建议', needsReview: false }] }); });
+  await page.evaluate(() => {
+    const request = globalThis.__batchRequests[0];request.resolve({ results: [{ id: request.input.questions[0].id, analysis: '第一批建议', needsReview: false }] });
+  });
   await page.waitForFunction(() => globalThis.__batchRequests.length === 2);
   assert.equal(await page.locator('[data-ai-analysis-apply-v991]').count(), 1);
   assert.equal(await page.locator('#ai-preview-start-btn-v991').isDisabled(), true);
   assert.deepEqual(await page.evaluate(() => globalThis.__batch2Refreshes), { import: 0, preview: 1 });
-  await page.evaluate(() => { globalThis.__batch2Refreshes = { import: 0, preview: 0 };const request = globalThis.__batchRequests[1];request.resolve({ results: [{ id: request.input.questions[0].id, analysis: '第二批建议', needsReview: false }] }); });
+  await page.evaluate(() => {
+    globalThis.__batch2Refreshes = { import: 0, preview: 0 };const request = globalThis.__batchRequests[1];request.resolve({ results: [{ id: request.input.questions[0].id, analysis: '第二批建议', needsReview: false }] });
+  });
   await page.locator('#ai-preview-status-v991').filter({ hasText: '处理 2 道题' }).waitFor();
   assert.equal(await page.locator('[data-ai-analysis-apply-v991]').count(), 2);
   assert.equal(await page.locator('#ai-preview-start-btn-v991').isEnabled(), true);
@@ -3188,7 +3394,9 @@ test('AI 成功结束只同步一次，中间批次仍立即展示建议', async
   await page.locator('#import-text').fill('待整理的原文');
   await page.locator('#ai-import-start-btn-v99').click();
   await page.waitForFunction(() => globalThis.__batchRequests.length === 3);
-  await page.evaluate(() => { globalThis.__batch2Refreshes = { import: 0, preview: 0 };globalThis.__batchRequests[2].resolve({ mode: 'direct_questions', questions: [{ type: 'short', question: '整理后的题', options: [], answer: [] }] }); });
+  await page.evaluate(() => {
+    globalThis.__batch2Refreshes = { import: 0, preview: 0 };globalThis.__batchRequests[2].resolve({ mode: 'direct_questions', questions: [{ type: 'short', question: '整理后的题', options: [], answer: [] }] });
+  });
   await page.locator('#ai-import-status-v99').filter({ hasText: '整理完成' }).waitFor();
   assert.equal(await page.locator('#ai-import-start-btn-v99').isEnabled(), true);
   const importEnd = await page.evaluate(() => globalThis.__batch2Refreshes);
@@ -3275,7 +3483,9 @@ test('第三批考试：局部更新计数、焦点与同卷重绘后的迟到�
     globalThis.__examCard = globalThis.document.querySelector('#exam-answer-card-v30');
     globalThis.__examOtherJump = globalThis.document.querySelector('[data-exam-jump="2"]');
   });
-  const reset = () => page.evaluate(() => { Object.assign(globalThis.__examCounts, { keys: 0, answers: 0, cardWrites: 0 }); });
+  const reset = () => page.evaluate(() => {
+    Object.assign(globalThis.__examCounts, { keys: 0, answers: 0, cardWrites: 0 });
+  });
   const check = async (answered) => {
     assert.match(await page.locator('#exam-answer-card-v30').innerText(), new RegExp(`已答 ${answered} / 40，未答 ${40 - answered}`));
     const observed = await page.evaluate(() => ({
@@ -3336,8 +3546,12 @@ test('第三批考试：保存失败后继续编辑、重试与重复提交保�
   await page.locator('#exam-card textarea').fill('原答案');
   await page.evaluate(() => {
     const { write } = globalThis.ShirohaPlatform.storage;
-    globalThis.__restoreThirdExamWrite = () => { globalThis.ShirohaPlatform.storage.write = write; };
-    globalThis.ShirohaPlatform.storage.write = async () => { throw new Error('模拟考试保存失败'); };
+    globalThis.__restoreThirdExamWrite = () => {
+      globalThis.ShirohaPlatform.storage.write = write;
+    };
+    globalThis.ShirohaPlatform.storage.write = async () => {
+      throw new Error('模拟考试保存失败');
+    };
   });
   await page.locator('#exam-submit-focus').click();
   await page.locator('#platform-status.failed').waitFor();
@@ -3348,7 +3562,9 @@ test('第三批考试：保存失败后继续编辑、重试与重复提交保�
   await page.evaluate(() => globalThis.__restoreThirdExamWrite());
   await page.locator('#platform-status button').click();
   await page.locator('#exam-back-setup').waitFor();
-  await page.locator('#submit-exam-btn').evaluate((button) => { button.click();button.click(); });
+  await page.locator('#submit-exam-btn').evaluate((button) => {
+    button.click();button.click();
+  });
   const { records } = JSON.parse(await saved(page));
   assert.equal(records.length, 1);
   assert.equal(records[0].answered, 1);
@@ -3397,7 +3613,9 @@ test('第三批题库：局部勾选保留节点、跨页选择并拒绝迟到�
     const { write } = globalThis.ShirohaPlatform.storage;
     globalThis.__releaseBulkWrite = null;
     globalThis.ShirohaPlatform.storage.write = (...args) => new Promise((resolve, reject) => {
-      globalThis.__releaseBulkWrite = () => { globalThis.ShirohaPlatform.storage.write = write;write(...args).then(resolve, reject); };
+      globalThis.__releaseBulkWrite = () => {
+        globalThis.ShirohaPlatform.storage.write = write;write(...args).then(resolve, reject);
+      };
     });
   });
   await page.locator('#bank-list [data-openbank]').first().evaluate((node) => node.click());
@@ -3439,7 +3657,9 @@ test('第三批装配：启动和恢复各一次题库选择器渲染并同步�
   assert(await page.locator('#export-bank-all-v23').isChecked());
   assert.equal(await page.locator('#bank-list [data-bank-bulk-v23]:checked').count(), 2);
   assert.match(await page.locator('#export-bank-summary-v23').innerText(), /已选择 2 个题库/);
-  await page.evaluate(async () => { globalThis.__bankSelectRenders = 0;await globalThis.__restartApplicationForTest(); });
+  await page.evaluate(async () => {
+    globalThis.__bankSelectRenders = 0;await globalThis.__restartApplicationForTest();
+  });
   assert.equal(await page.evaluate(() => globalThis.__bankSelectRenders), 1);
   assert.equal(await page.locator('#bank-list [data-bank-bulk-v23]:checked').count(), 2);
   await page.locator('#export-bank-all-v23').uncheck();
@@ -3534,7 +3754,9 @@ test('第三批收藏：两道题的后发读取先返回时只进入最后选�
   await page.locator('[data-practice-one-fav-v596="judge"]').click();
   await page.waitForFunction(() => globalThis.__favoriteReads.length === 2);
   assert.deepEqual(await page.evaluate(() => globalThis.__favoriteReads.map((read) => read.refs.map((ref) => [ref.bankId, ref.questionId]))), [[['bank-a', 'multiple']], [['bank-a', 'judge']]]);
-  await page.evaluate(() => { globalThis.__restoreFavoriteReads();globalThis.__favoriteReads[1].resolve(); });
+  await page.evaluate(() => {
+    globalThis.__restoreFavoriteReads();globalThis.__favoriteReads[1].resolve();
+  });
   await page.locator('#practice.active').waitFor();
   assert.equal(await page.locator('#practice-number-range-v58916').inputValue(), '2-2');
   await page.evaluate(() => globalThis.__favoriteReads[0].resolve());
@@ -3551,7 +3773,9 @@ test('审查回归：收藏读取期间保存等待并在完成后恢复列表',
   await page.evaluate(() => {
     const { storage } = globalThis.ShirohaPlatform;
     storage.lazy = true;
-    storage.ensureQuestions = () => new Promise((resolve) => { globalThis.__finishFavoriteListRead = resolve; });
+    storage.ensureQuestions = () => new Promise((resolve) => {
+      globalThis.__finishFavoriteListRead = resolve;
+    });
   });
   await page.locator('.nav[data-view="favorites"]').click();
   await page.waitForFunction(() => typeof globalThis.__finishFavoriteListRead === 'function');
@@ -3708,7 +3932,9 @@ for (const mode of ['single', 'total']) {
     await page.locator('#practice-limit').selectOption('all');
     await page.locator('#start-practice-btn').click();
     await page.locator('#practice-card textarea').fill('第一题原答案');
-    await page.locator('#practice-card textarea').evaluate((node) => { globalThis.__oldPracticeText = node; });
+    await page.locator('#practice-card textarea').evaluate((node) => {
+      globalThis.__oldPracticeText = node;
+    });
     await page.locator('#p-next').click();
     await page.locator('#practice-card textarea').fill('第二题答案');
     await page.evaluate(() => {
@@ -3728,7 +3954,9 @@ for (const mode of ['single', 'total']) {
     await page.locator('#practice-submit-mode').selectOption(mode);
     await page.locator('#start-practice-btn').click();
     await page.locator('#practice-card .option[data-key="A"]').click();
-    await page.locator('[data-clear-answer-options]').evaluate((node) => { globalThis.__oldPracticeClear = node; });
+    await page.locator('[data-clear-answer-options]').evaluate((node) => {
+      globalThis.__oldPracticeClear = node;
+    });
     await page.locator('#p-favorite').click();
     await page.locator('body[data-storage-state="ready"]').waitFor();
     await page.locator('#practice-card .option[data-key="B"]').click();
@@ -3779,7 +4007,9 @@ test('第三批题库编辑：当前按钮目标不存在时保留原提示', as
   await page.locator('.nav[data-view="banks"]').click();
   const button = page.locator('[data-editbank-v45="bank-a"]');
   await button.locator('..').locator('..').locator('summary').click();
-  await button.evaluate((node) => { node.dataset.editbankV45 = 'missing-bank';node.click(); });
+  await button.evaluate((node) => {
+    node.dataset.editbankV45 = 'missing-bank';node.click();
+  });
   await page.locator('.toast-item').filter({ hasText: '没有找到该题库' }).waitFor();
   assert.equal(await page.locator('#banks.active').count(), 1);
 });
@@ -3876,7 +4106,9 @@ for (const scenario of ['当前页', '翻页后', '离页后返回']) {
         calls += 1;
         if (calls > 1) { return Promise.resolve(); }
         return new Promise((_resolve, reject) => {
-          globalThis.__failPagedRead = () => { delete storage.ensureQuestions;reject(new Error('模拟分页旧读取失败')); };
+          globalThis.__failPagedRead = () => {
+            delete storage.ensureQuestions;reject(new Error('模拟分页旧读取失败'));
+          };
         });
       };
     });
@@ -3912,7 +4144,9 @@ for (const leave of [false, true]) {
     await page.evaluate(() => {
       const { storage } = globalThis.ShirohaPlatform;
       storage.ensureRecords = () => new Promise((_resolve, reject) => {
-        globalThis.__failRecordDetails = () => { delete storage.ensureRecords;reject(new Error('模拟记录详情旧读取失败')); };
+        globalThis.__failRecordDetails = () => {
+          delete storage.ensureRecords;reject(new Error('模拟记录详情旧读取失败'));
+        };
       });
     });
     await page.locator('#records [data-training-review]').first().click();
@@ -3949,7 +4183,9 @@ for (const leave of [false, true]) {
         calls += 1;
         if (calls > 1) { return Promise.resolve(); }
         return new Promise((_resolve, reject) => {
-          globalThis.__failReviewDetails = () => { delete storage.ensureQuestions;reject(new Error('模拟复盘详情旧读取失败')); };
+          globalThis.__failReviewDetails = () => {
+            delete storage.ensureQuestions;reject(new Error('模拟复盘详情旧读取失败'));
+          };
         });
       };
     });
@@ -3991,7 +4227,9 @@ for (const view of ['favorites', 'wrongbook']) {
       await page.evaluate(() => {
         const { storage } = globalThis.ShirohaPlatform;
         storage.ensureQuestions = () => new Promise((_resolve, reject) => {
-          globalThis.__failSavedRead = () => { delete storage.ensureQuestions;reject(new Error('模拟收藏错题旧读取失败')); };
+          globalThis.__failSavedRead = () => {
+            delete storage.ensureQuestions;reject(new Error('模拟收藏错题旧读取失败'));
+          };
         });
       });
       if (view === 'favorites') {
@@ -4081,7 +4319,9 @@ test('第三批记录列表明细：关闭一项后其余展开明细继续补�
     storage.ensureRecords = (_snapshot, ids) => {
       globalThis.__recordBatchReads.push(ids);
       if (ids.length !== 2) { return Promise.resolve(); }
-      return new Promise((resolve) => { globalThis.__finishRecordBatch = resolve; });
+      return new Promise((resolve) => {
+        globalThis.__finishRecordBatch = resolve;
+      });
     };
   });
   await page.locator('.nav[data-view="records"]').click();
@@ -4112,7 +4352,9 @@ test('第三批记录列表明细：无展开记录时初始化、分页与筛�
     const { storage } = globalThis.ShirohaPlatform;
     storage.lazy = true;
     globalThis.__emptyRecordReads = [];
-    storage.ensureRecords = async (_snapshot, ids) => { globalThis.__emptyRecordReads.push(ids); };
+    storage.ensureRecords = async (_snapshot, ids) => {
+      globalThis.__emptyRecordReads.push(ids);
+    };
   });
   await page.locator('.nav[data-view="records"]').click();
   await page.locator('#records-list-pager').getByRole('button', { name: '第 2 页', exact: true }).click();
@@ -4155,8 +4397,12 @@ test('第四批导入：单文件重选、清空、手动编辑复原和程序�
   assert.equal(await text.inputValue(), sample);
 
   await batch4SelectDelayed(page, '#import-file', 'OCR前.txt');
-  await page.locator('#ocr-result').evaluate((field) => { field.value = '人工核对过的 OCR 文本'; });
-  await page.locator('#ocr-use-text-btn').evaluate((button) => { button.disabled = false;button.click(); });
+  await page.locator('#ocr-result').evaluate((field) => {
+    field.value = '人工核对过的 OCR 文本';
+  });
+  await page.locator('#ocr-use-text-btn').evaluate((button) => {
+    button.disabled = false;button.click();
+  });
   await page.evaluate(() => globalThis.__batch4Reads['OCR前.txt'].resolve('旧文件覆盖 OCR'));
   await page.waitForTimeout(50);
   assert.equal(await text.inputValue(), '人工核对过的 OCR 文本');
@@ -4412,7 +4658,9 @@ test('第四批 WebDAV：开始只同步一次，保留列表节点并同步停�
 
 test('第四批 WebDAV：列表内容变化和节点替换后重绘并保持恢复入口', async (t) => {
   const page = await batch4DavPage(t);
-  await page.evaluate(() => { globalThis.__davNode = globalThis.document.querySelector('[data-webdav-restore-v378]'); });
+  await page.evaluate(() => {
+    globalThis.__davNode = globalThis.document.querySelector('[data-webdav-restore-v378]');
+  });
   await page.locator('#webdav-refresh-v378').click();
   await page.waitForFunction(() => !globalThis.document.querySelector('#webdav-refresh-v378').disabled);
   assert.equal(await page.evaluate(() => globalThis.document.querySelector('[data-webdav-restore-v378]') === globalThis.__davNode), true);

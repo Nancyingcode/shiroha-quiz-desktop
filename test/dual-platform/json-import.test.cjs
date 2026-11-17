@@ -30,9 +30,15 @@ function setup(data, { mode = 'auto', accepted = true } = {}) {
     normalizeBackupPayloadV23: api.normalizeBackupPayloadV23,
     countUnresolvedBackupImagesV24: api.countUnresolvedBackupImagesV24,
     ShirohaPlatform: { storage: {} },
-    ShirohaDialogs: { confirm: async (message) => { confirmations.push(message); return accepted; } },
+    ShirohaDialogs: {
+      confirm: async (message) => {
+        confirmations.push(message); return accepted;
+      },
+    },
     runMutation: async (action) => action(),
-    applyBackupImportV23: async (...args) => { imports.push(args); },
+    applyBackupImportV23: async (...args) => {
+      imports.push(args);
+    },
     renderImportPreview: (questions) => previews.push(plain(questions)),
     collectImportWarnings: () => [],
     collectSoftRiskWarnings: () => [],

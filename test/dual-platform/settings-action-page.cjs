@@ -11,7 +11,9 @@ test.before(async () => {
   server = await startServer(WEB_ROOT);
   browser = await chromium.launch({ headless: true, ...(process.env.SHIROHA_BROWSER_EXECUTABLE ? { executablePath: process.env.SHIROHA_BROWSER_EXECUTABLE } : { channel: 'msedge' }) });
 });
-test.after(async () => { await browser?.close(); await server?.close(); });
+test.after(async () => {
+  await browser?.close(); await server?.close();
+});
 
 // 必须包在 #exam 里：快捷操作的对齐规则都以 #exam / #practice 作用域书写，脱离该作用域测不到真实样式。
 const FORM = [

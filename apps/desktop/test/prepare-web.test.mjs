@@ -218,7 +218,9 @@ test('moves handlers to an external script while preserving click/error behavior
       index += 1;
       return Object.assign(element, {
         /** @param {string} type @param {(this: object, event: object) => void} callback */
-        addEventListener(type, callback) { events.push({ type, callback }); },
+        addEventListener(type, callback) {
+          events.push({ type, callback });
+        },
       });
     },
   };

@@ -6,7 +6,14 @@
     return '尚未配置 AI 服务，请先在“AI 设置”中选择并配置执行方式。';
   }
 
-  function createPractice({ practice, question, request, result, view, maxFollowUps }) {
+  function createPractice({
+    practice,
+    question,
+    request,
+    result,
+    view,
+    maxFollowUps,
+  }) {
     // 草稿和控制器属于当前练习轮次；重置或来源题变化后释放。
     const sessions = new Map();
     let practiceOwner = null;
@@ -211,7 +218,13 @@
     };
   }
 
-  function createReview({ question, request, result, storage, view }) {
+  function createReview({
+    question,
+    request,
+    result,
+    storage,
+    view,
+  }) {
     // 解析草稿只属于当前页面会话；来源库、题目和场景共同标识，卸载的列表项会取消请求并释放草稿，不写入备份。
     const sessions = new Map();
 
@@ -255,7 +268,9 @@
     }
 
     function retain(mounted) {
-      sessions.forEach((_session, key) => { if (!mounted.has(key)) { remove(key); } });
+      sessions.forEach((_session, key) => {
+        if (!mounted.has(key)) { remove(key); }
+      });
     }
 
     async function run(session) {

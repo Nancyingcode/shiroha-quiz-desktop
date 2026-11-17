@@ -81,8 +81,12 @@ function setup(respond) {
     refreshAiImportPanelV99() {},
     withAiTimeoutV99: (_timeout, run) => run({}),
     buildAiMessagesV99: (_text, options) => options,
-    requestAiChatV99: async (_config, options) => { requests.push(options.requestedMode); return respond(requests.length); },
-    parseAiRefactorPayloadV384: () => { throw new Error('模型业务 JSON 无效'); },
+    requestAiChatV99: async (_config, options) => {
+      requests.push(options.requestedMode); return respond(requests.length);
+    },
+    parseAiRefactorPayloadV384: () => {
+      throw new Error('模型业务 JSON 无效');
+    },
   });
   runWebScripts(context, ['import-preview.js']);
   context.importDraft = context.ShirohaImportPreview.create({ readers: {}, ocr: {} });
@@ -100,7 +104,9 @@ for (const failure of [
   { aiStage: 'json' }, { message: '无法连接接口' },
 ]) {
   test(`导入请求失败不另发文本兜底：${JSON.stringify(failure)}`, async () => {
-    const { context, requests, original } = setup(async () => { throw Object.assign(new Error('执行失败'), failure); });
+    const { context, requests, original } = setup(async () => {
+      throw Object.assign(new Error('执行失败'), failure);
+    });
     await context.startAiImportV99();
     assert.deepEqual(requests, ['direct_questions']);
     assert.equal(context.importDraft.questions, original);
@@ -118,7 +124,9 @@ test('已收到模型内容但业务结构无效时仍可请求一次文本兜�
 function deferred() {
   let resolve;
   let reject;
-  const promise = new Promise((accept, decline) => { resolve = accept; reject = decline; });
+  const promise = new Promise((accept, decline) => {
+    resolve = accept; reject = decline;
+  });
   return { promise, resolve, reject };
 }
 
@@ -229,7 +237,12 @@ function cancellationFixture(overrides = {}) {
 
 for (const cancelled of [true, false]) {
   test(`导入${cancelled ? '取消' : '失败'}提示与保留草稿一致`, async () => {
-    const { context, pending, status, notices } = cancellationFixture();
+    const {
+      context,
+      pending,
+      status,
+      notices,
+    } = cancellationFixture();
     const task = context.startAiImportV99();
     const error = new Error('测试失败');
     if (cancelled) { error.name = 'AbortError'; }
@@ -246,8 +259,12 @@ for (const kind of ['import', 'preview']) {
     const timers = new Set();
     const { context, pending, status } = cancellationFixture({
       useRealTimeout: kind === 'import',
-      setTimeout: (callback) => { timers.add(callback); return callback; },
-      clearTimeout: (timer) => { timers.delete(timer); },
+      setTimeout: (callback) => {
+        timers.add(callback); return callback;
+      },
+      clearTimeout: (timer) => {
+        timers.delete(timer);
+      },
     });
     const task = kind === 'import' ? context.startAiImportV99() : context.startAiPreviewTaskV991();
     assert.equal(timers.size, 1);
@@ -269,8 +286,12 @@ for (const kind of ['import', 'preview']) {
     const timers = new Set();
     const { context, pending, status } = cancellationFixture({
       useRealTimeout: kind === 'import',
-      setTimeout: (callback) => { timers.add(callback); return callback; },
-      clearTimeout: (timer) => { timers.delete(timer); },
+      setTimeout: (callback) => {
+        timers.add(callback); return callback;
+      },
+      clearTimeout: (timer) => {
+        timers.delete(timer);
+      },
     });
     const start = kind === 'import' ? () => context.startAiImportV99() : () => context.startAiPreviewTaskV991();
     const cancel = kind === 'import' ? () => context.cancelAiImportRequestV99(true) : () => context.cancelAiPreviewRequestV991(true);
@@ -364,7 +385,12 @@ for (const kind of ['import', 'preview']) {
 for (const kind of ['import', 'preview']) {
   for (const oldOutcome of ['response', 'error']) {
     test(`${kind} 取消旧任务并重启后，忽略中止的旧${oldOutcome}不得改写新任务`, async () => {
-      const { context, pending, status, notices } = cancellationFixture();
+      const {
+        context,
+        pending,
+        status,
+        notices,
+      } = cancellationFixture();
       const start = kind === 'import' ? () => context.startAiImportV99() : () => context.startAiPreviewTaskV991();
       const cancel = kind === 'import' ? () => context.cancelAiImportRequestV99(true) : () => context.cancelAiPreviewRequestV991(true);
       const current = () => (kind === 'import' ? context.aiImportRequestV99 : context.aiPreviewRequestV991);
@@ -412,7 +438,12 @@ for (const stage of ['首次成功', '首次失败', '兜底之前', '兜底成�
   for (const change of ['重新识别', '表格替换', '摘要外原位编辑', '选区外原文', '相同文字新选区']) {
     test(`整理期间${change}，${stage}不得覆盖新草稿或提示`, async () => {
       let range = { scope: 'selection', text: '相同', label: '选区', sourceText: '相同 x 相同', selectionStart: 0, selectionEnd: 2 };
-      const { context, pending, status, notices } = cancellationFixture({
+      const {
+        context,
+        pending,
+        status,
+        notices,
+      } = cancellationFixture({
         aiImportRangeV992: () => ({ ...range }),
         parseAiRefactorPayloadV384: (content) => {
           if (content === '结构无效') { throw new Error('结构无效'); }
@@ -761,7 +792,12 @@ for (const code of [400, 422]) {
 }
 
 test('草稿失效提示保持准确，旧结果不能覆盖随后启动的整理', async () => {
-  const { context, pending, status, notices } = cancellationFixture();
+  const {
+    context,
+    pending,
+    status,
+    notices,
+  } = cancellationFixture();
   const old = context.startAiImportV99();
   context.invalidateAiImportRequestV99();
   assert.match(status.at(-1), /变化.*停止/);
@@ -828,9 +864,15 @@ for (const kind of ['import', 'preview']) {
     test(`${kind} ${ending} 结束时每个可见面板只同步一次`, async () => {
       const counts = { import: 0, preview: 0 };
       const { context, pending } = cancellationFixture({
-        syncAiImportActionV99: () => { counts.import += 1;counts.preview += 1; },
-        refreshAiImportPanelV99: () => { counts.import += 1; },
-        refreshAiPreviewPanelV991: () => { counts.preview += 1; },
+        syncAiImportActionV99: () => {
+          counts.import += 1;counts.preview += 1;
+        },
+        refreshAiImportPanelV99: () => {
+          counts.import += 1;
+        },
+        refreshAiPreviewPanelV991: () => {
+          counts.preview += 1;
+        },
       });
       const task = kind === 'import' ? context.startAiImportV99() : context.startAiPreviewTaskV991();
       assert.equal(pending.length, 1);

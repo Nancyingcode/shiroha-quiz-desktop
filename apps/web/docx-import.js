@@ -171,7 +171,9 @@
     function decodeQuotedPrintableV58922(text, charset = 'utf-8') {
       const source = String(text || '').replace(/=\r?\n/g, '');
       const bytes = [];const encoder = new TextEncoder();let literal = '';
-      const flush = () => { if (!literal) { return; } const encoded = encoder.encode(literal);for (const b of encoded) { bytes.push(b); }literal = ''; };
+      const flush = () => {
+        if (!literal) { return; } const encoded = encoder.encode(literal);for (const b of encoded) { bytes.push(b); }literal = '';
+      };
       for (let i = 0;i < source.length;i += 1) {
         if (source[i] === '=' && /^[0-9A-Fa-f]{2}$/.test(source.slice(i + 1, i + 3))) {
           flush();bytes.push(parseInt(source.slice(i + 1, i + 3), 16));i += 2;
@@ -398,7 +400,9 @@
     function docxOmmlToPlainText(xml) {
       let s = String(xml || '');
       if (!s) { return ''; }
-      const replaceStruct = (re, fn) => { s = s.replace(re, fn); };
+      const replaceStruct = (re, fn) => {
+        s = s.replace(re, fn);
+      };
       for (let i = 0;i < 4;i += 1) {
         replaceStruct(/<m:f\b[\s\S]*?<\/m:f>/g, (m) => {
           const num = docxInnerXmlOfTag(m, 'm:num');
@@ -478,7 +482,9 @@
       while ((im = idRe.exec(String(token || '')))) { ids.push(im[1]); }
       return [...new Set(ids)].map((id) => (imageMap[id] ? `\n${imageMap[id]}\n` : '')).join('');
     }
-    function decodeXml(s) { return String(s).replace(/&#x([0-9a-fA-F]+);/g, (_, n) => String.fromCodePoint(parseInt(n, 16))).replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(parseInt(n, 10))).replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&apos;/g, "'"); }
+    function decodeXml(s) {
+      return String(s).replace(/&#x([0-9a-fA-F]+);/g, (_, n) => String.fromCodePoint(parseInt(n, 16))).replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(parseInt(n, 10))).replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&apos;/g, "'");
+    }
 
     return { extractDocxText, docxXmlToText, decodeXml };
   }

@@ -16,7 +16,9 @@ for (const fail of [false, true]) {
           return { items: [{ str: 'A self authored question with enough text for extraction', transform: [0, 0, 0, 0, 0, 0] }] };
         },
       }),
-      destroy: async () => { destroyed += 1; },
+      destroy: async () => {
+        destroyed += 1;
+      },
     };
     const context = vm.createContext({ Uint8Array, TextDecoder });
     context.window = context;
@@ -55,14 +57,18 @@ function ocrFixture({ recognize, viewport = { width: 1000, height: 1000 } }) {
   const page = {
     getViewport: () => viewport,
     render: () => ({ promise: Promise.resolve() }),
-    cleanup: () => { stats.cleaned += 1; },
+    cleanup: () => {
+      stats.cleaned += 1;
+    },
   };
   const pdf = {
     loadLocalPdfJs: async () => ({
       lib: {
         getDocument: () => ({
           promise: Promise.resolve({ numPages: 1, getPage: async () => page }),
-          destroy: async () => { stats.destroyed += 1; },
+          destroy: async () => {
+            stats.destroyed += 1;
+          },
         }),
       },
     }),
@@ -73,7 +79,9 @@ function ocrFixture({ recognize, viewport = { width: 1000, height: 1000 } }) {
   context.Tesseract = {
     createWorker: async () => ({
       recognize,
-      terminate: async () => { stats.terminated += 1; },
+      terminate: async () => {
+        stats.terminated += 1;
+      },
     }),
   };
   runWebScripts(context, ['ocr-import.js']);
@@ -85,7 +93,11 @@ function ocrFixture({ recognize, viewport = { width: 1000, height: 1000 } }) {
 }
 
 test('failed OCR releases canvas, worker and PDF without losing the failure status', async () => {
-  const { session, elements, stats } = ocrFixture({ recognize: async () => { throw new Error('broken recognition'); } });
+  const { session, elements, stats } = ocrFixture({
+    recognize: async () => {
+      throw new Error('broken recognition');
+    },
+  });
   await session.startPdfOcrImport();
   assert.deepEqual([stats.canvases[0].width, stats.canvases[0].height], [1, 1]);
   assert.equal(stats.destroyed, 1); assert.equal(stats.terminated, 1); assert.equal(stats.cleaned, 1);
@@ -95,8 +107,12 @@ test('failed OCR releases canvas, worker and PDF without losing the failure stat
 
 test('cancelling pending recognition releases resources and permits retry without late results', async () => {
   let finishOldRecognition; let recognitionStarted;
-  const pending = new Promise((resolve) => { finishOldRecognition = resolve; });
-  const started = new Promise((resolve) => { recognitionStarted = resolve; });
+  const pending = new Promise((resolve) => {
+    finishOldRecognition = resolve;
+  });
+  const started = new Promise((resolve) => {
+    recognitionStarted = resolve;
+  });
   let calls = 0;
   const { session, elements, stats } = ocrFixture({
     recognize: () => {
@@ -105,10 +121,14 @@ test('cancelling pending recognition releases resources and permits retry withou
     },
   });
   let completed = false;
-  const running = session.startPdfOcrImport().then(() => { completed = true; });
+  const running = session.startPdfOcrImport().then(() => {
+    completed = true;
+  });
   await started;
   elements['ocr-cancel-btn'].onclick();
-  await new Promise((resolve) => { setImmediate(resolve); });
+  await new Promise((resolve) => {
+    setImmediate(resolve);
+  });
   assert.equal(completed, true, 'cancellation must not await the terminated Worker');
   await running;
   assert.equal(session.isRunning(), false);
@@ -117,7 +137,9 @@ test('cancelling pending recognition releases resources and permits retry withou
   assert.equal(elements['ocr-use-text-btn'].disabled, true);
   await session.startPdfOcrImport();
   finishOldRecognition({ data: { text: 'late old result' } });
-  await new Promise((resolve) => { setImmediate(resolve); });
+  await new Promise((resolve) => {
+    setImmediate(resolve);
+  });
   assert.match(session.currentOcrText(), /new result/);
   assert.doesNotMatch(session.currentOcrText(), /late old result/);
   assert.equal(session.isRunning(), false);
@@ -127,9 +149,17 @@ test('cancelling pending recognition releases resources and permits retry withou
 
 test('switching import source cannot receive a late OCR result', async () => {
   let finish; let recognitionStarted;
-  const pending = new Promise((resolve) => { finish = resolve; });
-  const started = new Promise((resolve) => { recognitionStarted = resolve; });
-  const { session, stats } = ocrFixture({ recognize: () => { recognitionStarted(); return pending; } });
+  const pending = new Promise((resolve) => {
+    finish = resolve;
+  });
+  const started = new Promise((resolve) => {
+    recognitionStarted = resolve;
+  });
+  const { session, stats } = ocrFixture({
+    recognize: () => {
+      recognitionStarted(); return pending;
+    },
+  });
   const running = session.startPdfOcrImport();
   await started;
   session.setOcrImportSource({ name: 'new.pdf' });

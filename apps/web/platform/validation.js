@@ -47,19 +47,29 @@
   }
 
   /** @returns {CheckResult} */
-  function pass() { return { ok: true, value: undefined }; }
+  function pass() {
+    return { ok: true, value: undefined };
+  }
 
   /** @param {unknown} value @returns {value is Record<string, unknown>} */
-  function object(value) { return value !== null && typeof value === 'object' && !Array.isArray(value); }
+  function object(value) {
+    return value !== null && typeof value === 'object' && !Array.isArray(value);
+  }
 
   /** @param {unknown} value @returns {value is string} */
-  function id(value) { return typeof value === 'string' && value.trim().length > 0; }
+  function id(value) {
+    return typeof value === 'string' && value.trim().length > 0;
+  }
 
   /** @param {unknown} value */
-  function revision(value) { return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0; }
+  function revision(value) {
+    return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
+  }
 
   /** @param {Record<string, unknown>} value @param {readonly string[]} keys */
-  function onlyKeys(value, keys) { return Object.keys(value).every((key) => keys.includes(key)); }
+  function onlyKeys(value, keys) {
+    return Object.keys(value).every((key) => keys.includes(key));
+  }
 
   /** @param {unknown} value @param {Set<object>} ancestors @param {number} depth @returns {ErrorCode | null} */
   function inspectJson(value, ancestors = new Set(), depth = 0) {

@@ -56,7 +56,9 @@ test('PDF 文本按页面和坐标排序；文字层失败回退并释放文档'
             }),
           }),
         }),
-        destroy: async () => { destroyed += 1; },
+        destroy: async () => {
+          destroyed += 1;
+        },
       }),
     },
   };
@@ -65,7 +67,9 @@ test('PDF 文本按页面和坐标排序；文字层失败回退并释放文档'
   assert.equal(destroyed, 1);
   context.__pdfjsMixed.lib.getDocument = () => ({
     promise: Promise.reject(new Error('damaged PDF')),
-    destroy: async () => { destroyed += 1; },
+    destroy: async () => {
+      destroyed += 1;
+    },
   });
   assert.equal(await api.extractPdfText(file), 'Fallback self authored question text');
   assert.equal(destroyed, 2);

@@ -24,7 +24,9 @@ test('缺省、明确空库与损坏/未来数据不同；失败原值不变', a
 });
 test('队列冻结连续编辑，严格按序写入且推进修订', async () => {
   const r = runtime(); const s = r.create(); await s.initialize();
-  const written = [];const set = r.storage.setItem;r.storage.setItem = (key, value) => { written.push(JSON.parse(value));return set(key, value); };
+  const written = [];const set = r.storage.setItem;r.storage.setItem = (key, value) => {
+    written.push(JSON.parse(value));return set(key, value);
+  };
   const queue = r.queue(s); const a = snapshot();
   const first = queue.save(a); a.activeBankId = 'later';
   const second = queue.save(a); await Promise.all([first, second]);
@@ -47,7 +49,9 @@ test('即使外部标签把原值改回，已观察的变更也禁止过期写�
 test('首写 quota 失败阻断依赖写入；明确重试后恢复', async () => {
   const r = runtime(); const s = r.create(); await s.initialize();
   const queue = r.queue(s); const original = r.storage.setItem;
-  r.storage.setItem = () => { throw Object.assign(new Error('full'), { name: 'QuotaExceededError' }); };
+  r.storage.setItem = () => {
+    throw Object.assign(new Error('full'), { name: 'QuotaExceededError' });
+  };
   const results = await Promise.allSettled([queue.save(snapshot()), queue.save(snapshot())]);
   assert(results.every((x) => x.status === 'rejected'));
   assert.equal(r.values.size, 0);
@@ -58,7 +62,9 @@ test('保存进行中禁止恢复，失败阻断后继直到明确重试', async
   const r = runtime();
   let releaseWrite;
   let shouldFail = true;
-  const gate = new Promise((resolve) => { releaseWrite = resolve; });
+  const gate = new Promise((resolve) => {
+    releaseWrite = resolve;
+  });
   const writes = [];
   const queue = r.queue({
     revision: () => 0,
@@ -94,7 +100,9 @@ test('保存进行中禁止恢复，失败阻断后继直到明确重试', async
 test('保存队列状态优先显示进行中，再显示失败，明确恢复后显示已保存', async () => {
   const r = runtime(); const s = r.create(); await s.initialize();
   const queue = r.queue(s); const original = r.storage.setItem;
-  r.storage.setItem = () => { throw new Error('write failed'); };
+  r.storage.setItem = () => {
+    throw new Error('write failed');
+  };
   const first = queue.save(snapshot());
   assert.equal(queue.status().state, 'pending');
   await assert.rejects(first);
@@ -111,7 +119,9 @@ test('外部标签更改与拒绝访问不得覆盖数据', async () => {
   r.values.set('state', 'external');
   await assert.rejects(r.queue(s).save(snapshot()), /其他页面/);
   assert.equal(r.values.get('state'), 'external');
-  const denied = r.create(); r.storage.getItem = () => { throw new Error('denied'); };
+  const denied = r.create(); r.storage.getItem = () => {
+    throw new Error('denied');
+  };
   assert.equal((await denied.initialize()).state, 'recovery_required');
 });
 test('损坏 JSON、结构和未来版本进入各自恢复状态，并禁止覆盖且可导出原文', async () => {
@@ -135,7 +145,9 @@ for (const [name, code] of [['SecurityError', 'storage_unavailable'], ['QuotaExc
     const raw = JSON.stringify(snapshot());
     const read = runtime(raw); const blocked = read.create();
     const originalGet = read.storage.getItem;
-    read.storage.getItem = () => { throw new globalThis.DOMException('failure', name); };
+    read.storage.getItem = () => {
+      throw new globalThis.DOMException('failure', name);
+    };
     assert.equal((await blocked.initialize()).error.code, code);
     read.storage.getItem = originalGet;
     assert.equal(blocked.recoveryText(), raw);
@@ -144,7 +156,9 @@ for (const [name, code] of [['SecurityError', 'storage_unavailable'], ['QuotaExc
 
     const write = runtime(raw); const s = write.create();
     await s.initialize();
-    write.storage.setItem = () => { throw new globalThis.DOMException('failure', name); };
+    write.storage.setItem = () => {
+      throw new globalThis.DOMException('failure', name);
+    };
     await assert.rejects(s.write(snapshot(), 'failure', 0), (error) => error.code === code);
     assert.equal(write.values.get('state'), raw);
     assert.equal(s.revision(), 0);
@@ -156,6 +170,8 @@ test('观察到外部变更后优先报告冲突，不再访问存储', async ()
   const r = runtime(JSON.stringify(snapshot())); const s = r.create();
   await s.initialize();
   s.invalidate();
-  r.storage.getItem = () => { throw new globalThis.DOMException('denied', 'SecurityError'); };
+  r.storage.getItem = () => {
+    throw new globalThis.DOMException('denied', 'SecurityError');
+  };
   await assert.rejects(s.write(snapshot(), 'conflict', 0), (error) => error.code === 'revision_conflict');
 });

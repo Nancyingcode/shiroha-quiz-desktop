@@ -12,7 +12,9 @@ test.before(async () => {
   server = await startServer(WEB_ROOT);
   browser = await chromium.launch({ headless: true, ...(process.env.SHIROHA_BROWSER_EXECUTABLE ? { executablePath: process.env.SHIROHA_BROWSER_EXECUTABLE } : { channel: 'msedge' }) });
 });
-test.after(async () => { await browser?.close();await server?.close(); });
+test.after(async () => {
+  await browser?.close();await server?.close();
+});
 
 async function openPage(t) {
   const context = await browser.newContext();
@@ -80,7 +82,9 @@ test('恢复使单文件和双文件的迟到读取失效', async (t) => {
   await page.locator('#import-draft-status').filter({ hasText: '已保存' }).waitFor();
   await page.evaluate(() => {
     globalThis.__draftReads = {};
-    globalThis.ShirohaPlatform.files.readText = (file) => new Promise((resolve) => { globalThis.__draftReads[file.name] = resolve; });
+    globalThis.ShirohaPlatform.files.readText = (file) => new Promise((resolve) => {
+      globalThis.__draftReads[file.name] = resolve;
+    });
   });
   for (const [selector, name] of [['#import-file', '旧单文件.txt'], ['#dual-question-file', '旧题目.txt'], ['#dual-answer-file', '旧答案.txt']]) {
     await page.locator(selector).setInputFiles({ name, mimeType: 'text/plain', buffer: Buffer.from('测试') });
@@ -106,10 +110,14 @@ test('覆盖确认期间其他窗口更新草稿时拒绝覆盖', async (t) => {
   await page.locator('#save-import-draft-btn').click();
   await page.locator('#app-dialog[open]').waitFor();
   await page.evaluate(async () => {
-    const db = await new Promise((resolve, reject) => { const request = globalThis.indexedDB.open('shiroha-import-draft', 1);request.onsuccess = () => resolve(request.result);request.onerror = () => reject(request.error); });
+    const db = await new Promise((resolve, reject) => {
+      const request = globalThis.indexedDB.open('shiroha-import-draft', 1);request.onsuccess = () => resolve(request.result);request.onerror = () => reject(request.error);
+    });
     await new Promise((resolve, reject) => {
       const transaction = db.transaction('draft', 'readwrite');const store = transaction.objectStore('draft');const request = store.get('current');
-      request.onsuccess = () => { const record = request.result;record.revision = 'other-window';record.data.fields['import-bank-name'] = '另一窗口';store.put(record, 'current'); };
+      request.onsuccess = () => {
+        const record = request.result;record.revision = 'other-window';record.data.fields['import-bank-name'] = '另一窗口';store.put(record, 'current');
+      };
       transaction.oncomplete = resolve;transaction.onabort = () => reject(transaction.error);
     });
     db.close();
@@ -130,8 +138,12 @@ test('入库失败或题目继续修改均保留已保存草稿', async (t) => {
   await page.locator('#import-draft-status').filter({ hasText: '已保存' }).waitFor();
   await page.evaluate(() => {
     const { write } = globalThis.ShirohaPlatform.storage;
-    globalThis.__restoreDraftWrite = () => { globalThis.ShirohaPlatform.storage.write = write; };
-    globalThis.ShirohaPlatform.storage.write = async () => { throw new Error('模拟写入失败'); };
+    globalThis.__restoreDraftWrite = () => {
+      globalThis.ShirohaPlatform.storage.write = write;
+    };
+    globalThis.ShirohaPlatform.storage.write = async () => {
+      throw new Error('模拟写入失败');
+    };
   });
   await page.locator('#confirm-import-btn').click();
   await page.locator('#import-summary').waitFor();
@@ -156,7 +168,11 @@ test('恢复保留未采纳的 AI 建议并丢弃恢复前迟到的整理结果'
     globalThis.ShirohaPlatform.network.ai = async (_config, payload) => {
       const input = JSON.parse(payload.messages[1].content);
       const response = (content) => ({ ok: true, status: 200, text: async () => JSON.stringify({ choices: [{ message: { content: JSON.stringify(content) } }] }) });
-      if (input.task === 'refactor_questions') { return new Promise((resolve) => { globalThis.__lateAi = () => resolve(response({ mode: 'direct_questions', questions: [{ type: 'short', question: '迟到的旧结果', options: [], answer: [] }] })); }); }
+      if (input.task === 'refactor_questions') {
+        return new Promise((resolve) => {
+          globalThis.__lateAi = () => resolve(response({ mode: 'direct_questions', questions: [{ type: 'short', question: '迟到的旧结果', options: [], answer: [] }] }));
+        });
+      }
       return response({ results: [{ id: input.questions[0].id, analysis: '尚未采纳的解析建议', needsReview: true }] });
     };
   });
@@ -182,7 +198,9 @@ test('恢复保留未采纳的 AI 建议并丢弃恢复前迟到的整理结果'
   await page.locator('#ai-organize-import-btn-v99').click();
   await page.locator('#ai-import-start-btn-v99').click();
   await page.waitForFunction(() => typeof globalThis.__lateAi === 'function');
-  await page.locator('#import-draft-status').evaluate((element) => { element.textContent = ''; });
+  await page.locator('#import-draft-status').evaluate((element) => {
+    element.textContent = '';
+  });
   await page.locator('#restore-import-draft-btn').click();
   await page.locator('#import-draft-status').filter({ hasText: '已恢复' }).waitFor();
   await page.evaluate(() => globalThis.__lateAi());
@@ -201,7 +219,11 @@ test('取消覆盖和存储错误保留已保存的草稿与当前预览', async
   page.on('app-dialog', (dialog) => dialog.dismiss());
   await page.locator('#restore-import-draft-btn').click();
   assert.equal(await page.locator('#import-bank-name').inputValue(), '当前未保存');
-  await page.evaluate(() => { globalThis.indexedDB.open = () => { throw new globalThis.DOMException('空间不足', 'QuotaExceededError'); }; });
+  await page.evaluate(() => {
+    globalThis.indexedDB.open = () => {
+      throw new globalThis.DOMException('空间不足', 'QuotaExceededError');
+    };
+  });
   await page.locator('#save-import-draft-btn').click();
   await page.locator('#import-draft-status').filter({ hasText: '失败' }).waitFor();
   assert.equal(await page.locator('#import-bank-name').inputValue(), '当前未保存');
@@ -221,8 +243,12 @@ test('写入事务失败不会替换旧草稿', async (t) => {
   await page.locator('#import-bank-name').fill('写入失败的名称');
   await page.evaluate(() => {
     const { put } = globalThis.IDBObjectStore.prototype;
-    globalThis.__restorePut = () => { globalThis.IDBObjectStore.prototype.put = put; };
-    globalThis.IDBObjectStore.prototype.put = () => { throw new globalThis.DOMException('空间不足', 'QuotaExceededError'); };
+    globalThis.__restorePut = () => {
+      globalThis.IDBObjectStore.prototype.put = put;
+    };
+    globalThis.IDBObjectStore.prototype.put = () => {
+      throw new globalThis.DOMException('空间不足', 'QuotaExceededError');
+    };
   });
   await page.locator('#save-import-draft-btn').click();
   await page.locator('#import-draft-status').filter({ hasText: '失败' }).waitFor();
@@ -260,10 +286,14 @@ test('保存时的追加目标已消失，恢复后必须重新选择', async (t
   await page.locator('#save-import-draft-btn').click();
   await page.locator('#import-draft-status').filter({ hasText: '已保存' }).waitFor();
   await page.evaluate(async () => {
-    const db = await new Promise((resolve, reject) => { const request = globalThis.indexedDB.open('shiroha-import-draft', 1);request.onsuccess = () => resolve(request.result);request.onerror = () => reject(request.error); });
+    const db = await new Promise((resolve, reject) => {
+      const request = globalThis.indexedDB.open('shiroha-import-draft', 1);request.onsuccess = () => resolve(request.result);request.onerror = () => reject(request.error);
+    });
     await new Promise((resolve, reject) => {
       const tx = db.transaction('draft', 'readwrite');const store = tx.objectStore('draft');const request = store.get('current');
-      request.onsuccess = () => { const record = request.result;record.data.fields['import-target-bank-v59'] = 'missing-bank';store.put(record, 'current'); };
+      request.onsuccess = () => {
+        const record = request.result;record.data.fields['import-target-bank-v59'] = 'missing-bank';store.put(record, 'current');
+      };
       tx.oncomplete = resolve;tx.onabort = () => reject(tx.error);
     });
     db.close();
@@ -284,15 +314,23 @@ test('损坏的草稿不会被保存操作静默覆盖', async (t) => {
   await page.locator('#save-import-draft-btn').click();
   await page.locator('#import-draft-status').filter({ hasText: '已保存' }).waitFor();
   await page.evaluate(async () => {
-    const db = await new Promise((resolve, reject) => { const request = globalThis.indexedDB.open('shiroha-import-draft', 1);request.onsuccess = () => resolve(request.result);request.onerror = () => reject(request.error); });
-    await new Promise((resolve, reject) => { const tx = db.transaction('draft', 'readwrite');tx.objectStore('draft').put(false, 'current');tx.oncomplete = resolve;tx.onabort = () => reject(tx.error); });
+    const db = await new Promise((resolve, reject) => {
+      const request = globalThis.indexedDB.open('shiroha-import-draft', 1);request.onsuccess = () => resolve(request.result);request.onerror = () => reject(request.error);
+    });
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction('draft', 'readwrite');tx.objectStore('draft').put(false, 'current');tx.oncomplete = resolve;tx.onabort = () => reject(tx.error);
+    });
     db.close();
   });
   await page.locator('#save-import-draft-btn').click();
   await page.locator('#import-draft-status').filter({ hasText: '损坏' }).waitFor();
   const stored = await page.evaluate(async () => {
-    const db = await new Promise((resolve, reject) => { const request = globalThis.indexedDB.open('shiroha-import-draft', 1);request.onsuccess = () => resolve(request.result);request.onerror = () => reject(request.error); });
-    return new Promise((resolve, reject) => { const tx = db.transaction('draft', 'readonly');const request = tx.objectStore('draft').get('current');request.onsuccess = () => resolve(request.result);tx.oncomplete = () => db.close();tx.onabort = () => reject(tx.error); });
+    const db = await new Promise((resolve, reject) => {
+      const request = globalThis.indexedDB.open('shiroha-import-draft', 1);request.onsuccess = () => resolve(request.result);request.onerror = () => reject(request.error);
+    });
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('draft', 'readonly');const request = tx.objectStore('draft').get('current');request.onsuccess = () => resolve(request.result);tx.oncomplete = () => db.close();tx.onabort = () => reject(tx.error);
+    });
   });
   assert.equal(stored, false);
 });

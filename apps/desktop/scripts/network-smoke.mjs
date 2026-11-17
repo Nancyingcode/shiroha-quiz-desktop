@@ -29,7 +29,11 @@ export async function createNativeMock(root) {
     /** @type {Buffer[]} */ const chunks = [];
     request.on('data', (chunk) => chunks.push(chunk));
     request.on('end', () => {
-      if (request.url === '/slow') { setTimeout(() => { response.end('{}'); }, 500); return; }
+      if (request.url === '/slow') {
+        setTimeout(() => {
+          response.end('{}');
+        }, 500); return;
+      }
       if (request.url === '/chat') { response.setHeader('Content-Type', 'application/json'); response.end(JSON.stringify({ choices: [{ message: { content: 'native mock response' } }] })); return; }
       if (request.url === '/practice-analysis') {
         const content = JSON.stringify({ suggestedAnswer: 'A', matchesLocalAnswer: true, analysis: 'NATIVE_PRACTICE_AI: 1 + 1 = 2', confidence: 'HIGH', needsReview: false, warning: '' });
@@ -47,18 +51,28 @@ export async function createNativeMock(root) {
   try {
     await new Promise((resolve, reject) => {
       server.once('error', reject);
-      server.listen(0, '127.0.0.1', () => { server.off('error', reject); resolve(undefined); });
+      server.listen(0, '127.0.0.1', () => {
+        server.off('error', reject); resolve(undefined);
+      });
     });
     const address = server.address();
     assert(address && typeof address === 'object');
     const origin = `http://127.0.0.1:${address.port}`;
     await writeFile(path.join(root, 'network-mock-origin'), origin, { flag: 'wx' });
-    return { origin, requests, close: () => { server.closeAllConnections(); server.close(); } };
+    return {
+      origin,
+      requests,
+      close: () => {
+        server.closeAllConnections(); server.close();
+      },
+    };
   } catch (error) {
     if (server.listening) {
       try {
         server.closeAllConnections();
-        await new Promise((resolve, reject) => { server.close((failure) => (failure ? reject(failure) : resolve(undefined))); });
+        await new Promise((resolve, reject) => {
+          server.close((failure) => (failure ? reject(failure) : resolve(undefined)));
+        });
       } catch (cleanupError) {
         throw new NativeMockStartupCleanupError(error, cleanupError, root);
       }

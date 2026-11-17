@@ -1,7 +1,13 @@
 (() => {
   'use strict';
 
-  function create({ normalizeType, normalizeQuestion, makeId, trimMultilineBoundaryV5910, splitAnswer }) {
+  function create({
+    normalizeType,
+    normalizeQuestion,
+    makeId,
+    trimMultilineBoundaryV5910,
+    splitAnswer,
+  }) {
     function aiRefactorRawQuestionsV384(data) {
       let raw = Array.isArray(data) ? data : (data?.questions ?? data?.items ?? data?.data ?? data?.题目 ?? []);
 

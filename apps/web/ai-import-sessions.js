@@ -9,11 +9,55 @@
     return raw && Number.isInteger(size) && size >= 1 && size <= 30 ? size : null;
   }
 
-  function create({ draft: importDraft, configuration, organizer, preview, view, transport, limits }) {
-    const { isEditing, current: aiExecutionConfigV99, configured: aiConfiguredV99, unavailable: aiUnavailableReasonV99, request: aiRequestConfigV99, label: aiExecutionLabelV99 } = configuration;
-    const { range: aiImportRangeV992, context: aiRefactorContextV384, messages: buildAiMessagesV99, parse: parseAiRefactorPayloadV384, parseText: parseTextQuestions, risk: largeImportRiskMessageV376 } = organizer;
-    const { mode: getPreviewMode, collectTargets: collectAiPreviewTargetDetailsV992, key: aiQuestionKeyV991, fingerprint: aiQuestionFingerprintV991, payload: aiQuestionPayloadV991, issueStatus: importIssueStatus, label: aiPreviewModeLabelV991, analysisMessages: buildAiAnalysisMessagesV991, reviewMessages: buildAiReviewMessagesV991, resultArray, normalizeReview, normalizeAnalysis, findIndex } = preview;
-    const { select: $, sync: syncAiImportActionV99, refreshImport: refreshAiImportPanelV99, importStatus: setAiImportStatusV99, previewStatus: setAiPreviewStatusV991, notice: showNotice, render: renderImportPreview } = view;
+  function create({
+    draft: importDraft,
+    configuration,
+    organizer,
+    preview,
+    view,
+    transport,
+    limits,
+  }) {
+    const {
+      isEditing,
+      current: aiExecutionConfigV99,
+      configured: aiConfiguredV99,
+      unavailable: aiUnavailableReasonV99,
+      request: aiRequestConfigV99,
+      label: aiExecutionLabelV99,
+    } = configuration;
+    const {
+      range: aiImportRangeV992,
+      context: aiRefactorContextV384,
+      messages: buildAiMessagesV99,
+      parse: parseAiRefactorPayloadV384,
+      parseText: parseTextQuestions,
+      risk: largeImportRiskMessageV376,
+    } = organizer;
+    const {
+      mode: getPreviewMode,
+      collectTargets: collectAiPreviewTargetDetailsV992,
+      key: aiQuestionKeyV991,
+      fingerprint: aiQuestionFingerprintV991,
+      payload: aiQuestionPayloadV991,
+      issueStatus: importIssueStatus,
+      label: aiPreviewModeLabelV991,
+      analysisMessages: buildAiAnalysisMessagesV991,
+      reviewMessages: buildAiReviewMessagesV991,
+      resultArray,
+      normalizeReview,
+      normalizeAnalysis,
+      findIndex,
+    } = preview;
+    const {
+      select: $,
+      sync: syncAiImportActionV99,
+      refreshImport: refreshAiImportPanelV99,
+      importStatus: setAiImportStatusV99,
+      previewStatus: setAiPreviewStatusV991,
+      notice: showNotice,
+      render: renderImportPreview,
+    } = view;
     const { request: requestAiChatV99, timeout: withAiTimeoutV99 } = transport;
     const { importChars: AI_IMPORT_MAX_CHARS_V99, previewItems: AI_PREVIEW_MAX_ITEMS_V991 } = limits;
     // 请求状态属于本页导入会话；取消或完成时替换身份，迟到操作不得修改新轮次。
