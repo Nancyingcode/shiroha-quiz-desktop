@@ -16,7 +16,7 @@
       renderRow: renderAiSuggestionRowV991, remove: removeAiSuggestionsForQuestionV991,
       invalidateImport: invalidateAiImportRequestV99, bind: bindAiSuggestionActionsV991, sync: syncAiPreviewToolsV991,
     } = suggestions;
-    const { updateBankUi: updateBankEditUiV45, syncAppend: syncImportAppendUiV59 } = editor;
+    const { updateBankUi: updateBankEditUiV45, syncAppend: syncImportAppendUiV59, saveDraft } = editor;
     const {
       currentItem: currentPracticeItemV8916, question: practiceQuestionV8916, bankId: practiceItemBankIdV8916,
       key: practiceItemKeyV8916, renderScope: renderPracticeScopeUiV8916, render: renderPracticeQuestion,
@@ -117,7 +117,7 @@
         const [cls, rowCls] = styles[severity];
         const seqInfo = [q.volume, q.group, q.number ? `原${q.number}` : ''].filter(Boolean).join(' · ');
         const checked = importDraft.selected.has(i) ? 'checked' : '';
-        return `<tr class="${rowCls}"><td class="select-cell"><input type="checkbox" class="import-row-check" data-select-import="${i}" ${checked}></td><td class="seq-cell"><b>${i + 1}</b>${seqInfo ? `<small>${esc(seqInfo)}</small>` : ''}</td><td>${label(q.type)}</td><td>${esc(short(q.question, 72))}</td><td>${q.options.length}</td><td>${esc(q.answer.join(''))}</td><td class="${cls}">${esc(status)}</td><td><div class="row-actions"><button class="ghost mini-btn" data-edit-import="${i}">编辑</button><button class="ghost danger mini-btn" data-delete-import="${i}">删除</button></div></td></tr>${renderAiSuggestionRowV991(q, i)}`;
+        return `<tr class="${rowCls}"><td class="select-cell"><input type="checkbox" class="import-row-check" data-select-import="${i}" ${checked}></td><td class="seq-cell"><b>${i + 1}</b>${seqInfo ? `<small>${esc(seqInfo)}</small>` : ''}</td><td>${label(q.type)}</td><td>${esc(short(q.question, 72))}</td><td>${q.options.length}</td><td>${esc(q.answer.join(''))}</td><td class="${cls}">${esc(status)}</td><td><div class="row-actions"><button class="ghost mini-btn" data-edit-import="${i}">编辑</button><button class="ghost mini-btn" data-save-import-draft="${i}" aria-label="保存草稿并记住第 ${i + 1} 题位置">保存草稿</button><button class="ghost danger mini-btn" data-delete-import="${i}">删除</button></div></td></tr>${renderAiSuggestionRowV991(q, i)}`;
       }).join('');
       const filterLabel = { priority: '异常优先', problem: '仅异常', normal: '仅正常', all: '全部' }[importDraft.filter] || '异常优先';
       const report = importDraft.report ? `<div class="import-report">${esc(importDraft.report)}</div>` : '';
@@ -171,6 +171,7 @@
         renderImportPreview(importDraft.questions);
       });
       $$('[data-edit-import]').forEach((btn) => btn.onclick = () => openEditQuestion(Number(btn.dataset.editImport)));
+      $$('[data-save-import-draft]').forEach((btn) => btn.onclick = () => saveDraft?.(Number(btn.dataset.saveImportDraft)));
       $$('[data-delete-import]').forEach((btn) => btn.onclick = async () => {
         const i = Number(btn.dataset.deleteImport);
         if (await globalThis.ShirohaDialogs.confirm('删除这道识别结果？')) {

@@ -767,7 +767,7 @@
       bind: bindAiSuggestionActionsV991,
       sync: syncAiPreviewToolsV991,
     },
-    editor: { updateBankUi: updateBankEditUiV45, syncAppend: syncImportAppendUiV59 },
+    editor: { updateBankUi: updateBankEditUiV45, syncAppend: syncImportAppendUiV59, saveDraft: (index) => importDraftPersistence.save(index) },
     practice: {
       currentItem: currentPracticeItemV8916,
       question: practiceQuestionV8916,
@@ -785,6 +785,34 @@
       records: renderRecords,
     },
     storage: { transaction: runMutation, save: saveSilent },
+  });
+  const importDraftPersistence = globalThis.ShirohaImportPreview.createPersistence({
+    draft: importDraft,
+    select: $,
+    store: globalThis.ShirohaImportPreview.createStore(globalThis.indexedDB),
+    suggestions: { capture: aiImportSessions.captureSuggestions, restore: aiImportSessions.restoreSuggestions },
+    actions: {
+      isEditing: () => !!bankEditor.current(),
+      confirm: (message) => ShirohaDialogs.confirm(message),
+      makeId: () => makeId('import-draft'),
+      notify: toast,
+      invalidate: () => {
+        cancelAiImportRequestV99(true);cancelAiPreviewRequestV991(true);
+        closeAiImportPanelV99();closeAiPreviewPanelV991();resetOcrImportState();
+        ['single', 'question', 'answer'].forEach((slot) => importDraft.invalidateRead(slot));
+        importDraft.invalidatePreview();importDraft.invalidateBankName();
+        ['import-file', 'dual-question-file', 'dual-answer-file'].forEach((id) => {
+          const input = $(`#${id}`);if (!input) { return; }
+          input.value = '';
+          const control = input.closest('.file-control-v615');
+          const name = control?.querySelector('.file-name-v615');
+          if (name) { name.textContent = name.dataset.emptyText || '未选择文件'; }
+          control?.classList.remove('has-file-v615');
+        });
+        const name = $('#import-bank-name');if (name) { name.dataset.autoName = '0'; }
+      },
+      render: () => { renderImportPreview(importDraft.questions);syncAiImportActionV99(); },
+    },
   });
   function parseTextQuestions(text, strategy = 'auto') {
     const result = parseTextQuestionsDetailed(text, strategy, (report) => {
@@ -994,6 +1022,9 @@
     bindReviewAnalysisEvents();
     bindTrainingReviewEvents();
     bindPracticeClockLifecycle();
+    $('#save-import-draft-btn').onclick = () => importDraftPersistence.save();
+    $('#restore-import-draft-btn').onclick = importDraftPersistence.restore;
+    $('#delete-import-draft-btn').onclick = importDraftPersistence.remove;
     $('#start-due-review').onclick = startDueReview;
     if (!dueReviewVisibilityBound) {
       document.addEventListener('visibilitychange', () => { if (!document.hidden && applicationReady) { renderStats(); } });
@@ -1994,18 +2025,25 @@ D. 高速通过积水路段`;
         importCommitBusyV5911 = false;setImportCommitBusyV5911(false);
       }
       renderAll();
+      await importDraftPersistence.imported();
       showNotice('追加成功', `已追加到“${bankPathLabelV58(target)}”：新增 ${incoming.length} 道题，当前共 ${target.questions.length} 道题。${warnings.length ? `追加前有 ${warnings.length} 条提示，建议在题库管理中抽查。` : ''}`, 'ok');
       toast(`已追加 ${incoming.length} 题到：${target.name}`, 'ok', '追加成功');
     });
   }
   async function confirmImport() {
-    if (bankEditor.current()) { return saveBankEditSessionV45(); } if (readImportSaveModeV59() === 'append' && !await loadNativeBanks([$('#import-target-bank-v59')?.value || state.activeBankId])) { return; } return runMutation(async () => {
+    if (bankEditor.current()) { return saveBankEditSessionV45(); }
+    if (readImportSaveModeV59() === 'append') {
+      const targetId = $('#import-target-bank-v59')?.value;
+      if (!targetId) { showNotice('追加失败', '原目标题库不存在，请重新选择要追加的题库。', 'danger');return; }
+      if (!await loadNativeBanks([targetId])) { return; }
+    }
+    return runMutation(async () => {
       if (importCommitBusyV5911) { return; }
       if (!importDraft.questions.length) { showNotice('导入失败', '当前没有可导入的题目。', 'danger');return; }
       const warnings = collectImportWarnings(importDraft.questions);
       const saveMode = readImportSaveModeV59();
       if (saveMode === 'append') {
-        const targetId = $('#import-target-bank-v59')?.value || state.activeBankId || '';
+        const targetId = $('#import-target-bank-v59')?.value || '';
         const target = state.banks.find((b) => b.id === targetId);
         if (!target) { showNotice('追加失败', '没有找到要追加的目标题库，请先选择已有题库。', 'danger');return; }
         await appendImportToBankV5911(target, warnings);
@@ -2036,6 +2074,7 @@ D. 高速通过积水路段`;
         importCommitBusyV5911 = false;setImportCommitBusyV5911(false);
       }
       renderAll();
+      await importDraftPersistence.imported();
       showNotice('导入成功', `已创建题库“${name}”，共 ${bank.questions.length} 道题。${warnings.length ? `导入前有 ${warnings.length} 条提示，建议在题库管理中抽查。` : ''}`, 'ok');
       toast(`已导入题库：${name}，共 ${bank.questions.length} 题。`, 'ok', '导入成功');
     });
@@ -2849,7 +2888,14 @@ D. 高速通过积水路段`;
 
   /* SHIROHA_WEB_V28_2_LAYOUT_AND_IMMERSIVE_FIX_END */
 
-  async function resetData() { return runMutation(async () => { if (await ShirohaDialogs.confirm('确定清除全部本地数据？默认题库也会重新初始化。')) { await ShirohaPlatform.saves.idle();await clearStoredState();location.reload(); } }); }
+  async function resetData() {
+    return runMutation(async () => {
+      if (!await ShirohaDialogs.confirm('确定清除全部本地数据？默认题库也会重新初始化。')) { return; }
+      await ShirohaPlatform.saves.idle();await clearStoredState();
+      try { await importDraftPersistence.clearForReset(); } catch { await ShirohaDialogs.alert('题库数据已清除，但本机导入草稿未能清除，请刷新后手动删除草稿。'); }
+      location.reload();
+    });
+  }
 
   /* SHIROHA_WEB_V45_BANK_EDITOR_AND_FOCUS_NAV_START */
   async function switchViewV45(viewId, resumePractice = true) {
