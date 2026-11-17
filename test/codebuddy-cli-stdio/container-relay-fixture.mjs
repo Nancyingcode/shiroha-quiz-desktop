@@ -58,7 +58,10 @@ const timer = setInterval(async () => {
   if (writing) { return; }
   writing = true;
   try {
-    await writeFile(path.join(directory, 'relay-proof.json'), JSON.stringify({ scenario, upstreamCount, ...relay.evidence() }));
+    await writeFile(
+      path.join(directory, 'relay-proof.json'),
+      JSON.stringify({ scenario, upstreamCount, ...relay.evidence() }),
+    );
   } finally { writing = false; }
 }, 100);
 process.once('SIGTERM', async () => {

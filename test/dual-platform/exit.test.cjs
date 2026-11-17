@@ -110,6 +110,9 @@ test('总提交草稿关闭需确认，已锁定自评须先完成', async () =>
   assert.equal(await cancelled.close(), false);
   assert.equal(cancelled.prompts.length, 1);
   assert.equal(await fixture({ ...draft, confirm: () => true }).close(), true);
-  assert.equal(await fixture({ practice: { submitMode: 'total', totalLocked: true }, confirm: () => true }).close(), false);
+  assert.equal(
+    await fixture({ practice: { submitMode: 'total', totalLocked: true }, confirm: () => true }).close(),
+    false,
+  );
   assert.equal(await fixture({ practice: { submitMode: 'total', totalLocked: true, completed: true } }).close(), true);
 });

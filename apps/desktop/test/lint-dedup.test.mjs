@@ -325,12 +325,22 @@ test('legacy discovery skips ignored JavaScript links and directory junctions it
   await writeFile(path.join(f.temporary, 'test/dual-platform/base.cjs'), "console.log('valid');\n");
   await writeFile(path.join(desktop, 'eslint.config.mjs'), [
     "import { createConfig } from './eslint.rules.mjs';",
-    "export default [...createConfig({ desktop: true }), { ignores: ['scripts/ignored.mjs', 'scripts/ignored.mjs/**', 'scripts/assets/**'] }];",
+    'export default [',
+    '  ...createConfig({ desktop: true }),',
+    "  { ignores: ['scripts/ignored.mjs', 'scripts/ignored.mjs/**', 'scripts/assets/**'] },",
+    '];',
     '',
   ].join('\n'));
   await writeFile(path.join(desktop, 'eslint.platform.config.mjs'), [
     "import { createConfig } from './eslint.rules.mjs';",
-    "export default [...createConfig(), { ignores: ['apps/desktop/scripts/ignored.mjs', 'apps/desktop/scripts/ignored.mjs/**', 'apps/desktop/scripts/assets/**'] }];",
+    'export default [',
+    '  ...createConfig(),',
+    '  {',
+    '    ignores: [',
+    "      'apps/desktop/scripts/ignored.mjs', 'apps/desktop/scripts/ignored.mjs/**', 'apps/desktop/scripts/assets/**',",
+    '    ],',
+    '  },',
+    '];',
     '',
   ].join('\n'));
   const tempRoot = await realpath(os.tmpdir());

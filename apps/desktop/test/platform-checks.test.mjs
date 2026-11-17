@@ -27,7 +27,9 @@ test('platform lint accepts a CSS-only desktop frontend and still checks nested 
   await mkdir(reports, { recursive: true });
   const temporary = await mkdtemp(path.join(reports, 'platform-lint-'));
   t.after(() => rm(temporary, { recursive: true, force: true }));
-  for (const directory of ['apps/desktop/scripts', 'apps/desktop/frontend/nested', 'apps/web/platform', 'test/dual-platform']) {
+  for (const directory of [
+    'apps/desktop/scripts', 'apps/desktop/frontend/nested', 'apps/web/platform', 'test/dual-platform',
+  ]) {
     await mkdir(path.join(temporary, directory), { recursive: true });
   }
   const script = path.join(temporary, 'apps/desktop/scripts/lint-platform.mjs');

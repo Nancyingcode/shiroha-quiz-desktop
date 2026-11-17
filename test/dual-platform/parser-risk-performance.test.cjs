@@ -17,7 +17,10 @@ for (const [name, text, expected] of [
       deterministicIds: true,
       parserSourceTransform(source) {
         assert.equal(source.split(marker).length, 2);
-        return source.replace(marker, `${marker}\n      globalThis.__batch4RiskCount = (globalThis.__batch4RiskCount || 0) + 1;`);
+        return source.replace(
+          marker,
+          `${marker}\n      globalThis.__batch4RiskCount = (globalThis.__batch4RiskCount || 0) + 1;`,
+        );
       },
     });
     context.__batch4RiskCount = 0;

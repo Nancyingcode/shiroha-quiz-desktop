@@ -10,7 +10,10 @@ const cases = [
   { name: '共用材料', text: fixture('material.txt') },
   { name: '全角与粘连选项', text: '一、单选题\n１．哪一项正确？Ａ．甲Ｂ．乙Ｃ．丙\n答案：Ｂ\n２．下一题？\nA. 左 B. 右\n答案：A' },
   { name: '分卷及多空', text: '第一卷\n一、填空题\n1. 首都是____，简称____。\n答案：北京；京\n二、简答题\n2. 简述保存步骤。\n答案：先保存再退出。' },
-  { name: 'Word 图片与答案', text: '一、单选题\n1. 根据图选择（ ）\n![题图](data:image/png;base64,aGVsbG8=)\nA. 甲\nB. 乙\n答案：B\n解析：根据图判断。' },
+  {
+    name: 'Word 图片与答案',
+    text: '一、单选题\n1. 根据图选择（ ）\n![题图](data:image/png;base64,aGVsbG8=)\nA. 甲\nB. 乙\n答案：B\n解析：根据图判断。',
+  },
 ];
 const repairText = [
   '一、单选题', '1. 甲问题？', 'A. 甲', 'B. 乙', '答案：A',

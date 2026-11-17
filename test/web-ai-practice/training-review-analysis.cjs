@@ -66,7 +66,10 @@ async function seedReview(h, { unknownSource = false, changedSnapshot = false, c
   await h.page.reload();
   await h.page.locator('body[data-storage-state="ready"]').waitFor();
   await h.page.locator('#save-all-btn').click();
-  await h.page.waitForFunction((key) => JSON.parse(globalThis.localStorage.getItem(key)).banks[0].questions[0].normalized, h.keys.state);
+  await h.page.waitForFunction(
+    (key) => JSON.parse(globalThis.localStorage.getItem(key)).banks[0].questions[0].normalized,
+    h.keys.state,
+  );
 }
 
 async function openReview(h) {

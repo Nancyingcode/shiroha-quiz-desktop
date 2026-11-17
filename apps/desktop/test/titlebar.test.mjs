@@ -43,7 +43,9 @@ class Element {
 }
 
 function fixture() {
-  const elements = new Map(['titlebar', 'window-drag', 'window-status', 'window-minimize', 'window-maximize', 'window-close'].map((name) => [`desktop-${name}`, new Element()]));
+  const elements = new Map([
+    'titlebar', 'window-drag', 'window-status', 'window-minimize', 'window-maximize', 'window-close',
+  ].map((name) => [`desktop-${name}`, new Element()]));
   /** @param {string} name */
   const get = (name) => {
     const result = elements.get(`desktop-${name}`); assert(result); return result;

@@ -383,16 +383,56 @@ test('line length pilot accepts 120 characters and rejects 121 in selected modul
     `console.log(/${'a'.repeat(120)}/);`,
     '',
   ].join('\n');
+  const desktopLint = new ESLint({
+    cwd: desktop,
+    overrideConfigFile: path.join(desktop, 'eslint.config.mjs'),
+  });
   for (const filePath of [
     'apps/web/quiz-core.js', 'apps/web/text-answers.js', 'apps/web/training.js',
     'apps/web/study-sessions.js', 'apps/web/zip.js', 'apps/web/platform/index.js',
     'apps/web/platform/save-queue.js', 'apps/desktop/frontend/bridge.js',
+    'apps/desktop/commitlint.config.mjs', 'apps/desktop/eslint.config.mjs',
+    'apps/desktop/eslint.migration.mjs', 'apps/desktop/eslint.platform.config.mjs',
+    'apps/desktop/eslint.rules.mjs', 'apps/desktop/stylelint.config.mjs',
+    'apps/desktop/scripts/check-docs.mjs', 'apps/desktop/scripts/lint-debt.mjs',
+    'apps/desktop/scripts/lint-incremental.mjs', 'apps/desktop/scripts/lint-index.mjs',
+    'apps/desktop/scripts/lint-platform.mjs', 'apps/desktop/scripts/lint-runner.mjs',
+    'apps/desktop/scripts/native-isolation.mjs', 'apps/desktop/scripts/smoke-control.mjs',
+    'apps/desktop/test/benchmark.test.mjs', 'apps/desktop/test/check-docs.test.mjs',
+    'apps/desktop/test/distribution.test.mjs', 'apps/desktop/test/installer-integrity.test.mjs',
+    'apps/desktop/test/lint-cli.test.mjs', 'apps/desktop/test/lint-deleted-worktree.test.mjs',
+    'apps/desktop/test/lint-mixed-extensions.test.mjs', 'apps/desktop/test/lint-runner.test.mjs',
+    'apps/desktop/test/lint-suppressions.test.mjs', 'apps/desktop/test/lint-worktree.test.mjs',
+    'apps/desktop/test/platform-checks.test.mjs', 'apps/desktop/test/titlebar.test.mjs',
+    'apps/web/backup-archive.js',
+    'test/codebuddy-cli-stdio/container-relay-fixture.mjs', 'test/codebuddy-cli-stdio/guard.mjs',
+    'test/codebuddy-cli-stdio/verify.mjs', 'test/dual-platform/ai-fixed-bindings.test.cjs',
+    'test/dual-platform/ai-settings-helper.cjs', 'test/dual-platform/ai-transport-helper.cjs',
+    'test/dual-platform/backup-core.test.cjs', 'test/dual-platform/backup-entry-performance.test.cjs',
+    'test/dual-platform/css-computed-style.cjs', 'test/dual-platform/desktop-inline-events.test.cjs',
+    'test/dual-platform/document-lifecycle.test.cjs', 'test/dual-platform/document-page.cjs',
+    'test/dual-platform/exit.test.cjs', 'test/dual-platform/import-lifecycle.test.cjs',
+    'test/dual-platform/import-ownership.test.cjs', 'test/dual-platform/json-import.test.cjs',
+    'test/dual-platform/pagination.test.cjs', 'test/dual-platform/parser-risk-performance.test.cjs',
+    'test/dual-platform/platform-index.test.cjs', 'test/dual-platform/question-view.test.cjs',
+    'test/dual-platform/quiz-core.test.cjs', 'test/dual-platform/source-tools.cjs',
+    'test/dual-platform/styles.cjs', 'test/dual-platform/text-answers.test.cjs',
+    'test/dual-platform/text-parser-cases.cjs', 'test/dual-platform/training-characterization.test.cjs',
+    'test/web-ai-practice/dialogs.cjs', 'test/web-ai-practice/submit-modes.cjs',
+    'test/web-ai-practice/training-review-analysis.cjs', 'test/web-webdav/request.test.cjs',
   ]) {
     const [result] = await lint.lintText(source, { filePath });
     assert.deepEqual(result.messages.filter((m) => m.ruleId === rule).map((m) => m.line), [2], filePath);
+    if (filePath.startsWith('apps/desktop/')) {
+      const desktopFile = filePath.slice('apps/desktop/'.length);
+      const [desktopResult] = await desktopLint.lintText(source, { filePath: desktopFile });
+      assert.deepEqual(desktopResult.messages.filter((m) => m.ruleId === rule).map((m) => m.line), [2], filePath);
+    }
   }
-  const [outside] = await lint.lintText(source, { filePath: 'apps/web/app.js' });
-  assert(!outside.messages.some((message) => message.ruleId === rule));
+  for (const filePath of ['apps/web/app.js', 'apps/desktop/scripts/release-github.mjs']) {
+    const [outside] = await lint.lintText(source, { filePath });
+    assert(!outside.messages.some((message) => message.ruleId === rule), filePath);
+  }
 });
 
 test('no-shadow pilot rejects local shadowing only in the AI import panel', async () => {

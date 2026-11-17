@@ -30,21 +30,24 @@ test('fixture repositories ignore Git hook repository variables', async (t) => {
   assert.equal(bare.stdout.trim(), 'false');
 });
 
-test('incremental CLI finds untracked code outside the old scopes and reads complete files without rewriting', async (t) => {
-  const f = await repositoryFixture(t);
-  const probe = path.join(f.temporary, 'test/new-slice/probe.cjs');
-  const invalid = 'console.log(1);\nconsole.log("new violation");\n';
-  await writeFile(probe, invalid);
-  const rejected = f.run('lint-incremental.mjs');
-  assert.ifError(rejected.error);
-  assert.equal(rejected.status, 1, rejected.stderr + rejected.stdout);
-  assert.match(rejected.stdout, /@stylistic\/quotes/);
-  assert.equal(await readFile(probe, 'utf8'), invalid);
-  await writeFile(probe, "console.log('valid');\n");
-  const valid = f.run('lint-incremental.mjs');
-  assert.equal(valid.status, 0, valid.stderr + valid.stdout);
-  assert.match(valid.stdout, /Checked 7 complete/);
-});
+test(
+  'incremental CLI finds untracked code outside the old scopes and reads complete files without rewriting',
+  async (t) => {
+    const f = await repositoryFixture(t);
+    const probe = path.join(f.temporary, 'test/new-slice/probe.cjs');
+    const invalid = 'console.log(1);\nconsole.log("new violation");\n';
+    await writeFile(probe, invalid);
+    const rejected = f.run('lint-incremental.mjs');
+    assert.ifError(rejected.error);
+    assert.equal(rejected.status, 1, rejected.stderr + rejected.stdout);
+    assert.match(rejected.stdout, /@stylistic\/quotes/);
+    assert.equal(await readFile(probe, 'utf8'), invalid);
+    await writeFile(probe, "console.log('valid');\n");
+    const valid = f.run('lint-incremental.mjs');
+    assert.equal(valid.status, 0, valid.stderr + valid.stdout);
+    assert.match(valid.stdout, /Checked 7 complete/);
+  },
+);
 
 test('full lint rejects a tracked symlink checked out as a regular file', async (t) => {
   const f = await repositoryFixture(t);

@@ -7,7 +7,8 @@ const root = fileURLToPath(new URL('../../..', import.meta.url));
 const git = (/** @type {string[]} */ args) => execFileSync('git', ['--no-optional-locks', ...args], {
   cwd: root, encoding: 'utf8', windowsHide: true, maxBuffer: 64 * 1024 * 1024,
 });
-const changed = git(['diff', '--cached', '--no-ext-diff', '--no-renames', '--name-only', '-z']).split('\0').filter(Boolean);
+const changed = git(['diff', '--cached', '--no-ext-diff', '--no-renames', '--name-only', '-z'])
+  .split('\0').filter(Boolean);
 const staged = git(['diff', '--cached', '--no-ext-diff', '--no-renames', '--name-only', '--diff-filter=AMT', '-z'])
   .split('\0').filter((file) => /\.(?:js|mjs|cjs)$/i.test(file));
 const configPaths = [

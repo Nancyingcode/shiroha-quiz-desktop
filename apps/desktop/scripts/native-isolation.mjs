@@ -7,7 +7,9 @@ export async function markNativeIsolation(directory) {
   const metadata = await lstat(directory);
   if (metadata.isSymbolicLink() || !metadata.isDirectory()) { throw new Error('测试数据目录不能是链接'); }
   const root = await realpath(directory);
-  if (path.dirname(root) !== await realpath(tmpdir()) || !path.basename(root).startsWith('shiroha-native-')) { throw new Error('测试数据目录越界'); }
+  if (path.dirname(root) !== await realpath(tmpdir()) || !path.basename(root).startsWith('shiroha-native-')) {
+    throw new Error('测试数据目录越界');
+  }
   await writeFile(path.join(root, 'test-isolation'), 'fake-credentials\nnetwork-denied\n', { flag: 'wx' });
   return root;
 }

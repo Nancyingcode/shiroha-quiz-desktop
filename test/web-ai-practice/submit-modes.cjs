@@ -162,7 +162,10 @@ const cases = [
       assert.equal((await snapshot(h.page)).practice.answered, 0);
       await h.page.locator('#p-exit').click();
       await h.page.locator('#start-practice-btn').waitFor({ state: 'visible' });
-      assert.equal(await h.page.locator('body').evaluate((body) => body.classList.contains('side-collapsed')), sidebarBefore);
+      assert.equal(
+        await h.page.locator('body').evaluate((body) => body.classList.contains('side-collapsed')),
+        sidebarBefore,
+      );
     },
   },
   {

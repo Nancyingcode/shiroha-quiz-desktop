@@ -13,7 +13,8 @@ async function addSharedStyles(page, source) {
       const relations = [...link.relList].map((relation) => relation.toLowerCase());
       const type = link.type.split(';')[0].trim().toLowerCase();
       const isCss = type === '' || type === 'text/css';
-      return relations.includes('stylesheet') && !relations.includes('alternate') && !link.disabled && !link.closest('noscript') && isCss;
+      return relations.includes('stylesheet') && !relations.includes('alternate')
+        && !link.disabled && !link.closest('noscript') && isCss;
     })
       .map((link) => ({ href: link.getAttribute('href'), media: link.getAttribute('media') }));
   }, html);

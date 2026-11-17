@@ -42,7 +42,9 @@ test('focused suppression analysis matches full-rule results', async () => {
   ].join('\n');
   const full = linter();
   const focused = suppressionLinter();
-  for (const file of ['apps/web/app.js', 'apps/desktop/scripts/prepare-web.mjs', 'test/dual-platform/ai-harness.test.cjs']) {
+  for (const file of [
+    'apps/web/app.js', 'apps/desktop/scripts/prepare-web.mjs', 'test/dual-platform/ai-harness.test.cjs',
+  ]) {
     const filePath = path.join(root, file);
     const [fullResult] = await full.lintText(source, { filePath });
     const [focusedResult] = await focused.lintText(source, { filePath });

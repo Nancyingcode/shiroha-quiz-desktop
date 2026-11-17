@@ -198,7 +198,9 @@ export async function createGuardedRelay(upstream, expectedBearer = undefined) {
     const payload = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(body));
     const hasNoTools = payload.tools === undefined || (Array.isArray(payload.tools) && payload.tools.length === 0);
     assert.ok(payload.model === 'poc-model' && payload.stream === true && hasNoTools);
-    assert.ok(payload.functions === undefined && payload.function_call === undefined && payload.tool_choice === undefined);
+    assert.ok(
+      payload.functions === undefined && payload.function_call === undefined && payload.tool_choice === undefined,
+    );
     if (evidence.state !== 'unused') {
       evidence.rejected += 1;
       reply(response, 409, 'request_budget_exhausted'); return;

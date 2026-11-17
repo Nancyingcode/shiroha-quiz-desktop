@@ -132,7 +132,11 @@ if (complete) {
     }
   }
   // 使用 ESLint 自己的目录与忽略规则发现旧入口范围；空处理器不解析或执行规则。
-  const discover = async (/** @type {string} */ cwd, /** @type {string} */ config, /** @type {string[]} */ patterns) => {
+  const discover = async (
+    /** @type {string} */ cwd,
+    /** @type {string} */ config,
+    /** @type {string[]} */ patterns,
+  ) => {
     /** @type {string[]} */
     const found = [];
     const processor = {

@@ -27,7 +27,10 @@ function fixture() {
   runWebScripts(context, ['import-preview.js']);
   const draft = context.ShirohaImportPreview.create({
     readers: { readText: read, readDocx: read, readPdf: read, readTable: read },
-    ocr: { setOcrImportSource: (file) => events.push(['source', file.name]), setOcrStatus: (message) => events.push(['ocr', message]) },
+    ocr: {
+      setOcrImportSource: (file) => events.push(['source', file.name]),
+      setOcrStatus: (message) => events.push(['ocr', message]),
+    },
     setBankName: (name) => events.push(['name', name]),
     applyTable: (result, name) => events.push(['table', name, result]),
     toast: (message) => events.push(['toast', message]),

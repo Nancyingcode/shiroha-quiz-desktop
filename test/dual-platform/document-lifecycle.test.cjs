@@ -13,7 +13,9 @@ for (const fail of [false, true]) {
       getPage: async () => ({
         getTextContent: async () => {
           if (fail) { throw new Error('damaged page'); }
-          return { items: [{ str: 'A self authored question with enough text for extraction', transform: [0, 0, 0, 0, 0, 0] }] };
+          return {
+            items: [{ str: 'A self authored question with enough text for extraction', transform: [0, 0, 0, 0, 0, 0] }],
+          };
         },
       }),
       destroy: async () => {

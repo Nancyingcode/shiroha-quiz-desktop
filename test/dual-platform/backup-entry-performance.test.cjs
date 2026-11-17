@@ -10,7 +10,10 @@ const source = loadWebSource();
 const { api } = loadWeb();
 
 function payload(path = '') {
-  return { banks: [{ id: 'fixture-bank', questions: [{ id: 'fixture-question', images: path ? [{ localPath: path }] : [] }] }], records: [] };
+  return {
+    banks: [{ id: 'fixture-bank', questions: [{ id: 'fixture-question', images: path ? [{ localPath: path }] : [] }] }],
+    records: [],
+  };
 }
 function setup(entry, data, assets) {
   const calls = { apply: 0, unresolved: 0, imports: [], messages: [] };

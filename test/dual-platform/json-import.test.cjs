@@ -68,7 +68,10 @@ for (const mode of ['auto', 'json']) {
     assert.equal(run.imports.length, 1);
     const [normalized, importMode] = run.imports[0];
     assert.equal(importMode, 'merge');
-    assert.deepEqual(plain(normalized.banks.map((bank) => [bank.id, bank.name, bank.groupName])), payload.banks.map((bank) => [bank.id, bank.name, bank.groupName]));
+    assert.deepEqual(
+      plain(normalized.banks.map((bank) => [bank.id, bank.name, bank.groupName])),
+      payload.banks.map((bank) => [bank.id, bank.name, bank.groupName]),
+    );
     for (const key of ['wrongBook', 'favorites', 'records']) { assert.deepEqual(plain(normalized[key]), payload[key]); }
     assert.deepEqual(run.previews, [[]]);
   });

@@ -32,7 +32,12 @@ async function observeAppDialogs(page) {
       }
       globalThis.__testAppDialogOpened(kind, dialog.querySelector('#app-dialog-message').textContent);
     };
-    new MutationObserver(check).observe(document, { childList: true, subtree: true, attributes: true, attributeFilter: ['open'] });
+    new MutationObserver(check).observe(document, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['open'],
+    });
   });
 }
 module.exports = { observeAppDialogs };

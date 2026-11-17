@@ -122,7 +122,10 @@ export function createSmokeControl(options) {
       throw new SmokeStopFailedError(new AggregateError(failures, message));
     }
     try {
-      await deadline(Promise.all([Promise.allSettled([...launches]), Promise.allSettled([...actions])]), options.settleTimeoutMs);
+      await deadline(
+        Promise.all([Promise.allSettled([...launches]), Promise.allSettled([...actions])]),
+        options.settleTimeoutMs,
+      );
     } catch (error) {
       throw new SmokeUnsettledError(error);
     }

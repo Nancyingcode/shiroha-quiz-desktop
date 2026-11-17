@@ -44,7 +44,10 @@
       const raw = String(question.question || '');
       if (!/!\[[^\]]{0,120}\]\(data:image\//i.test(raw)) { return; }
       if (!Array.isArray(question.images)) { question.images = []; }
-      let nextOrder = (question.images.reduce((highest, image) => Math.max(highest, Number((image && image.order) || 0)), 0)
+      let nextOrder = (question.images.reduce(
+        (highest, image) => Math.max(highest, Number((image && image.order) || 0)),
+        0,
+      )
         || question.images.length) + 1;
       question.question = raw.replace(markdownImageRegex(), (match, alt, src) => {
         const cleanAlt = String(alt || `题目图片${nextOrder}`).replace(/[\]\n\r]/g, '').slice(0, 80)
