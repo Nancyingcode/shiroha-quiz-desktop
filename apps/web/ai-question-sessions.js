@@ -106,7 +106,11 @@
       try {
         const response = await request.timeout(requestConfig.timeoutSeconds, (controller) => {
           session.controller = controller;
-          return request.chat(requestConfig, request.analysisMessages(item, chosen), { controller, task: 'question_analysis', isCurrent: isCurrentBeforeSend });
+          return request.chat(
+            requestConfig,
+            request.analysisMessages(item, chosen),
+            { controller, task: 'question_analysis', isCurrent: isCurrentBeforeSend },
+          );
         });
         if (!isCurrentAnalysis()) { return; }
         const parsed = result.analysis(response.content);
@@ -168,12 +172,18 @@
       const isCurrentFollowUp = () => isCurrentRequest(owner, key, session, requestId, item, fingerprint);
       const isCurrentBeforeSend = () => isCurrentFollowUp() && isSelectedQuestion(key)
         && String(session.draft || '').trim() === text
-        && JSON.stringify([question.answer(key).chosen || [], session.messages, session.analysis, text]) === followUpSnapshot;
+        && JSON.stringify([
+          question.answer(key).chosen || [], session.messages, session.analysis, text,
+        ]) === followUpSnapshot;
       try {
         const response = await request.timeout(requestConfig.timeoutSeconds, (controller) => {
           session.controller = controller;
           const draft = { analysis: session.analysis, initialAnalysis: session.initialAnalysis, messages: history };
-          return request.chat(requestConfig, request.followUpMessages(item, chosen, draft, text), { controller, task: 'question_followup', isCurrent: isCurrentBeforeSend });
+          return request.chat(
+            requestConfig,
+            request.followUpMessages(item, chosen, draft, text),
+            { controller, task: 'question_followup', isCurrent: isCurrentBeforeSend },
+          );
         });
         if (!isCurrentFollowUp()) { return; }
         const parsed = result.followUp(response.content);
@@ -291,7 +301,8 @@
         const current = question.source(session.item);
         const currentQuestion = current.bank?.questions[current.index];
         return isCurrentReviewRequest() && question.fingerprint(session.item) === session.fingerprint
-          && (sourceFingerprint === null || (!!currentQuestion && question.fingerprint(currentQuestion) === sourceFingerprint));
+          && (sourceFingerprint === null
+            || (!!currentQuestion && question.fingerprint(currentQuestion) === sourceFingerprint));
       };
       session.loading = 'analysis';
       session.error = '';
@@ -300,7 +311,11 @@
       try {
         const response = await request.timeout(requestConfig.timeoutSeconds, (controller) => {
           session.controller = controller;
-          return request.chat(requestConfig, request.analysisMessages(session.item, session.chosen), { controller, task: 'question_analysis', isCurrent: isCurrentBeforeSend });
+          return request.chat(
+            requestConfig,
+            request.analysisMessages(session.item, session.chosen),
+            { controller, task: 'question_analysis', isCurrent: isCurrentBeforeSend },
+          );
         });
         if (!isCurrentReviewRequest()) { return; }
         const current = question.source(session.item);

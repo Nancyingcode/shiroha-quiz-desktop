@@ -34,7 +34,11 @@ async function fixture(t) {
     HUSKY: '1',
     XDG_CONFIG_HOME: path.join(temporary, 'config'),
   });
-  const git = (/** @type {string[]} */ args, cwd = repository, /** @type {string | undefined} */ input = undefined) => spawnSync(
+  const git = (
+    /** @type {string[]} */ args,
+    cwd = repository,
+    /** @type {string | undefined} */ input = undefined,
+  ) => spawnSync(
     'git',
     args,
     { cwd, env, encoding: 'utf8', windowsHide: true, input },
@@ -45,7 +49,10 @@ async function fixture(t) {
   for (const name of ['pre-commit', 'commit-msg']) {
     await copyFile(path.join(root, '.husky', name), path.join(repository, '.husky', name));
   }
-  for (const name of ['eslint.config.mjs', 'eslint.platform.config.mjs', 'eslint.rules.mjs', 'eslint.migration.mjs', 'commitlint.config.mjs']) {
+  for (const name of [
+    'eslint.config.mjs', 'eslint.platform.config.mjs', 'eslint.rules.mjs', 'eslint.migration.mjs',
+    'commitlint.config.mjs',
+  ]) {
     await copyFile(path.join(desktop, name), path.join(project, name));
   }
   await copyFile(path.join(desktop, 'scripts/lint-index.mjs'), path.join(project, 'scripts/lint-index.mjs'));
@@ -54,7 +61,9 @@ async function fixture(t) {
     private: true,
     type: 'module',
     scripts: {
-      lint: 'eslint scripts --max-warnings 0', 'lint:index': pkg.scripts['lint:index'], commitlint: pkg.scripts.commitlint,
+      lint: 'eslint scripts --max-warnings 0',
+      'lint:index': pkg.scripts['lint:index'],
+      commitlint: pkg.scripts.commitlint,
     },
     // 夹具未安装依赖；越权依赖检查按真实工程声明的 devDependencies 判定，否则会把已声明的开发依赖误报为外部包。
     devDependencies: pkg.devDependencies,
@@ -215,7 +224,10 @@ test('the hook checks the index while the CI lint command still runs every full 
   for (const name of names) {
     assert.equal(await readFile(path.join(f.repository, `.git/ran-${name}`), 'utf8'), 'yes');
   }
-  assert.deepEqual(JSON.parse(await readFile(path.join(f.repository, '.git/args-incremental'), 'utf8')), ['--complete']);
+  assert.deepEqual(
+    JSON.parse(await readFile(path.join(f.repository, '.git/args-incremental'), 'utf8')),
+    ['--complete'],
+  );
   for (const name of ['eslint', 'platform']) {
     await assert.rejects(readFile(path.join(f.repository, `.git/ran-${name}`)), { code: 'ENOENT' });
   }
@@ -333,17 +345,20 @@ test('commit message validation does not require starting npm', async (t) => {
   expectSuccess(f.git(['commit', '-m', 'chore: 验证提交信息']));
 });
 
-test('hooks validate the message file supplied by Git in a linked worktree with spaces and Chinese in its path', async (t) => {
-  const f = await fixture(t);
-  expectSuccess(f.git(['commit', '-m', 'chore: 初始化检查样例']));
-  const linked = path.join(f.temporary, 'linked worktree 中文');
-  expectSuccess(f.git(['worktree', 'add', '-b', 'hook-test', linked]));
-  await symlink(path.join(desktop, 'node_modules'), path.join(linked, 'apps/desktop/node_modules'), 'junction');
-  f.install(linked);
-  await writeFile(path.join(linked, 'apps/desktop/scripts/probe.mjs'), "console.log('linked');\n");
-  expectSuccess(f.git(['add', '.'], linked));
-  const result = f.git(['commit', '-m', '错误信息'], linked);
-  assert.equal(result.status, 1, result.stdout + result.stderr);
-  assert.match(result.stdout + result.stderr, /type-empty/);
-  expectSuccess(f.git(['commit', '-m', 'test(desktop): 验证工作树钩子'], linked));
-});
+test(
+  'hooks validate the message file supplied by Git in a linked worktree with spaces and Chinese in its path',
+  async (t) => {
+    const f = await fixture(t);
+    expectSuccess(f.git(['commit', '-m', 'chore: 初始化检查样例']));
+    const linked = path.join(f.temporary, 'linked worktree 中文');
+    expectSuccess(f.git(['worktree', 'add', '-b', 'hook-test', linked]));
+    await symlink(path.join(desktop, 'node_modules'), path.join(linked, 'apps/desktop/node_modules'), 'junction');
+    f.install(linked);
+    await writeFile(path.join(linked, 'apps/desktop/scripts/probe.mjs'), "console.log('linked');\n");
+    expectSuccess(f.git(['add', '.'], linked));
+    const result = f.git(['commit', '-m', '错误信息'], linked);
+    assert.equal(result.status, 1, result.stdout + result.stderr);
+    assert.match(result.stdout + result.stderr, /type-empty/);
+    expectSuccess(f.git(['commit', '-m', 'test(desktop): 验证工作树钩子'], linked));
+  },
+);

@@ -9,7 +9,11 @@ const { addSharedStyles } = require('./styles.cjs');
 let browser; let server;
 test.before(async () => {
   server = await startServer(WEB_ROOT);
-  browser = await chromium.launch({ headless: true, ...(process.env.SHIROHA_BROWSER_EXECUTABLE ? { executablePath: process.env.SHIROHA_BROWSER_EXECUTABLE } : { channel: 'msedge' }) });
+  browser = await chromium.launch({
+    headless: true,
+    ...(process.env.SHIROHA_BROWSER_EXECUTABLE
+      ? { executablePath: process.env.SHIROHA_BROWSER_EXECUTABLE } : { channel: 'msedge' }),
+  });
 });
 test.after(async () => {
   await browser?.close(); await server?.close();
@@ -61,8 +65,14 @@ for (const desktop of [false, true]) {
       await page.setViewportSize({ width, height: 900 });
       const box = await geometry(page);
       const label = `${desktop ? '桌面' : 'Web'} ${width}px`;
-      assert.ok(Math.abs(box.start.bottom - box.select.bottom) <= 1, `${label}：开始考试按钮底边未与下拉框底边对齐 ${JSON.stringify(box)}`);
-      assert.ok(Math.abs(box.submit.bottom - box.select.bottom) <= 1, `${label}：交卷评分按钮底边未与下拉框底边对齐 ${JSON.stringify(box)}`);
+      assert.ok(
+        Math.abs(box.start.bottom - box.select.bottom) <= 1,
+        `${label}：开始考试按钮底边未与下拉框底边对齐 ${JSON.stringify(box)}`,
+      );
+      assert.ok(
+        Math.abs(box.submit.bottom - box.select.bottom) <= 1,
+        `${label}：交卷评分按钮底边未与下拉框底边对齐 ${JSON.stringify(box)}`,
+      );
       assert.ok(Math.abs(box.start.height - box.select.height) <= 1, `${label}：按钮高度与输入框不一致 ${JSON.stringify(box)}`);
       assert.ok(Math.abs(box.row.height - box.select.height) <= 1, `${label}：按钮行换行导致高度超过输入框 ${JSON.stringify(box)}`);
       assert.ok(Math.abs(box.cell.height - box.label.height) <= 1, `${label}：快捷操作单元高度与左侧单元不一致 ${JSON.stringify(box)}`);
@@ -76,7 +86,10 @@ test('窄屏快捷操作按钮与输入框同高', async (t) => {
   await page.setViewportSize({ width: 420, height: 800 });
   const box = await geometry(page);
   assert.ok(Math.abs(box.start.height - box.select.height) <= 1, `窄屏按钮高度应与输入框一致 ${JSON.stringify(box)}`);
-  assert.ok(Math.abs(box.cell.height - (box.caption.height + box.row.height + 7)) <= 1, `窄屏快捷操作单元高度应等于标题 + 间距 + 按钮行 ${JSON.stringify(box)}`);
+  assert.ok(
+    Math.abs(box.cell.height - (box.caption.height + box.row.height + 7)) <= 1,
+    `窄屏快捷操作单元高度应等于标题 + 间距 + 按钮行 ${JSON.stringify(box)}`,
+  );
 });
 
 // 选中态“被遮挡”回归：.form-grid > label 带 overflow:hidden !important（styles/responsive-artwork.css，
@@ -127,7 +140,10 @@ for (const desktop of [false, true]) {
       assert.equal(ring.overflow, 'hidden', `${label}：label 裁剪盒应为 hidden，否则本断言失去意义 ${JSON.stringify(ring)}`);
       assert.equal(ring.outlineStyle, 'none', `${label}：不应再使用会被裁剪的外扩 outline ${JSON.stringify(ring)}`);
       assert.match(ring.boxShadow, /inset/, `${label}：聚焦环应改为内嵌 box-shadow ${JSON.stringify(ring)}`);
-      assert.ok(ring.leftGap >= 0 && ring.rightGap >= 0 && ring.topGap >= 0 && ring.bottomGap >= 0, `${label}：控件盒越出 label 裁剪边界，内嵌聚焦环会被切边 ${JSON.stringify(ring)}`);
+      assert.ok(
+        ring.leftGap >= 0 && ring.rightGap >= 0 && ring.topGap >= 0 && ring.bottomGap >= 0,
+        `${label}：控件盒越出 label 裁剪边界，内嵌聚焦环会被切边 ${JSON.stringify(ring)}`,
+      );
     });
   }
 }

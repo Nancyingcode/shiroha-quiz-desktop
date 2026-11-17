@@ -37,20 +37,35 @@ test('AI 结果模式保留显式别名、结构推断及文本兜底', () => {
 test('单题结果区分答案匹配的缺省、null、false 和 true', () => {
   const api = results();
   for (const value of [undefined, null, false, true]) {
-    const parsed = api.parseAiSingleAnalysisV613(JSON.stringify({ analysis: '解析', confidence: 'HIGH', needsReview: false, matchesLocalAnswer: value }));
+    const parsed = api.parseAiSingleAnalysisV613(JSON.stringify({
+      analysis: '解析',
+      confidence: 'HIGH',
+      needsReview: false,
+      matchesLocalAnswer: value,
+    }));
     assert.equal(parsed.matchesLocalAnswer, typeof value === 'boolean' ? value : null);
     assert.equal(parsed.needsReview, value === false);
   }
   assert.equal(api.parseAiSingleAnalysisV613('{"analysis":"解析","confidence":"HIGH"}').needsReview, true);
-  assert.equal(api.parseAiSingleAnalysisV613('{"analysis":"解析","confidence":"unknown","needsReview":false}').needsReview, true);
-  assert.equal(api.parseAiSingleFollowUpV381('{"reply":"追问","revisedAnalysis":"解析","confidence":"HIGH","needsReview":false}').needsReview, false);
+  assert.equal(
+    api.parseAiSingleAnalysisV613('{"analysis":"解析","confidence":"unknown","needsReview":false}').needsReview,
+    true,
+  );
+  assert.equal(
+    api.parseAiSingleFollowUpV381('{"reply":"追问","revisedAnalysis":"解析","confidence":"HIGH","needsReview":false}')
+      .needsReview,
+    false,
+  );
   for (const [confidence, needsReview, expected] of [
     ['HIGH', false, false], ['MEDIUM', false, false], ['LOW', false, true],
     ['unknown', false, true], ['HIGH', true, true], ['HIGH', undefined, true],
   ]) {
     const common = { confidence, needsReview };
     assert.equal(api.parseAiSingleAnalysisV613(JSON.stringify({ ...common, analysis: '解析' })).needsReview, expected);
-    assert.equal(api.parseAiSingleFollowUpV381(JSON.stringify({ ...common, reply: '追问', revisedAnalysis: '解析' })).needsReview, expected);
+    assert.equal(
+      api.parseAiSingleFollowUpV381(JSON.stringify({ ...common, reply: '追问', revisedAnalysis: '解析' })).needsReview,
+      expected,
+    );
   }
 });
 
@@ -58,7 +73,10 @@ test('批量解析的缺省核对标记与明确 false 保持区别', () => {
   const api = results();
   const batch = [{ id: 'question', index: 0, question: {} }];
   assert.equal(api.normalizeAiAnalysisResultV991({ id: 'question', analysis: '解析' }, batch).needsReview, true);
-  assert.equal(api.normalizeAiAnalysisResultV991({ id: 'question', analysis: '解析', needsReview: false }, batch).needsReview, false);
+  assert.equal(
+    api.normalizeAiAnalysisResultV991({ id: 'question', analysis: '解析', needsReview: false }, batch).needsReview,
+    false,
+  );
   assert.equal(api.normalizeAiAnalysisResultV991({ id: 'missing', index: 9 }, batch), null);
 });
 

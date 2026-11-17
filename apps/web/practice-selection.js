@@ -51,7 +51,10 @@
       }
     }
     function bindLimitControlsV60() {
-      [['practice', '#practice-limit', '#practice-custom-count'], ['wrong', '#wrong-practice-limit', '#wrong-practice-custom-count']].forEach(([scope, sel, inputSel]) => {
+      [
+        ['practice', '#practice-limit', '#practice-custom-count'],
+        ['wrong', '#wrong-practice-limit', '#wrong-practice-custom-count'],
+      ].forEach(([scope, sel, inputSel]) => {
         const select = $(sel);
         const input = $(inputSel);
         if (select && !select.dataset.boundV60) {
@@ -77,7 +80,8 @@
       if (mode === 'half') {
         return qs.slice(0, Math.max(1, Math.ceil(qs.length / 2)));
       }
-      const count = mode === 'custom' ? readCustomCountV60('', customCount || 20) : Math.max(1, Math.floor(Number(mode) || 20));
+      const count = mode === 'custom'
+        ? readCustomCountV60('', customCount || 20) : Math.max(1, Math.floor(Number(mode) || 20));
       return qs.slice(0, count);
     }
     function filteredPracticeItemsV8916(source, type, order, limit, customCount, scopeOverride) {
@@ -92,7 +96,8 @@
     function practiceProgressStoreV58916() {
       state.settings = state.settings && typeof state.settings === 'object' ? state.settings : {};
       const current = state.settings.practiceProgressV58916;
-      state.settings.practiceProgressV58916 = current && typeof current === 'object' && !Array.isArray(current) ? current : {};
+      state.settings.practiceProgressV58916 = current && typeof current === 'object' && !Array.isArray(current)
+        ? current : {};
       return state.settings.practiceProgressV58916;
     }
     function practiceProgressKeyV58916(scope, source, type) {
@@ -121,7 +126,8 @@
           }
           const rank = { priority, time: Number.isFinite(time) ? time : 0 };
           const previous = entries.get(entry.id);
-          if (!previous || rank.priority < previous.priority || (rank.priority === previous.priority && rank.time < previous.time)) {
+          if (!previous || rank.priority < previous.priority
+            || (rank.priority === previous.priority && rank.time < previous.time)) {
             entries.set(entry.id, rank);
           }
         }
@@ -151,7 +157,10 @@
       const banks = practiceScopeBanksV8916(scopeOverride);
       let items = source === 'due' ? dueReviewItems(scopeOverride) : practiceSessionItemsForBanksV8916(banks);
       if (source === 'wrong') {
-        const byBank = new Map(banks.map((b) => [b.id, new Set(getWrongEntries(b.id).filter((e) => e.status !== '已掌握').map((e) => e.id))]));
+        const byBank = new Map(banks.map((b) => [
+          b.id,
+          new Set(getWrongEntries(b.id).filter((e) => e.status !== '已掌握').map((e) => e.id)),
+        ]));
         items = items.filter((item) => byBank.get(item.bankId)?.has(item.question.id));
       }
       if (source === 'favorite') {

@@ -11,7 +11,11 @@ async function generate(h, panel, text, responseOptions = {}) {
   const entry = h.mock.enqueue('analysis', analysis(text), responseOptions);
   await button(panel, 'generate').click();
   const call = await h.waitCall(entry);
-  if (!responseOptions.status) { await panel.locator('.q-multiline-text').filter({ hasText: text }).waitFor(); } else { await panel.locator('[role="alert"]').waitFor(); }
+  if (!responseOptions.status) {
+    await panel.locator('.q-multiline-text').filter({ hasText: text }).waitFor();
+  } else {
+    await panel.locator('[role="alert"]').waitFor();
+  }
   return call;
 }
 async function save(h, panel) {
@@ -20,7 +24,9 @@ async function save(h, panel) {
   await panel.locator('.review-analysis-saved').waitFor();
 }
 async function wrongBook(h) {
-  if (await h.page.locator('#back-practice-setup').isVisible()) { await h.page.locator('#back-practice-setup').click(); }
+  if (await h.page.locator('#back-practice-setup').isVisible()) {
+    await h.page.locator('#back-practice-setup').click();
+  }
   await h.page.locator('.nav[data-view="wrongbook"]').click();
   return h.page.locator('#wrongbook-list .wrong-item').filter({ hasText: 'SAFE_Q1' }).locator('[data-review-analysis]');
 }
@@ -72,7 +78,11 @@ const cases = [
       await h.start(); await h.submitChoice('B');
       const panel = h.page.locator('#p-feedback [data-review-analysis]');
       await button(panel, 'generate').waitFor();
-      assert.equal(await h.page.locator('#p-ai-v613 button').count(), 0, 'Two AI entries appeared for the empty wrong answer.');
+      assert.equal(
+        await h.page.locator('#p-ai-v613 button').count(),
+        0,
+        'Two AI entries appeared for the empty wrong answer.',
+      );
       const before = await stored(h);
       await generate(h, panel, 'PRESERVED_WRONG_DRAFT');
       await generate(h, panel, 'IGNORED_ERROR', { status: 503 });
@@ -110,7 +120,9 @@ const cases = [
       await h.page.evaluate((key) => {
         window.__reviewOriginalSet = Storage.prototype.setItem;
         Storage.prototype.setItem = function (name, value) {
-          if (this === localStorage && name === key) { throw new DOMException('Synthetic quota', 'QuotaExceededError'); }
+          if (this === localStorage && name === key) {
+            throw new DOMException('Synthetic quota', 'QuotaExceededError');
+          }
           return window.__reviewOriginalSet.call(this, name, value);
         };
       }, h.keys.state);
@@ -181,7 +193,10 @@ const cases = [
       await panel.locator('[role="alert"]').waitFor();
       assert.match(await panel.innerText(), /来源题库或题目不存在/);
       assert.match(await panel.innerText(), /ORPHAN_RESULT_DRAFT/);
-      assert.equal((await stored(h)).banks.find((bank) => bank.id === BANK_ID).questions.some((q) => q.id === 'safe-single-1'), false);
+      assert.equal(
+        (await stored(h)).banks.find((bank) => bank.id === BANK_ID).questions.some((q) => q.id === 'safe-single-1'),
+        false,
+      );
     },
   },
   {

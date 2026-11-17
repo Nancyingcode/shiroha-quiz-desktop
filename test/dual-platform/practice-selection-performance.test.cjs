@@ -100,11 +100,26 @@ test('练习和考试基础筛选保持跨库身份、顺序、自选起点与�
   const f = fixture();
   const scope = { type: 'GROUP', value: 'g' };
   const keys = (items) => Array.from(items, (item) => `${item.bankId}:${item.question.id}`);
-  assert.deepEqual(keys(f.api.filteredPracticeItemsV8916('wrong', 'all', 'sequence', 'all', 20, scope)), ['a:q-0', 'b:q-1']);
-  assert.deepEqual(keys(f.api.filteredPracticeItemsV8916('favorite', 'multi', 'sequence', 'all', 20, scope)), ['b:q-3']);
-  assert.deepEqual(keys(f.api.filteredPracticeItemsV8916('all', 'single', 'random', '2', 20, scope)), ['b:q-248', 'b:q-246']);
+  assert.deepEqual(
+    keys(f.api.filteredPracticeItemsV8916('wrong', 'all', 'sequence', 'all', 20, scope)),
+    ['a:q-0', 'b:q-1'],
+  );
+  assert.deepEqual(
+    keys(f.api.filteredPracticeItemsV8916('favorite', 'multi', 'sequence', 'all', 20, scope)),
+    ['b:q-3'],
+  );
+  assert.deepEqual(
+    keys(f.api.filteredPracticeItemsV8916('all', 'single', 'random', '2', 20, scope)),
+    ['b:q-248', 'b:q-246'],
+  );
   f.start.value = 'custom';
-  assert.deepEqual(keys(f.api.buildPracticeSelectionV58916(scope, 'all', 'all', 'sequence', '2').items), ['a:q-2', 'a:q-3']);
+  assert.deepEqual(
+    keys(f.api.buildPracticeSelectionV58916(scope, 'all', 'all', 'sequence', '2').items),
+    ['a:q-2', 'a:q-3'],
+  );
   f.start.value = 'from';
-  assert.deepEqual(keys(f.api.buildPracticeSelectionV58916(scope, 'all', 'all', 'random', '2').items), ['b:q-249', 'b:q-248']);
+  assert.deepEqual(
+    keys(f.api.buildPracticeSelectionV58916(scope, 'all', 'all', 'random', '2').items),
+    ['b:q-249', 'b:q-248'],
+  );
 });

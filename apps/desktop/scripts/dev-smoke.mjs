@@ -103,7 +103,11 @@ async function nativeState(page) {
   const result = await page.evaluate(async () => {
     const host = (/** @type {TestWindow} */ (window)).ShirohaDesktopHost;
     if (!host) { throw new Error('原生桥接缺失'); }
-    try { return await host.invoke('local_initialize'); } catch (error) { throw new Error(`local_initialize: ${JSON.stringify(error)}`, { cause: error }); }
+    try {
+      return await host.invoke('local_initialize');
+    } catch (error) {
+      throw new Error(`local_initialize: ${JSON.stringify(error)}`, { cause: error });
+    }
   });
   assert(result && typeof result === 'object' && 'revision' in result && 'hasData' in result, '原生初始化回包无效');
   assert(typeof result.revision === 'number' && Number.isSafeInteger(result.revision), '原生修订号无效');
@@ -137,7 +141,11 @@ async function stopDevelopment(child, page) {
     ]);
   }
   if (!running(child)) { return; }
-  await execute('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true, timeout: CLOSE_TIMEOUT_MS })
+  await execute(
+    'taskkill.exe',
+    ['/PID', String(child.pid), '/T', '/F'],
+    { windowsHide: true, timeout: CLOSE_TIMEOUT_MS },
+  )
     .catch((error) => {
       if (running(child)) { throw error; }
     });
@@ -188,7 +196,8 @@ async function main() {
   let cleanupError = '';
   // 在 CDP 接入之前也拦截浏览器外网请求；Rust native-test 使用隔离标记提供假凭据并拒绝真实网络。
   const proxy = createServer((socket) => {
-    socket.on('error', () => undefined); socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\nContent-Length: 0\r\n\r\n');
+    socket.on('error', () => undefined);
+    socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\nContent-Length: 0\r\n\r\n');
   });
   const stop = () => stopping ??= child ? stopDevelopment(child, page) : Promise.resolve();
   const cleanup = () => cleaning ??= (async () => {
@@ -213,7 +222,14 @@ async function main() {
   /** @param {string} name @param {() => Promise<unknown>} action */
   const check = async (name, action) => {
     assert(!interrupted, '开发模式回归已中断');
-    try { const detail = await action(); checks.push({ name, ok: true, detail }); console.log(`通过：${name}`); } catch (error) { checks.push({ name, ok: false, error: errorText(error) }); throw error; }
+    try {
+      const detail = await action();
+      checks.push({ name, ok: true, detail });
+      console.log(`通过：${name}`);
+    } catch (error) {
+      checks.push({ name, ok: false, error: errorText(error) });
+      throw error;
+    }
   };
   try {
     await check('开发端口可用', requireFreeDevelopmentPort);
@@ -253,7 +269,12 @@ async function main() {
     assert(context, '未取得本次 WebView2 context');
     await context.route('**/*', async (route) => {
       const url = route.request().url();
-      if (localResource(url)) { await route.continue(); } else { blockedRequests.push(url); await route.abort('blockedbyclient'); }
+      if (localResource(url)) {
+        await route.continue();
+      } else {
+        blockedRequests.push(url);
+        await route.abort('blockedbyclient');
+      }
     });
     page = context.pages()[0] ?? await context.waitForEvent('page', { timeout: ACTION_TIMEOUT_MS });
     const activePage = page;

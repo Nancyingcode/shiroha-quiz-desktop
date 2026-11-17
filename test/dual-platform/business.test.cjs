@@ -166,7 +166,13 @@ test('题目自定分覆盖界面默认分；答题明细保留多空内容、�
   assert.equal(api.scoreOf({ type: 'unknown' }), 2);
   assert.equal(api.scoreOf({ type: 'single', score: '0' }), '0');
   const question = questions()[3];
-  const detail = plain(api.makeAnswerDetail({ bankId: 'bank-a', bankName: '阶段A全题型', question }, ['北京市', '京'], true, 4, 4));
+  const detail = plain(api.makeAnswerDetail(
+    { bankId: 'bank-a', bankName: '阶段A全题型', question },
+    ['北京市', '京'],
+    true,
+    4,
+    4,
+  ));
   assert.deepEqual(detail.blankAnswers, [['北京', '北京市'], ['京']]);
   assert.deepEqual(detail.userBlankAnswers, ['北京市', '京']);
   assert.equal(detail.score, 4);
@@ -198,7 +204,10 @@ test('共享材料绑定到两道题，答案和各自选项保持独立', () =>
   assert.match(parsed[0].question, /学校种植了多少棵树/);
   assert.match(parsed[1].question, /松树有多少棵/);
   assert.deepEqual(plain(parsed.map((question) => question.answer)), [['A'], ['B']]);
-  assert.deepEqual(plain(parsed.map((question) => question.options.map((option) => option.text))), [['十棵', '六棵'], ['四棵', '六棵']]);
+  assert.deepEqual(
+    plain(parsed.map((question) => question.options.map((option) => option.text))),
+    [['十棵', '六棵'], ['四棵', '六棵']],
+  );
 });
 
 test('共享材料已在首题时不重复，后续题仍保留材料及各自答案', () => {
@@ -213,7 +222,10 @@ test('共享材料已在首题时不重复，后续题仍保留材料及各自�
   assert.equal(parsed.length, 2);
   for (const question of parsed) { assert.equal(question.question.split(material).length - 1, 1); }
   assert.deepEqual(parsed.map((question) => question.answer), [['A'], ['B']]);
-  assert.deepEqual(parsed.map((question) => question.options.map((option) => option.text)), [['十棵', '六棵'], ['四棵', '六棵']]);
+  assert.deepEqual(
+    parsed.map((question) => question.options.map((option) => option.text)),
+    [['十棵', '六棵'], ['四棵', '六棵']],
+  );
 });
 
 test('多种解析策略保留同行选项顺序、题号与答案', () => {
@@ -288,12 +300,16 @@ test('练习轮次计数接受文本与 BigInt 时保留原有自增转换', () 
   const question = api.snapshot().banks[0].questions[0];
   const item = { bankId: 'bank-a', question };
   for (const [value, next] of [['2', 3], [2n, 3n]]) {
-    api.practiceSession.current = { items: [item], idx: 0, answered: value, correct: value, wrong: value, details: [], answerState: {} };
+    api.practiceSession.current = {
+      items: [item], idx: 0, answered: value, correct: value, wrong: value, details: [], answerState: {},
+    };
     api.recordPracticeAnswer(item, ['A'], true);
     assert.equal(api.practiceSession.current.answered, next);
     assert.equal(api.practiceSession.current.correct, next);
     assert.equal(api.practiceSession.current.wrong, value);
-    api.practiceSession.current = { items: [item], idx: 0, answered: value, correct: value, wrong: value, details: [], answerState: {} };
+    api.practiceSession.current = {
+      items: [item], idx: 0, answered: value, correct: value, wrong: value, details: [], answerState: {},
+    };
     api.recordPracticeAnswer(item, ['B'], false);
     assert.equal(api.practiceSession.current.answered, next);
     assert.equal(api.practiceSession.current.correct, value);
