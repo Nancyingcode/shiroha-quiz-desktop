@@ -172,7 +172,9 @@ export async function lintChangedFiles(repositoryRoot, files) {
 function runNpm(script) {
   const npm = process.env.npm_execpath;
   if (!npm) { throw new Error('请通过 npm run lint:ci 启动检查。'); }
-  const result = spawnSync(process.execPath, [npm, 'run', script], { cwd: desktop, stdio: 'inherit', windowsHide: true });
+  const result = spawnSync(process.execPath, [npm, 'run', script], {
+    cwd: desktop, stdio: 'inherit', windowsHide: true,
+  });
   if (result.error) { throw result.error; }
   return result.status === 0;
 }
@@ -185,7 +187,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
   }
   // CI 必须验证原始提交，而不是前置步骤意外修改后的文件。
   git(root, ['diff', '--quiet', 'HEAD', '--']);
-  const event = /** @type {PullRequestEvent} */ (JSON.parse(await readFile(process.env.GITHUB_EVENT_PATH ?? '', 'utf8')));
+  const event = /** @type {PullRequestEvent} */ (JSON.parse(
+    await readFile(process.env.GITHUB_EVENT_PATH ?? '', 'utf8'),
+  ));
   const plan = await planCiLint({
     root,
     eventName: process.env.GITHUB_EVENT_NAME ?? '',

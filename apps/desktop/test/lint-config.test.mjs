@@ -420,6 +420,11 @@ test('line length pilot accepts 120 characters and rejects 121 in selected modul
     'test/dual-platform/text-parser-cases.cjs', 'test/dual-platform/training-characterization.test.cjs',
     'test/web-ai-practice/dialogs.cjs', 'test/web-ai-practice/submit-modes.cjs',
     'test/web-ai-practice/training-review-analysis.cjs', 'test/web-webdav/request.test.cjs',
+    'apps/desktop/frontend/titlebar.js', 'apps/desktop/scripts/lint-ci.mjs',
+    'apps/desktop/scripts/release-github.mjs', 'apps/desktop/test/lint-fixture-helpers.mjs',
+    'apps/web/backup-core.js', 'test/codebuddy-cli-stdio/guard.test.mjs',
+    'test/codebuddy-cli-stdio/verify-guarded.mjs', 'test/dual-platform/ai-connection.test.cjs',
+    'test/dual-platform/circled-stem.test.cjs', 'test/dual-platform/due-review.test.cjs',
   ]) {
     const [result] = await lint.lintText(source, { filePath });
     assert.deepEqual(result.messages.filter((m) => m.ruleId === rule).map((m) => m.line), [2], filePath);
@@ -429,7 +434,7 @@ test('line length pilot accepts 120 characters and rejects 121 in selected modul
       assert.deepEqual(desktopResult.messages.filter((m) => m.ruleId === rule).map((m) => m.line), [2], filePath);
     }
   }
-  for (const filePath of ['apps/web/app.js', 'apps/desktop/scripts/release-github.mjs']) {
+  for (const filePath of ['apps/web/app.js', 'apps/desktop/scripts/smoke.mjs']) {
     const [outside] = await lint.lintText(source, { filePath });
     assert(!outside.messages.some((message) => message.ruleId === rule), filePath);
   }

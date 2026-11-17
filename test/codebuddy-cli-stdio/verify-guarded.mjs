@@ -4,7 +4,9 @@ import path from 'node:path';
 
 assert.ok(process.argv[2], 'Usage: node verify-guarded.mjs <run-directory>');
 const { observations } = JSON.parse(await readFile(path.join(process.argv[2], 'summary.json'), 'utf8'));
-const expected = ['stop', 'length', 'content_filter', 'eof', 'done_only', 'malformed', 'tool', 'cancel', 'timeout', 'interrupt'];
+const expected = [
+  'stop', 'length', 'content_filter', 'eof', 'done_only', 'malformed', 'tool', 'cancel', 'timeout', 'interrupt',
+];
 assert.deepEqual(observations.map((item) => item.scenario), expected);
 for (const item of observations) {
   const label = item.scenario;
@@ -23,5 +25,7 @@ for (const item of observations) {
     assert.equal(item.result[0].is_error, true, label);
   }
 }
-console.log('10 guarded CLI cases verified: one upstream request each; only complete stop accepted as a transport candidate.');
+console.log(
+  '10 guarded CLI cases verified: one upstream request each; only complete stop accepted as a transport candidate.',
+);
 console.log('Production integration, operating-system isolation and subscription billing are separate gates.');

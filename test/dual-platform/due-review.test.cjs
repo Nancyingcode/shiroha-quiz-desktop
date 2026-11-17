@@ -9,7 +9,12 @@ function selectionFixture() {
   const today = new Date(2026, 10, 17, 12);
   const localTime = (day, hour = 0, minute = 0) => new Date(2026, 10, day, hour, minute).toISOString();
   const banks = [
-    { id: 'a', questions: ['today', 'old', 'legacy', 'bad', 'tomorrow', 'mastered', 'same'].map((id) => ({ id, type: 'single' })) },
+    {
+      id: 'a',
+      questions: [
+        'today', 'old', 'legacy', 'bad', 'tomorrow', 'mastered', 'same',
+      ].map((id) => ({ id, type: 'single' })),
+    },
     { id: 'b', questions: [{ id: 'same', type: 'single' }] },
   ];
   const wrong = {
@@ -34,7 +39,9 @@ function selectionFixture() {
     select: () => null,
     scope: { banks: (scope) => (scope?.type === 'bank' ? banks.filter((bank) => bank.id === scope.value) : banks) },
     questions: {
-      itemsForBanks: (values) => values.flatMap((bank) => bank.questions.map((question) => ({ bankId: bank.id, question }))),
+      itemsForBanks: (values) => values.flatMap(
+        (bank) => bank.questions.map((question) => ({ bankId: bank.id, question })),
+      ),
       wrongEntries: (id) => wrong[id],
     },
     progress: {},

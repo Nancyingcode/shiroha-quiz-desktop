@@ -12,7 +12,10 @@
   if (captionName) {
     // 按钮保留在 body 下以沿用保存锁；本页面观察标题宽度，字体缩放后仍紧邻名称。
     const syncNavigationPosition = () => {
-      document.body.style.setProperty('--desktop-navigation-toggle-left', `${captionName.getBoundingClientRect().right + 8}px`);
+      document.body.style.setProperty(
+        '--desktop-navigation-toggle-left',
+        `${captionName.getBoundingClientRect().right + 8}px`,
+      );
     };
     syncNavigationPosition();
     new window.ResizeObserver(syncNavigationPosition).observe(captionName);
@@ -73,7 +76,11 @@
   drag.addEventListener('mousedown', (event) => {
     if (event.button !== 0) { return; }
     event.preventDefault();
-    if (event.detail === 2) { void run(() => appWindow.toggleMaximize()); } else { void appWindow.startDragging().catch(showError); }
+    if (event.detail === 2) {
+      void run(() => appWindow.toggleMaximize());
+    } else {
+      void appWindow.startDragging().catch(showError);
+    }
   });
   window.addEventListener('resize', () => {
     window.clearTimeout(resizeTimer);

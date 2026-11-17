@@ -265,6 +265,11 @@ export function createConfig({ desktop = false, debt = false, semanticOnly = fal
         'test/dual-platform/text-parser-cases.cjs', 'test/dual-platform/training-characterization.test.cjs',
         'test/web-ai-practice/dialogs.cjs', 'test/web-ai-practice/submit-modes.cjs',
         'test/web-ai-practice/training-review-analysis.cjs', 'test/web-webdav/request.test.cjs',
+        'apps/desktop/frontend/titlebar.js', 'apps/desktop/scripts/lint-ci.mjs',
+        'apps/desktop/scripts/release-github.mjs', 'apps/desktop/test/lint-fixture-helpers.mjs',
+        'apps/web/backup-core.js', 'test/codebuddy-cli-stdio/guard.test.mjs',
+        'test/codebuddy-cli-stdio/verify-guarded.mjs', 'test/dual-platform/ai-connection.test.cjs',
+        'test/dual-platform/circled-stem.test.cjs', 'test/dual-platform/due-review.test.cjs',
       ].map(relative),
       rules: {
         '@stylistic/max-len': ['error', {

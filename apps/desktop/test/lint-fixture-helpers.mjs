@@ -34,13 +34,19 @@ export async function repositoryFixture(t, environment = process.env) {
       delete fixtureEnvironment[key];
     }
   }
-  const init = spawnSync('git', ['init'], { cwd: temporary, env: fixtureEnvironment, encoding: 'utf8', windowsHide: true });
+  const init = spawnSync('git', ['init'], {
+    cwd: temporary, env: fixtureEnvironment, encoding: 'utf8', windowsHide: true,
+  });
   assert.equal(init.status, 0, init.stderr);
   const run = (/** @type {string} */ script, /** @type {string[]} */ args = []) => spawnSync(
     process.execPath,
     [path.join(project, 'scripts', script), ...args],
     { cwd: os.tmpdir(), env: fixtureEnvironment, encoding: 'utf8', windowsHide: true },
   );
-  const git = (/** @type {string[]} */ args) => spawnSync('git', args, { cwd: temporary, env: fixtureEnvironment, encoding: 'utf8', windowsHide: true });
+  const git = (/** @type {string[]} */ args) => spawnSync(
+    'git',
+    args,
+    { cwd: temporary, env: fixtureEnvironment, encoding: 'utf8', windowsHide: true },
+  );
   return { temporary, run, git };
 }

@@ -111,12 +111,22 @@
         }
         const isMultiBlank = isMultiBlankQuestionV58914(question);
         let userAnswer = [];
-        if (Array.isArray(detail.userAnswer)) { userAnswer = detail.userAnswer; } else if (Array.isArray(detail.chosen)) { userAnswer = detail.chosen; }
+        if (Array.isArray(detail.userAnswer)) {
+          userAnswer = detail.userAnswer;
+        } else if (Array.isArray(detail.chosen)) {
+          userAnswer = detail.chosen;
+        }
         const directBlankAnswers = Array.isArray(detail.userBlankAnswers) ? detail.userBlankAnswers : null;
         let userBlankAnswers = directBlankAnswers || [];
         if (!userBlankAnswers.length && isMultiBlank) { userBlankAnswers = userAnswer; }
         let answerText;
-        if (detail.nativeAnswerText != null) { answerText = String(detail.nativeAnswerText); } else if (Array.isArray(detail.answer)) { answerText = detail.answer.join(' / '); } else { answerText = String(detail.answer || ''); }
+        if (detail.nativeAnswerText != null) {
+          answerText = String(detail.nativeAnswerText);
+        } else if (Array.isArray(detail.answer)) {
+          answerText = detail.answer.join(' / ');
+        } else {
+          answerText = String(detail.answer || '');
+        }
         const result = {
           question: serializeQuestion(question),
           userAnswer: [...userAnswer],

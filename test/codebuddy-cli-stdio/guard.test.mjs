@@ -46,13 +46,20 @@ function events() {
   });
   return [
     { type: 'system', subtype: 'init', session_id: 'session' },
-    streamed({ type: 'message_start', message: { id: 'model-request', role: 'assistant', content: [], stop_reason: null } }),
+    streamed({
+      type: 'message_start',
+      message: { id: 'model-request', role: 'assistant', content: [], stop_reason: null },
+    }),
     streamed({ type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } }),
     streamed({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: TEXT } }),
     streamed({ type: 'content_block_stop', index: 0 }),
     streamed({ type: 'message_delta', delta: { stop_reason: 'end_turn' } }),
     streamed({ type: 'message_stop' }),
-    { ...base, type: 'assistant', message: { id: 'model-request', role: 'assistant', content: [{ type: 'text', text: TEXT }] } },
+    {
+      ...base,
+      type: 'assistant',
+      message: { id: 'model-request', role: 'assistant', content: [{ type: 'text', text: TEXT }] },
+    },
     { ...base, type: 'result', subtype: 'success', is_error: false, result: TEXT },
   ];
 }

@@ -27,11 +27,16 @@ async function runGh(args) {
 
 /** @param {ReleaseContext} context @param {GhRunner} run */
 async function listReleases(context, run) {
-  const pages = JSON.parse(await run(['api', '--paginate', '--slurp', `repos/${context.repository}/releases?per_page=100`]));
+  const pages = JSON.parse(await run([
+    'api', '--paginate', '--slurp', `repos/${context.repository}/releases?per_page=100`,
+  ]));
   if (!Array.isArray(pages) || pages.some((page) => !Array.isArray(page))) { throw new Error('GitHub Release 列表响应无效'); }
   /** @type {RemoteRelease[]} */
   const releases = pages.flat();
-  if (releases.some((release) => !release || typeof release.tag_name !== 'string' || typeof release.draft !== 'boolean')) { throw new Error('GitHub Release 记录无效'); }
+  if (releases.some((release) => !release || typeof release.tag_name !== 'string'
+    || typeof release.draft !== 'boolean')) {
+    throw new Error('GitHub Release 记录无效');
+  }
   return releases;
 }
 

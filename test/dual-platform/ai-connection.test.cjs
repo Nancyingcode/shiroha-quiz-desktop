@@ -122,7 +122,11 @@ test('浏览器本地服务 HTTP 403 保留 Origin 排查建议', () => {
 
 for (const native of [false, true]) {
   test(`${native ? '桌面' : '浏览器'} HTTP 参数错误中的秒数限制不会被诊断为超时`, async () => {
-    const { context } = harness(native, async () => ({ ok: false, status: 400, text: async () => 'duration 参数不能超过 60 秒' }));
+    const { context } = harness(native, async () => ({
+      ok: false,
+      status: 400,
+      text: async () => 'duration 参数不能超过 60 秒',
+    }));
     await assert.rejects(context.requestAiChatV99(config, []), (error) => {
       assert.equal(error.status, 400);
       const diagnostic = context.buildAiDiagnosticV375(error, config);
@@ -134,7 +138,9 @@ for (const native of [false, true]) {
 
   test(`${native ? '桌面' : '浏览器'} AI 超时保留超时诊断并释放定时器`, async () => {
     const { context, timers } = harness(native, async (_config, _payload, signal) => new Promise((_resolve, reject) => {
-      signal.addEventListener('abort', () => reject(Object.assign(new Error('请求已取消。'), { name: 'AbortError', code: 'cancelled' })));
+      signal.addEventListener('abort', () => reject(
+        Object.assign(new Error('请求已取消。'), { name: 'AbortError', code: 'cancelled' }),
+      ));
     }));
     const pending = context.withAiTimeoutV99(15, (controller) => context.requestAiChatV99(config, [], { controller }));
     assert.equal(timers.size, 1);
