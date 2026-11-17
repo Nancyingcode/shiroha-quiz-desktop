@@ -17,7 +17,7 @@ test.before(async () => {
   browser = await chromium.launch({ headless: true, ...(process.env.SHIROHA_BROWSER_EXECUTABLE ? { executablePath: process.env.SHIROHA_BROWSER_EXECUTABLE } : { channel: 'msedge' }) });
 });
 test.after(async () => { await browser?.close(); await server?.close(); });
-async function pageFor(t, raw, injection = '', appTransform = null, sourceTransforms = {}) {
+async function pageFor(t, raw, injection = '', appTransform = null, sourceTransforms = {}, clockTime = null) {
   const context = await browser.newContext(); t.after(() => context.close());
   await context.addInitScript(({ raw, key }) => { if (!globalThis.sessionStorage.getItem('__stage_b_seed')) { if (raw !== null) { globalThis.localStorage.setItem(key, raw); }globalThis.sessionStorage.setItem('__stage_b_seed', '1'); } }, { raw, key: KEY });
   await context.route('**/*', async (route) => {
@@ -36,6 +36,7 @@ async function pageFor(t, raw, injection = '', appTransform = null, sourceTransf
     return route.continue();
   });
   const page = await context.newPage();
+  if (clockTime) { await page.clock.install({ time: clockTime }); }
   await observeAppDialogs(page);
   const errors = []; page.on('pageerror', (error) => errors.push(error.message));
   page.on('app-dialog', (dialog) => dialog.accept());
@@ -44,6 +45,164 @@ async function pageFor(t, raw, injection = '', appTransform = null, sourceTransf
   return page;
 }
 const saved = (page) => page.evaluate((key) => globalThis.localStorage.getItem(key), KEY);
+
+function dueReviewState() {
+  const initial = webState();
+  const base = new Date();
+  const local = (offset, hour) => new Date(base.getFullYear(), base.getMonth(), base.getDate() + offset, hour).toISOString();
+  initial.wrongBook = {
+    'bank-a': [
+      { id: 'same-id', status: '未掌握', nextReviewAt: local(-1, 12) },
+      { id: 'multiple', status: '复习中', nextReviewAt: local(0, 23) },
+      'judge',
+      { id: 'blank', status: '复习中', nextReviewAt: 'invalid-date' },
+      { id: 'short', status: '未掌握', nextReviewAt: local(1, 0) },
+      { id: 'unanswered', status: '已掌握', nextReviewAt: local(-2, 0) },
+      { id: 'deleted-question', status: '未掌握', nextReviewAt: local(-3, 0) },
+    ],
+    'bank-b': [{ id: 'same-id', status: '未掌握', nextReviewAt: local(-2, 0) }],
+  };
+  return initial;
+}
+
+test('今日错题复习：首页范围、键盘启动、跨库顺序和答题后刷新', async (t) => {
+  const page = await pageFor(t, JSON.stringify(dueReviewState()));
+  page.setDefaultTimeout(5000);
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  assert.equal(await page.locator('#stat-review-due').innerText(), '4');
+  await page.locator('.nav[data-view="banks"]').click();
+  await page.locator('[data-practice-group-v8916="自建样本"]').click();
+  await page.locator('.nav[data-view="dashboard"]').click();
+  assert.equal(await page.locator('#stat-review-due').innerText(), '5');
+  const start = page.getByRole('button', { name: /待复习错题/ });
+  await start.focus();
+  await page.keyboard.press('Enter');
+  await page.locator('#practice-card .question-title').waitFor();
+  assert.match(await page.locator('#practice-card').innerText(), /第二题库同 ID/);
+  assert.equal(await page.locator('#practice-progress').innerText(), '1 / 5');
+  await page.locator('#practice-card .option[data-key="B"]').click();
+  await page.locator('#p-submit').click();
+  await page.locator('#p-feedback').getByText(/回答正确/).waitFor();
+  await page.locator('#sidebar-toggle').click();
+  await page.locator('.nav[data-view="dashboard"]').click();
+  assert.equal(await page.locator('#stat-review-due').innerText(), '4');
+  page.removeAllListeners('app-dialog');
+  await start.click();
+  await page.locator('#app-dialog[open]').waitFor();
+  await page.locator('#app-dialog [data-dialog-cancel]').click();
+  assert.equal(await page.locator('#dashboard.active').count(), 1);
+  await page.locator('.nav[data-view="practice"]').click();
+  assert.match(await page.locator('#practice-card').innerText(), /第二题库同 ID/);
+});
+
+test('今日错题复习：掌握状态变更和空队列刷新首页', async (t) => {
+  const initial = dueReviewState();
+  initial.banks[0].questions = [initial.banks[0].questions[0]];
+  const page = await pageFor(t, JSON.stringify(initial));
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  assert.equal(await page.locator('#stat-review-due').innerText(), '1');
+  await page.locator('.nav[data-view="wrongbook"]').click();
+  await page.locator('[data-toggle-master-wrong="same-id"]').click();
+  await page.locator('.nav[data-view="dashboard"]').click();
+  assert.equal(await page.locator('#stat-review-due').innerText(), '0');
+  assert.equal(await page.getByRole('button', { name: /待复习错题/ }).isDisabled(), true);
+  await page.locator('.nav[data-view="wrongbook"]').click();
+  assert.equal(await page.locator('#practice-wrong-btn').innerText(), '重练未掌握错题');
+});
+
+test('今日错题复习：桌面摘要计数不补读，开始后请求全部到期题正文', async (t) => {
+  const initial = webState();
+  const question = initial.banks[0].questions[0];
+  initial.banks = [{ ...initial.banks[0], questions: Array.from({ length: 205 }, (_, index) => ({ ...question, id: `due-${index}`, question: `到期题 ${index}` })) }];
+  initial.wrongBook = { 'bank-a': initial.banks[0].questions.map((item) => ({ id: item.id, status: '未掌握' })) };
+  const injection = `
+    const dueStorage = globalThis.ShirohaPlatform.storage;
+    const dueRead = dueStorage.read.bind(dueStorage);
+    dueStorage.lazy = true;
+    globalThis.__dueReads = [];
+    dueStorage.read = async () => {
+      const snapshot = await dueRead();
+      globalThis.__dueBodies = structuredClone(snapshot.banks);
+      snapshot.banks.forEach((bank) => { bank.questions = bank.questions.map(({ id, type, number }) => ({ id, type, number, question: '', options: [], answer: [] })); });
+      return snapshot;
+    };
+    dueStorage.ensureQuestions = async (snapshot, refs) => {
+      globalThis.__dueReads.push(refs);
+      refs.forEach(({ bankId, questionId }) => Object.assign(snapshot.banks.find((bank) => bank.id === bankId).questions.find((item) => item.id === questionId), globalThis.__dueBodies.find((bank) => bank.id === bankId).questions.find((item) => item.id === questionId)));
+    };
+  `;
+  const page = await pageFor(t, JSON.stringify(initial), injection);
+  page.setDefaultTimeout(10000);
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  assert.equal(await page.locator('#stat-review-due').innerText(), '205');
+  assert.equal(await page.evaluate(() => globalThis.__dueReads.length), 0);
+  await page.getByRole('button', { name: /待复习错题/ }).click();
+  await page.locator('#practice-card .question-title').waitFor();
+  assert.match(await page.locator('#practice-card .question-title').innerText(), /到期题 0/);
+  assert.deepEqual(await page.evaluate(() => globalThis.__dueReads.map((refs) => refs.length)), [205]);
+});
+
+test('今日错题复习：取消大题量确认后保留之前未完成的练习', async (t) => {
+  const initial = webState();
+  const question = initial.banks[0].questions[0];
+  initial.banks = [{ ...initial.banks[0], questions: Array.from({ length: 201 }, (_, index) => ({ ...question, id: `due-confirm-${index}`, question: `题目 ${index}` })) }];
+  initial.wrongBook = { 'bank-a': initial.banks[0].questions.map((item) => ({ id: item.id, status: '未掌握' })) };
+  const page = await pageFor(t, JSON.stringify(initial));
+  page.setDefaultTimeout(5000);
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.locator('.nav[data-view="practice"]').click();
+  await page.locator('#practice-custom-count').fill('1');
+  await page.locator('#start-practice-btn').click();
+  await page.locator('#practice-card .question-title').waitFor();
+  await page.locator('#sidebar-toggle').click();
+  await page.locator('.nav[data-view="dashboard"]').click();
+  page.removeAllListeners('app-dialog');
+  await page.getByRole('button', { name: /待复习错题/ }).click();
+  await page.locator('#app-dialog [data-dialog-accept]').click();
+  await page.locator('#app-dialog').getByText(/题量很大|轻微卡顿/).waitFor();
+  await page.locator('#app-dialog [data-dialog-cancel]').click();
+  await page.locator('#practice-pause-dialog[open]').waitFor();
+  await page.locator('#practice-resume').click();
+  assert.equal(await page.locator('#practice-progress').innerText(), '1 / 1');
+  assert.match(await page.locator('#practice-card .question-title').innerText(), /题目 0/);
+});
+
+test('今日错题复习：本地午夜及页面恢复可见时更新数量', async (t) => {
+  const initial = webState();
+  const clockTime = new Date(2026, 10, 17, 23, 58);
+  const tomorrow = new Date(2026, 10, 18);
+  initial.banks[0].questions = [initial.banks[0].questions[0]];
+  initial.wrongBook = { 'bank-a': [{ id: 'same-id', status: '未掌握', nextReviewAt: tomorrow.toISOString() }] };
+  const page = await pageFor(t, JSON.stringify(initial), '', null, {}, clockTime);
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  assert.equal(await page.locator('#stat-review-due').innerText(), '0');
+  await page.clock.fastForward('02:01');
+  assert.equal(await page.locator('#stat-review-due').innerText(), '1');
+  await page.clock.setSystemTime(clockTime);
+  await page.evaluate(() => globalThis.document.dispatchEvent(new globalThis.Event('visibilitychange')));
+  assert.equal(await page.locator('#stat-review-due').innerText(), '0');
+});
+
+test('今日错题复习：离开后旧正文读取失败不启动练习或显示错误', async (t) => {
+  const page = await pageFor(t, JSON.stringify(dueReviewState()));
+  page.setDefaultTimeout(5000);
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.evaluate(() => {
+    const { storage } = globalThis.ShirohaPlatform;
+    storage.lazy = true;
+    storage.ensureQuestions = () => new Promise((_resolve, reject) => {
+      globalThis.__failDueRead = () => reject(new Error('模拟已离开复习的旧读取失败'));
+    });
+  });
+  await page.getByRole('button', { name: /待复习错题/ }).click();
+  await page.waitForFunction(() => typeof globalThis.__failDueRead === 'function');
+  await page.locator('.nav[data-view="dashboard"]').click();
+  await page.evaluate(() => globalThis.__failDueRead());
+  await page.waitForTimeout(100);
+  assert.equal(await page.locator('#dashboard.active').count(), 1);
+  assert.equal(await page.locator('body').evaluate((body) => body.classList.contains('practice-focus')), false);
+  assert.doesNotMatch(await page.locator('#platform-status').innerText(), /模拟已离开复习的旧读取失败/);
+});
 
 function recordDeletionState() {
   const initial = webState();

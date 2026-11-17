@@ -69,6 +69,9 @@
   const LIST_PAGE_SIZES = [10, 20, 50, 100];
   const nativeOpenRecords = new Set();
   const nativeRenderVersions = new Map();
+  // 首页的午夜刷新计时器随页面存活；每次统计重绘时替换，避免累积任务。
+  let dueReviewTimer = null;
+  let dueReviewVisibilityBound = false;
 
   function beginNativeRender(view) { const version = (nativeRenderVersions.get(view) || 0) + 1;nativeRenderVersions.set(view, version);return version; }
 
@@ -145,7 +148,7 @@
     normalizeBlankAnswersV58914,
   });
   const {
-    readCustomCountV60, syncLimitControlV60, bindLimitControlsV60, filteredPracticeItemsV8916,
+    readCustomCountV60, syncLimitControlV60, bindLimitControlsV60, filteredPracticeItemsV8916, dueReviewItems,
     practiceBaseItemsV58916, syncPracticeStartModeFieldsV58916, syncPracticeStartUiV58916,
     bindPracticeStartControlsV58916, buildPracticeSelectionV58916, updatePracticeProgressV58916,
   } = globalThis.ShirohaPracticeSelection.create({
@@ -990,6 +993,11 @@
     bindReviewAnalysisEvents();
     bindTrainingReviewEvents();
     bindPracticeClockLifecycle();
+    $('#start-due-review').onclick = startDueReview;
+    if (!dueReviewVisibilityBound) {
+      document.addEventListener('visibilitychange', () => { if (!document.hidden && applicationReady) { renderStats(); } });
+      dueReviewVisibilityBound = true;
+    }
     $('#active-bank-select').onchange = async (e) => runMutation(async () => { setPracticeBankScopeV8916(e.target.value, true);await saveSilent();renderAll(); });const importNameInput = $('#import-bank-name');if (importNameInput && !importNameInput.dataset.autoNameBound) { importNameInput.dataset.autoNameBound = '1';importNameInput.addEventListener('input', () => { importDraft.invalidateBankName();importNameInput.dataset.autoName = '0'; }); };$('#save-all-btn').onclick = saveState;
     $('#load-sample-btn').onclick = loadSample;$('#import-file').onchange = readImportFile;$('#parse-import-btn').onclick = parseImport;$('#confirm-import-btn').onclick = confirmImport;const findReplaceBtnV51 = $('#find-replace-import-btn');if (findReplaceBtnV51) { findReplaceBtnV51.onclick = openImportFindReplaceV51; } const dualConfirmBtn = $('#dual-confirm-import-btn');if (dualConfirmBtn) { dualConfirmBtn.onclick = confirmImport; } const importTextAreaV49 = $('#import-text');if (importTextAreaV49 && !importTextAreaV49.dataset.sourceBoundV49) { importTextAreaV49.dataset.sourceBoundV49 = '1';importTextAreaV49.addEventListener('input', () => { importDraft.invalidateRead('single');if (importTextAreaV49.dataset.tableImportV49 === '1') { importDraft.tableResult = null;delete importTextAreaV49.dataset.tableImportV49; }importDraft.sourceMeta = { name: '手动文本', size: new Blob([importTextAreaV49.value || '']).size, type: 'text' }; }); };const ocrStartBtn = $('#ocr-start-btn');if (ocrStartBtn) { ocrStartBtn.onclick = startPdfOcrImport; } const ocrUseBtn = $('#ocr-use-text-btn');if (ocrUseBtn) { ocrUseBtn.onclick = applyOcrTextToImport; } const ocrCopyBtn = $('#ocr-copy-btn');if (ocrCopyBtn) { ocrCopyBtn.onclick = copyOcrText; } const ocrDocxBtn = $('#ocr-download-docx-btn');if (ocrDocxBtn) { ocrDocxBtn.onclick = downloadOcrDocx; }$('#clear-import-btn').onclick = () => { cancelAiImportRequestV99(true);cancelAiPreviewRequestV991(true);closeAiImportPanelV99();closeAiPreviewPanelV991();resetAiSuggestionsV991();$('#import-text').value = '';if ($('#import-text')) { delete $('#import-text').dataset.tableImportV49; }importDraft.clearSingle();resetOcrImportState();renderImportPreview([]);syncAiImportActionV99(); };
     $('#dual-question-file').onchange = (e) => readDualFile(e, 'question');$('#dual-answer-file').onchange = (e) => readDualFile(e, 'answer');
@@ -1285,13 +1293,14 @@
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   }
   function renderStats() {
+    const current = new Date();
     const scopeBanks = practiceScopeBanksV8916();
     const totalQuestions = scopeBanks.reduce((n, b) => n + (b.questions || []).length, 0);
     const activeWrongEntries = scopeBanks.flatMap((b) => getWrongEntries(b.id).filter((e) => e.status !== '已掌握'));
     $('#stat-total').textContent = totalQuestions;
     $('#stat-wrong').textContent = activeWrongEntries.length;
     $('#stat-records').textContent = state.records.length;
-    const today = localDateKeyV36();
+    const today = localDateKeyV36(current);
     const practiceRecords = (state.records || []).filter((r) => r && r.mode === '练习');
     const todayPractice = practiceRecords.filter((r) => localDateKeyV36(r.date) === today);
     const todayAnswered = todayPractice.reduce((n, r) => n + Number(r.answered || 0), 0);
@@ -1299,8 +1308,43 @@
     const setText = (id, val) => { const el = $(id);if (el) { el.textContent = val; } };
     setText('#stat-today-count', todayAnswered);
     setText('#stat-today-rate', todayAnswered ? `${Math.round(todayCorrect / todayAnswered * 100)}%` : '—');
-    setText('#stat-review-due', activeWrongEntries.length);
+    const dueCount = dueReviewItems(undefined, current).length;
+    setText('#stat-review-due', dueCount);
+    const dueButton = $('#start-due-review');
+    if (dueButton) {
+      dueButton.disabled = dueCount === 0;
+      dueButton.setAttribute('aria-label', `待复习错题 ${dueCount} 道，开始复习`);
+    }
     setText('#stat-total-practice', practiceRecords.length);
+    const nextDay = new Date(current.getFullYear(), current.getMonth(), current.getDate() + 1);
+    if (dueReviewTimer !== null) { clearTimeout(dueReviewTimer); }
+    dueReviewTimer = setTimeout(renderStats, Math.max(1, nextDay.getTime() - current.getTime()));
+  }
+
+  async function startDueReview() {
+    if (!applicationReady || mutationBusy || !$('#dashboard')?.classList.contains('active')) { return; }
+    if (!dueReviewItems().length) { renderStats();toast('当前范围暂无待复习错题。', 'warn');return; }
+    const previous = practiceSession.current;
+    if (previous.items?.length && !previous.completed) {
+      const accepted = await ShirohaDialogs.confirm('当前练习尚未保存为记录，开始今日错题复习会放弃本轮进度。是否继续？');
+      if (!accepted || practiceSession.current !== previous || !$('#dashboard')?.classList.contains('active') || mutationBusy) { return; }
+    }
+    await switchViewV45('practice', false);
+    if (!applicationReady || mutationBusy || !$('#practice')?.classList.contains('active')) { return; }
+    $('#practice-source').value = 'due';
+    $('#practice-type').value = 'all';
+    $('#practice-order').value = 'sequence';
+    $('#practice-submit-mode').value = 'single';
+    $('#practice-limit').value = 'all';
+    $('#practice-start-mode-v58916').value = PRACTICE_START_FROM_V58916;
+    syncPracticeStartUiV58916(false);
+    await startPractice();
+    if (practiceSession.current !== previous && practiceSession.current.items?.length) {
+      $('#practice-card input:not([disabled]), #practice-card textarea:not([disabled]), #p-submit')?.focus();
+    } else if (practiceSession.current === previous && previous.items?.length && !previous.completed && $('#practice')?.classList.contains('active')) {
+      enterPracticeFocus();
+      renderPracticeQuestion();
+    }
   }
 
   function bankQuestionDeletionBlocked(bankId, ids) {
@@ -2807,7 +2851,7 @@ D. 高速通过积水路段`;
   async function resetData() { return runMutation(async () => { if (await ShirohaDialogs.confirm('确定清除全部本地数据？默认题库也会重新初始化。')) { await ShirohaPlatform.saves.idle();await clearStoredState();location.reload(); } }); }
 
   /* SHIROHA_WEB_V45_BANK_EDITOR_AND_FOCUS_NAV_START */
-  async function switchViewV45(viewId) {
+  async function switchViewV45(viewId, resumePractice = true) {
     const view = viewId && $(`#${viewId}`);
     if (!view) { return; }
     if (viewId !== 'practice' && !await canLeaveTotalPractice(viewId)) { return; }
@@ -2821,7 +2865,7 @@ D. 高速通过积水路段`;
     const title = $('#page-title');
     if (title && nav) { title.textContent = nav.textContent; }
     updateShellLayoutByView(viewId);releaseNativeView();renderNativeView();
-    if (viewId === 'practice' && practiceSession.current.items.length && !practiceSession.current.completed) { enterPracticeFocus();renderPracticeQuestion(); }
+    if (viewId === 'practice' && resumePractice && practiceSession.current.items.length && !practiceSession.current.completed) { enterPracticeFocus();renderPracticeQuestion(); }
     if (viewId === 'ai-settings') { renderAiSettingsV99(); }
     if (viewId === 'import') { syncAiImportActionV99(); }
     resetViewScrollV282();

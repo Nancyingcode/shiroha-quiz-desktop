@@ -112,10 +112,10 @@
                 <span>正确率</span>
                 <b id="stat-today-rate">—</b>
               </div>
-              <div class="learning-stat-tile-v42">
-                <span>待复习错题</span>
+              <button id="start-due-review" class="learning-stat-tile-v42 due-review-tile" type="button" disabled>
+                <span>待复习错题 <span aria-hidden="true">↗</span></span>
                 <b id="stat-review-due">0</b>
-              </div>
+              </button>
               <div class="learning-stat-tile-v42">
                 <span>总练习次数</span>
                 <b id="stat-total-practice">0</b>
@@ -319,7 +319,7 @@ C. 判断题
           <div id="practice-scope-summary-v8916" class="practice-scope-summary-v8916"></div>
           <div class="form-grid">
             <label>题型<select id="practice-type"><option value="all">全部</option><option value="single">单选</option><option value="multiple">多选</option><option value="multi">多选兼容</option><option value="judge">判断</option><option value="blank">填空</option><option value="short">简答</option></select></label>
-            <label>来源<select id="practice-source"><option value="all">全部题目</option><option value="wrong">仅错题本</option><option value="favorite">仅收藏题</option></select></label>
+            <label>来源<select id="practice-source"><option value="all">全部题目</option><option value="wrong">仅错题本</option><option value="due">今日待复习错题</option><option value="favorite">仅收藏题</option></select></label>
             <label>顺序<select id="practice-order"><option value="sequence">顺序</option><option value="random">随机</option></select></label>
             <label>提交方式<select id="practice-submit-mode"><option value="single">单题提交</option><option value="total">总提交</option></select></label>
             <label class="practice-start-field-v58916">练习起点<select id="practice-start-mode-v58916"><option value="from_start">从头开始</option><option value="continue">继续上次</option><option value="custom">自选题号</option></select></label>

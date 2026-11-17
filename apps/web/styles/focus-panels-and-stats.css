@@ -1642,6 +1642,23 @@ body.exam-rail-collapsed-v34 #exam-answer-card-v30 .rail-show-btn-v34:hover{
   text-shadow:none !important;
   opacity:1 !important;
 }
+#dashboard .due-review-tile{
+  width:100%;
+  text-align:left;
+  cursor:pointer;
+}
+#dashboard .due-review-tile:disabled{
+  cursor:default;
+  opacity:.65 !important;
+}
+#dashboard .due-review-tile:enabled:hover{
+  outline:2px solid #93c5fd;
+  outline-offset:2px;
+}
+#dashboard .due-review-tile:enabled:focus-visible{
+  outline:3px solid #2563eb;
+  outline-offset:3px;
+}
 @media(max-width:720px){
   #dashboard .learning-stats-v42{
     gap:10px !important;
