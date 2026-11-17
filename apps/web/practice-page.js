@@ -343,6 +343,21 @@
         showNotice('无法开始练习', selection.error, 'warn');
         return;
       }
+      if (!selection.items.length) {
+        $('#practice-card').innerHTML = '<div class="empty">当前条件下没有题目。</div>';
+        showNotice('无法开始练习', '当前筛选条件下没有题目。', 'warn');
+        return;
+      }
+      const previous = practiceSession.current;
+      const needsLargeRoundConfirmation = selection.items.length > 200 && (limit === 'all' || limit === 'half' || limit === 'custom' || Number(limit) > 200 || selection.startMode === PRACTICE_START_CUSTOM_V58916);
+      if (needsLargeRoundConfirmation) {
+        const count = selection.items.length;
+        const msg = count > 500 ? `本轮将练习 ${count} 道题，题量很大，手机 WebView 可能明显卡顿，建议减少题量或使用电脑端。是否继续？` : `本轮将练习 ${count} 道题，手机 WebView 可能出现轻微卡顿，是否继续？`;
+        const accepted = await globalThis.ShirohaDialogs.confirm(msg);
+        if (!accepted || practiceSession.current !== previous || !isCurrentStart()) {
+          return;
+        }
+      }
       if (!await loadNativeItems(selection.items, isCurrentStart) || !isCurrentStart()) {
         return;
       }
@@ -368,25 +383,7 @@
         progressKey: selection.progressKey,
         baseItemKeys: selection.baseItems.map(practiceItemKeyV8916),
       };
-      const session = practiceSession.current; const sessionRequest = practiceSession.request;
       practiceSession.current.submitMode = $('#practice-submit-mode')?.value === 'total' ? 'total' : 'single';
-      if (!practiceSession.current.items.length) {
-        $('#practice-card').innerHTML = '<div class="empty">当前条件下没有题目。</div>';
-        showNotice('无法开始练习', '当前筛选条件下没有题目。', 'warn');
-        return;
-      }
-      const needsLargeRoundConfirmation = session.items.length > 200 && (limit === 'all' || limit === 'half' || limit === 'custom' || Number(limit) > 200 || selection.startMode === PRACTICE_START_CUSTOM_V58916);
-      if (needsLargeRoundConfirmation) {
-        const msg = session.items.length > 500 ? `本轮将练习 ${session.items.length} 道题，题量很大，手机 WebView 可能明显卡顿，建议减少题量或使用电脑端。是否继续？` : `本轮将练习 ${session.items.length} 道题，手机 WebView 可能出现轻微卡顿，是否继续？`;
-        const accepted = await globalThis.ShirohaDialogs.confirm(msg);
-        if (practiceSession.current !== session || practiceSession.request !== sessionRequest || isMutationBusy()) {
-          return;
-        }
-        if (!accepted) {
-          practiceSession.current = { items: [], idx: 0, answered: 0, correct: 0, wrong: 0, start: 0, details: [], answerState: {} };
-          return;
-        }
-      }
       let startText = '';
       if (selection.startMode === PRACTICE_START_CONTINUE_V58916) {
         startText = ` · 从第 ${selection.startIndex + 1} 题继续`;

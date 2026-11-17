@@ -27,6 +27,23 @@
       analysisSuggestions.clear();
     }
 
+    function captureSuggestions() {
+      const current = (map) => [...map].filter(([key]) => currentAiSuggestionV991(map, key));
+      return { review: current(reviewSuggestions), analysis: current(analysisSuggestions) };
+    }
+
+    function restoreSuggestions(saved) {
+      resetAiSuggestionsV991();
+      for (const [kind, map] of [['review', reviewSuggestions], ['analysis', analysisSuggestions]]) {
+        for (const entry of Array.isArray(saved?.[kind]) ? saved[kind] : []) {
+          if (!Array.isArray(entry) || entry.length !== 2) { continue; }
+          const [key, item] = entry;
+          if (typeof key !== 'string' || !item || typeof item !== 'object') { continue; }
+          if (currentAiTargetIndexV991({ id: key, fingerprint: item.fingerprint }) >= 0) { map.set(key, item); }
+        }
+      }
+    }
+
     // 编辑后即使内容被改回原值，也不能让本轮旧批次继续使用该目标。
     function invalidateAiPreviewTargetV991(question, index) {
       if (aiPreviewRequestV991.running) {
@@ -495,6 +512,8 @@
       startAiPreviewTaskV991,
       startAiImportV99,
       resetAiSuggestionsV991,
+      captureSuggestions,
+      restoreSuggestions,
       removeAiSuggestionsForQuestionV991,
       invalidateAiPreviewTargetV991,
       getReview: (key) => currentAiSuggestionV991(reviewSuggestions, key),

@@ -7,7 +7,7 @@
     const setImportBankNameFromFile = setBankName;
     const applyTableImportResultV49 = applyTable;
     const $ = (selector) => document.querySelector(selector);
-    // 预览草稿只属于当前页面；单文件或双文件清空时保留原有报告与筛选语义。
+    // 当前预览归本页面；保存的副本单独管理，清空输入时不删除该副本。
     const draft = {
       questions: [],
       tableResult: null,
@@ -142,5 +142,209 @@
     return Object.assign(draft, { readImportFile, readDualFile, invalidateRead, invalidatePreview, invalidateBankName, clearSingle, clearDual, snapshot, restore });
   }
 
-  globalThis.ShirohaImportPreview = Object.freeze({ create });
+  const DATABASE_NAME = 'shiroha-import-draft';
+  const STORE_NAME = 'draft';
+  const RECORD_KEY = 'current';
+  const RECORD_VERSION = 1;
+  const FILTERS = ['priority', 'problem', 'normal', 'all'];
+  const INPUT_IDS = ['import-bank-name', 'import-bank-group-v58', 'import-save-mode-v59', 'import-target-bank-v59', 'import-mode', 'import-strategy', 'import-text', 'dual-question-text', 'dual-answer-text', 'dual-match-mode'];
+
+  function createStore(indexedDb) {
+    function open() {
+      return new Promise((resolve, reject) => {
+        if (!indexedDb) { reject(new Error('本地草稿存储不可用。'));return; }
+        const request = indexedDb.open(DATABASE_NAME, 1);
+        let blocked = false;
+        request.onupgradeneeded = () => request.result.createObjectStore(STORE_NAME);
+        request.onblocked = () => { blocked = true;reject(new Error('草稿存储被其他窗口占用，请关闭其他窗口后重试。')); };
+        request.onerror = () => reject(request.error || new Error('打开草稿存储失败。'));
+        request.onsuccess = () => { if (blocked) { request.result.close(); } else { resolve(request.result); } };
+      });
+    }
+    async function access(mode, operation) {
+      const db = await open();
+      return new Promise((resolve, reject) => {
+        let result;
+        let failure;
+        let tx;
+        try {
+          tx = db.transaction(STORE_NAME, mode);
+          const store = tx.objectStore(STORE_NAME);
+          const request = store.get(RECORD_KEY);
+          request.onsuccess = () => {
+            try { result = operation(store, request.result); } catch (error) { failure = error;tx.abort(); }
+          };
+          tx.oncomplete = () => { db.close();resolve(result); };
+          tx.onabort = () => { db.close();reject(failure || tx.error || new Error('草稿事务未完成。')); };
+          tx.onerror = () => { /* 事务中止回调负责关闭连接并报告错误。 */ };
+        } catch (error) { db.close();reject(error); }
+      });
+    }
+    function checkRevision(existing, expected) {
+      if ((existing?.revision || null) !== expected) { throw new Error('已保存草稿已在其他窗口变化，请重新操作。'); }
+    }
+    return {
+      read: () => access('readonly', (_store, record) => {
+        if (record === undefined) { return null; }
+        return record && typeof record === 'object' ? record : { invalid: true };
+      }),
+      replace: (record, expected) => access('readwrite', (store, existing) => { checkRevision(existing, expected);store.put(record, RECORD_KEY); }),
+      remove: (expected) => access('readwrite', (store, existing) => { checkRevision(existing, expected);store.delete(RECORD_KEY); }),
+    };
+  }
+
+  function validRecord(record) {
+    const data = record?.data;
+    const diagnostics = data?.diagnostics;
+    const candidates = diagnostics?.candidates;
+    const validDiagnostics = (diagnostics === null || (diagnostics && typeof diagnostics === 'object' && !Array.isArray(diagnostics)))
+      && (candidates === undefined || (Array.isArray(candidates) && candidates.every((item) => item && typeof item === 'object'
+        && (item.segments === undefined || Array.isArray(item.segments)) && (item.warnings === undefined || Array.isArray(item.warnings)))));
+    const validSuggestions = (entries, review) => Array.isArray(entries) && entries.every((entry) => Array.isArray(entry)
+      && entry.length === 2 && typeof entry[0] === 'string' && entry[1] && typeof entry[1] === 'object'
+      && typeof entry[1].fingerprint === 'string' && (!review || (Array.isArray(entry[1].issues) && entry[1].changes && typeof entry[1].changes === 'object')));
+    return record?.version === RECORD_VERSION && typeof record.revision === 'string' && !!record.revision
+      && !!data && Array.isArray(data.questions) && data.questions.length > 0
+      && data.questions.every((q) => q && typeof q === 'object' && typeof q.question === 'string' && Array.isArray(q.options)
+        && q.options.every((option) => option && typeof option === 'object') && Array.isArray(q.answer))
+      && Array.isArray(data.warnings) && typeof data.report === 'string' && validDiagnostics
+      && Array.isArray(data.selected) && data.selected.every((index) => Number.isInteger(index) && index >= 0 && index < data.questions.length)
+      && FILTERS.includes(data.filter) && data.sourceMeta && typeof data.sourceMeta === 'object'
+      && (data.tableResult === null || (data.tableResult && typeof data.tableResult === 'object'))
+      && typeof data.tableInput === 'boolean' && data.fields && INPUT_IDS.every((id) => typeof data.fields[id] === 'string')
+      && data.suggestions && validSuggestions(data.suggestions.review, true) && validSuggestions(data.suggestions.analysis, false);
+  }
+
+  function createPersistence({ draft, select: $, store, suggestions, actions }) {
+    // 此页面仅记住亲自保存或恢复的修订；成功入库后只能清理同一修订。
+    let owned = null;
+    let busy = false;
+    function status(message) { const el = $('#import-draft-status');if (el) { el.textContent = message; } }
+    function setBusy(value) {
+      busy = value;
+      ['save-import-draft-btn', 'restore-import-draft-btn', 'delete-import-draft-btn'].forEach((id) => {
+        const button = $(`#${id}`);if (button) { button.disabled = value; }
+      });
+      document.querySelectorAll('[data-save-import-draft]').forEach((button) => { button.disabled = value; });
+    }
+    function position(anchor) {
+      const buttons = [...document.querySelectorAll('#import-preview [data-edit-import]')];
+      const visible = buttons.find((button) => Number(button.dataset.editImport) === anchor) || buttons.find((button) => {
+        const rect = button.getBoundingClientRect();
+        return rect.bottom > 0 && rect.top < window.innerHeight;
+      });
+      return { index: visible ? Number(visible.dataset.editImport) : null, offset: visible ? visible.getBoundingClientRect().top : 0, scrollY: window.scrollY };
+    }
+    function capture(anchor) {
+      const fields = Object.fromEntries(INPUT_IDS.map((id) => [id, $(`#${id}`)?.value || '']));
+      return {
+        questions: draft.questions,
+        warnings: draft.warnings,
+        report: draft.report,
+        diagnostics: draft.diagnostics,
+        filter: draft.filter,
+        selected: [...draft.selected],
+        sourceMeta: draft.sourceMeta,
+        tableResult: draft.tableResult,
+        tableInput: $('#import-text')?.dataset.tableImportV49 === '1',
+        fields,
+        suggestions: suggestions.capture(),
+        position: position(anchor),
+      };
+    }
+    function fingerprint(data) { const content = { ...data };delete content.position;return JSON.stringify(content); }
+    function contentFingerprint(data) {
+      const content = { ...data };delete content.position;delete content.filter;delete content.selected;
+      return JSON.stringify(content);
+    }
+    function isEditing() { return actions.isEditing() || !$('#edit-modal')?.classList.contains('hidden'); }
+    function canOperate() {
+      if (busy) { return false; }
+      if (isEditing()) { status('请先保存或关闭题目编辑，退出题库二次编辑后再操作草稿。');return false; }
+      return true;
+    }
+    function changedSince(before) { return isEditing() || fingerprint(capture()) !== before; }
+    function savedRecord(record) {
+      if (record && !validRecord(record)) { throw new Error('已保存草稿损坏或版本不受支持，原数据已保留。'); }
+      return record;
+    }
+    async function save(anchor) {
+      if (!canOperate()) { return; }
+      if (!draft.questions.length) { status('请先识别出题目，再保存草稿。');return; }
+      setBusy(true);status('正在保存草稿……');
+      try {
+        const before = fingerprint(capture());
+        const existing = savedRecord(await store.read());
+        if (existing && !await actions.confirm('已有一份本地导入草稿，覆盖它？')) { status('已取消保存，原草稿保留。');return; }
+        if (changedSince(before)) { status('当前预览已变化，请重新保存草稿。');return; }
+        const data = structuredClone(capture(anchor));
+        const record = { version: RECORD_VERSION, revision: actions.makeId(), data };
+        const savedContent = contentFingerprint(data);
+        await store.replace(record, existing?.revision || null);
+        owned = { revision: record.revision, content: savedContent };
+        status(changedSince(before) ? '已保存操作开始时的草稿；当前预览已变化，请再次保存。' : '草稿已保存到本机；确认导入前仍需核对。');
+        if (Number.isInteger(anchor)) { actions.notify('本机草稿已保存，可从这道题继续核对。', 'ok'); }
+      } catch (error) { status(`保存草稿失败，现有预览和已保存草稿均保留。${error?.message || ''}`);if (Number.isInteger(anchor)) { actions.notify('草稿保存失败，原内容已保留。', 'warn'); } } finally { setBusy(false); }
+    }
+    function restorePosition(saved) {
+      globalThis.requestAnimationFrame(() => {
+        const button = Number.isInteger(saved?.index) ? $(`#import-preview [data-edit-import="${saved.index}"]`) : null;
+        if (button) { window.scrollBy(0, button.getBoundingClientRect().top - (Number(saved.offset) || 0)); } else { window.scrollTo(0, Math.max(0, Number(saved?.scrollY) || 0)); }
+      });
+    }
+    function apply(data) {
+      actions.invalidate();
+      draft.questions = data.questions;draft.warnings = data.warnings;draft.report = data.report;
+      draft.diagnostics = data.diagnostics;draft.filter = data.filter;draft.selected = new Set(data.selected);
+      draft.sourceMeta = data.sourceMeta;draft.tableResult = data.tableResult;
+      for (const id of INPUT_IDS) { const field = $(`#${id}`);if (field) { field.value = data.fields[id] || ''; } }
+      const input = $('#import-text');
+      if (data.tableInput) { input.dataset.tableImportV49 = '1'; } else { delete input.dataset.tableImportV49; }
+      suggestions.restore(data.suggestions);
+      actions.render();restorePosition(data.position);
+    }
+    async function restore() {
+      if (!canOperate()) { return; }
+      setBusy(true);status('正在读取草稿……');
+      try {
+        const beforeData = capture();const before = fingerprint(beforeData);
+        const record = savedRecord(await store.read());
+        if (!record) { status('没有保存的草稿。');return; }
+        if (changedSince(before)) { status('当前预览已变化，请重新恢复。');return; }
+        if (before === fingerprint(record.data)) { owned = { revision: record.revision, content: contentFingerprint(record.data) };status('当前预览已是保存的草稿。');return; }
+        const hasCurrent = beforeData.questions.length || beforeData.fields['import-text'] || beforeData.fields['dual-question-text'] || beforeData.fields['dual-answer-text']
+          || beforeData.fields['import-bank-name'] || beforeData.fields['import-bank-group-v58'];
+        if (hasCurrent && !await actions.confirm('恢复本地草稿会替换当前导入预览和输入文本，继续？')) { status('已取消恢复，当前预览保留。');return; }
+        const latest = await store.read();
+        if (latest?.revision !== record.revision || changedSince(before)) { status('草稿或当前预览已变化，请重新恢复。');return; }
+        apply(record.data);owned = { revision: record.revision, content: contentFingerprint(record.data) };
+        status('已恢复本地草稿；请继续核对并主动确认导入。');
+      } catch (error) { status(`恢复草稿失败，当前预览和已保存草稿均保留。${error?.message || ''}`); } finally { setBusy(false); }
+    }
+    async function remove() {
+      if (!canOperate()) { return; }
+      setBusy(true);status('正在读取草稿……');
+      try {
+        const record = await store.read();
+        if (!record) { status('没有保存的草稿。');return; }
+        if (!await actions.confirm('删除本机保存的导入草稿？当前预览不受影响。')) { status('已取消删除草稿。');return; }
+        await store.remove(record.revision || null);owned = null;status('已删除本机保存的草稿，当前预览保留。');
+      } catch (error) { status(`删除草稿失败，原草稿已保留。${error?.message || ''}`); } finally { setBusy(false); }
+    }
+    async function imported() {
+      if (!owned) { return; }
+      try {
+        if (contentFingerprint(capture()) !== owned.content) { status('导入成功；当前内容与已保存草稿不同，草稿仍保留。');return; }
+        await store.remove(owned.revision);owned = null;status('导入成功，已清除对应的本地草稿。');
+      } catch (error) { status(`导入成功，但本地草稿未清除，请核对后手动删除。${error?.message || ''}`); }
+    }
+    async function clearForReset() {
+      const record = await store.read();
+      if (record) { await store.remove(record.revision || null); }
+      owned = null;
+    }
+    return { save, restore, remove, imported, clearForReset };
+  }
+
+  globalThis.ShirohaImportPreview = Object.freeze({ create, createStore, createPersistence });
 })();

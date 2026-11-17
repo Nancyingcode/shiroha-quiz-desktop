@@ -112,10 +112,10 @@
                 <span>正确率</span>
                 <b id="stat-today-rate">—</b>
               </div>
-              <div class="learning-stat-tile-v42">
-                <span>待复习错题</span>
+              <button id="start-due-review" class="learning-stat-tile-v42 due-review-tile" type="button" disabled>
+                <span>待复习错题 <span aria-hidden="true">↗</span></span>
                 <b id="stat-review-due">0</b>
-              </div>
+              </button>
               <div class="learning-stat-tile-v42">
                 <span>总练习次数</span>
                 <b id="stat-total-practice">0</b>
@@ -253,6 +253,8 @@ C. 判断题
         </details>
         <div class="card">
           <div class="section-head import-preview-head-v5981"><div class="import-preview-title-v5981"><h2>识别结果预览</h2><p class="muted">识别后请先核对题型、答案和异常提示。AI 核对与补解析只生成建议，不会自动修改题目。</p></div><div class="row-actions import-preview-tools-v5981"><button id="ai-review-import-btn-v991" class="ghost ai-preview-tool-v991" type="button" disabled>AI 核对</button><button id="ai-analysis-import-btn-v991" class="ghost ai-preview-tool-v991" type="button" disabled>AI 补解析</button><label class="inline-filter import-preview-filter-v5981">筛选<select id="import-preview-filter"><option value="priority">异常优先</option><option value="problem">仅异常</option><option value="normal">仅正常</option><option value="all">全部</option></select></label><button id="revalidate-import-btn" class="ghost">重新校验</button><button id="batch-delete-import-btn" class="ghost danger" disabled>删除选中</button><button id="clear-import-selection-btn" class="ghost" disabled>清空选择</button></div></div>
+          <div class="actions"><button id="save-import-draft-btn" class="ghost" type="button">保存草稿</button><button id="restore-import-draft-btn" class="ghost" type="button">恢复草稿</button><button id="delete-import-draft-btn" class="ghost" type="button">删除草稿</button></div>
+          <p id="import-draft-status" class="muted" role="status" aria-live="polite">草稿仅保存在当前浏览器或桌面的本机存储，不包含在备份中。</p>
           <div id="ai-preview-panel-v991" class="ai-preview-panel-v991 ai-hidden-v99">
             <div class="ai-import-panel-head-v99"><div><p class="kicker">AI Preview Assistant</p><h3 id="ai-preview-title-v991">AI 核对</h3></div><span id="ai-preview-badge-v991" class="ocr-badge">结果核对</span></div>
             <p id="ai-preview-description-v991" class="muted">检查识别结果，只生成修改建议，不会自动改题。</p>
@@ -299,6 +301,10 @@ C. 判断题
         </div>
         <div class="card">
           <h2>当前题库预览</h2>
+          <div class="form-grid bank-search-controls">
+            <label>搜索题干或选项<input id="bank-search-query" type="search" placeholder="输入关键词" autocomplete="off" /></label>
+            <label>筛选题型<select id="bank-search-type"><option value="all">全部题型</option><option value="single">单选题</option><option value="multiple">多选题</option><option value="judge">判断题</option><option value="blank">填空题</option><option value="short">简答题</option></select></label>
+          </div>
           <div class="actions bank-question-actions" aria-label="试题批量管理">
             <button id="select-bank-question-page" class="ghost" type="button">全选本页</button>
             <button id="clear-bank-question-selection" class="ghost" type="button">清空选择</button>
@@ -319,7 +325,7 @@ C. 判断题
           <div id="practice-scope-summary-v8916" class="practice-scope-summary-v8916"></div>
           <div class="form-grid">
             <label>题型<select id="practice-type"><option value="all">全部</option><option value="single">单选</option><option value="multiple">多选</option><option value="multi">多选兼容</option><option value="judge">判断</option><option value="blank">填空</option><option value="short">简答</option></select></label>
-            <label>来源<select id="practice-source"><option value="all">全部题目</option><option value="wrong">仅错题本</option><option value="favorite">仅收藏题</option></select></label>
+            <label>来源<select id="practice-source"><option value="all">全部题目</option><option value="wrong">仅错题本</option><option value="due">今日待复习错题</option><option value="favorite">仅收藏题</option></select></label>
             <label>顺序<select id="practice-order"><option value="sequence">顺序</option><option value="random">随机</option></select></label>
             <label>提交方式<select id="practice-submit-mode"><option value="single">单题提交</option><option value="total">总提交</option></select></label>
             <label class="practice-start-field-v58916">练习起点<select id="practice-start-mode-v58916"><option value="from_start">从头开始</option><option value="continue">继续上次</option><option value="custom">自选题号</option></select></label>

@@ -84,9 +84,57 @@
       const normalized = normalizePracticeScopeV8916(scope);
       return JSON.stringify([normalized.type, normalized.value, String(source || 'all'), String(type || 'all')]);
     }
+    function dueReviewItems(scopeOverride, date = new Date()) {
+      const banks = practiceScopeBanksV8916(scopeOverride);
+      const start = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+      const end = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1).getTime();
+      const dueByBank = new Map();
+      for (const bank of banks) {
+        const entries = new Map();
+        for (const entry of getWrongEntries(bank.id)) {
+          if (entry.status === '已掌握') {
+            continue;
+          }
+          const time = entry.nextReviewAt ? new Date(entry.nextReviewAt).getTime() : NaN;
+          if (Number.isFinite(time) && time >= end) {
+            continue;
+          }
+          // 旧备份未安排复习日期；已知逾期题优先，其后是旧题和今日到期题。
+          let priority = 1;
+          if (Number.isFinite(time)) {
+            priority = time < start ? 0 : 2;
+          }
+          const rank = { priority, time: Number.isFinite(time) ? time : 0 };
+          const previous = entries.get(entry.id);
+          if (!previous || rank.priority < previous.priority || (rank.priority === previous.priority && rank.time < previous.time)) {
+            entries.set(entry.id, rank);
+          }
+        }
+        dueByBank.set(bank.id, entries);
+      }
+      const seenByBank = new Map();
+      const rows = [];
+      for (const item of practiceSessionItemsForBanksV8916(banks)) {
+        const rank = dueByBank.get(item.bankId)?.get(item.question.id);
+        if (!rank) {
+          continue;
+        }
+        if (!seenByBank.has(item.bankId)) {
+          seenByBank.set(item.bankId, new Set());
+        }
+        const seen = seenByBank.get(item.bankId);
+        if (seen.has(item.question.id)) {
+          continue;
+        }
+        seen.add(item.question.id);
+        rows.push({ item, rank });
+      }
+      rows.sort((a, b) => a.rank.priority - b.rank.priority || a.rank.time - b.rank.time);
+      return rows.map((row) => row.item);
+    }
     function practiceBaseItemsV58916(source, type, scopeOverride) {
       const banks = practiceScopeBanksV8916(scopeOverride);
-      let items = practiceSessionItemsForBanksV8916(banks);
+      let items = source === 'due' ? dueReviewItems(scopeOverride) : practiceSessionItemsForBanksV8916(banks);
       if (source === 'wrong') {
         const byBank = new Map(banks.map((b) => [b.id, new Set(getWrongEntries(b.id).filter((e) => e.status !== '已掌握').map((e) => e.id))]));
         items = items.filter((item) => byBank.get(item.bankId)?.has(item.question.id));
@@ -187,7 +235,7 @@
       if (order !== 'sequence' && startMode === PRACTICE_START_CONTINUE_V58916) {
         startMode = PRACTICE_START_FROM_V58916;
       }
-      const progressKey = practiceProgressKeyV58916(scope, source, type);
+      const progressKey = source === 'due' ? '' : practiceProgressKeyV58916(scope, source, type);
       let startIndex = 0;
       let items;
       if (startMode === PRACTICE_START_CUSTOM_V58916) {
@@ -266,6 +314,7 @@
       syncLimitControlV60,
       bindLimitControlsV60,
       filteredPracticeItemsV8916,
+      dueReviewItems,
       practiceBaseItemsV58916,
       syncPracticeStartModeFieldsV58916,
       syncPracticeStartUiV58916,
