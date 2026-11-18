@@ -1,18 +1,12 @@
 use serde_json::{json, Value};
 use shiroha_quiz_desktop::storage::Store;
-use std::{
-    fs,
-    path::PathBuf,
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::{fs, path::PathBuf};
 
 struct Fixture(PathBuf);
 impl Fixture {
     fn new() -> Self {
-        let id = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
+        // 同一进程中的并行测试可能读到相同的系统时间。
+        let id = uuid::Uuid::new_v4();
         let root = std::env::temp_dir().join(format!("shiroha-native-{}-{id}", std::process::id()));
         fs::create_dir(&root).unwrap();
         Self(root)
