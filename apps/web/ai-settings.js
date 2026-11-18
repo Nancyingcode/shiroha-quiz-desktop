@@ -1,7 +1,9 @@
+// 统一直接 API 与桌面 Harness 的配置、可用性和连接诊断。
 (() => {
   'use strict';
   const AI_PROVIDER_PRESETS_V99 = { ollama: { label: 'Ollama', endpoint: 'http://127.0.0.1:11434/v1/chat/completions' }, lmstudio: { label: 'LM Studio', endpoint: 'http://127.0.0.1:1234/v1/chat/completions' }, custom: { label: '自定义接口', endpoint: '' } };
 
+  // 将平台及界面依赖绑定到当前页面，诊断和连接状态随页面释放。
   function create({
     presets: AI_PROVIDER_PRESETS_V99 = AI_PROVIDER_PRESETS_V99_DEFAULT,
     platform: ShirohaPlatform,
@@ -23,6 +25,7 @@
       return { provider: 'ollama', endpoint: AI_PROVIDER_PRESETS_V99.ollama.endpoint, model: '', timeoutSeconds: 120, rememberKey: false };
     }
 
+    // 将用户设置归一化为可请求的 API 结构，并限制超时范围。
     function normalizeAiConfigV99(value) {
       const raw = value && typeof value === 'object' ? value : {};
 
@@ -37,6 +40,7 @@
       return AI_PROVIDER_PRESETS_V99[provider]?.label || '自定义接口';
     }
 
+    // 维护适配器在设置页和练习页共用的展示名称。
     function aiHarnessLabelV99(adapter) {
       switch (adapter) {
         case 'codex'
@@ -53,6 +57,7 @@
       return execution?.mode === 'harness';
     }
 
+    // 先按适配器检查任务能力，避免把不受支持的任务交给服务。
     function aiHarnessTaskReasonV99(config, task) {
       if (!isAiHarnessExecutionV99(config.execution)) {
         return '';
@@ -73,9 +78,11 @@
       if (isAiHarnessExecutionV99(config.execution)) {
         return aiHarnessTaskReasonV99(config, task) || config.execution.reason || '所选 Harness 尚未就绪，请检查 AI 设置。';
       }
+
       return '尚未配置 AI 服务，请先前往“AI 设置”。';
     }
 
+    // 发送前明确题目数据去向和账户用量，服务未就绪时对应说明无发送。
     function aiHarnessPrivacyV99(config, subject) {
       if (config.execution?.adapter === 'codex') {
         return `${subject}将经 Codex 发送到 OpenAI，使用已登录的订阅额度。`;
@@ -88,6 +95,7 @@
       return `${aiHarnessLabelV99(config.execution?.adapter)} 当前尚未开放模型执行，本次不会发送题目内容。`;
     }
 
+    // 把当前 Harness 快照或浏览器 API 设置组合为一次任务的执行配置。
     function aiExecutionConfigV99() {
       const execution = ShirohaPlatform.harness?.snapshot();
 
@@ -95,12 +103,14 @@
         if (execution.adapter === 'codebuddy') {
           return { provider: 'codebuddy', model: execution.model, timeoutSeconds: 120, execution };
         }
+
         return { provider: execution.adapter, model: execution.adapter === 'codex' ? (execution.model || '适配器默认模型') : '', timeoutSeconds: execution.timeoutSeconds, execution };
       }
 
       return { ...ensureAiImportStateV99(), execution };
     }
 
+    // 检查任务是否可执行，CodeBuddy 还须具备已读到账户修订。
     function aiConfiguredV99(config, task = 'connection_test') {
       if (!isAiHarnessExecutionV99(config.execution)) {
         return !!(config.endpoint && config.model);
@@ -113,21 +123,26 @@
       return config.execution.adapter === 'codex' || (Number.isSafeInteger(config.execution.accountRevision) && config.execution.accountRevision >= 0);
     }
 
+    // 区分后台检查、检查失败和未配置，便于页面提供合适的操作。
     function aiAvailabilityV99(config, task = 'connection_test') {
       const unsupported = aiHarnessTaskReasonV99(config, task);
       if (unsupported) { return { state: 'unsupported', reason: unsupported }; }
+
       if (isAiHarnessExecutionV99(config.execution)) {
         const { readiness } = config.execution;
         if (readiness === 'checking' || readiness === 'error' || readiness === 'blocked') {
           return { state: readiness, reason: config.execution.reason || 'AI 状态尚未确认。', retryable: readiness !== 'checking' && config.execution.readinessRetryable !== false };
         }
+
         if (!aiConfiguredV99(config, task)) { return { state: 'action_required', reason: aiUnavailableReasonV99(config, task) }; }
       } else if (!aiConfiguredV99(config, task)) {
         return { state: 'unconfigured', reason: aiUnavailableReasonV99(config, task) };
       }
+
       return { state: 'ready', reason: '' };
     }
 
+    // 按执行方式选择任务面板显示的服务名称。
     function aiExecutionLabelV99(config) {
       if (!isAiHarnessExecutionV99(config.execution)) {
         return aiProviderLabelV99(config.provider);
@@ -141,6 +156,7 @@
       return isAiHarnessExecutionV99(config.execution) ? config : { ...config, apiKey: readStoredAiKeyV99(config) };
     }
 
+    // 校验用户填写的地址并补全兼容的 Chat Completions 路径。
     function normalizeAiEndpointV99(value, provider) {
       let text = String(value || '').trim();
 
@@ -159,23 +175,31 @@
       } catch (error) {
         throw new Error('接口地址格式不正确，请填写完整的 http:// 或 https:// 地址。', { cause: error });
       }
+
+      // 仅接受 HTTP 或 HTTPS URL 协议，排除浏览器支持但无法用于接口的其他协议。
       if (!/^https?:$/.test(url.protocol)) {
         throw new Error('接口地址只支持 http:// 或 https://。');
       }
 
+      // 去掉路径尾部重复的斜杠，便于判断是否需要补全 API 路径。
       const path = url.pathname.replace(/\/+$/, '');
 
       if (!path || path === '/') {
         url.pathname = '/v1/chat/completions';
-      } else if (/\/v1$/i.test(path)) {
+      } else if (
+        // 只补全以版本段 v1 结尾的路径，保留用户提供的完整端点。
+        /\/v1$/i.test(path)
+      ) {
         url.pathname = `${path}/chat/completions`;
       }
 
       url.hash = '';
 
+      // 去掉序列化结果末尾的斜杠，保持保存地址和凭据绑定一致。
       return url.toString().replace(/\/$/, '');
     }
 
+    // 只把环回地址识别为本地服务，以免给远程主机建议更改本地工具配置。
     function isLocalAiEndpointV99(endpoint) {
       try {
         const host = new URL(endpoint).hostname.toLowerCase();
@@ -185,6 +209,7 @@
       }
     }
 
+    // 读取并校验当前 API 表单，只有服务地址未变时才能复用原凭据。
     function readAiFormV99() {
       const provider = $('#ai-provider-v99')?.value || 'ollama';
 
@@ -213,6 +238,7 @@
       return { provider, endpoint, model, timeoutSeconds, rememberKey, apiKey };
     }
 
+    // 用文本通知连接和保存结果，避免把外部提示当成 HTML。
     function setAiSettingsStatusV99(message, type = '') {
       const el = $('#ai-settings-status-v99');
       if (!el) {
@@ -223,6 +249,7 @@
       el.className = `notice${type ? ` ${type}` : ''}`;
     }
 
+    // 普通页面使用 Origin，本地文件诊断保留有用的地址信息。
     function aiCurrentOriginV375() {
       try {
         return location.origin && location.origin !== 'null' ? location.origin : location.href.split('#')[0];
@@ -231,6 +258,7 @@
       }
     }
 
+    // 只提取诊断可用的主机部分，无效地址留空。
     function aiEndpointHostV375(endpoint) {
       try {
         return new URL(endpoint).host;
@@ -239,7 +267,9 @@
       }
     }
 
+    // 裁剪并脱敏服务响应，方便用户查看或复制诊断。
     function sanitizeAiDiagnosticDetailV375(text, config) {
+      // 把服务错误中的连续空白压成空格，使诊断摘要适合单行展示。
       let detail = String(text || '').replace(/\s+/g, ' ').trim();
 
       if (config) {
@@ -249,11 +279,13 @@
       return detail.slice(0, 520);
     }
 
+    // 仅为浏览器连接本地 Ollama 的诊断生成跨域配置说明。
     function aiOllamaCorsCommandV375(diag) {
       if (ShirohaPlatform.credentials.native || !diag || diag.provider !== 'ollama') {
         return '';
       }
 
+      // 只将 HTTP 或 HTTPS 页面的来源加入命令，本地文件地址无需写入。
       const origin = /^https?:\/\//i.test(diag.origin || '') ? diag.origin : '';
 
       const origins = [origin, 'http://localhost', 'http://127.0.0.1', 'http://localhost:*', 'http://127.0.0.1:*'].filter(Boolean).join(',');
@@ -261,40 +293,65 @@
       return `setx OLLAMA_ORIGINS "${origins}"\n\n然后完全退出并重新启动 Ollama，再回到 Shiroha Quiz 点击“测试连接”。`;
     }
 
-    function buildAiDiagnosticV375(error, config, mode = 'error') {
-      const cfg = config || {};
-      const endpoint = String(cfg.endpoint || '').trim();
-      const provider = String(cfg.provider || 'custom');
-      const local = endpoint ? isLocalAiEndpointV99(endpoint) : false;
+    // 依据 HTTP 状态提供检查建议，403 在桌面、本地浏览器和远程浏览器中含义不同。
+    function describeAiHttpResponse(status, native, local) {
+      let summary;
+      let statusMessage;
+      let steps;
+      if (status === 401) {
+        summary = '鉴权失败';
+        statusMessage = '鉴权失败，请检查 API Key 或服务权限。';
+        steps = ['确认 API Key 是否填写正确。', '本地 Ollama 通常不需要 API Key，可以留空。', '如果是远程 OpenAI-compatible 服务，请确认 Key 仍有效且有模型调用权限。'];
+      } else if (status === 403) {
+        if (native) {
+          summary = '服务拒绝访问';
+          statusMessage = 'AI 服务拒绝访问，请检查 API Key、模型权限或服务端访问限制。';
+          steps = ['确认 API Key 有效且允许调用当前模型。', '检查服务端 IP 白名单、访问权限和日志。'];
+        } else {
+          summary = local ? '本地服务拒绝当前网页访问，优先检查 CORS / Origin' : '服务拒绝访问';
+          statusMessage = local ? '本地 AI 服务拒绝当前网页访问，优先检查 OLLAMA_ORIGINS 或服务端跨域设置。' : 'AI 服务拒绝访问，请检查权限、来源限制或跨域设置。';
+          steps = local ? ['如果使用 Ollama，请把当前页面 Origin 加入 OLLAMA_ORIGINS。', '如果使用 LM Studio，请检查本地服务器是否开启跨域访问。', '修改后完全重启本地 AI 服务。'] : ['确认账号、Key、IP 白名单和 Origin 白名单。', '确认当前模型是否允许被调用。'];
+        }
+      } else if (status === 404) {
+        summary = '接口路径不存在';
+        statusMessage = '接口不存在或路径不正确，请检查 Chat Completions 地址。';
+        steps = ['Ollama / LM Studio 的 OpenAI-compatible 地址通常应以 /v1/chat/completions 结尾。', '如果只填到 /v1，本页面会自动补全为 /v1/chat/completions。', '确认服务端版本是否支持 Chat Completions。'];
+      } else if (status === 405) {
+        summary = '接口不支持当前请求方法';
+        statusMessage = '接口不支持 Chat Completions POST 请求，请检查地址或服务类型。';
+        steps = ['不要填写浏览器管理页面地址，应填写 API 地址。', '确认目标接口支持 POST /v1/chat/completions。'];
+      } else if (status === 400 || status === 422) {
+        summary = '请求格式或模型名称可能不匹配';
+        statusMessage = '接口已响应，但请求格式或模型名称可能不匹配。';
+        steps = ['确认模型名称与本地服务中显示的模型名称完全一致。', '如果服务不支持 response_format，本页面已自动重试普通 JSON 请求；仍失败时请查看错误详情。'];
+      } else if (status === 429) {
+        summary = '请求频率或额度受限';
+        statusMessage = '请求过于频繁或账户额度不足。';
+        steps = ['稍后重试。', '如果是远程服务，请检查账户额度、速率限制和模型权限。'];
+      } else if (status >= 500) {
+        summary = 'AI 服务内部错误';
+        statusMessage = 'AI 服务内部错误，请稍后重试或查看本地服务日志。';
+        steps = ['检查模型是否已成功加载。', '查看本地 AI 服务控制台日志。', '降低模型或上下文规模后重试。'];
+      } else {
+        return null;
+      }
 
-      const status = Number(error?.status || 0);
-      const origin = aiCurrentOriginV375();
-      const providerLabel = aiProviderLabelV99(provider);
+      return { summary, level: 'warn', statusMessage, steps };
+    }
 
-      const native = !!ShirohaPlatform.credentials.native;
-      const code = String(error?.code || '');
-
-      const rawDetail = sanitizeAiDiagnosticDetailV375(error?.detail || error?.cause?.message || error?.message || '', cfg);
-
-      const network = !!error?.network || /Failed to fetch|Load failed|NetworkError|ERR_FAILED/i.test(rawDetail || error?.message || '');
-
-      const nativeErrors = {
-        binding_required: ['凭据绑定已变化', '重新输入当前服务的 API Key，再保存设置。'],
-        credential_pending: ['凭据保存尚未完成', '等待保存完成；仍失败时请重新保存设置。'],
-        credential_unavailable: ['系统凭据不可用', '检查 Windows 凭据管理器是否可用，再重新保存设置。'],
-        configuration_not_committed: ['配置尚未保存', '先保存当前服务配置，再重新测试连接。'],
-        invalid_service_config: ['服务配置不正确', '核对完整接口地址；地址不能包含账号、密码、查询参数或片段。'],
-        invalid_input: ['请求参数不正确', '核对接口地址、模型名称和 API Key 后重试。'],
-        redirect_denied: ['服务重定向被拒绝', '将接口地址改为服务实际使用的最终 Chat Completions 地址。'],
-        network_scope_denied: ['服务重定向超出允许范围', '核对服务的最终接口地址，避免跨站重定向。'],
-        network_denied: ['当前环境禁止访问该服务', '确认正在运行正常桌面版本；测试版本仅允许连接隔离测试服务。'],
-        payload_too_large: ['请求内容过大', '减少本次发送的题目或文本后重试。'],
-        response_too_large: ['接口响应过大', '减少请求规模，并检查接口是否返回异常的大量内容。'],
-        invalid_response: ['接口响应无效', '确认接口返回 UTF-8 编码的 Chat Completions 响应。'],
-      };
-
-      const nativeError = native ? nativeErrors[code] : null;
-
+    // 优先识别取消、超时和原生诊断码，再根据连接环境和 HTTP 响应给出建议。
+    function summarizeAiDiagnostic({
+      error,
+      mode,
+      native,
+      nativeError,
+      code,
+      status,
+      network,
+      local,
+    }) {
+      // 兼容只返回“超过 N 秒”的旧超时提示；已有 HTTP 状态时保留 HTTP 诊断。
+      const timeoutMessage = /超过\s*\d+\s*秒/;
       let summary = '连接状态待确认';
       let statusMessage = '尚未测试连接。';
       let level = '';
@@ -305,7 +362,7 @@
         statusMessage = '连接测试成功。请点击“保存设置”，导入页才会使用当前配置。';
 
         steps = ['当前接口已能返回有效响应。', native ? '如更换模型、地址或 API Key 后，请重新测试。' : '如更换模型、地址或跨域配置后，请重新测试。'];
-      } else if (code === 'timeout' || (!status && /超过\s*\d+\s*秒/.test(error?.message || ''))) {
+      } else if (code === 'timeout' || (!status && timeoutMessage.test(error?.message || ''))) {
         summary = '请求超时';
         level = 'warn';
         statusMessage = error.message || 'AI 请求超时，请检查服务连接。';
@@ -333,60 +390,72 @@
         statusMessage = local ? '无法访问本地 AI 接口。请检查服务是否启动、地址是否正确，以及是否允许当前网页跨域访问。' : '无法访问 AI 接口。请检查网络、地址、HTTPS/HTTP 混用和接口跨域设置。';
 
         steps = local ? ['确认 Ollama / LM Studio 正在运行。', '确认接口地址和端口正确。', '如果当前页面来自 GitHub Pages，需要在本地 AI 服务里允许该页面 Origin 跨域访问。', '设置跨域后要完全重启本地 AI 服务，再重新测试。'] : ['确认接口地址能从当前浏览器访问。', '确认服务端允许当前网页跨域请求。', '如果是远程服务，优先使用自己的后端代理转发请求，避免在纯前端暴露密钥。'];
-      } else if (status === 401) {
-        summary = '鉴权失败';
-        level = 'warn';
-        statusMessage = '鉴权失败，请检查 API Key 或服务权限。';
-        steps = ['确认 API Key 是否填写正确。', '本地 Ollama 通常不需要 API Key，可以留空。', '如果是远程 OpenAI-compatible 服务，请确认 Key 仍有效且有模型调用权限。'];
-      } else if (status === 403) {
-        if (native) {
-          summary = '服务拒绝访问';
-          level = 'warn';
-          statusMessage = 'AI 服务拒绝访问，请检查 API Key、模型权限或服务端访问限制。';
-          steps = ['确认 API Key 有效且允许调用当前模型。', '检查服务端 IP 白名单、访问权限和日志。'];
-        } else {
-          summary = local ? '本地服务拒绝当前网页访问，优先检查 CORS / Origin' : '服务拒绝访问';
-          level = 'warn';
-          statusMessage = local ? '本地 AI 服务拒绝当前网页访问，优先检查 OLLAMA_ORIGINS 或服务端跨域设置。' : 'AI 服务拒绝访问，请检查权限、来源限制或跨域设置。';
-          steps = local ? ['如果使用 Ollama，请把当前页面 Origin 加入 OLLAMA_ORIGINS。', '如果使用 LM Studio，请检查本地服务器是否开启跨域访问。', '修改后完全重启本地 AI 服务。'] : ['确认账号、Key、IP 白名单和 Origin 白名单。', '确认当前模型是否允许被调用。'];
-        }
-      } else if (status === 404) {
-        summary = '接口路径不存在';
-        level = 'warn';
-        statusMessage = '接口不存在或路径不正确，请检查 Chat Completions 地址。';
-        steps = ['Ollama / LM Studio 的 OpenAI-compatible 地址通常应以 /v1/chat/completions 结尾。', '如果只填到 /v1，本页面会自动补全为 /v1/chat/completions。', '确认服务端版本是否支持 Chat Completions。'];
-      } else if (status === 405) {
-        summary = '接口不支持当前请求方法';
-        level = 'warn';
-        statusMessage = '接口不支持 Chat Completions POST 请求，请检查地址或服务类型。';
-        steps = ['不要填写浏览器管理页面地址，应填写 API 地址。', '确认目标接口支持 POST /v1/chat/completions。'];
-      } else if (status === 400 || status === 422) {
-        summary = '请求格式或模型名称可能不匹配';
-        level = 'warn';
-        statusMessage = '接口已响应，但请求格式或模型名称可能不匹配。';
-        steps = ['确认模型名称与本地服务中显示的模型名称完全一致。', '如果服务不支持 response_format，本页面已自动重试普通 JSON 请求；仍失败时请查看错误详情。'];
-      } else if (status === 429) {
-        summary = '请求频率或额度受限';
-        level = 'warn';
-        statusMessage = '请求过于频繁或账户额度不足。';
-        steps = ['稍后重试。', '如果是远程服务，请检查账户额度、速率限制和模型权限。'];
-      } else if (status >= 500) {
-        summary = 'AI 服务内部错误';
-        level = 'warn';
-        statusMessage = 'AI 服务内部错误，请稍后重试或查看本地服务日志。';
-        steps = ['检查模型是否已成功加载。', '查看本地 AI 服务控制台日志。', '降低模型或上下文规模后重试。'];
-      } else if (error) {
-        summary = '连接测试失败';
-        level = 'warn';
-        statusMessage = error.message || '连接测试失败。';
-        steps = ['检查服务是否启动、地址是否正确、模型名称是否存在。', native ? '根据错误摘要检查桌面服务和接口状态后重试。' : '如果浏览器控制台出现 CORS、Origin 或 Failed to fetch，按跨域问题处理。'];
       } else {
-        steps = ['填写接口地址和模型名称后点击“测试连接”。', native ? '桌面通过原生网络连接服务，请确认地址、模型和 API Key 正确。' : '如果使用 GitHub Pages 访问本地服务，通常还需要本地服务允许跨域访问。'];
+        const diagnostic = describeAiHttpResponse(status, native, local);
+        if (diagnostic) {
+          return diagnostic;
+        }
+
+        if (error) {
+          summary = '连接测试失败';
+          level = 'warn';
+          statusMessage = error.message || '连接测试失败。';
+          steps = ['检查服务是否启动、地址是否正确、模型名称是否存在。', native ? '根据错误摘要检查桌面服务和接口状态后重试。' : '如果浏览器控制台出现 CORS、Origin 或 Failed to fetch，按跨域问题处理。'];
+        } else {
+          steps = ['填写接口地址和模型名称后点击“测试连接”。', native ? '桌面通过原生网络连接服务，请确认地址、模型和 API Key 正确。' : '如果使用 GitHub Pages 访问本地服务，通常还需要本地服务允许跨域访问。'];
+        }
       }
+
+      return { summary, level, statusMessage, steps };
+    }
+
+    // 收集执行环境、已脱敏的错误和对应处置说明供界面展示。
+    function buildAiDiagnosticV375(error, config, mode = 'error') {
+      const cfg = config || {};
+      const endpoint = String(cfg.endpoint || '').trim();
+      const provider = String(cfg.provider || 'custom');
+      const local = endpoint ? isLocalAiEndpointV99(endpoint) : false;
+
+      const status = Number(error?.status || 0);
+      const origin = aiCurrentOriginV375();
+      const providerLabel = aiProviderLabelV99(provider);
+
+      const native = !!ShirohaPlatform.credentials.native;
+      const code = String(error?.code || '');
+
+      const rawDetail = sanitizeAiDiagnosticDetailV375(error?.detail || error?.cause?.message || error?.message || '', cfg);
+
+      // 识别不同浏览器报告的连接失败文案，用于区分网络问题和 HTTP 响应。
+      const network = !!error?.network || /Failed to fetch|Load failed|NetworkError|ERR_FAILED/i.test(rawDetail || error?.message || '');
+
+      const nativeErrors = {
+        binding_required: ['凭据绑定已变化', '重新输入当前服务的 API Key，再保存设置。'],
+        credential_pending: ['凭据保存尚未完成', '等待保存完成；仍失败时请重新保存设置。'],
+        credential_unavailable: ['系统凭据不可用', '检查 Windows 凭据管理器是否可用，再重新保存设置。'],
+        configuration_not_committed: ['配置尚未保存', '先保存当前服务配置，再重新测试连接。'],
+        invalid_service_config: ['服务配置不正确', '核对完整接口地址；地址不能包含账号、密码、查询参数或片段。'],
+        invalid_input: ['请求参数不正确', '核对接口地址、模型名称和 API Key 后重试。'],
+        redirect_denied: ['服务重定向被拒绝', '将接口地址改为服务实际使用的最终 Chat Completions 地址。'],
+        network_scope_denied: ['服务重定向超出允许范围', '核对服务的最终接口地址，避免跨站重定向。'],
+        network_denied: ['当前环境禁止访问该服务', '确认正在运行正常桌面版本；测试版本仅允许连接隔离测试服务。'],
+        payload_too_large: ['请求内容过大', '减少本次发送的题目或文本后重试。'],
+        response_too_large: ['接口响应过大', '减少请求规模，并检查接口是否返回异常的大量内容。'],
+        invalid_response: ['接口响应无效', '确认接口返回 UTF-8 编码的 Chat Completions 响应。'],
+      };
+
+      const nativeError = native ? nativeErrors[code] : null;
+
+      const {
+        summary,
+        statusMessage,
+        level,
+        steps,
+      } = summarizeAiDiagnostic({ error, mode, native, nativeError, code, status, network, local });
 
       return { time: new Date().toLocaleString('zh-CN', { hour12: false }), mode, provider, providerLabel, endpoint, host: aiEndpointHostV375(endpoint), origin, local, status: status || '', statusLabel: status ? `HTTP ${status}` : '无 HTTP 状态', summary, statusMessage, level, detail: rawDetail || '无额外错误详情', steps };
     }
 
+    // 将当前诊断放入设置页，并按诊断类别显示可执行操作。
     function renderAiDiagnosticV375() {
       const panel = $('#ai-diagnostics-v375');
       if (!panel) {
@@ -426,11 +495,13 @@
       }
     }
 
+    // 更新当前诊断，调用方明确要求时才改变显示开关。
     function setAiDiagnosticV375(diag, show) {
       aiLastDiagnosticV375 = diag;
       if (show != null) {
         aiDiagnosticsVisibleV375 = !!show;
       }
+
       renderAiDiagnosticV375();
     }
 
@@ -447,6 +518,7 @@
       copyTextV23(text, '已复制 AI 连接诊断。');
     }
 
+    // 仅复制对当前浏览器诊断适用的 Ollama 命令。
     function copyAiOllamaCorsCommandV375() {
       const diag = aiLastDiagnosticV375 || buildAiDiagnosticV375(null, ensureAiImportStateV99(), 'idle');
 
@@ -459,6 +531,7 @@
       copyTextV23(command, '已复制 Ollama 跨域命令。');
     }
 
+    // 用配置和后台就绪状态更新连接标记，优先提示尚未完成的检查。
     function updateAiConnectionPillV99(stateValue, configuredOverride) {
       if (stateValue) {
         aiConnectionStateV99 = stateValue;
@@ -496,6 +569,7 @@
       }
     }
 
+    // 以持久配置回填表单，凭据在页面只以已保存占位提示呈现。
     function renderAiSettingsV99() {
       const config = ensureAiImportStateV99();
 
@@ -538,17 +612,21 @@
 
       ShirohaPlatform.harness?.render();
     }
+
     function setState(connection, diagnostic) {
       aiConnectionStateV99 = connection;
       aiLastDiagnosticV375 = diagnostic;
     }
+
     function reset() {
       aiConnectionStateV99 = 'idle';
       aiLastDiagnosticV375 = null;
       aiDiagnosticsVisibleV375 = false;
     }
+
     return { defaultAiConfigV99, normalizeAiConfigV99, aiProviderLabelV99, isAiHarnessExecutionV99, aiHarnessLabelV99, aiHarnessTaskReasonV99, aiUnavailableReasonV99, aiHarnessPrivacyV99, aiExecutionConfigV99, aiConfiguredV99, aiAvailabilityV99, aiExecutionLabelV99, aiRequestConfigV99, normalizeAiEndpointV99, isLocalAiEndpointV99, readAiFormV99, setAiSettingsStatusV99, sanitizeAiDiagnosticDetailV375, aiOllamaCorsCommandV375, buildAiDiagnosticV375, renderAiDiagnosticV375, setAiDiagnosticV375, toggleAiDiagnosticV375, copyAiDiagnosticV375, copyAiOllamaCorsCommandV375, updateAiConnectionPillV99, renderAiSettingsV99, setState, reset };
   }
+
   const AI_PROVIDER_PRESETS_V99_DEFAULT = AI_PROVIDER_PRESETS_V99;
   globalThis.ShirohaAiSettings = Object.freeze({ create, presets: AI_PROVIDER_PRESETS_V99 });
 })();

@@ -162,6 +162,7 @@ test('changed-file lint enforces the AI import shadowing pilot without affecting
     "  const value = 'inner';",
     '  console.log(value);',
     '}',
+    '',
     'printValue();',
     'console.log(value);',
     '',
@@ -181,10 +182,12 @@ test('changed-file lint enforces the state complexity pilot without affecting ot
   const pilotFiles = ['apps/web/study-sessions.js', 'apps/web/platform/browser.js'];
   const outside = 'apps/web/bank-page.js';
   const branchy = [
+    '// 列举输入值的分支以触发复杂度检查。',
     'function branchy(value) {',
-    ...Array.from({ length: 16 }, (_, index) => `  if (value === ${index}) {\n    return ${index};\n  }`),
+    ...Array.from({ length: 16 }, (_, index) => `  if (value === ${index}) {\n    return ${index};\n  }\n`),
     '  return -1;',
     '}',
+    '',
     'console.log(branchy(1));',
     '',
   ].join('\n');

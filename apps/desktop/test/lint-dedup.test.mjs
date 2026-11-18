@@ -70,6 +70,7 @@ test('complete lint retains both Web pilots when Git ignores their paths', async
     "  const value = 'inner';",
     '  console.log(value);',
     '}',
+    '',
     'printValue();',
     'console.log(value);',
     '',

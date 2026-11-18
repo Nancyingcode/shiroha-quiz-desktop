@@ -60,11 +60,11 @@ test('readability pilot counts code lines and accepts comments tied to their def
     '};',
   ].join('\n');
   const [pilot] = await lint.lintText(source, { filePath: filename });
-  const [adjacent] = await lint.lintText(source, { filePath: 'apps/web/practice-selection.js' });
+  const [outsideWeb] = await lint.lintText(source, { filePath: 'test/readability-probe.js' });
   const hits = (/** @type {ESLint.LintResult} */ result) => result.messages
     .filter(({ ruleId }) => ruleId === 'readability/explain-function').map(({ line }) => line);
   assert.deepEqual(hits(pilot), [11]);
-  assert.deepEqual(hits(adjacent), []);
+  assert.deepEqual(hits(outsideWeb), []);
 });
 
 test('readability rule locates regexp literals and global constructors', async () => {
@@ -85,23 +85,27 @@ test('readability rule locates regexp literals and global constructors', async (
   assert.deepEqual(matches.map(({ line }) => line), [2, 5, 11]);
 });
 
-test('readability gate covers adopted modules and leaves neighboring files eligible for gradual adoption', async () => {
+test('readability gate checks all tracked Web modules in the lint scope', async () => {
   const lint = linter();
   const source = 'function testPattern(value) {\n  return /x/.test(value);\n}\nconsole.log(testPattern(1));\n';
-  const pairs = [
-    ['apps/web/platform/index.js', 'apps/web/platform/browser-network.js'],
-    ['apps/web/study-sessions.js', 'apps/web/practice-page.js'],
-    ['apps/web/ai-prompts.js', 'apps/web/ai-results.js'],
-  ];
-  for (const [filePath, neighbor] of pairs) {
+  const listed = spawnSync('git', ['ls-files', '-z', '--', 'apps/web'], { cwd: root, encoding: 'utf8' });
+  assert.ifError(listed.error);
+  assert.equal(listed.status, 0, listed.stderr);
+  const matches = (/** @type {ESLint.LintResult} */ result) => result.messages
+    .filter(({ ruleId }) => ruleId && Object.hasOwn(readabilityReportRules, ruleId))
+    .map(({ ruleId }) => ruleId);
+  let checked = 0;
+  for (const filePath of listed.stdout.split('\0').filter((file) => /\.(?:js|mjs|cjs)$/i.test(file))) {
+    if (await lint.isPathIgnored(filePath)) {
+      continue;
+    }
     const [adopted] = await lint.lintText(source, { filePath });
-    const [pending] = await lint.lintText(source, { filePath: neighbor });
-    const matches = (/** @type {ESLint.LintResult} */ result) => result.messages
-      .filter(({ ruleId }) => ruleId && Object.hasOwn(readabilityReportRules, ruleId))
-      .map(({ ruleId }) => ruleId);
-    assert.deepEqual(matches(adopted), ['readability/explain-regexp', '@stylistic/padding-line-between-statements']);
-    assert.deepEqual(matches(pending), []);
+    assert.deepEqual(matches(adopted), ['readability/explain-regexp', '@stylistic/padding-line-between-statements'], filePath);
+    checked += 1;
   }
+  assert(checked > 0);
+  const [outsideWeb] = await lint.lintText(source, { filePath: 'test/readability-probe.js' });
+  assert.deepEqual(matches(outsideWeb), []);
 });
 
 test('readability padding respects complete statements and leading comments', async () => {
@@ -593,6 +597,7 @@ test('no-shadow pilot rejects local shadowing only in the AI import panel', asyn
     "  const value = 'inner';",
     '  console.log(value);',
     '}',
+    '',
     'printValue();',
     'console.log(value);',
     '',

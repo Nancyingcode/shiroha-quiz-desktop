@@ -1,11 +1,14 @@
+// 将练习和复盘解析分别绑定到各自的会话、请求和来源题目。
 (() => {
   'use strict';
 
   function unavailableReason(config) {
     if (config.execution?.mode === 'harness' && config.execution.reason) { return config.execution.reason; }
+
     return '尚未配置 AI 服务，请先在“AI 设置”中选择并配置执行方式。';
   }
 
+  // 管理当前练习轮次的单题解析草稿与追问，轮次变化后废弃旧请求。
   function createPractice({
     practice,
     question,
@@ -20,16 +23,37 @@
 
     function reset() {
       sessions.forEach((session) => session.controller?.abort());
+
       sessions.clear();
       practiceOwner = null;
     }
 
+    // 每次来源变化都建立独立草稿，重置请求计数与控制器。
+    function createAnalysisSession(fingerprint) {
+      return {
+        analysis: null,
+        initialAnalysis: '',
+        messages: [],
+        loading: '',
+        error: '',
+        notice: '',
+        followUpOpen: false,
+        draft: '',
+        expanded: false,
+        controller: null,
+        requestId: 0,
+        fingerprint,
+      };
+    }
+
+    // 只复用同一轮次且来源指纹相同的草稿。
     function getSession(key) {
       const currentPractice = practice.current();
       if (practiceOwner !== currentPractice) {
         reset();
         practiceOwner = currentPractice;
       }
+
       const item = (currentPractice.items || []).find((value) => question.key(value) === key);
       const fingerprint = question.fingerprint(item);
       const previous = sessions.get(key);
@@ -37,25 +61,15 @@
         previous.controller?.abort();
         sessions.delete(key);
       }
+
       if (!sessions.has(key)) {
-        sessions.set(key, {
-          analysis: null,
-          initialAnalysis: '',
-          messages: [],
-          loading: '',
-          error: '',
-          notice: '',
-          followUpOpen: false,
-          draft: '',
-          expanded: false,
-          controller: null,
-          requestId: 0,
-          fingerprint,
-        });
+        sessions.set(key, createAnalysisSession(fingerprint));
       }
+
       return sessions.get(key);
     }
 
+    // 撤销本次请求的所有权，保留已生成的解析和用户输入。
     function stop(session) {
       // eslint-disable-next-line no-plusplus -- 会话可由调用方修改，保留字符串和 BigInt 的转换；限定请求号类型后移除此例外。
       session.requestId++;
@@ -76,12 +90,31 @@
       return !!selected && question.key(selected) === key;
     }
 
+    // 新生成的解析替换旧草稿，若没有发送图片就降低置信并要求人工核对。
+    function applyInitialAnalysis(session, item, content) {
+      const parsed = result.analysis(content);
+      if (question.hasImages(item)) {
+        parsed.confidence = 'LOW';
+        parsed.needsReview = true;
+        parsed.warning = [parsed.warning, '本次未发送图片，解析仅供文字部分参考。'].filter(Boolean).join(' ');
+      }
+
+      session.analysis = parsed;
+      session.initialAnalysis = parsed.analysis;
+      session.messages = [];
+      session.followUpOpen = false;
+      session.draft = '';
+    }
+
+    // 记录发送时的题目与作答快照，等待就绪时复核发送条件，回包时核对会话身份。
     async function runAnalysis() {
       const item = question.current();
       if (!question.allowed(item)) { return; }
+
       const key = question.key(item);
       const session = getSession(key);
       if (session.loading) { return; }
+
       const owner = practice.current();
       // eslint-disable-next-line no-plusplus -- 会话可由调用方修改，保留字符串和 BigInt 的转换；限定请求号类型后移除此例外。
       const requestId = ++session.requestId;
@@ -93,6 +126,7 @@
         view.render();
         return;
       }
+
       const chosen = question.answer(key).chosen || [];
       const chosenSnapshot = JSON.stringify(chosen);
       session.loading = 'analysis';
@@ -101,29 +135,26 @@
       session.expanded = true;
       view.render();
       const isCurrentAnalysis = () => isCurrentRequest(owner, key, session, requestId, item, fingerprint);
+
       const isCurrentBeforeSend = () => isCurrentAnalysis() && isSelectedQuestion(key)
         && JSON.stringify(question.answer(key).chosen || []) === chosenSnapshot;
+
       try {
-        const response = await request.timeout(requestConfig.timeoutSeconds, (controller) => {
-          session.controller = controller;
-          return request.chat(
-            requestConfig,
-            request.analysisMessages(item, chosen),
-            { controller, task: 'question_analysis', isCurrent: isCurrentBeforeSend },
-          );
-        });
+        const response = await request.timeout(
+          requestConfig.timeoutSeconds,
+          // 登记本次解析的控制器，供切题或手动停止使用。
+          (controller) => {
+            session.controller = controller;
+            return request.chat(
+              requestConfig,
+              request.analysisMessages(item, chosen),
+              { controller, task: 'question_analysis', isCurrent: isCurrentBeforeSend },
+            );
+          },
+        );
         if (!isCurrentAnalysis()) { return; }
-        const parsed = result.analysis(response.content);
-        if (question.hasImages(item)) {
-          parsed.confidence = 'LOW';
-          parsed.needsReview = true;
-          parsed.warning = [parsed.warning, '本次未发送图片，解析仅供文字部分参考。'].filter(Boolean).join(' ');
-        }
-        session.analysis = parsed;
-        session.initialAnalysis = parsed.analysis;
-        session.messages = [];
-        session.followUpOpen = false;
-        session.draft = '';
+
+        applyInitialAnalysis(session, item, response.content);
       } catch (error) {
         if (isCurrentAnalysis()) {
           session.error = view.sanitize(error?.message || 'AI 单题解析失败。', requestConfig);
@@ -138,13 +169,38 @@
       }
     }
 
+    // 保留既有的人工核对要求，更新解析草稿并限制追问历史长度。
+    function applyFollowUpAnalysis(session, item, pending, content) {
+      const parsed = result.followUp(content);
+      if (question.hasImages(item)) {
+        parsed.confidence = 'LOW';
+        parsed.needsReview = true;
+        parsed.warning = result.mergeWarning(parsed.warning, '本次未发送图片，追问与修订解析仅供文字部分参考。');
+      }
+
+      const active = session.analysis;
+      session.analysis = {
+        ...active,
+        analysis: parsed.revisedAnalysis,
+        confidence: parsed.confidence,
+        needsReview: !!active.needsReview || parsed.needsReview,
+        warning: result.mergeWarning(active.warning, parsed.warning),
+      };
+      session.messages = [...pending, { role: 'assistant', content: parsed.reply }].slice(-maxFollowUps * 2);
+      session.draft = '';
+      session.notice = '已根据本次追问更新解析草稿；确认无误后可保存到题库。';
+    }
+
+    // 以当前解析和已有对话生成追问，失败时保留可重试的输入。
     async function runFollowUp() {
       const item = question.current();
       if (!question.allowed(item)) { return; }
+
       const key = question.key(item);
       const session = getSession(key);
       const text = String(session.draft || '').trim();
       if (session.loading || !session.analysis) { return; }
+
       const owner = practice.current();
       // eslint-disable-next-line no-plusplus -- 会话可由调用方修改，保留字符串和 BigInt 的转换；限定请求号类型后移除此例外。
       const requestId = ++session.requestId;
@@ -154,12 +210,14 @@
         view.render();
         return;
       }
+
       const { configured, requestConfig } = request.config();
       if (!configured) {
         session.error = unavailableReason(requestConfig);
         view.render();
         return;
       }
+
       const chosen = question.answer(key).chosen || [];
       const history = session.messages || [];
       const followUpSnapshot = JSON.stringify([chosen, history, session.analysis, text]);
@@ -170,39 +228,31 @@
       session.followUpOpen = true;
       view.render();
       const isCurrentFollowUp = () => isCurrentRequest(owner, key, session, requestId, item, fingerprint);
+
+      // 发送追问前同时核对当前题、输入和历史，避免发送就绪等待期间已被修改的上下文。
       const isCurrentBeforeSend = () => isCurrentFollowUp() && isSelectedQuestion(key)
         && String(session.draft || '').trim() === text
         && JSON.stringify([
           question.answer(key).chosen || [], session.messages, session.analysis, text,
         ]) === followUpSnapshot;
+
       try {
-        const response = await request.timeout(requestConfig.timeoutSeconds, (controller) => {
-          session.controller = controller;
-          const draft = { analysis: session.analysis, initialAnalysis: session.initialAnalysis, messages: history };
-          return request.chat(
-            requestConfig,
-            request.followUpMessages(item, chosen, draft, text),
-            { controller, task: 'question_followup', isCurrent: isCurrentBeforeSend },
-          );
-        });
+        const response = await request.timeout(
+          requestConfig.timeoutSeconds,
+          // 用提交这次追问时的历史快照构造请求，保留对应的停止控制器。
+          (controller) => {
+            session.controller = controller;
+            const draft = { analysis: session.analysis, initialAnalysis: session.initialAnalysis, messages: history };
+            return request.chat(
+              requestConfig,
+              request.followUpMessages(item, chosen, draft, text),
+              { controller, task: 'question_followup', isCurrent: isCurrentBeforeSend },
+            );
+          },
+        );
         if (!isCurrentFollowUp()) { return; }
-        const parsed = result.followUp(response.content);
-        if (question.hasImages(item)) {
-          parsed.confidence = 'LOW';
-          parsed.needsReview = true;
-          parsed.warning = result.mergeWarning(parsed.warning, '本次未发送图片，追问与修订解析仅供文字部分参考。');
-        }
-        const active = session.analysis;
-        session.analysis = {
-          ...active,
-          analysis: parsed.revisedAnalysis,
-          confidence: parsed.confidence,
-          needsReview: !!active.needsReview || parsed.needsReview,
-          warning: result.mergeWarning(active.warning, parsed.warning),
-        };
-        session.messages = [...pending, { role: 'assistant', content: parsed.reply }].slice(-maxFollowUps * 2);
-        session.draft = '';
-        session.notice = '已根据本次追问更新解析草稿；确认无误后可保存到题库。';
+
+        applyFollowUpAnalysis(session, item, pending, response.content);
       } catch (error) {
         if (isCurrentFollowUp()) {
           session.draft = text;
@@ -228,6 +278,7 @@
     };
   }
 
+  // 为复盘页面中各道来源题维护独立可释放的解析草稿。
   function createReview({
     question,
     request,
@@ -238,15 +289,37 @@
     // 解析草稿只属于当前页面会话；来源库、题目和场景共同标识，卸载的列表项会取消请求并释放草稿，不写入备份。
     const sessions = new Map();
 
+    // 释放已卸载或上下文过期的项目，并让在途响应失效。
     function remove(key) {
       const session = sessions.get(key);
       if (!session) { return; }
+
       // eslint-disable-next-line no-plusplus -- 会话可由调用方修改，保留字符串和 BigInt 的转换；限定请求号类型后移除此例外。
       session.requestId++;
       session.controller?.abort();
       sessions.delete(key);
     }
 
+    // 将作答独立复制给复盘草稿，便于判断后来发生的作答修改。
+    function createReviewSession(key, item, chosen, fingerprint, context) {
+      return {
+        key,
+        item,
+        chosen: [...chosen],
+        fingerprint,
+        context,
+        analysis: null,
+        loading: '',
+        saving: false,
+        saved: false,
+        error: '',
+        notice: '',
+        requestId: 0,
+        controller: null,
+      };
+    }
+
+    // 只为相同来源题及作答复用复盘草稿，冲突时先取消旧任务。
     function getOrCreate(key, item, chosen) {
       const fingerprint = question.fingerprint(item);
       const context = JSON.stringify([fingerprint, chosen]);
@@ -255,24 +328,12 @@
         remove(key);
         session = null;
       }
+
       if (!session) {
-        session = {
-          key,
-          item,
-          chosen: [...chosen],
-          fingerprint,
-          context,
-          analysis: null,
-          loading: '',
-          saving: false,
-          saved: false,
-          error: '',
-          notice: '',
-          requestId: 0,
-          controller: null,
-        };
+        session = createReviewSession(key, item, chosen, fingerprint, context);
         sessions.set(key, session);
       }
+
       session.item = item;
       return session;
     }
@@ -283,20 +344,46 @@
       });
     }
 
+    // 来源库或复盘题发生修改时丢弃响应，图片题保留人工核对提示。
+    function applyReviewAnalysis(session, sourceFingerprint, content) {
+      const current = question.source(session.item);
+      const currentQuestion = current.bank?.questions[current.index];
+      const sourceChanged = sourceFingerprint !== null
+        && (!currentQuestion || question.fingerprint(currentQuestion) !== sourceFingerprint);
+      if (sourceChanged || question.fingerprint(session.item) !== session.fingerprint) {
+        throw new Error('来源题目已发生变化，请重新打开题目后再生成。');
+      }
+
+      const parsed = result.analysis(content);
+      if (question.hasImages(session.item)) {
+        parsed.confidence = 'LOW';
+        parsed.needsReview = true;
+        parsed.warning = result.mergeWarning(parsed.warning, '本次未发送图片，解析仅供文字部分参考。');
+      }
+
+      session.analysis = parsed;
+      session.saved = false;
+    }
+
+    // 在模型响应返回前后检查题目与来源快照，避免把解析交给已改变的题目。
     async function run(session) {
       if (session.loading || session.saving) { return; }
+
       const { configured, requestConfig } = request.config();
       if (!configured) {
         session.error = unavailableReason(requestConfig);
         view.render();
         return;
       }
+
       // eslint-disable-next-line no-plusplus -- 会话可由调用方修改，保留字符串和 BigInt 的转换；限定请求号类型后移除此例外。
       const requestId = ++session.requestId;
       const source = question.source(session.item);
       const sourceQuestion = source.bank?.questions[source.index];
       const sourceFingerprint = sourceQuestion ? question.fingerprint(sourceQuestion) : null;
       const isCurrentReviewRequest = () => sessions.get(session.key) === session && session.requestId === requestId;
+
+      // 模型可能等待后台就绪，实际发送前再次核对来源题。
       const isCurrentBeforeSend = () => {
         const current = question.source(session.item);
         const currentQuestion = current.bank?.questions[current.index];
@@ -304,35 +391,27 @@
           && (sourceFingerprint === null
             || (!!currentQuestion && question.fingerprint(currentQuestion) === sourceFingerprint));
       };
+
       session.loading = 'analysis';
       session.error = '';
       session.notice = '';
       view.render();
       try {
-        const response = await request.timeout(requestConfig.timeoutSeconds, (controller) => {
-          session.controller = controller;
-          return request.chat(
-            requestConfig,
-            request.analysisMessages(session.item, session.chosen),
-            { controller, task: 'question_analysis', isCurrent: isCurrentBeforeSend },
-          );
-        });
+        const response = await request.timeout(
+          requestConfig.timeoutSeconds,
+          // 登记复盘请求的控制器，列表项卸载时可以停止生成。
+          (controller) => {
+            session.controller = controller;
+            return request.chat(
+              requestConfig,
+              request.analysisMessages(session.item, session.chosen),
+              { controller, task: 'question_analysis', isCurrent: isCurrentBeforeSend },
+            );
+          },
+        );
         if (!isCurrentReviewRequest()) { return; }
-        const current = question.source(session.item);
-        const currentQuestion = current.bank?.questions[current.index];
-        const sourceChanged = sourceFingerprint !== null
-          && (!currentQuestion || question.fingerprint(currentQuestion) !== sourceFingerprint);
-        if (sourceChanged || question.fingerprint(session.item) !== session.fingerprint) {
-          throw new Error('来源题目已发生变化，请重新打开题目后再生成。');
-        }
-        const parsed = result.analysis(response.content);
-        if (question.hasImages(session.item)) {
-          parsed.confidence = 'LOW';
-          parsed.needsReview = true;
-          parsed.warning = result.mergeWarning(parsed.warning, '本次未发送图片，解析仅供文字部分参考。');
-        }
-        session.analysis = parsed;
-        session.saved = false;
+
+        applyReviewAnalysis(session, sourceFingerprint, response.content);
       } catch (error) {
         if (isCurrentReviewRequest()) {
           session.error = view.sanitize(error?.message || 'AI 解析生成失败，请重试。', requestConfig);
@@ -346,8 +425,10 @@
       }
     }
 
+    // 落库前按需读取来源题，读取失败时保留当前草稿。
     async function save(session) {
       if (session.loading || session.saving || !session.analysis) { return; }
+
       session.saving = true;
       view.render();
       try {
@@ -356,6 +437,7 @@
           session.error = '读取来源题目失败，草稿已保留，请重试。';
           return;
         }
+
         await storage.save(session);
       } finally {
         session.saving = false;
@@ -363,6 +445,7 @@
       }
     }
 
+    // 停止复盘请求并保留用户仍可保存或放弃的草稿。
     function stop(session) {
       // eslint-disable-next-line no-plusplus -- 会话可由调用方修改，保留字符串和 BigInt 的转换；限定请求号类型后移除此例外。
       session.requestId++;
@@ -380,6 +463,7 @@
 
     return {
       get: (key) => sessions.get(key),
+
       getOrCreate,
       remove,
       retain,

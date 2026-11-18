@@ -1,5 +1,7 @@
+// 封装练习选题、顺序进度和今日错题队列，交给应用按当前视图初始化。
 (() => {
   'use strict';
+  // 通过页面状态和选题规则装配练习配置，供普通练习和错题重练共用。
   function create({
     state,
     session: practiceSession,
@@ -26,12 +28,15 @@
       parseNumbers: parsePracticeNumberRangeV58916,
     } = questions;
     const { answer: getPracticeAnswerStateV26 } = progress;
+    // 自定义题量无效时沿用调用方提供的默认值。
     function readCustomCountV60(selector, fallback = 20) {
       const el = selector ? $(selector) : null;
       const raw = el ? Number(el.value) : NaN;
       const n = Number.isFinite(raw) ? Math.floor(raw) : Number(fallback || 20);
       return Math.max(1, n || 20);
     }
+
+    // 让题量模式决定自定义输入是否可用，并使数值与范围约束一致。
     function syncLimitControlV60(scope) {
       const prefix = scope === 'wrong' ? 'wrong-practice' : 'practice';
       const select = $(`#${prefix}-limit`);
@@ -40,27 +45,32 @@
       if (!select || !input) {
         return;
       }
+
       const custom = select.value === 'custom';
       if (control) {
         control.classList.toggle('is-custom', custom);
       }
+
       input.disabled = !custom;
       input.style.display = custom ? '' : 'none';
       if (custom && (!Number(input.value) || Number(input.value) < 1)) {
         input.value = '20';
       }
     }
+
+    // 分别绑定普通练习和错题练习的题量控件，重复初始化不添加额外监听。
     function bindLimitControlsV60() {
       [
         ['practice', '#practice-limit', '#practice-custom-count'],
         ['wrong', '#wrong-practice-limit', '#wrong-practice-custom-count'],
-      ].forEach(([scope, sel, inputSel]) => {
+      ].forEach(/* 将模式选择与对应的自定义数量输入同步，避免两个入口共享错误的范围。 */ ([scope, sel, inputSel]) => {
         const select = $(sel);
         const input = $(inputSel);
         if (select && !select.dataset.boundV60) {
           select.dataset.boundV60 = '1';
           select.addEventListener('change', () => syncLimitControlV60(scope));
         }
+
         if (input && !input.dataset.boundV60) {
           input.dataset.boundV60 = '1';
           input.addEventListener('input', () => {
@@ -69,28 +79,37 @@
             }
           });
         }
+
         syncLimitControlV60(scope);
       });
     }
+
+    // 按全部、比例、固定或自定义模式裁剪候选题，保持当前题序。
     function applyQuestionLimitV60(qs, limit, customCount) {
       const mode = String(limit || 'custom');
       if (mode === 'all') {
         return qs;
       }
+
       if (mode === 'half') {
         return qs.slice(0, Math.max(1, Math.ceil(qs.length / 2)));
       }
+
       const count = mode === 'custom'
         ? readCustomCountV60('', customCount || 20) : Math.max(1, Math.floor(Number(mode) || 20));
       return qs.slice(0, count);
     }
+
+    // 先按来源和题型选取题目，再应用随机顺序与题量限制。
     function filteredPracticeItemsV8916(source, type, order, limit, customCount, scopeOverride) {
       let items = practiceBaseItemsV58916(source, type, scopeOverride);
       if (order === 'random') {
         items = shuffle(items);
       }
+
       return applyQuestionLimitV60(items, limit, customCount);
     }
+
     /* SHIROHA_WEB_V58_9_16_PRACTICE_PROGRESS_START
    顺序练习进度记忆与自选题号。进度只保存在 Web settings，不写入跨端业务层。 */
     function practiceProgressStoreV58916() {
@@ -100,14 +119,14 @@
         ? current : {};
       return state.settings.practiceProgressV58916;
     }
+
     function practiceProgressKeyV58916(scope, source, type) {
       const normalized = normalizePracticeScopeV8916(scope);
       return JSON.stringify([normalized.type, normalized.value, String(source || 'all'), String(type || 'all')]);
     }
-    function dueReviewItems(scopeOverride, date = new Date()) {
-      const banks = practiceScopeBanksV8916(scopeOverride);
-      const start = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
-      const end = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1).getTime();
+
+    // 按题库建立错题优先级；重复记录保留排序更靠前的一条。
+    function collectDueRanks(banks, start, end) {
       const dueByBank = new Map();
       for (const bank of banks) {
         const entries = new Map();
@@ -115,15 +134,18 @@
           if (entry.status === '已掌握') {
             continue;
           }
+
           const time = entry.nextReviewAt ? new Date(entry.nextReviewAt).getTime() : NaN;
           if (Number.isFinite(time) && time >= end) {
             continue;
           }
+
           // 旧备份未安排复习日期；已知逾期题优先，其后是旧题和今日到期题。
           let priority = 1;
           if (Number.isFinite(time)) {
             priority = time < start ? 0 : 2;
           }
+
           const rank = { priority, time: Number.isFinite(time) ? time : 0 };
           const previous = entries.get(entry.id);
           if (!previous || rank.priority < previous.priority
@@ -131,8 +153,19 @@
             entries.set(entry.id, rank);
           }
         }
+
         dueByBank.set(bank.id, entries);
       }
+
+      return dueByBank;
+    }
+
+    // 按本地日界收集可复习的错题，跨库相同题号各自占一条。
+    function dueReviewItems(scopeOverride, date = new Date()) {
+      const banks = practiceScopeBanksV8916(scopeOverride);
+      const start = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+      const end = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1).getTime();
+      const dueByBank = collectDueRanks(banks, start, end);
       const seenByBank = new Map();
       const rows = [];
       for (const item of practiceSessionItemsForBanksV8916(banks)) {
@@ -140,19 +173,26 @@
         if (!rank) {
           continue;
         }
+
         if (!seenByBank.has(item.bankId)) {
           seenByBank.set(item.bankId, new Set());
         }
+
         const seen = seenByBank.get(item.bankId);
         if (seen.has(item.question.id)) {
           continue;
         }
+
         seen.add(item.question.id);
         rows.push({ item, rank });
       }
+
       rows.sort((a, b) => a.rank.priority - b.rank.priority || a.rank.time - b.rank.time);
+
       return rows.map((row) => row.item);
     }
+
+    // 建立题型和来源过滤后的基础题序，供自选题号及进度索引使用。
     function practiceBaseItemsV58916(source, type, scopeOverride) {
       const banks = practiceScopeBanksV8916(scopeOverride);
       let items = source === 'due' ? dueReviewItems(scopeOverride) : practiceSessionItemsForBanksV8916(banks);
@@ -163,22 +203,28 @@
         ]));
         items = items.filter((item) => byBank.get(item.bankId)?.has(item.question.id));
       }
+
       if (source === 'favorite') {
         const byBank = new Map(banks.map((b) => [b.id, new Set(getFavoriteIdsV27(b.id))]));
         items = items.filter((item) => byBank.get(item.bankId)?.has(item.question.id));
       }
+
       if (type && type !== 'all') {
         const t = type === 'multi' ? 'multiple' : type;
         items = items.filter((item) => item.question.type === t);
       }
+
       return items;
     }
+
+    // 使用已保存的题目身份恢复顺序进度，旧序号只能作为找不到身份时的回退。
     function resolvePracticeProgressV58916(scope, source, type, baseItems) {
       const key = practiceProgressKeyV58916(scope, source, type);
       const saved = practiceProgressStoreV58916()[key];
       if (!saved || !baseItems.length) {
         return null;
       }
+
       const keys = baseItems.map(practiceItemKeyV8916);
       let index = keys.indexOf(String(saved.nextSessionKey || ''));
       if (index < 0) {
@@ -187,8 +233,11 @@
           index = fallback;
         }
       }
+
       return index >= 0 && index < baseItems.length ? { key, index, item: baseItems[index], saved } : null;
     }
+
+    // 开始模式决定是否接收自选题号，并更新增加的操作说明。
     function syncPracticeStartModeFieldsV58916() {
       const select = $('#practice-start-mode-v58916');
       const rangeInput = $('#practice-number-range-v58916');
@@ -197,6 +246,7 @@
       if (!select || !rangeInput || !limitControl) {
         return;
       }
+
       const custom = select.value === PRACTICE_START_CUSTOM_V58916;
       rangeInput.hidden = !custom;
       rangeInput.disabled = !custom;
@@ -205,11 +255,14 @@
         rangeLabel.hidden = !custom;
       }
     }
+
+    // 根据当前范围与题序更新开始选项，存在可续练进度时才提供该模式。
     function syncPracticeStartUiV58916(preferContinue = false) {
       const select = $('#practice-start-mode-v58916');
       if (!select) {
         return;
       }
+
       const order = $('#practice-order')?.value || 'sequence';
       let progress = null;
       if (order === 'sequence') {
@@ -219,16 +272,19 @@
         const baseItems = practiceBaseItemsV58916(source, type, scope);
         progress = resolvePracticeProgressV58916(scope, source, type, baseItems);
       }
+
       const fromOption = select.querySelector(`option[value="${PRACTICE_START_FROM_V58916}"]`);
       const continueOption = select.querySelector(`option[value="${PRACTICE_START_CONTINUE_V58916}"]`);
       if (fromOption) {
         fromOption.textContent = order === 'random' ? '全部范围' : '从头开始';
       }
+
       if (continueOption) {
         continueOption.hidden = order !== 'sequence';
         continueOption.disabled = !progress;
         continueOption.textContent = progress ? `继续上次 · 第${progress.index + 1}题` : '继续上次 · 暂无进度';
       }
+
       if (order !== 'sequence' && select.value === PRACTICE_START_CONTINUE_V58916) {
         select.value = PRACTICE_START_FROM_V58916;
       } else if (preferContinue && progress) {
@@ -236,49 +292,72 @@
       } else if (select.value === PRACTICE_START_CONTINUE_V58916 && !progress) {
         select.value = PRACTICE_START_FROM_V58916;
       }
+
       syncPracticeStartModeFieldsV58916();
     }
+
+    // 让来源、题型和顺序改变时重新计算续练与自选题号的可用状态。
     function bindPracticeStartControlsV58916() {
       const select = $('#practice-start-mode-v58916');
       if (select && !select.dataset.boundV58916) {
         select.dataset.boundV58916 = '1';
         select.addEventListener('change', syncPracticeStartModeFieldsV58916);
       }
-      ['#practice-type', '#practice-source', '#practice-order'].forEach((selector) => {
+
+      ['#practice-type', '#practice-source', '#practice-order'].forEach(/* 每种筛选仅绑定一次。 */ (selector) => {
         const el = $(selector);
         if (el && !el.dataset.practiceStartBoundV58916) {
           el.dataset.practiceStartBoundV58916 = '1';
           el.addEventListener('change', () => syncPracticeStartUiV58916(true));
         }
       });
+
       syncPracticeStartUiV58916(true);
     }
+
+    // 自选题号先通过完整解析，再按起点或显式列表出题，最后应用题量限制。
+    function selectCustomPracticeItems(baseItems, order, limit, customCount) {
+      const raw = String($('#practice-number-range-v58916')?.value || '').trim();
+      const parsed = parsePracticeNumberRangeV58916(raw, baseItems.length);
+      if (parsed.error) {
+        return { error: parsed.error };
+      }
+
+      let startIndex = 0;
+      let items;
+      const isStartingNumber = /* 单个整数表示从该题起顺序取题，区间与列表保持显式选择语义。 */ /^\d+$/.test(raw);
+      if (isStartingNumber) {
+        startIndex = parsed.indexes[0];
+        items = baseItems.slice(startIndex);
+      } else {
+        items = parsed.indexes.map((index) => baseItems[index]).filter(Boolean);
+      }
+
+      if (order === 'random') {
+        items = shuffle(items);
+      }
+
+      return { items: applyQuestionLimitV60(items, limit, customCount), startIndex };
+    }
+
+    // 从当前来源和起始模式构造一轮题目，题号无效时不产生部分练习。
     function buildPracticeSelectionV58916(scope, source, type, order, limit, customCount) {
       const baseItems = practiceBaseItemsV58916(source, type, scope);
       let startMode = $('#practice-start-mode-v58916')?.value || PRACTICE_START_FROM_V58916;
       if (order !== 'sequence' && startMode === PRACTICE_START_CONTINUE_V58916) {
         startMode = PRACTICE_START_FROM_V58916;
       }
+
       const progressKey = source === 'due' ? '' : practiceProgressKeyV58916(scope, source, type);
       let startIndex = 0;
       let items;
       if (startMode === PRACTICE_START_CUSTOM_V58916) {
-        const raw = String($('#practice-number-range-v58916')?.value || '').trim();
-        const parsed = parsePracticeNumberRangeV58916(raw, baseItems.length);
-        if (parsed.error) {
-          return { error: parsed.error, items: [], baseItems, startMode, progressKey, startIndex };
+        const custom = selectCustomPracticeItems(baseItems, order, limit, customCount);
+        if (custom.error) {
+          return { error: custom.error, items: [], baseItems, startMode, progressKey, startIndex };
         }
-        const isStartingNumber = /^\d+$/.test(raw);
-        if (isStartingNumber) {
-          startIndex = parsed.indexes[0];
-          items = baseItems.slice(startIndex);
-        } else {
-          items = parsed.indexes.map((index) => baseItems[index]).filter(Boolean);
-        }
-        if (order === 'random') {
-          items = shuffle(items);
-        }
-        items = applyQuestionLimitV60(items, limit, customCount);
+
+        ({ items, startIndex } = custom);
       } else if (order === 'sequence') {
         if (startMode === PRACTICE_START_CONTINUE_V58916) {
           const progress = resolvePracticeProgressV58916(scope, source, type, baseItems);
@@ -288,12 +367,16 @@
             startMode = PRACTICE_START_FROM_V58916;
           }
         }
+
         items = applyQuestionLimitV60(baseItems.slice(startIndex), limit, customCount);
       } else {
         items = applyQuestionLimitV60(shuffle([...baseItems]), limit, customCount);
       }
+
       return { items, baseItems, startMode, progressKey, startIndex, error: '' };
     }
+
+    // 仅为可续练的顺序轮次保存下一题，已完成范围则清理原进度。
     function updatePracticeProgressV58916() {
       const round = practiceSession.current;
       const hasSequentialProgress = round.order === 'sequence'
@@ -303,6 +386,7 @@
       if (!hasSequentialProgress) {
         return;
       }
+
       const itemKeys = round.items.map(practiceItemKeyV8916);
       let nextKey = '';
       for (const key of itemKeys) {
@@ -312,11 +396,13 @@
           break;
         }
       }
+
       let nextIndex = nextKey ? round.baseItemKeys.indexOf(nextKey) : -1;
       if (nextIndex < 0) {
         const lastIndex = round.baseItemKeys.indexOf(itemKeys[itemKeys.length - 1]);
         nextIndex = lastIndex >= 0 ? lastIndex + 1 : round.startIndex + round.items.length;
       }
+
       const store = practiceProgressStoreV58916();
       if (nextIndex >= round.baseItemKeys.length) {
         delete store[round.progressKey];
@@ -332,6 +418,7 @@
         };
       }
     }
+
     /* SHIROHA_WEB_V58_9_16_PRACTICE_PROGRESS_END */
     return {
       readCustomCountV60,
@@ -347,5 +434,6 @@
       updatePracticeProgressV58916,
     };
   }
+
   globalThis.ShirohaPracticeSelection = { create };
 })();

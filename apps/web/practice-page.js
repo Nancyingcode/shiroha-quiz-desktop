@@ -1,5 +1,7 @@
+// 组织练习的出题、作答、专注计时和训练结果，统一接入应用生命周期。
 (() => {
   'use strict';
+  // 从应用接入练习范围、会话、评分和保存能力，让单题与总提交共享作答状态。
   function create({
     state,
     session: practiceSession,
@@ -103,23 +105,29 @@
     // 运行计时器和复盘视图仅归当前页面；换轮/重置释放计时器，离开复盘后释放快照引用。
     const PRACTICE_CLOCK_REFRESH_MS = 250;
     let lifecycleBound = false;
+    // 只绑定一次页面可见性生命周期，后台停留不继续计入专注练习时间。
     function bindPracticeClockLifecycle() {
       if (lifecycleBound) {
         return;
       }
+
       lifecycleBound = true;
-      document.addEventListener('visibilitychange', () => {
+      document.addEventListener('visibilitychange', /* 页面隐藏时暂停；恢复显示时按当前练习状态决定是否提示继续。 */ () => {
         if (document.hidden) {
           pausePracticeClock(false);
         } else {
           showPracticePause();
         }
       });
+
       window.addEventListener('focus', showPracticePause);
       // WebView2 最小化/恢复不总派发可见性事件；仅补显已暂停状态，待这些路径稳定派发后可移除补显监听。
       window.addEventListener('shiroha:practice-hidden', () => pausePracticeClock());
+
       window.addEventListener('resize', showPracticePause);
     }
+
+    // 更换练习前释放当前轮次的 AI 会话、计时资源和专注布局。
     function resetPractice() {
       resetAiSinglePracticeV613();
       exitPracticeFocus();
@@ -128,22 +136,29 @@
       $('#practice-progress').textContent = '0 / 0';
       syncPracticeStartUiV58916(true);
     }
+
+    // 暂停、离开或切题前收集当前可编辑控件里的作答草稿。
     function capturePracticeDraft() {
       const item = currentPracticeItemV8916();
       if (!item || practiceSession.current.completed) {
         return;
       }
+
       const key = practiceItemKeyV8916(item); const st = getPracticeAnswerStateV26(key);
       if (!st.answered && !st.revealed && !practiceSession.current.totalLocked && $('#practice-card .question-title')) {
         setPracticeAnswerStateV26(key, { chosen: collectAnswer('#practice-card', practiceQuestionV8916(item)) });
       }
     }
+
     function clearPracticeClockTimer() {
       if (practiceSession.timer !== null) {
         globalThis.clearInterval(practiceSession.timer);
       }
+
       practiceSession.timer = null;
     }
+
+    // 清理当前计时器和暂停对话框，使旧轮次无法更新另一轮界面。
     function disposePracticeClock() {
       clearPracticeClockTimer();
       if (practiceSession.dialog) {
@@ -152,69 +167,87 @@
         practiceSession.dialog = null;
       }
     }
+
     function updatePracticeClock() {
       const elapsed = ShirohaTraining.elapsedClock(practiceSession.current.clock, globalThis.performance.now()); const node = $('#p-clock');
       if (node) {
         node.textContent = ShirohaTraining.formatDuration(elapsed / 1000);
       }
     }
+
+    // 只在专注计时运行时启动可更新界面的滴答，切换轮次后旧定时器自行取消。
     function startPracticeClockTicker() {
       clearPracticeClockTimer();
       if (practiceSession.current.clock?.state === 'running') {
         const owner = practiceSession.current;
-        const timer = globalThis.setInterval(() => {
+        const timer = globalThis.setInterval(/* 滴答检查捕获的轮次身份，旧回调不再刷新新题的计时显示。 */ () => {
           if (practiceSession.current !== owner) {
             globalThis.clearInterval(timer);
             return;
           }
+
           updatePracticeClock();
         }, PRACTICE_CLOCK_REFRESH_MS);
         practiceSession.timer = timer;
       }
+
       updatePracticeClock();
     }
+
+    // 继续前确认还是捕获的可见轮次，再撤掉暂停对话框并恢复计时。
+    function resumePausedPractice(owner, dialog) {
+      if (practiceSession.current !== owner || document.hidden) {
+        return;
+      }
+
+      dialog.close();
+      dialog.remove();
+      practiceSession.dialog = null;
+      owner.clock = ShirohaTraining.transitionClock(owner.clock, 'running', globalThis.performance.now());
+      refreshAnswerOptionControls();
+      startPracticeClockTicker();
+      $('#p-pause')?.focus({ preventScroll: true });
+    }
+
+    // 仅在当前练习可见且不存在冲突对话框时展示暂停遮罩。
     function showPracticePause() {
       if (practiceSession.dialog || practiceSession.current.clock?.state !== 'paused' || !$('#practice.active') || document.hidden || $('#app-dialog[open]')) {
         return;
       }
+
       const owner = practiceSession.current; const dialog = document.createElement('dialog');
       practiceSession.dialog = dialog;
       dialog.id = 'practice-pause-dialog';
       dialog.className = 'practice-pause-dialog';
       dialog.setAttribute('aria-labelledby', 'practice-pause-title');
       dialog.innerHTML = `<h2 id="practice-pause-title">练习已暂停</h2><p>暂停期间不计时，当前作答已保留。</p><strong id="practice-pause-time">${ShirohaTraining.formatDuration(ShirohaTraining.elapsedClock(owner.clock, globalThis.performance.now()) / 1000)}</strong><button type="button" class="primary" id="practice-resume">继续练习</button>`;
-      const resume = () => {
-        if (practiceSession.current !== owner || document.hidden) {
-          return;
-        }
-        dialog.close();
-        dialog.remove();
-        practiceSession.dialog = null;
-        owner.clock = ShirohaTraining.transitionClock(owner.clock, 'running', globalThis.performance.now());
-        refreshAnswerOptionControls();
-        startPracticeClockTicker();
-        $('#p-pause')?.focus({ preventScroll: true });
-      };
+      const resume = () => resumePausedPractice(owner, dialog);
+
       dialog.addEventListener('cancel', (event) => {
         event.preventDefault();
         resume();
       });
-      dialog.addEventListener('keydown', (event) => {
+
+      dialog.addEventListener('keydown', /* 临时接管暂停对话框的键盘事件，使快捷键和焦点不会泄漏到答题区。 */ (event) => {
         event.stopPropagation();
         if (event.key === 'Tab') {
           event.preventDefault();
           $('#practice-resume').focus();
         }
       });
+
       dialog.querySelector('button').onclick = resume;
       document.body.appendChild(dialog);
       dialog.showModal();
       dialog.querySelector('button').focus();
     }
+
+    // 暂停前保留当前作答，并根据页面调用场景选择是否立即显示继续提示。
     function pausePracticeClock(show = true) {
       if (!practiceSession.current.clock || practiceSession.current.clock.state === 'stopped') {
         return;
       }
+
       capturePracticeDraft();
       practiceSession.current.clock = ShirohaTraining.transitionClock(practiceSession.current.clock, 'paused', globalThis.performance.now());
       clearPracticeClockTimer();
@@ -223,6 +256,7 @@
         showPracticePause();
       }
     }
+
     function freezePracticeInputs() {
       if (practiceSession.current.clock?.state === 'stopped') {
         $$('#practice-card input,#practice-card textarea,#p-submit,#p-reveal').forEach((node) => {
@@ -230,6 +264,8 @@
         });
       }
     }
+
+    // 完成练习时保存最后一题草稿并固定实际专注用时。
     function stopPracticeClock() {
       capturePracticeDraft();
       practiceSession.current.clock = ShirohaTraining.transitionClock(practiceSession.current.clock, 'stopped', globalThis.performance.now());
@@ -238,19 +274,25 @@
       refreshAnswerOptionControls();
       updatePracticeClock();
     }
+
+    // 在练习标题中装配计时与暂停入口，复用当前轮次的时间状态。
     function mountPracticeClock() {
       const head = $('#practice-card .practice-focus-head');
       if (!head || !practiceSession.current.clock) {
         return;
       }
+
       head.insertAdjacentHTML('beforeend', `<div class="practice-clock"><span>用时 <b id="p-clock" role="timer" aria-label="本轮有效练习用时" aria-live="off"></b></span><button type="button" class="ghost mini-btn" id="p-pause" ${practiceSession.current.clock.state === 'stopped' ? 'disabled' : ''}>暂停</button></div>`);
       $('#p-pause').onclick = () => pausePracticeClock();
+
       freezePracticeInputs();
       updatePracticeClock();
       if (practiceSession.current.clock.state === 'paused') {
         showPracticePause();
       }
     }
+
+    // 确认操作期间暂停计时，取消确认后只恢复仍活动的同一轮。
     async function confirmPracticeAction(message, options) {
       const owner = practiceSession.current; const wasRunning = owner.clock?.state === 'running';
       pausePracticeClock(false);
@@ -259,20 +301,26 @@
         owner.clock = ShirohaTraining.transitionClock(owner.clock, 'running', globalThis.performance.now());
         startPracticeClockTicker();
       }
+
       return accepted && practiceSession.current === owner;
     }
+
     function practiceReviewItems() {
       return (practiceSession.current.reviewItems || trainingSessionItems(practiceSession.current.items)).map((item, index) => {
         const answer = getPracticeAnswerStateV26(practiceItemKeyV8916(practiceSession.current.items[index]));
         return { ...item, chosen: answer.chosen || [], revealed: answer.revealed };
       });
     }
+
+    // 使用错题专用题量设置进入练习，并保留当前错题来源。
     function startWrongPractice() {
       const limit = $('#wrong-practice-limit')?.value || 'custom';
       const customCount = readCustomCountV60('#wrong-practice-custom-count', 20);
       $$('.nav').forEach((b) => b.classList.remove('active'));
+
       document.querySelector('[data-view="practice"]').classList.add('active');
       $$('.view').forEach((v) => v.classList.remove('active'));
+
       $('#practice').classList.add('active');
       $('#page-title').textContent = '刷题练习';
       $('#practice-source').value = 'wrong';
@@ -281,24 +329,32 @@
       if ($('#practice-custom-count')) {
         $('#practice-custom-count').value = customCount;
       }
+
       openQuickPracticeSetup();
     }
+
+    // 首次进入专注练习时记录导航变化；连续开始下一轮仍复用专注会话。
     function enterPracticeFocus() {
       // 连续再练仍属于同一次沉浸会话，保留退出时恢复导航的标记。
       if (document.body.classList.contains('practice-focus')) {
         return;
       }
+
       document.body.classList.add('practice-focus');
       autoCollapseSidebarForFocusV47();
     }
+
     function exitPracticeFocus() {
       pausePracticeClock(false);
       document.body.classList.remove('practice-focus', 'practice-rail-collapsed-v34');
       restoreSidebarAfterFocusV47();
     }
+
     function practiceWrongRows(record) {
       return (record.details || []).map((detail, index) => ({ detail, index })).filter(({ detail }) => !detail.correct);
     }
+
+    // 渲染本轮错题的历史答案和选项，快照缺少 ID 时使用明细中的题目身份。
     function renderPracticeWrongRows(record, items) {
       return items.map(({ detail, index }) => {
         const snapshot = detail.nativeQuestion || detail; const q = snapshot.id ? snapshot : { ...snapshot, id: detail.questionId || '' }; const chosen = blankUserAnswersFromDetailV58914(detail); const answer = detail.answer || q.answer || [];
@@ -307,36 +363,46 @@
         return `<article class="exam-q" data-wrong-question-index="${index}"><div class="qmeta"><b>第 ${index + 1} 题</b><span class="pill">${label(q.type)}</span><span>${esc(detail.sourceBankName || record.bankName || '')}</span></div><div class="question-title">${renderQuestionBodyV83(q)}</div>${renderReviewOptions({ ...q, answer }, chosen)}${isTextType(q.type) ? `<div class="feedback bad">${comparison}</div>` : renderReviewAnswerSummary({ ...q, answer }, chosen, '未作答')}${renderReviewAnalysis({ bankId: detail.sourceBankId || record.bankId || '', question: q }, chosen, 'result:' + record.id + ':' + index)}</article>`;
       }).join('');
     }
+
     function renderPracticeWrongOverview(record, items = practiceWrongRows(record)) {
       const wrong = practiceWrongRows(record);
       return `<section id="p-wrong-overview" aria-label="本轮错题一览"><h3>错题一览（${wrong.length}）</h3><div id="p-wrong-overview-list" aria-label="本轮错题一览">${wrong.length ? renderPracticeWrongRows(record, items) : '<div class="notice ok">本轮没有错题，全部答对了。</div>'}</div></section>`;
     }
+
+    // 对本轮错题列表分页，重绘只涉及当前可见的错题明细。
     function renderPracticeWrongPage(record) {
       const target = document.getElementById('p-wrong-overview-list'); const wrong = practiceWrongRows(record);
       if (!target || !wrong.length) {
         return;
       }
+
       // eslint-disable-next-line prefer-template -- 历史数据字段可能是对象，保留 + 的默认转换；字段类型受约束后移除此例外。
       const rows = nativePage(wrong, 'practice-wrong:' + record.id, target, () => renderPracticeWrongPage(record));
       target.innerHTML = renderPracticeWrongRows(record, rows);
       updateReviewAnalysisPanels();
     }
+
     function hasUnfinishedTotalPractice() {
       return practiceSession.current.submitMode === 'total'
         && (!practiceSession.current.totalLocked || practiceSession.current.answered !== practiceSession.current.items.length);
     }
+
+    // 完成时固化当前训练记录和结果；仍有未提交总提交草稿时先保留本轮。
     async function finishPractice(exited = false) {
       if (hasUnfinishedTotalPractice()) {
         return;
       }
+
       stopPracticeClock();
-      return runMutation(async () => {
+      return runMutation(/* 在保存事务中再次确认练习尚未计入记录，并以完成时的快照生成复盘。 */ async () => {
         if (practiceSession.current.completed || !practiceSession.current.items.length) {
           return;
         }
+
         if (hasUnfinishedTotalPractice()) {
           return;
         }
+
         const total = practiceSession.current.answered;
         const groupMode = practiceSession.current.scopeType === 'GROUP';
         const rec = {
@@ -366,64 +432,29 @@
         if (exited) {
           exitPracticeFocus();
         }
+
         $('#practice-card').innerHTML = `<div class="score-card"><div class="metric"><span>已答</span><b>${total}</b></div><div class="metric"><span>正确</span><b>${practiceSession.current.correct}</b></div><div class="metric"><span>错误</span><b>${practiceSession.current.wrong}</b></div><div class="metric"><span>正确率</span><b>${rec.accuracy}%</b></div></div><div class="notice ok">本轮练习已完成，并已写入记录页。记录包含每题作答明细。</div><div class="actions"><button class="primary" id="back-practice-setup">返回练习设置</button><button class="ghost" id="again-practice">按当前条件再练一次</button></div>`;
         if (practiceSession.current.submitMode === 'total') {
           $('#practice-card').insertAdjacentHTML('beforeend', renderPracticeWrongOverview(rec, []));
           renderPracticeWrongPage(rec);
         }
+
         $('#practice-card > .notice').textContent = `${trainingCompletion(rec)}，记录已保存。可查看本轮全部题目的作答情况。`;
         $('#practice-card .score-card').insertAdjacentHTML('afterend', `<p class="training-result-summary">${trainingCompletion(rec)} · 未作答 ${rec.reviewSummary.unanswered} 题 · 用时 ${ShirohaTraining.formatDuration(rec.duration)}</p><div class="actions training-result-actions"><button type="button" class="primary" id="practice-review-result">查看复盘</button></div>`);
         $('#practice-review-result').onclick = () => openTrainingReview(rec.id, 'practice');
+
         $('#back-practice-setup').onclick = () => exitPracticeFocus();
+
         $('#again-practice').onclick = () => startPractice();
+
         showNotice(trainingCompletion(rec), `已答 ${total} 道，正确率 ${rec.accuracy}%。`, 'ok');
         renderAll();
       });
     }
-    async function startPractice(scopeOverrideV8916) {
-      // eslint-disable-next-line no-plusplus -- setter 仍接受字符串和 BigInt；限定类型后才能移除此例外。
-      const request = ++practiceSession.request;
-      const isCurrentStart = () => request === practiceSession.request && isApplicationReady() && !isMutationBusy()
-        && $('#practice')?.classList.contains('active');
-      if (!isCurrentStart()) {
-        return;
-      }
-      const overrideType = String((scopeOverrideV8916 && scopeOverrideV8916.type) || '').toLowerCase();
-      const override = [PRACTICE_SCOPE_BANK_V8916, PRACTICE_SCOPE_GROUP_V8916].includes(overrideType) ? normalizePracticeScopeV8916(scopeOverrideV8916) : null;
-      const limit = $('#practice-limit')?.value || 'custom';
-      const customCount = readCustomCountV60('#practice-custom-count', 20);
-      syncLimitControlV60('practice');
-      const scope = override || practiceScopeV8916();
-      const source = $('#practice-source')?.value || 'all';
-      const type = $('#practice-type')?.value || 'all';
-      const order = $('#practice-order')?.value || 'sequence';
-      const selection = buildPracticeSelectionV58916(scope, source, type, order, limit, customCount);
-      if (selection.error) {
-        $('#practice-card').innerHTML = `<div class="empty">${esc(selection.error)}</div>`;
-        showNotice('无法开始练习', selection.error, 'warn');
-        return;
-      }
-      if (!selection.items.length) {
-        $('#practice-card').innerHTML = '<div class="empty">当前条件下没有题目。</div>';
-        showNotice('无法开始练习', '当前筛选条件下没有题目。', 'warn');
-        return;
-      }
-      const previous = practiceSession.current;
-      const needsLargeRoundConfirmation = selection.items.length > 200 && (limit === 'all' || limit === 'half' || limit === 'custom' || Number(limit) > 200 || selection.startMode === PRACTICE_START_CUSTOM_V58916);
-      if (needsLargeRoundConfirmation) {
-        const count = selection.items.length;
-        const msg = count > 500 ? `本轮将练习 ${count} 道题，题量很大，手机 WebView 可能明显卡顿，建议减少题量或使用电脑端。是否继续？` : `本轮将练习 ${count} 道题，手机 WebView 可能出现轻微卡顿，是否继续？`;
-        const accepted = await globalThis.ShirohaDialogs.confirm(msg);
-        if (!accepted || practiceSession.current !== previous || !isCurrentStart()) {
-          return;
-        }
-      }
-      if (!await loadNativeItems(selection.items, isCurrentStart) || !isCurrentStart()) {
-        return;
-      }
-      disposePracticeClock();
-      resetAiSinglePracticeV613();
-      practiceSession.current = {
+
+    // 从选题结果建立独立轮次，保留原选题范围和稳定的续练索引。
+    function createPracticeRound(selection, scope, source, type, order) {
+      return {
         items: selection.items,
         idx: 0,
         answered: 0,
@@ -443,6 +474,59 @@
         progressKey: selection.progressKey,
         baseItemKeys: selection.baseItems.map(practiceItemKeyV8916),
       };
+    }
+
+    // 读取选题后检查启动请求仍有效，再切换到新轮次和计时器。
+    async function startPractice(scopeOverrideV8916) {
+      // eslint-disable-next-line no-plusplus -- setter 仍接受字符串和 BigInt；限定类型后才能移除此例外。
+      const request = ++practiceSession.request;
+      const isCurrentStart = () => request === practiceSession.request && isApplicationReady() && !isMutationBusy()
+        && $('#practice')?.classList.contains('active');
+
+      if (!isCurrentStart()) {
+        return;
+      }
+
+      const overrideType = String((scopeOverrideV8916 && scopeOverrideV8916.type) || '').toLowerCase();
+      const override = [PRACTICE_SCOPE_BANK_V8916, PRACTICE_SCOPE_GROUP_V8916].includes(overrideType) ? normalizePracticeScopeV8916(scopeOverrideV8916) : null;
+      const limit = $('#practice-limit')?.value || 'custom';
+      const customCount = readCustomCountV60('#practice-custom-count', 20);
+      syncLimitControlV60('practice');
+      const scope = override || practiceScopeV8916();
+      const source = $('#practice-source')?.value || 'all';
+      const type = $('#practice-type')?.value || 'all';
+      const order = $('#practice-order')?.value || 'sequence';
+      const selection = buildPracticeSelectionV58916(scope, source, type, order, limit, customCount);
+      if (selection.error) {
+        $('#practice-card').innerHTML = `<div class="empty">${esc(selection.error)}</div>`;
+        showNotice('无法开始练习', selection.error, 'warn');
+        return;
+      }
+
+      if (!selection.items.length) {
+        $('#practice-card').innerHTML = '<div class="empty">当前条件下没有题目。</div>';
+        showNotice('无法开始练习', '当前筛选条件下没有题目。', 'warn');
+        return;
+      }
+
+      const previous = practiceSession.current;
+      const needsLargeRoundConfirmation = selection.items.length > 200 && (limit === 'all' || limit === 'half' || limit === 'custom' || Number(limit) > 200 || selection.startMode === PRACTICE_START_CUSTOM_V58916);
+      if (needsLargeRoundConfirmation) {
+        const count = selection.items.length;
+        const msg = count > 500 ? `本轮将练习 ${count} 道题，题量很大，手机 WebView 可能明显卡顿，建议减少题量或使用电脑端。是否继续？` : `本轮将练习 ${count} 道题，手机 WebView 可能出现轻微卡顿，是否继续？`;
+        const accepted = await globalThis.ShirohaDialogs.confirm(msg);
+        if (!accepted || practiceSession.current !== previous || !isCurrentStart()) {
+          return;
+        }
+      }
+
+      if (!await loadNativeItems(selection.items, isCurrentStart) || !isCurrentStart()) {
+        return;
+      }
+
+      disposePracticeClock();
+      resetAiSinglePracticeV613();
+      practiceSession.current = createPracticeRound(selection, scope, source, type, order);
       practiceSession.current.submitMode = $('#practice-submit-mode')?.value === 'total' ? 'total' : 'single';
       let startText = '';
       if (selection.startMode === PRACTICE_START_CONTINUE_V58916) {
@@ -450,6 +534,7 @@
       } else if (selection.startMode === PRACTICE_START_CUSTOM_V58916) {
         startText = ' · 自选题号';
       }
+
       practiceSession.current.reviewItems = trainingSessionItems(practiceSession.current.items);
       enterPracticeFocus();
       prewarmMathJaxV56();
@@ -459,23 +544,30 @@
       mountPracticeClock();
       startPracticeClockTicker();
     }
+
     function totalPracticeFilledCount() {
       return practiceSession.current.items.filter((item) => hasAnswerValueV58914(getPracticeAnswerStateV26(practiceItemKeyV8916(item)).chosen)).length;
     }
+
+    // 离开前保护未提交的总提交草稿，已锁定进入自评时保持当前页面。
     async function canLeaveTotalPractice(target) {
       if (practiceSession.current.submitMode !== 'total' || practiceSession.current.completed) {
         return true;
       }
+
       if (target === 'ai-settings') {
         return true;
       }
+
       if (practiceSession.current.totalLocked) {
         toast('请先完成简答题自评和总提交保存。', 'warn');
         return false;
       }
+
       if (totalPracticeFilledCount() > 0 && !await confirmPracticeAction('本轮答案尚未提交，离开将放弃本轮草稿。确定离开？')) {
         return false;
       }
+
       disposePracticeClock();
       resetAiSinglePracticeV613();
       practiceSession.current = { items: [], idx: 0, answered: 0, correct: 0, wrong: 0, start: 0, details: [], answerState: {} };
@@ -483,38 +575,49 @@
       $('#practice-progress').textContent = '0 / 0';
       return true;
     }
+
     function hasCompletedPracticeSelfAssessment(answerState) {
       const { selfCorrect } = answerState;
       return selfCorrect === true || selfCorrect === false;
     }
+
+    // 仅对已填写的简答题请求自评，避免空答案进入评分确认。
     function needsPracticeSelfAssessment(question, answerState) {
       const isAnsweredShortQuestion = question.type === 'short' && hasAnswerValueV58914(answerState.chosen);
       if (!isAnsweredShortQuestion) {
         return false;
       }
+
       return !hasCompletedPracticeSelfAssessment(answerState);
     }
+
     function totalPracticePendingSelfIndex() {
       return practiceSession.current.items.findIndex((item) => {
         const answerState = getPracticeAnswerStateV26(practiceItemKeyV8916(item));
         return needsPracticeSelfAssessment(practiceQuestionV8916(item), answerState);
       });
     }
+
     function totalPracticeStatus() {
       const filled = totalPracticeFilledCount();
       return `共 ${practiceSession.current.items.length} 题 · 已填写 ${filled} 题 · 未填写 ${practiceSession.current.items.length - filled} 题`;
     }
+
+    // 总提交答题卡只反映是否填写，不在统一提交前泄露判定结果。
     function renderTotalPracticeNav() {
       return `<div id="practice-nav-v26" class="practice-nav-v26"><b>答题卡 · ✓ 已填写 / ○ 未填写</b><div class="practice-nav-grid-v26">${practiceSession.current.items.map((item, index) => {
         const filled = hasAnswerValueV58914(getPracticeAnswerStateV26(practiceItemKeyV8916(item)).chosen);
         return `<button type="button" class="${index === practiceSession.current.idx ? 'current' : ''}" data-practice-jump="${index}" aria-label="第 ${index + 1} 题，${filled ? '已填写' : '未填写'}" ${practiceSession.current.totalLocked ? 'disabled' : ''}>${index + 1}${filled ? ' ✓' : ' ○'}</button>`;
       }).join('')}</div></div>`;
     }
+
+    // 渲染总提交练习的当前题、草稿和导航，并保持已锁定作答不可编辑。
     function renderTotalPracticeQuestion() {
       const item = currentPracticeItemV8916();
       if (!item) {
         return;
       }
+
       const q = practiceQuestionV8916(item); const key = practiceItemKeyV8916(item); const st = getPracticeAnswerStateV26(key); const locked = !!practiceSession.current.totalLocked;
       $('#practice-progress').textContent = `${practiceSession.current.idx + 1} / ${practiceSession.current.items.length}`;
       $('#practice-card').innerHTML = `<div class="practice-focus-head"><b>${esc(practiceSession.current.scopeName || '刷题练习')} · 总提交</b><span class="practice-round-progress">本轮进度 · 第 ${practiceSession.current.idx + 1} / ${practiceSession.current.items.length} 题</span><div class="practice-tools-v26"><button class="ghost mini-btn" id="p-favorite">${isFavoriteV27(q.id, practiceItemBankIdV8916(item)) ? '取消收藏' : '收藏题目'}</button><button class="ghost mini-btn" id="p-edit-v120" disabled title="本轮总提交结束后可编辑题目">编辑题目</button><button class="ghost mini-btn" id="p-exit" ${locked ? 'disabled' : ''}>退出练习</button></div></div>${questionHtml(q, false, 0, item)}<div class="actions practice-actions-v44"><button class="ghost" id="p-prev" ${locked || practiceSession.current.idx === 0 ? 'disabled' : ''}>上一题</button><button class="ghost" id="p-next" ${locked || practiceSession.current.idx === practiceSession.current.items.length - 1 ? 'disabled' : ''}>下一题</button><button class="primary" id="p-submit-all">${locked ? '继续提交' : '总提交'}</button></div><p id="p-total-status" role="status">${totalPracticeStatus()}${locked ? ' · 答案已锁定，请完成自评与保存。' : ' · 提交前可修改答案。'}</p><div id="p-feedback" role="status"></div><div id="p-ai-v613"></div>${renderTotalPracticeNav()}`;
@@ -523,15 +626,19 @@
       const marker = $('#practice-card .question-title');
       const canEdit = () => canEditPracticeOptions(session, key) && marker?.isConnected
         && $('#practice-card')?.contains(marker);
+
+      // 仅在当前轮次及题目仍可写时将输入收集到总提交草稿。
       const capture = () => {
         if (!canEdit()) {
           return;
         }
+
         setPracticeAnswerStateV26(key, { chosen: collectAnswer('#practice-card', q) });
         $('#p-total-status').textContent = `${totalPracticeStatus()} · 提交前可修改答案。`;
         $('#practice-nav-v26').outerHTML = renderTotalPracticeNav();
         bindPracticeNavV30();
       };
+
       bindAnswerOptionControls('#practice-card', q, practiceSession.current.idx + 1, canEdit, capture);
       // 草稿属于本轮，不写入学习记录；输入时采集可覆盖切题、收藏重绘和键盘操作。
       $$('#practice-card .text-answer').forEach((input) => {
@@ -540,26 +647,31 @@
           input.addEventListener('input', capture);
         }
       });
+
       $('#p-favorite').onclick = async () => {
         if (await toggleFavoriteV27(q.id, practiceItemBankIdV8916(item))) {
           renderPracticeQuestion();
         }
       };
+
       $('#p-prev').onclick = () => {
         // eslint-disable-next-line no-plusplus -- 轮次状态可由调用方替换，保留字符串和 BigInt 的转换；限定字段类型后移除此例外。
         practiceSession.current.idx--;
         renderPracticeQuestion();
       };
+
       $('#p-next').onclick = () => {
         // eslint-disable-next-line no-plusplus -- 轮次状态可由调用方替换，保留字符串和 BigInt 的转换；限定字段类型后移除此例外。
         practiceSession.current.idx++;
         renderPracticeQuestion();
       };
+
       $('#p-submit-all').onclick = submitTotalPractice;
-      $('#p-exit').onclick = async () => {
+      $('#p-exit').onclick = /* 退出确认跨越异步操作，确认前保留本轮未提交的作答。 */ async () => {
         if (!await confirmPracticeAction('本轮答案尚未提交。退出将放弃本轮草稿，不生成练习记录。确定退出？')) {
           return;
         }
+
         disposePracticeClock();
         resetAiSinglePracticeV613();
         practiceSession.current = { items: [], idx: 0, answered: 0, correct: 0, wrong: 0, start: 0, details: [], answerState: {} };
@@ -568,28 +680,37 @@
         $('#practice-progress').textContent = '0 / 0';
         $('#start-practice-btn').focus();
       };
+
       bindPracticeNavV30();
       bindPracticeHotkeysV44();
       mountPracticeClock();
       renderPracticeAiPanelV613();
       if (locked && needsPracticeSelfAssessment(q, st)) {
         $('#p-feedback').innerHTML = `<div class="feedback warn"><b>请对照参考答案自评</b><p>你的作答：${renderQuestionContent(st.chosen.join('；'))}</p><p>参考答案：${renderQuestionContent(q.answer.join('；') || '未提供')}</p>${q.analysis ? `<p>解析：${renderQuestionContent(q.analysis)}</p>` : ''}<div class="actions"><button class="primary" id="p-self-right">判为正确</button><button class="danger" id="p-self-wrong">判为错误</button></div></div>`;
+        // 每道简答题只接受一次自评，然后恢复总提交的剩余处理。
         const assess = (correct) => {
           if (hasCompletedPracticeSelfAssessment(getPracticeAnswerStateV26(key))) {
             return;
           }
+
           setPracticeAnswerStateV26(key, { selfCorrect: correct });
           continueTotalPractice();
         };
+
         $('#p-self-right').onclick = () => assess(true);
+
         $('#p-self-wrong').onclick = () => assess(false);
+
         $('#p-self-right').focus();
       }
     }
+
+    // 统一提交前冻结本轮作答，仅允许一个确认流程进入评阅。
     async function submitTotalPractice() {
       if (practiceSession.current.submitMode !== 'total' || practiceSession.current.completed || isMutationBusy() || practiceSession.current.confirmingTotal) {
         return;
       }
+
       const session = practiceSession.current;
       // 异步确认期间尚未进入保存事务；本轮临时标记阻止连击排入第二次提交，结束后释放。
       session.confirmingTotal = true;
@@ -599,18 +720,23 @@
           if (!await confirmPracticeAction(`${totalPracticeStatus()}。总提交后不能修改答案；未填写题将按错误计入本轮，简答题需对照参考答案自评。确认总提交？`)) {
             return;
           }
+
           if (practiceSession.current !== session) {
             return;
           }
+
           session.totalLocked = true;
           stopPracticeClock();
         }
+
         return continueTotalPractice();
       } finally {
         delete session.confirmingTotal;
         refreshAnswerOptionControls();
       }
     }
+
+    // 若有待自评题则定位到该题，完成自评后才结算总提交。
     function continueTotalPractice() {
       const index = totalPracticePendingSelfIndex();
       if (index >= 0) {
@@ -618,12 +744,14 @@
         renderPracticeQuestion();
         return;
       }
+
       renderPracticeQuestion();
       // 自评仅暂存在本轮；全部就绪后用同一事务更新错题、进度和记录，失败整体回滚。
-      return runMutation(() => {
+      return runMutation(/* 只有尚未完成且已经锁定的总提交可记录一次成绩。 */ () => {
         if (practiceSession.current.completed || practiceSession.current.submitMode !== 'total' || !practiceSession.current.totalLocked) {
           return;
         }
+
         for (const item of practiceSession.current.items) {
           const question = practiceQuestionV8916(item);
           const answerState = getPracticeAnswerStateV26(practiceItemKeyV8916(item));
@@ -637,27 +765,34 @@
               correct = sameAnswerForQuestion(question, chosen, question.answer);
             }
           }
+
           recordPracticeAnswer(item, chosen, correct);
         }
+
         return finishPractice();
       });
     }
+
+    // 按提交方式和当前题状态渲染练习区，使用一致的结果与答题卡入口。
     function renderPracticeQuestion(done = false) {
       if (practiceSession.current.submitMode === 'total' && !practiceSession.current.completed) {
         renderTotalPracticeQuestion();
         return;
       }
+
       $('#practice-progress').textContent = `${Math.min(practiceSession.current.idx + 1, practiceSession.current.items.length)} / ${practiceSession.current.items.length}`;
       if (done || practiceSession.current.idx >= practiceSession.current.items.length) {
         finishPractice();
         return;
       }
+
       const item = currentPracticeItemV8916();
       const q = practiceQuestionV8916(item);
       const key = practiceItemKeyV8916(item);
       const bid = practiceItemBankIdV8916(item);
       const st = getPracticeAnswerStateV26(key);
       const answerLocked = () => st.answered || st.revealed;
+
       const fav = isFavoriteV27(q.id, bid);
       const groupTitle = practiceSession.current.scopeType === 'GROUP' ? `${practiceSession.current.scopeName} · 分组练习` : '刷题练习';
       $('#practice-card').innerHTML = `<div class="practice-focus-head"><b>${esc(groupTitle)}</b><span class="practice-round-progress">本轮进度 · 第 ${practiceSession.current.idx + 1} / ${practiceSession.current.items.length} 题</span><div class="practice-tools-v26"><button class="ghost mini-btn" id="p-favorite">${fav ? '取消收藏' : '收藏题目'}</button><button class="ghost mini-btn" id="p-edit-v120">编辑题目</button><button class="ghost mini-btn" id="p-exit">退出练习</button></div></div>${questionHtml(q, false, 0, item)}<div class="actions practice-actions-v44"><button class="ghost" id="p-prev" ${practiceSession.current.idx === 0 ? 'disabled' : ''}>上一题</button><button class="ghost" id="p-next">${practiceSession.current.idx >= practiceSession.current.items.length - 1 ? '完成练习' : '下一题'}</button><button class="primary" id="p-submit" ${answerLocked() ? 'disabled' : ''}>提交答案</button><button class="ghost" id="p-reveal" ${answerLocked() ? 'disabled' : ''}>看答案</button></div><div id="p-feedback"></div><div id="p-ai-v613"></div>${renderPracticeNavV26()}<aside class="practice-side-v31">${renderPracticeStatsV30()}</aside>`;
@@ -668,17 +803,21 @@
       } else {
         renderPracticeAiPanelV613();
       }
+
       $('#p-exit').onclick = async () => {
         if (await confirmPracticeAction('已作答部分会保存为一条记录。', { title: '退出本轮练习？', cancelLabel: '继续练习', acceptLabel: '保存并退出' })) {
           finishPractice(true);
         }
       };
+
       $('#p-favorite').onclick = async () => {
         if (await toggleFavoriteV27(q.id, bid)) {
           renderPracticeQuestion();
         }
       };
+
       $('#p-edit-v120').onclick = () => openPracticeEditQuestionV120();
+
       $('#p-prev').onclick = () => {
         if (practiceSession.current.idx > 0) {
           // eslint-disable-next-line no-plusplus -- 轮次状态可由调用方替换，保留字符串和 BigInt 的转换；限定字段类型后移除此例外。
@@ -686,9 +825,12 @@
           renderPracticeQuestion();
         }
       };
+
       $('#p-submit').onclick = () => submitPractice(item, false);
+
       $('#p-reveal').onclick = () => submitPractice(item, true);
-      $('#p-next').onclick = () => {
+
+      $('#p-next').onclick = /* 最后一题之后完成训练，其余场景切换到下一题并同步当前视图。 */ () => {
         if (practiceSession.current.idx >= practiceSession.current.items.length - 1) {
           finishPractice();
         } else {
@@ -697,21 +839,26 @@
           renderPracticeQuestion();
         }
       };
+
       bindPracticeNavV30();
       bindFocusRailToggleV34();
       bindPracticeHotkeysV44();
       updateReviewAnalysisPanels();
       mountPracticeClock();
     }
+
+    // 仅安装一次专注练习快捷键，输入框和对话框继续拥有各自的键盘操作。
     function bindPracticeHotkeysV44() {
       if (window.__shirohaPracticeHotkeysV44Bound) {
         return;
       }
+
       window.__shirohaPracticeHotkeysV44Bound = true;
-      document.addEventListener('keydown', (e) => {
+      document.addEventListener('keydown', /* 只有当前可答的专注练习才解释快捷键，避免输入法或浏览器快捷键受到影响。 */ (e) => {
         if (!document.body.classList.contains('practice-focus') || !practiceSession.current?.items?.length || e.isComposing || e.ctrlKey || e.metaKey || e.altKey) {
           return;
         }
+
         const { target } = e;
         const tag = ((target && target.tagName) || '').toUpperCase();
         const type = String((target && target.type) || '').toLowerCase();
@@ -719,42 +866,52 @@
         if (editable || (tag === 'BUTTON' && (e.key === 'Enter' || e.key === ' '))) {
           return;
         }
+
         const q = practiceQuestionV8916(currentPracticeItemV8916());
         if (!q) {
           return;
         }
+
+        // 让快捷键复用可点击控件的行为与禁用规则。
         const clickIfReady = (selector) => {
           const btn = $(selector);
           if (btn && !btn.disabled) {
             btn.click();
             return true;
           }
+
           return false;
         };
+
         if (e.key === 'ArrowLeft') {
           e.preventDefault();
           clickIfReady('#p-prev');
           return;
         }
+
         if (e.key === 'ArrowRight') {
           e.preventDefault();
           clickIfReady('#p-next');
           return;
         }
+
         if (e.key === 'Enter') {
           e.preventDefault();
           if (!clickIfReady('#p-submit')) {
             clickIfReady('#p-next');
           }
+
           return;
         }
+
         if (String(e.key || '').toLowerCase() === 'v') {
           e.preventDefault();
           clickIfReady('#p-reveal');
           return;
         }
+
         const numeric = String(e.key || '').trim();
-        if (/^[1-7]$/.test(numeric) && !isTextType(q.type)) {
+        if (/* 仅把单个数字 1 到 7 当成选项快捷键，文本题继续使用正常输入。 */ /^[1-7]$/.test(numeric) && !isTextType(q.type)) {
           const label = $$('#practice-card .option')[Number(numeric) - 1];
           if (label) {
             e.preventDefault();
@@ -763,6 +920,8 @@
         }
       });
     }
+
+    // 使用本轮计数生成当前进度与正确率，并沿用当轮的范围标签。
     function renderPracticeStatsV30() {
       const total = (practiceSession.current.items || []).length;
       const answered = Number(practiceSession.current.answered || 0);
@@ -772,11 +931,14 @@
       const remaining = Math.max(0, total - answered);
       return `<div id="practice-stat-card-v30" class="practice-stat-card-v30"><div class="practice-stat-head-v30"><div><b>本轮统计</b><span>${esc(practiceSession.current.scopeName || '沉浸练习')}</span></div><button class="rail-hide-btn-v34" data-rail-toggle-v34="practice" type="button" title="隐藏本轮统计">隐藏</button></div><div class="practice-stat-list-v31"><div><span>总题</span><b>${total}</b></div><div><span>已刷</span><b>${answered}</b></div><div><span>正确率</span><b>${accuracy}%</b></div><div><span>错题</span><b>${wrong}</b></div></div><p>正确 ${correct} · 剩余 ${remaining}</p><button class="rail-show-btn-v34" data-rail-toggle-v34="practice" type="button" title="显示本轮统计">统计</button></div>`;
     }
+
+    // 作答后局部刷新训练统计，避免不必要地重绘输入控件。
     function refreshPracticeStatsV30() {
       const box = $('#practice-stat-card-v30');
       if (box) {
         box.outerHTML = renderPracticeStatsV30();
       }
+
       bindFocusRailToggleV34();
       const nav = $('#practice-nav-v26');
       if (nav) {
@@ -785,39 +947,49 @@
         bindFocusRailToggleV34();
       }
     }
+
     function bindPracticeNavV30() {
       $$('#practice-card [data-practice-jump]').forEach((btn) => btn.onclick = () => {
         practiceSession.current.idx = Number(btn.dataset.practiceJump);
         renderPracticeQuestion();
       });
     }
+
     function getPracticeAnswerStateV26(id) {
       practiceSession.current.answerState = practiceSession.current.answerState || {};
       return practiceSession.current.answerState[id] || { chosen: [], answered: false, revealed: false, correct: null };
     }
+
     function setPracticeAnswerStateV26(id, next) {
       practiceSession.current.answerState = practiceSession.current.answerState || {};
       practiceSession.current.answerState[id] = { ...getPracticeAnswerStateV26(id), ...next };
     }
+
+    // 将变化绑定到捕获的会话和题目标记，旧控件事件不得写入新一轮。
     function bindPracticeAnswerDraft(q, key, stateValue) {
       const session = practiceSession.current; const marker = $('#practice-card .question-title');
       const canEdit = () => canEditPracticeOptions(session, key) && marker?.isConnected
         && $('#practice-card')?.contains(marker);
+
       const capture = () => {
         if (canEdit()) {
           setPracticeAnswerStateV26(key, { chosen: collectAnswer('#practice-card', q) });
         }
       };
+
       bindAnswerOptionControls('#practice-card', q, practiceSession.current.idx + 1, canEdit, capture);
       if (stateValue.answered || stateValue.revealed) {
         return;
       }
+
       $$('#practice-card .text-answer').forEach((input) => {
         input.oninput = capture;
       });
     }
+
+    // 为逐题训练生成可定位的答题卡，区分作答、揭晓与当前题。
     function renderPracticeNavV26() {
-      const buttons = (practiceSession.current.items || []).map((item, i) => {
+      const buttons = (practiceSession.current.items || []).map(/* 逐题读取答题状态构造卡片，键盘和视图依赖稳定的题目索引。 */ (item, i) => {
         const q = practiceQuestionV8916(item);
         const st = getPracticeAnswerStateV26(practiceItemKeyV8916(item));
         let correctness = '';
@@ -826,29 +998,35 @@
         } else if (st.correct === false) {
           correctness = 'bad';
         }
+
         const cls = [i === practiceSession.current.idx ? 'current' : '', st.answered ? 'done' : '', correctness, isFavoriteV27(q.id, practiceItemBankIdV8916(item)) ? 'favorite' : ''].filter(Boolean).join(' ');
         return `<button type="button" class="${cls}" data-practice-jump="${i}" title="第${i + 1}题">${i + 1}</button>`;
       }).join('');
       return `<div id="practice-nav-v26" class="practice-nav-v26"><b>答题卡</b><div class="practice-nav-grid-v26">${buttons}</div></div>`;
     }
+
+    // 单题提交通过事务记录答案；揭晓与主动判分沿用不同的交互入口。
     async function submitPractice(item, reveal) {
-      return runMutation(async () => {
+      return runMutation(/* 在提交时重新收集当前输入，保存成功后更新可显示的判定状态。 */ async () => {
         const q = practiceQuestionV8916(item); const key = practiceItemKeyV8916(item);
         const chosen = collectAnswer('#practice-card', q);
         if (!hasAnswerValueV58914(chosen) && !reveal) {
           $('#p-feedback').innerHTML = '<div class="feedback warn">请先作答，再提交。</div>';
           return;
         }
+
         if (q.type === 'short') {
           showSubjectiveFeedback(item, chosen, reveal);
           return;
         }
+
         const ok = !reveal && sameAnswerForQuestion(q, chosen, q.answer);
         if (!reveal) {
           recordPracticeAnswer(item, chosen, ok);
         } else {
           setPracticeAnswerStateV26(key, { chosen, revealed: true, correct: null });
         }
+
         await saveSilent();
         markOptions('#practice-card', q, chosen);
         showAnsweredStateV26(q, getPracticeAnswerStateV26(key));
@@ -856,6 +1034,8 @@
         renderStats();
       });
     }
+
+    // 根据当前题已答状态恢复反馈和控件，揭晓答案不显示为普通作答错误。
     function showAnsweredStateV26(q, st) {
       markOptions('#practice-card', q, st.chosen || []);
       const wrong = st.answered && st.correct === false && !st.revealed;
@@ -865,6 +1045,7 @@
       } else if (q.analysis) {
         analysis = `<br>解析：${renderQuestionContent(q.analysis)}`;
       }
+
       let feedbackClass = 'bad';
       let feedbackTitle = '✕ 这题要再看一遍';
       if (st.revealed) {
@@ -874,24 +1055,29 @@
         feedbackClass = 'ok';
         feedbackTitle = '✓ 回答正确';
       }
+
       $('#p-feedback').innerHTML = `<div class="feedback ${feedbackClass}"><b>${feedbackTitle}</b>${isMultiBlankQuestionV58914(q) ? renderMultiBlankComparisonV58914(q.blankAnswers, st.chosen || [], true) : `｜${feedbackAnswerHtmlV58914(q, st.chosen || [])}`}${analysis}</div>`;
       const sub = $('#p-submit'); const rev = $('#p-reveal');
       if (sub) {
         sub.disabled = true;
       }
+
       if (rev) {
         rev.disabled = true;
       }
+
       renderPracticeAiPanelV613();
       updateReviewAnalysisPanels();
     }
+
+    // 简答反馈先保留用户文字和参考答案，由用户自评决定本题结果。
     function showSubjectiveFeedback(item, chosen, reveal) {
       const q = practiceQuestionV8916(item); const key = practiceItemKeyV8916(item); const user = chosen.join('；') || '未填写';
       setPracticeAnswerStateV26(key, { chosen, revealed: !!reveal });
       $('#p-feedback').innerHTML = `<div class="feedback warn"><b>你的作答：</b><div class="q-multiline-text">${renderQuestionContent(user)}</div><b>参考答案：</b><div class="q-multiline-text">${renderQuestionContent(q.answer.join('；') || '未提供')}</div>${q.analysis ? `<b>解析：</b><div class="q-multiline-text">${renderQuestionContent(q.analysis)}</div>` : ''}<div class="actions"><button class="primary" id="p-self-right">判为正确</button><button class="danger" id="p-self-wrong">判为错误</button></div></div>`;
       $('#p-submit').disabled = true;
       $('#p-reveal').disabled = true;
-      $('#p-self-right').onclick = async () => runMutation(async () => {
+      $('#p-self-right').onclick = /* 将自评正确的点击提交给同一保存事务。 */ async () => runMutation(/* 按正确记录原作答后关闭两个自评入口，避免重复登记。 */ async () => {
         recordPracticeAnswer(item, chosen, true);
         $('#p-self-right').disabled = true;
         $('#p-self-wrong').disabled = true;
@@ -899,7 +1085,8 @@
         renderStats();
         renderPracticeQuestion();
       });
-      $('#p-self-wrong').onclick = async () => runMutation(async () => {
+
+      $('#p-self-wrong').onclick = /* 将自评错误的点击提交给同一保存事务。 */ async () => runMutation(/* 按错误记录原作答后关闭两个自评入口，供后续错题复习。 */ async () => {
         recordPracticeAnswer(item, chosen, false);
         $('#p-self-right').disabled = true;
         $('#p-self-wrong').disabled = true;
@@ -907,14 +1094,18 @@
         renderStats();
         renderPracticeQuestion();
       });
+
       renderPracticeAiPanelV613();
     }
+
+    // 只首次登记有效判分，并按原题来源更新本轮计数和错题记录。
     function recordPracticeAnswer(item, chosen, ok) {
       const q = practiceQuestionV8916(item); const key = practiceItemKeyV8916(item); const bid = practiceItemBankIdV8916(item);
       const current = getPracticeAnswerStateV26(key);
       if (current.answered) {
         return;
       }
+
       // eslint-disable-next-line no-plusplus -- 轮次状态可由调用方替换，保留字符串和 BigInt 的转换；限定字段类型后移除此例外。
       practiceSession.current.answered++;
       if (ok) {
@@ -926,9 +1117,12 @@
         practiceSession.current.wrong++;
         addWrong(q.id, bid, chosen);
       }
+
       setPracticeAnswerStateV26(key, { chosen: [...chosen], answered: true, revealed: false, correct: !!ok, answeredAt: now() });
       practiceSession.current.details.push(makeAnswerDetail(item, chosen, ok, scoreOf(q), scoreOf(q)));
     }
+
+    // 从题库详情带当前源题库进入练习设置，并关闭旧题目详情。
     function openQuickPracticeSetup() {
       closeBankQuestionDetail();
       setPracticeBankScopeV8916(activeBank().id);
@@ -944,10 +1138,14 @@
       updateShellLayoutByView('practice');
       $('#practice-submit-mode').focus();
     }
+
+    // 切换练习来源时使导航与实际视图一致，并同步可用的开始方式。
     function switchPracticeSourceV27(source) {
       $$('.nav').forEach((b) => b.classList.remove('active'));
+
       document.querySelector('[data-view="practice"]').classList.add('active');
       $$('.view').forEach((v) => v.classList.remove('active'));
+
       $('#practice').classList.add('active');
       $('#page-title').textContent = '刷题练习';
       $('#practice-source').value = source;
@@ -956,8 +1154,10 @@
       if ($('#practice-custom-count')) {
         $('#practice-custom-count').value = '20';
       }
+
       openQuickPracticeSetup();
     }
+
     return {
       startPracticeClockTicker,
       showPracticePause,
@@ -981,5 +1181,6 @@
       bindPracticeClockLifecycle,
     };
   }
+
   globalThis.ShirohaPracticePage = { create };
 })();

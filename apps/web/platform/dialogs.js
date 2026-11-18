@@ -1,4 +1,5 @@
 // @ts-check
+// 复用页内原生模态框，串行显示提示并在关闭后还原焦点。
 (() => {
   'use strict';
   /** @typedef {{title?: string, acceptLabel?: string, cancelLabel?: string, context?: string, danger?: boolean}} DialogOptions */
@@ -6,19 +7,8 @@
   // 队列属于当前页面；关闭后释放节点与回调，避免并发提示互相覆盖或重复提交。
   let pending = Promise.resolve();
 
-  /** @param {DialogKind} kind @param {string} message @param {string} initial @param {DialogOptions} options */
-  function open(kind, message, initial, options) {
-    return new Promise((resolve) => {
-      const previousFocus = document.activeElement;
-      const dialog = document.createElement('dialog');
-      dialog.id = 'app-dialog';
-      dialog.setAttribute('aria-labelledby', 'app-dialog-title');
-      dialog.setAttribute(
-        'aria-describedby',
-        options.context ? 'app-dialog-context app-dialog-message' : 'app-dialog-message',
-      );
-      if (options.danger) { dialog.dataset.variant = 'danger'; }
-      dialog.innerHTML = `<form method="dialog" class="app-dialog-form">
+  // 各类对话框共用标签关联和控件结构，消息与提示由创建函数以文本填入。
+  const dialogMarkup = `<form method="dialog" class="app-dialog-form">
         <button type="button" data-dialog-close aria-label="关闭">×</button>
         <div class="app-dialog-icon" aria-hidden="true">i</div>
         <h2 id="app-dialog-title"></h2>
@@ -30,87 +20,146 @@
           <button type="submit" data-dialog-accept></button>
         </div>
       </form>`;
-      const form = /** @type {HTMLFormElement} */ (dialog.querySelector('form'));
-      const input = /** @type {HTMLInputElement} */ (dialog.querySelector('input'));
-      const cancel = /** @type {HTMLButtonElement} */ (dialog.querySelector('[data-dialog-cancel]'));
-      const accept = /** @type {HTMLButtonElement} */ (dialog.querySelector('[data-dialog-accept]'));
-      const close = /** @type {HTMLButtonElement} */ (dialog.querySelector('[data-dialog-close]'));
-      const title = /** @type {HTMLElement} */ (dialog.querySelector('h2'));
-      const context = /** @type {HTMLElement} */ (dialog.querySelector('#app-dialog-context'));
-      const messageElement = /** @type {HTMLElement} */ (dialog.querySelector('#app-dialog-message'));
-      const icon = /** @type {HTMLElement} */ (dialog.querySelector('.app-dialog-icon'));
-      title.textContent = options.title || ({ alert: '提示', confirm: '请确认', prompt: '请输入' })[kind];
-      context.hidden = !options.context;
-      context.textContent = options.context || '';
-      messageElement.textContent = message;
-      icon.textContent = options.danger ? '⚠' : 'i';
-      input.hidden = kind !== 'prompt';
-      input.value = initial;
-      cancel.hidden = kind === 'alert';
-      cancel.textContent = options.cancelLabel || '取消';
-      accept.textContent = options.acceptLabel || (kind === 'alert' ? '知道了' : '确定');
-      let settled = false;
-      /** @param {boolean} accepted */
-      const finish = (accepted) => {
-        if (settled) { return; }
-        settled = true;
-        let value = null;
-        if (kind === 'confirm') { value = accepted; }
-        if (kind === 'prompt' && accepted) { value = input.value; }
-        dialog.close();
-        dialog.remove();
-        if (previousFocus instanceof window.HTMLElement && previousFocus.isConnected) {
-          previousFocus.focus({ preventScroll: true });
+
+  /** 根据提示类型设置内容和可用控件，供事件处理复用同一组节点。
+   * @param {DialogKind} kind @param {string} message @param {string} initial @param {DialogOptions} options
+   */
+  function createDialog(kind, message, initial, options) {
+    const dialog = document.createElement('dialog');
+    dialog.id = 'app-dialog';
+    dialog.setAttribute('aria-labelledby', 'app-dialog-title');
+    dialog.setAttribute(
+      'aria-describedby',
+      options.context ? 'app-dialog-context app-dialog-message' : 'app-dialog-message',
+    );
+    if (options.danger) { dialog.dataset.variant = 'danger'; }
+
+    dialog.innerHTML = dialogMarkup;
+    const form = /** @type {HTMLFormElement} */ (dialog.querySelector('form'));
+    const input = /** @type {HTMLInputElement} */ (dialog.querySelector('input'));
+    const cancel = /** @type {HTMLButtonElement} */ (dialog.querySelector('[data-dialog-cancel]'));
+    const accept = /** @type {HTMLButtonElement} */ (dialog.querySelector('[data-dialog-accept]'));
+    const close = /** @type {HTMLButtonElement} */ (dialog.querySelector('[data-dialog-close]'));
+    const title = /** @type {HTMLElement} */ (dialog.querySelector('h2'));
+    const context = /** @type {HTMLElement} */ (dialog.querySelector('#app-dialog-context'));
+    const messageElement = /** @type {HTMLElement} */ (dialog.querySelector('#app-dialog-message'));
+    const icon = /** @type {HTMLElement} */ (dialog.querySelector('.app-dialog-icon'));
+    title.textContent = options.title || ({ alert: '提示', confirm: '请确认', prompt: '请输入' })[kind];
+    context.hidden = !options.context;
+    context.textContent = options.context || '';
+    messageElement.textContent = message;
+    icon.textContent = options.danger ? '⚠' : 'i';
+    input.hidden = kind !== 'prompt';
+    input.value = initial;
+    cancel.hidden = kind === 'alert';
+    cancel.textContent = options.cancelLabel || '取消';
+    accept.textContent = options.acceptLabel || (kind === 'alert' ? '知道了' : '确定');
+    return { dialog, form, input, cancel, accept, close };
+  }
+
+  /** 模态框拥有本轮键盘输入，Tab 只能在可用控件之间循环。
+   * @param {KeyboardEvent} event
+   * @param {(HTMLButtonElement | HTMLInputElement)[]} controls
+   */
+  function handleDialogKeydown(event, controls) {
+    // 模态框内的快捷键不应切题、作答或触发页面保存；Tab 循环不将焦点交给浏览器工具栏。
+    event.stopPropagation();
+    if (event.key !== 'Tab') { return; }
+
+    const focusable = controls.filter((control) => !control.hidden && !control.disabled);
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault(); last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault(); first.focus();
+    }
+  }
+
+  /** 打开当前排队的提示，结算一次并在关闭时还原焦点。
+   * @param {DialogKind} kind @param {string} message @param {string} initial @param {DialogOptions} options
+   */
+  function open(kind, message, initial, options) {
+    return new Promise(
+      // 同一弹窗的表单、取消键与关闭按钮共用结算逻辑，避免重复触发。
+      (resolve) => {
+        const previousFocus = document.activeElement;
+        const {
+          dialog,
+          form,
+          input,
+          cancel,
+          accept,
+          close,
+        } = createDialog(kind, message, initial, options);
+        let settled = false;
+        /** 提交时读取即时输入，并在移除对话框后把焦点交回调用来源。
+       * @param {boolean} accepted
+       */
+        const finish = (accepted) => {
+          if (settled) { return; }
+
+          settled = true;
+          let value = null;
+          if (kind === 'confirm') { value = accepted; }
+
+          if (kind === 'prompt' && accepted) { value = input.value; }
+
+          dialog.close();
+          dialog.remove();
+          if (previousFocus instanceof window.HTMLElement && previousFocus.isConnected) {
+            previousFocus.focus({ preventScroll: true });
+          }
+
+          resolve(value);
+        };
+
+        form.addEventListener('submit', (event) => {
+          event.preventDefault(); finish(true);
+        });
+
+        cancel.addEventListener('click', () => finish(false));
+
+        close.addEventListener('click', () => finish(false));
+
+        dialog.addEventListener('cancel', (event) => {
+          event.preventDefault(); finish(false);
+        });
+
+        dialog.addEventListener('keydown', (event) => handleDialogKeydown(event, [close, input, cancel, accept]));
+
+        document.body.appendChild(dialog);
+        dialog.showModal();
+        if (kind === 'prompt') {
+          input.focus(); input.select();
+        } else if (kind === 'confirm') {
+          cancel.focus();
+        } else {
+          accept.focus();
         }
-        resolve(value);
-      };
-      form.addEventListener('submit', (event) => {
-        event.preventDefault(); finish(true);
-      });
-      cancel.addEventListener('click', () => finish(false));
-      close.addEventListener('click', () => finish(false));
-      dialog.addEventListener('cancel', (event) => {
-        event.preventDefault(); finish(false);
-      });
-      dialog.addEventListener('keydown', (event) => {
-        // 模态框内的快捷键不应切题、作答或触发页面保存；Tab 循环不将焦点交给浏览器工具栏。
-        event.stopPropagation();
-        if (event.key !== 'Tab') { return; }
-        const controls = [close, input, cancel, accept].filter((control) => !control.hidden && !control.disabled);
-        const first = controls[0]; const last = controls[controls.length - 1];
-        if (event.shiftKey && document.activeElement === first) {
-          event.preventDefault(); last.focus();
-        } else if (!event.shiftKey && document.activeElement === last) {
-          event.preventDefault(); first.focus();
-        }
-      });
-      document.body.appendChild(dialog);
-      dialog.showModal();
-      if (kind === 'prompt') {
-        input.focus(); input.select();
-      } else if (kind === 'confirm') {
-        cancel.focus();
-      } else {
-        accept.focus();
-      }
-    });
+      },
+    );
   }
 
   /** @param {DialogKind} kind @param {string} message @param {string} initial @param {DialogOptions} options */
   function enqueue(kind, message, initial, options) {
     const result = pending.then(() => open(kind, message, initial, options));
     pending = result.then(() => {}, () => {});
+
     return result;
   }
+
   const api = {
     /** @param {string} message @param {DialogOptions} [options] */
     async alert(message, options = {}) {
       await enqueue('alert', message, '', options);
     },
+
     /** @param {string} message @param {DialogOptions} [options] */
     async confirm(message, options = {}) {
       return (await enqueue('confirm', message, '', options)) === true;
     },
+
     /** @param {string} message @param {string} [initial] @param {DialogOptions} [options] */
     async prompt(message, initial = '', options = {}) {
       const value = await enqueue('prompt', message, initial, options);

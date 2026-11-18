@@ -1,3 +1,4 @@
+// 管理 AI 导入和预览分析的请求所有权，防止取消后的响应覆盖新草稿。
 (() => {
   'use strict';
 
@@ -9,6 +10,7 @@
     return raw && Number.isInteger(size) && size >= 1 && size <= 30 ? size : null;
   }
 
+  // 将请求、草稿与界面依赖绑定到导入页的同一个会话。
   function create({
     draft: importDraft,
     configuration,
@@ -73,16 +75,20 @@
 
     function captureSuggestions() {
       const current = (map) => [...map].filter(([key]) => currentAiSuggestionV991(map, key));
+
       return { review: current(reviewSuggestions), analysis: current(analysisSuggestions) };
     }
 
+    // 恢复草稿中的建议前核对目标标识和指纹，避免把建议交给已修改的题目。
     function restoreSuggestions(saved) {
       resetAiSuggestionsV991();
       for (const [kind, map] of [['review', reviewSuggestions], ['analysis', analysisSuggestions]]) {
         for (const entry of Array.isArray(saved?.[kind]) ? saved[kind] : []) {
           if (!Array.isArray(entry) || entry.length !== 2) { continue; }
+
           const [key, item] = entry;
           if (typeof key !== 'string' || !item || typeof item !== 'object') { continue; }
+
           if (currentAiTargetIndexV991({ id: key, fingerprint: item.fingerprint }) >= 0) { map.set(key, item); }
         }
       }
@@ -95,6 +101,7 @@
       }
     }
 
+    // 题目编辑后移除两类建议，并让仍在运行的旧批次无法接纳该题。
     function removeAiSuggestionsForQuestionV991(question, index) {
       invalidateAiPreviewTargetV991(question, index);
       const key = aiQuestionKeyV991(question, index);
@@ -102,6 +109,7 @@
       analysisSuggestions.delete(key);
     }
 
+    // 通过唯一标识和内容指纹定位仍可接收建议的题目。
     function currentAiTargetIndexV991(target) {
       const index = findIndex(target.id, -1);
       const question = importDraft.questions[index];
@@ -119,14 +127,17 @@
         ? suggestion : undefined;
     }
 
+    // 只保存仍属于当前题目的有效建议，供用户在预览中逐条核对。
     function storeAiBatchResultsV991(mode, content, batchItems) {
       const results = resultArray(content);
       let stored = 0;
       for (const raw of results) {
         const item = mode === 'analysis' ? normalizeAnalysis(raw, batchItems) : normalizeReview(raw, batchItems);
         if (!item) { continue; }
+
         const target = batchItems.find((value) => value.id === item.questionId);
         if (!target || currentAiTargetIndexV991(target) < 0) { continue; }
+
         item.fingerprint = target.fingerprint;
         if (mode === 'analysis') {
           if (item.analysis || item.note) { analysisSuggestions.set(item.questionId, item);stored += 1; }
@@ -135,9 +146,11 @@
           stored += 1;
         }
       }
+
       return stored;
     }
 
+    // 取消原文整理并更换请求身份，保证现有识别草稿安全。
     function cancelAiImportRequestV99(silent) {
       if (!aiImportRequestV99.running) {
         return;
@@ -154,6 +167,7 @@
         // 身份已失效；即使底层控制器异常，旧结果也不会进入草稿。
         }
       }
+
       aiImportRequestV99 = { running: false, controller: null };
 
       syncAiImportActionV99();
@@ -165,10 +179,12 @@
 
     function invalidateAiImportRequestV99() {
       if (!aiImportRequestV99.running) { return; }
+
       cancelAiImportRequestV99(true);
       setAiImportStatusV99('原文或识别预览已变化，本次整理结果已失效；已请求停止，请重新开始。', 'warn');
     }
 
+    // 停止预览批次并保留已生成建议，界面仍可在下一轮继续使用。
     function cancelAiPreviewRequestV991(silent) {
       if (!aiPreviewRequestV991.running) {
         return;
@@ -184,6 +200,7 @@
         // 身份已失效；即使底层控制器异常，旧建议也不会进入预览。
         }
       }
+
       aiPreviewRequestV991 = { running: false, mode: '', cancelled: false, controller: null };
 
       syncAiImportActionV99();
@@ -193,6 +210,7 @@
       }
     }
 
+    // 只在目标集合仍有效时发送当前批次，并在完成后释放本批独有的控制器。
     async function requestAiPreviewBatchV991(mode, requestConfig, batchItems, remainingTargets, owner) {
       const controller = new AbortController();
       owner.controller = controller;
@@ -205,13 +223,16 @@
       try {
         const isCurrent = () => aiPreviewRequestV991 === owner && !owner.cancelled && getPreviewMode() === mode
           && remainingTargets.every((item) => isAiPreviewTargetCurrentV991(item, owner));
+
         const result = await requestAiChatV99(requestConfig, mode === 'analysis' ? buildAiAnalysisMessagesV991(batchItems.map((x) => x.payload)) : buildAiReviewMessagesV991(batchItems.map((x) => x.payload)), { controller, task: mode === 'analysis' ? 'batch_analysis' : 'batch_review', isCurrent });
         if (timedOut) { throw new Error(`当前批次请求超过 ${requestConfig.timeoutSeconds} 秒，已自动停止。`); }
+
         return result;
       } catch (error) {
         if (error?.name === 'AbortError' && timedOut) {
           throw new Error(`当前批次请求超过 ${requestConfig.timeoutSeconds} 秒，已自动停止。`, { cause: error });
         }
+
         throw error;
       } finally {
         clearTimeout(timer);
@@ -221,10 +242,61 @@
       }
     }
 
+    // 暂存目标内容、唯一标识和发送载荷，后续批次可以发现用户的题目编辑。
+    function capturePreviewTarget(index) {
+      const question = importDraft.questions[index];
+      const id = aiQuestionKeyV991(question, index);
+      return {
+        id,
+        index,
+        question,
+        fingerprint: aiQuestionFingerprintV991(question),
+        payload: aiQuestionPayloadV991(question, index, importIssueStatus(question, importDraft.diagnostics?.profile || {})),
+      };
+    }
+
+    // 界面的筛选范围和单批题量都有效后才允许启动模型请求。
+    function readPreviewSelection(mode) {
+      const scope = $('#ai-preview-scope-v991')?.value || 'range';
+      const condition = $('#ai-preview-condition-v992')?.value || 'missing';
+      const details = collectAiPreviewTargetDetailsV992(mode, scope, condition);
+      const { indexes } = details;
+
+      if (details.error) {
+        setAiPreviewStatusV991(details.error, 'warn');
+        return null;
+      }
+
+      if (!details.baseIndexes.length) {
+        setAiPreviewStatusV991('当前范围没有题目。', 'warn');
+        return null;
+      }
+
+      if (!indexes.length) {
+        setAiPreviewStatusV991(mode === 'analysis' ? '当前范围没有符合解析条件的题目。' : '当前范围没有可处理的题目。', 'warn');
+        return null;
+      }
+
+      if (indexes.length > AI_PREVIEW_MAX_ITEMS_V991) {
+        setAiPreviewStatusV991(`实际处理题目超过单次 ${AI_PREVIEW_MAX_ITEMS_V991} 道上限，请缩小范围。`, 'warn');
+        return null;
+      }
+
+      const batchSize = previewBatchSize($('#ai-preview-batch-v991')?.value);
+      if (batchSize === null) {
+        setAiPreviewStatusV991(PREVIEW_BATCH_ERROR, 'warn');
+        return null;
+      }
+
+      return { indexes, batchSize };
+    }
+
+    // 按当前筛选范围分批生成建议，已完成批次可以独立展示并在失败后保留。
     async function startAiPreviewTaskV991() {
       if (aiPreviewRequestV991.running || aiImportRequestV99.running) {
         return;
       }
+
       if (isEditing()) {
         setAiPreviewStatusV991('第一阶段不处理题库二次编辑草稿。', 'warn');
         return;
@@ -238,45 +310,14 @@
       }
 
       const mode = getPreviewMode();
-      const scope = $('#ai-preview-scope-v991')?.value || 'range';
-      const condition = $('#ai-preview-condition-v992')?.value || 'missing';
-      const details = collectAiPreviewTargetDetailsV992(mode, scope, condition);
-      const { indexes } = details;
-
-      if (details.error) {
-        setAiPreviewStatusV991(details.error, 'warn');
-        return;
-      }
-      if (!details.baseIndexes.length) {
-        setAiPreviewStatusV991('当前范围没有题目。', 'warn');
-        return;
-      }
-      if (!indexes.length) {
-        setAiPreviewStatusV991(mode === 'analysis' ? '当前范围没有符合解析条件的题目。' : '当前范围没有可处理的题目。', 'warn');
-        return;
-      }
-      if (indexes.length > AI_PREVIEW_MAX_ITEMS_V991) {
-        setAiPreviewStatusV991(`实际处理题目超过单次 ${AI_PREVIEW_MAX_ITEMS_V991} 道上限，请缩小范围。`, 'warn');
+      const selection = readPreviewSelection(mode);
+      if (!selection) {
         return;
       }
 
-      const batchSize = previewBatchSize($('#ai-preview-batch-v991')?.value);
-      if (batchSize === null) {
-        setAiPreviewStatusV991(PREVIEW_BATCH_ERROR, 'warn');
-        return;
-      }
+      const { indexes, batchSize } = selection;
       const requestConfig = aiRequestConfigV99(config);
-      const targets = indexes.map((index) => {
-        const question = importDraft.questions[index];
-        const id = aiQuestionKeyV991(question, index);
-        return {
-          id,
-          index,
-          question,
-          fingerprint: aiQuestionFingerprintV991(question),
-          payload: aiQuestionPayloadV991(question, index, importIssueStatus(question, importDraft.diagnostics?.profile || {})),
-        };
-      });
+      const targets = indexes.map(capturePreviewTarget);
       if (targets.some((target) => !target.id || findIndex(target.id, -1) !== target.index)) {
         setAiPreviewStatusV991('目标题目身份不唯一或缺失，请重新识别并选择后再试。', 'warn');
         return;
@@ -294,6 +335,7 @@
           if (!isCurrentPreviewRequest()) {
             return;
           }
+
           const batchItems = targets.slice(offset, offset + batchSize);
           const remainingTargets = targets.slice(offset);
           if (remainingTargets.some((item) => !isAiPreviewTargetCurrentV991(item, owner))) {
@@ -309,14 +351,18 @@
             if (isCurrentPreviewRequest() && remainingTargets.some((item) => !isAiPreviewTargetCurrentV991(item, owner))) {
               throw new Error('目标题目已变化或身份不唯一，请重新选择后再试。', { cause: error });
             }
+
             throw error;
           }
+
           if (!isCurrentPreviewRequest()) {
             return;
           }
+
           if (batchItems.some((item) => !isAiPreviewTargetCurrentV991(item, owner))) {
             throw new Error('目标题目已变化或身份不唯一，请重新选择后再试。');
           }
+
           stored += storeAiBatchResultsV991(mode, result.content, batchItems);
           processed += batchItems.length;
           // 最后一批与结束状态一起同步；中间批次仍立即展示建议。
@@ -324,12 +370,14 @@
         }
 
         if (!isCurrentPreviewRequest()) { return; }
+
         setAiPreviewStatusV991(`${aiPreviewModeLabelV991(mode)}完成：处理 ${processed} 道题，生成 ${stored} 条建议。建议不会自动修改题目，请逐题采纳或忽略。`, 'ok');
         showNotice(aiPreviewModeLabelV991(mode), `已生成 ${stored} 条建议，请在预览表中逐题核对。`, 'ok');
       } catch (error) {
         if (!isCurrentPreviewRequest()) {
           return;
         }
+
         setAiPreviewStatusV991(`${error.message || '处理失败'}${processed ? ` 已完成 ${processed} 道题，已有建议已保留。` : ''}`, 'warn');
         showNotice(aiPreviewModeLabelV991(mode), error.message || '处理失败。', 'danger');
       } finally {
@@ -340,6 +388,82 @@
       }
     }
 
+    // 文本兜底沿用本地识别逻辑。无法识别时恢复原有诊断，保留可编辑的题目预览。
+    function parseOrganizedQuestions(payload, previous, usedFallback) {
+      let questions;
+      let modeLabel;
+      let parserReport = '';
+      let parserWarnings = [];
+
+      if (payload.mode === 'direct_questions') {
+        questions = payload.questions;
+        modeLabel = 'AI 结构化整理';
+        parserReport = 'AI 直接返回经过结构校验的题目对象；仍需人工核对后导入。';
+      } else {
+        importDraft.warnings = [];
+        importDraft.report = '';
+        importDraft.diagnostics = null;
+
+        try {
+          questions = parseTextQuestions(payload.cleanedText, $('#import-strategy')?.value || 'auto');
+          parserReport = importDraft.report;
+          parserWarnings = [...importDraft.warnings];
+        } catch (error) {
+          questions = [];
+          parserWarnings = [`AI 清洗文本进入本地解析器时失败：${error.message || error}`];
+        }
+
+        modeLabel = usedFallback ? 'AI 文本兜底 → 本地解析器' : 'AI 清洗文本 → 本地解析器';
+
+        if (!questions.length) {
+          importDraft.warnings = previous.warnings;
+          importDraft.report = previous.report;
+          importDraft.diagnostics = previous.diagnostics;
+          throw new Error('AI 已返回清洗文本，但本地解析器没有识别到有效题目。原有预览未被修改。');
+        }
+      }
+
+      return { questions, modeLabel, parserReport, parserWarnings };
+    }
+
+    // 解析成功后更新预览、清空旧建议，并保留核对信息供用户确认导入。
+    function applyOrganizedQuestions({
+      payload,
+      questions,
+      modeLabel,
+      parserReport,
+      parserWarnings,
+      usedFallback,
+      fallbackReason,
+      config,
+      range,
+      text,
+      beforeCount,
+    }) {
+      importDraft.invalidatePreview?.();
+      importDraft.questions = questions;
+      importDraft.selected.clear();
+      resetAiSuggestionsV991();
+
+      const structuredWarnings = (payload.structuredIssues || []).map((x) => `结构化校验：${x}`);
+      const fallbackNotes = usedFallback && fallbackReason ? [`结构化结果不可用，已自动使用文本兜底：${fallbackReason}`] : [];
+
+      importDraft.warnings = [`${modeLabel}结果必须人工核对。`, ...fallbackNotes, ...structuredWarnings, ...parserWarnings, ...(payload.notes || [])].filter(Boolean).slice(0, 40);
+
+      importDraft.report = `${modeLabel}：${aiExecutionLabelV99(config)} / ${config.model}，${range.label} ${text.length.toLocaleString('zh-CN')} 字。${beforeCount ? `整理前预览 ${beforeCount} 题，整理后 ${importDraft.questions.length} 题。` : ''}${parserReport ? ` ${parserReport}` : ''}`;
+
+      importDraft.diagnostics = { ...(importDraft.diagnostics || {}), strategy: modeLabel, mode: aiExecutionLabelV99(config), aiMode: payload.mode, aiStructuredFirstV384: true, aiUsedCleanTextFallbackV384: usedFallback, expected: importDraft.diagnostics?.expected || {}, profile: importDraft.diagnostics?.profile || {}, candidates: importDraft.diagnostics?.candidates || [] };
+      importDraft.filter = 'priority';
+
+      renderImportPreview(importDraft.questions, { syncPreviewTools: false });
+      setAiImportStatusV99(`整理完成：${modeLabel}，得到 ${importDraft.questions.length} 道题。请核对题量、题干、选项、答案和解析后再确认导入。`, 'ok');
+      {
+        const risk = largeImportRiskMessageV376(importDraft.questions);
+        showNotice('AI 整理完成', `${modeLabel}得到 ${importDraft.questions.length} 道题，必须人工核对后再导入。${risk ? ` ${risk}` : ''}`, risk ? 'warn' : 'ok');
+      }
+    }
+
+    // 按原文与草稿快照启动整理，结构不可用时尝试文本兜底并保持失败可恢复。
     async function startAiImportV99() {
       if (aiImportRequestV99.running || aiPreviewRequestV991.running) {
         return;
@@ -400,6 +524,8 @@
       setAiImportStatusV99('正在调用 AI 结构化整理题库。将优先生成 questions，结构校验失败时自动退回文本清洗。');
 
       const isCurrentImportRequest = () => aiImportRequestV99 === owner && !owner.cancelled;
+
+      // 后台准备完成或响应返回时复核原文、草稿对象与内容，避免误用过期结果。
       const isCurrentBeforeSend = () => {
         const currentRange = aiImportRangeV992();
         const sameDraft = importDraft.questions === previous.cache
@@ -459,6 +585,7 @@
           if (!isCurrentBeforeSend()) {
             return;
           }
+
           payload = parseAiRefactorPayloadV384(fallbackResult.content);
           usedFallback = true;
 
@@ -469,60 +596,14 @@
           payload = { ...payload, mode: 'clean_text' };
         }
 
-        let questions = [];
-        let modeLabel = '';
-        let parserReport = '';
-        let parserWarnings = [];
+        const {
+          questions,
+          modeLabel,
+          parserReport,
+          parserWarnings,
+        } = parseOrganizedQuestions(payload, previous, usedFallback);
 
-        if (payload.mode === 'direct_questions') {
-          questions = payload.questions;
-          modeLabel = 'AI 结构化整理';
-          parserReport = 'AI 直接返回经过结构校验的题目对象；仍需人工核对后导入。';
-        } else {
-          importDraft.warnings = [];
-          importDraft.report = '';
-          importDraft.diagnostics = null;
-
-          try {
-            questions = parseTextQuestions(payload.cleanedText, $('#import-strategy')?.value || 'auto');
-            parserReport = importDraft.report;
-            parserWarnings = [...importDraft.warnings];
-          } catch (error) {
-            questions = [];
-            parserWarnings = [`AI 清洗文本进入本地解析器时失败：${error.message || error}`];
-          }
-
-          modeLabel = usedFallback ? 'AI 文本兜底 → 本地解析器' : 'AI 清洗文本 → 本地解析器';
-
-          if (!questions.length) {
-            importDraft.warnings = previous.warnings;
-            importDraft.report = previous.report;
-            importDraft.diagnostics = previous.diagnostics;
-            throw new Error('AI 已返回清洗文本，但本地解析器没有识别到有效题目。原有预览未被修改。');
-          }
-        }
-
-        importDraft.invalidatePreview?.();
-        importDraft.questions = questions;
-        importDraft.selected.clear();
-        resetAiSuggestionsV991();
-
-        const structuredWarnings = (payload.structuredIssues || []).map((x) => `结构化校验：${x}`);
-        const fallbackNotes = usedFallback && fallbackReason ? [`结构化结果不可用，已自动使用文本兜底：${fallbackReason}`] : [];
-
-        importDraft.warnings = [`${modeLabel}结果必须人工核对。`, ...fallbackNotes, ...structuredWarnings, ...parserWarnings, ...(payload.notes || [])].filter(Boolean).slice(0, 40);
-
-        importDraft.report = `${modeLabel}：${aiExecutionLabelV99(config)} / ${config.model}，${range.label} ${text.length.toLocaleString('zh-CN')} 字。${beforeCount ? `整理前预览 ${beforeCount} 题，整理后 ${importDraft.questions.length} 题。` : ''}${parserReport ? ` ${parserReport}` : ''}`;
-
-        importDraft.diagnostics = { ...(importDraft.diagnostics || {}), strategy: modeLabel, mode: aiExecutionLabelV99(config), aiMode: payload.mode, aiStructuredFirstV384: true, aiUsedCleanTextFallbackV384: usedFallback, expected: importDraft.diagnostics?.expected || {}, profile: importDraft.diagnostics?.profile || {}, candidates: importDraft.diagnostics?.candidates || [] };
-        importDraft.filter = 'priority';
-
-        renderImportPreview(importDraft.questions, { syncPreviewTools: false });
-        setAiImportStatusV99(`整理完成：${modeLabel}，得到 ${importDraft.questions.length} 道题。请核对题量、题干、选项、答案和解析后再确认导入。`, 'ok');
-        {
-          const risk = largeImportRiskMessageV376(importDraft.questions);
-          showNotice('AI 整理完成', `${modeLabel}得到 ${importDraft.questions.length} 道题，必须人工核对后再导入。${risk ? ` ${risk}` : ''}`, risk ? 'warn' : 'ok');
-        }
+        applyOrganizedQuestions({ payload, questions, modeLabel, parserReport, parserWarnings, usedFallback, fallbackReason, config, range, text, beforeCount });
       } catch (error) {
         if (!isCurrentBeforeSend()) {
           return;
@@ -547,9 +628,11 @@
       get importRequest() {
         return aiImportRequestV99;
       },
+
       get previewRequest() {
         return aiPreviewRequestV991;
       },
+
       cancelAiImportRequestV99,
       invalidateAiImportRequestV99,
       cancelAiPreviewRequestV991,
@@ -561,8 +644,11 @@
       removeAiSuggestionsForQuestionV991,
       invalidateAiPreviewTargetV991,
       getReview: (key) => currentAiSuggestionV991(reviewSuggestions, key),
+
       getAnalysis: (key) => currentAiSuggestionV991(analysisSuggestions, key),
+
       deleteReview: (key) => reviewSuggestions.delete(key),
+
       deleteAnalysis: (key) => analysisSuggestions.delete(key),
     };
   }

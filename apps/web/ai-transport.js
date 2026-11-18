@@ -1,7 +1,83 @@
+// 统一浏览器 API 和桌面 Harness 的 AI 请求、取消与格式兼容处理。
 (() => {
   'use strict';
 
+  function responseDetail(raw) {
+    // 将错误正文中的连续空白压成一个空格，便于在单行诊断中展示。
+    return raw.replace(/\s+/g, ' ').slice(0, 400);
+  }
+
+  // 绑定平台请求与 Harness 能力，供导入、解析和连接测试共用。
   function create({ platform, harness, response }) {
+    // 等待桌面 Harness 就绪后重新核对请求上下文，避免用变化后的账户或模型发送旧任务。
+    async function requestViaHarness(config, messages, controller, task, isCurrent) {
+      if (!platform.harness) { throw new Error('当前平台不支持 Harness，请在桌面端配置。'); }
+
+      const unavailable = harness.taskReason(config, task);
+      if (unavailable) { throw new Error(unavailable); }
+
+      let { execution } = config;
+      if (execution.readiness === 'checking' || platform.harness.status?.().readiness === 'checking') {
+        await platform.harness.ensureReady();
+        if (controller?.signal?.aborted) {
+          const error = new Error('AI 请求已取消。');
+          error.name = 'AbortError';
+          throw error;
+        }
+
+        const current = platform.harness.snapshot();
+        const configurationChanged = current.adapter !== execution.adapter || current.mode !== execution.mode
+          || current.model !== execution.model || current.timeoutSeconds !== execution.timeoutSeconds;
+        const revisionChanged = current.revision !== execution.revision
+          || current.accountRevision !== execution.accountRevision;
+        const verifiesTransition = typeof platform.harness.isReadinessTransition === 'function';
+        const confirmedTransition = verifiesTransition && platform.harness.isReadinessTransition(execution, current);
+        const lifecycleChanged = verifiesTransition && current.ready && !confirmedTransition;
+        if (typeof isCurrent !== 'function') { throw new Error('当前任务缺少上下文确认，无法在检查后继续。'); }
+
+        if (configurationChanged || lifecycleChanged || (revisionChanged && !confirmedTransition) || !isCurrent()) {
+          throw new Error('题目或 AI 配置已变化，请重新发起请求。');
+        }
+
+        if (!current.ready) { throw new Error(current.reason || 'AI 状态尚未就绪，请重试。'); }
+
+        execution = current;
+      }
+
+      if (execution.adapter === 'codebuddy' && !harness.configured({ ...config, execution }, task)) {
+        throw new Error(harness.unavailableReason(config, task));
+      }
+
+      return platform.harness.execute(execution, task, messages, controller?.signal);
+    }
+
+    // 解析成功响应并检查模型内容。连接测试允许接口返回空内容。
+    function decodeResponse(raw, config, testMode) {
+      let payload;
+      try {
+        payload = raw ? JSON.parse(raw) : {};
+      } catch {
+        const failure = new Error('接口已响应，但返回内容不是有效 JSON。');
+        failure.aiStage = 'json';
+        failure.endpoint = config.endpoint;
+        failure.provider = config.provider;
+        failure.detail = responseDetail(raw);
+        throw failure;
+      }
+
+      const content = response.content(payload);
+      if (!content && !testMode) {
+        const failure = new Error('接口返回成功，但没有找到模型输出内容。');
+        failure.aiStage = 'empty';
+        failure.endpoint = config.endpoint;
+        failure.provider = config.provider;
+        throw failure;
+      }
+
+      return { payload, content };
+    }
+
+    // API 回退只适用于接口拒绝 JSON 格式参数；修改题目或配置后旧请求不可再发送。
     async function requestAiChatV99(config, messages, {
       controller,
       maxTokens,
@@ -11,39 +87,12 @@
       isCurrent,
     } = {}) {
       if (harness.isHarness(config.execution)) {
-        if (!platform.harness) { throw new Error('当前平台不支持 Harness，请在桌面端配置。'); }
-        const unavailable = harness.taskReason(config, task);
-        if (unavailable) { throw new Error(unavailable); }
-        let { execution } = config;
-        if (execution.readiness === 'checking' || platform.harness.status?.().readiness === 'checking') {
-          await platform.harness.ensureReady();
-          if (controller?.signal?.aborted) {
-            const error = new Error('AI 请求已取消。');
-            error.name = 'AbortError';
-            throw error;
-          }
-          const current = platform.harness.snapshot();
-          const configurationChanged = current.adapter !== execution.adapter || current.mode !== execution.mode
-            || current.model !== execution.model || current.timeoutSeconds !== execution.timeoutSeconds;
-          const revisionChanged = current.revision !== execution.revision
-            || current.accountRevision !== execution.accountRevision;
-          const verifiesTransition = typeof platform.harness.isReadinessTransition === 'function';
-          const confirmedTransition = verifiesTransition && platform.harness.isReadinessTransition(execution, current);
-          const lifecycleChanged = verifiesTransition && current.ready && !confirmedTransition;
-          if (typeof isCurrent !== 'function') { throw new Error('当前任务缺少上下文确认，无法在检查后继续。'); }
-          if (configurationChanged || lifecycleChanged || (revisionChanged && !confirmedTransition) || !isCurrent()) {
-            throw new Error('题目或 AI 配置已变化，请重新发起请求。');
-          }
-          if (!current.ready) { throw new Error(current.reason || 'AI 状态尚未就绪，请重试。'); }
-          execution = current;
-        }
-        if (execution.adapter === 'codebuddy' && !harness.configured({ ...config, execution }, task)) {
-          throw new Error(harness.unavailableReason(config, task));
-        }
-        return platform.harness.execute(execution, task, messages, controller?.signal);
+        return requestViaHarness(config, messages, controller, task, isCurrent);
       }
+
       const base = { model: config.model, messages, temperature: 0, stream: false };
       if (maxTokens) { base.max_tokens = maxTokens; }
+
       const attempts = plainText ? [base] : [{ ...base, response_format: { type: 'json_object' } }, base];
       let lastError = null;
       for (let index = 0; index < attempts.length; index += 1) {
@@ -52,6 +101,7 @@
           result = await platform.network.ai(config, attempts[index], controller?.signal);
         } catch (error) {
           if (error?.name === 'AbortError' || platform.credentials.native) { throw error; }
+
           const failure = new Error('无法访问 AI 接口。请检查服务是否启动、地址是否正确，以及接口是否允许浏览器跨域访问。');
           failure.cause = error;
           failure.network = true;
@@ -60,6 +110,7 @@
           failure.provider = config.provider;
           throw failure;
         }
+
         const raw = await result.text();
         if (controller?.signal?.aborted) {
           // 响应体读取后重新确认取消，避免忽略信号的传输触发格式回退或交付迟到结果。
@@ -67,29 +118,12 @@
           error.name = 'AbortError';
           throw error;
         }
+
         if (result.ok) {
-          let payload;
-          try {
-            payload = raw ? JSON.parse(raw) : {};
-          } catch {
-            const failure = new Error('接口已响应，但返回内容不是有效 JSON。');
-            failure.aiStage = 'json';
-            failure.endpoint = config.endpoint;
-            failure.provider = config.provider;
-            failure.detail = raw.replace(/\s+/g, ' ').slice(0, 400);
-            throw failure;
-          }
-          const content = response.content(payload);
-          if (!content && !testMode) {
-            const failure = new Error('接口返回成功，但没有找到模型输出内容。');
-            failure.aiStage = 'empty';
-            failure.endpoint = config.endpoint;
-            failure.provider = config.provider;
-            throw failure;
-          }
-          return { payload, content };
+          return decodeResponse(raw, config, testMode);
         }
-        const detail = raw.replace(/\s+/g, ' ').slice(0, 400);
+
+        const detail = responseDetail(raw);
         const error = new Error(response.httpErrorMessage(result.status, detail));
         error.status = result.status;
         error.detail = detail;
@@ -102,13 +136,17 @@
           if (typeof isCurrent === 'function' && !isCurrent()) {
             throw new Error('题目或 AI 配置已变化，请重新发起请求。');
           }
+
           continue;
         }
+
         throw error;
       }
+
       throw lastError || new Error('AI 请求失败。');
     }
 
+    // 不论传输是否遵守中止信号，超时后都丢弃返回结果并清理定时器。
     async function withAiTimeoutV99(timeoutSeconds, runner) {
       const controller = new AbortController();
       let timedOut = false;
@@ -119,12 +157,14 @@
       try {
         const value = await runner(controller);
         if (timedOut) { throw new Error(`AI 请求超过 ${timeoutSeconds} 秒，已自动停止。`); }
+
         return value;
       } catch (error) {
         if (error?.name !== 'AbortError' || !timedOut) { throw error; }
       } finally {
         clearTimeout(timer);
       }
+
       throw new Error(`AI 请求超过 ${timeoutSeconds} 秒，已自动停止。`);
     }
 

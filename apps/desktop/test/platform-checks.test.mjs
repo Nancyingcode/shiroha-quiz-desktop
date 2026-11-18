@@ -71,6 +71,7 @@ test('platform lint accepts a CSS-only desktop frontend and still checks nested 
       "  const value = 'inner';",
       '  console.log(value);',
       '}',
+      '',
       'printValue();',
       'console.log(value);',
       '',
