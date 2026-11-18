@@ -34,7 +34,8 @@ test('platform lint accepts a CSS-only desktop frontend and still checks nested 
   }
   const script = path.join(temporary, 'apps/desktop/scripts/lint-platform.mjs');
   await copyFile(path.join(desktop, 'scripts/lint-platform.mjs'), script);
-  for (const name of ['eslint.platform.config.mjs', 'eslint.rules.mjs', 'eslint.migration.mjs']) {
+  const configs = ['eslint.platform.config.mjs', 'eslint.rules.mjs', 'eslint.migration.mjs', 'eslint.readability.mjs'];
+  for (const name of configs) {
     await copyFile(path.join(desktop, name), path.join(temporary, 'apps/desktop', name));
   }
   await copyFile(path.join(root, 'apps/web/training.js'), path.join(temporary, 'apps/web/training.js'));

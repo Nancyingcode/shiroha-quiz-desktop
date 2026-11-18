@@ -52,6 +52,7 @@ async function fixture(t) {
   }
   for (const name of [
     'eslint.config.mjs', 'eslint.platform.config.mjs', 'eslint.rules.mjs', 'eslint.migration.mjs',
+    'eslint.readability.mjs',
     'commitlint.config.mjs',
   ]) {
     await copyFile(path.join(desktop, name), path.join(project, name));

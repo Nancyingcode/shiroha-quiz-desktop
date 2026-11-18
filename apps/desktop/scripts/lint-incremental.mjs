@@ -5,11 +5,24 @@ import { isDeepStrictEqual } from 'node:util';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ESLint } from 'eslint';
+import { readabilityReportRules } from '../eslint.readability.mjs';
 
 const root = fileURLToPath(new URL('../../..', import.meta.url));
+const readabilityReport = process.argv.includes('--readability-report');
+const complete = process.argv.includes('--complete');
+if (readabilityReport && complete) {
+  throw new Error('请单独运行 --readability-report。');
+}
 const lint = new ESLint({
   cwd: root,
   overrideConfigFile: fileURLToPath(new URL('../eslint.platform.config.mjs', import.meta.url)),
+  ...(readabilityReport && {
+    ruleFilter: ({ ruleId }) => Object.hasOwn(readabilityReportRules, ruleId),
+    overrideConfig: {
+      rules: readabilityReportRules,
+      linterOptions: { reportUnusedDisableDirectives: 'off', reportUnusedInlineConfigs: 'off' },
+    },
+  }),
 });
 // Git 列表包含未跟踪的新源码并遵守忽略规则；新路径不继承历史文件的迁移例外。
 // 历史门禁外文件已迁移，增量检查不再排除它们。
@@ -48,7 +61,6 @@ async function verifyOrdinaryPath(target) {
     throw new Error(`无法检查非普通 JavaScript 文件：${name}`);
   }
 }
-const complete = process.argv.includes('--complete');
 const desktop = fileURLToPath(new URL('..', import.meta.url));
 const pathKey = (/** @type {string} */ file) => path.resolve(file);
 /** @type {string[]} */
@@ -59,7 +71,9 @@ if (complete) {
   for (const name of ['apps', 'apps/desktop']) {
     if ((await lstat(path.join(root, name))).isSymbolicLink()) { throw new Error(`无法检查链接：${name}`); }
   }
-  for (const name of ['eslint.config.mjs', 'eslint.platform.config.mjs', 'eslint.rules.mjs', 'eslint.migration.mjs']) {
+  const configNames = ['eslint.config.mjs', 'eslint.platform.config.mjs', 'eslint.rules.mjs', 'eslint.migration.mjs',
+    'eslint.readability.mjs'];
+  for (const name of configNames) {
     const info = await lstat(path.join(desktop, name));
     const mode = modes.get(`apps/desktop/${name}`);
     if (!info.isFile() || (mode !== undefined && mode !== '100644' && mode !== '100755')) {
@@ -127,7 +141,7 @@ if (complete) {
     await inspect(path.join(root, name), true);
   }
   for (const name of await readdir(desktop)) {
-    if (/\.config\.mjs$/.test(name) || ['eslint.rules.mjs', 'eslint.migration.mjs'].includes(name)) {
+    if (/\.config\.mjs$/.test(name) || configNames.includes(name)) {
       await inspect(path.join(desktop, name));
     }
   }
@@ -172,7 +186,7 @@ if (complete) {
   if (!Reflect.set(fsPromises, 'readFile', guardedReadFile)) { throw new Error('无法保护 ESLint 发现阶段读取'); }
   try {
     desktopFiles = await discover(desktop, path.join(desktop, 'eslint.config.mjs'), [
-      'scripts', 'test', '*.config.mjs', 'eslint.rules.mjs', 'eslint.migration.mjs',
+      'scripts', 'test', ...configNames,
     ]);
     const platformFiles = await discover(root, path.join(desktop, 'eslint.platform.config.mjs'), [
       'apps/web/platform/**/*.js', 'apps/web/training.js', 'test/dual-platform/**/*.cjs',
@@ -223,12 +237,28 @@ if (complete && desktopLint) {
     console.log(`Checked ${different.length} files again with differing desktop configuration.`);
   }
 }
-const formatter = await lint.loadFormatter('stylish');
-const output = await formatter.format(results);
-if (output) {
-  console.log(output);
-}
-console.log(`Checked ${files.length} complete handwritten JavaScript files (full target rules).`);
-if (results.some((result) => result.errorCount || result.warningCount)) {
-  process.exitCode = 1;
+if (readabilityReport) {
+  const report = results.map((result) => ({
+    file: path.relative(root, result.filePath).split(path.sep).join('/'),
+    diagnostics: result.messages.map(({
+      ruleId,
+      line,
+      column,
+      message,
+    }) => ({ ruleId, line, column, message })),
+  }));
+  console.log(JSON.stringify(report, null, 2));
+  if (report.some(({ diagnostics }) => diagnostics.some(({ ruleId }) => !ruleId))) {
+    process.exitCode = 1;
+  }
+} else {
+  const formatter = await lint.loadFormatter('stylish');
+  const output = await formatter.format(results);
+  if (output) {
+    console.log(output);
+  }
+  console.log(`Checked ${files.length} complete handwritten JavaScript files (full target rules).`);
+  if (results.some((result) => result.errorCount || result.warningCount)) {
+    process.exitCode = 1;
+  }
 }

@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { ESLint } from 'eslint';
 import { baseRules, semanticRules, styleRules } from '../eslint.rules.mjs';
+import { readabilityReportRules } from '../eslint.readability.mjs';
 import { repositoryFixture } from './lint-fixture-helpers.mjs';
 
 const desktop = fileURLToPath(new URL('..', import.meta.url));
@@ -26,6 +27,135 @@ const probes = [
   'apps/desktop/new-probe.js',
   'test/new-probe.js',
 ];
+
+test('readability pilot counts code lines and accepts comments tied to their definitions', async () => {
+  const filename = 'apps/web/training.js';
+  const lint = linter();
+  const source = [
+    'function short() {',
+    '  const a = 1;',
+    '',
+    '  // 空行和注释不计入函数长度。',
+    '  const b = {',
+    '    value: 2,',
+    '  };',
+    '}',
+    '',
+    '/** @returns {number} */',
+    'function long() {',
+    '  const a = 1;',
+    '  const b = 2;',
+    '  const c = 3;',
+    '  return a + b + c;',
+    '}',
+    '',
+    'const rules = {',
+    '  // 汇总导入选项的匹配值。',
+    '  read() {',
+    '    const a = 1;',
+    '    const b = 2;',
+    '    const c = 3;',
+    '    return a + b + c;',
+    '  },',
+    '};',
+  ].join('\n');
+  const [pilot] = await lint.lintText(source, { filePath: filename });
+  const [adjacent] = await lint.lintText(source, { filePath: 'apps/web/practice-selection.js' });
+  const hits = (/** @type {ESLint.LintResult} */ result) => result.messages
+    .filter(({ ruleId }) => ruleId === 'readability/explain-function').map(({ line }) => line);
+  assert.deepEqual(hits(pilot), [11]);
+  assert.deepEqual(hits(adjacent), []);
+});
+
+test('readability rule locates regexp literals and global constructors', async () => {
+  const [result] = await linter().lintText([
+    'const base = 1; // 这条说明属于前一行。',
+    'const matcher = /x/;',
+    '// 用运行时输入构造精确匹配。',
+    'const configured = new RegExp(input);',
+    'const missing = RegExp(input);',
+    'function build(RegExp) {',
+    '  return new RegExp(input);',
+    '}',
+    '',
+    '// 说明只覆盖第一个模式。',
+    'const pair = [/x/, /y/];',
+  ].join('\n'), { filePath: 'apps/web/training.js' });
+  const matches = result.messages.filter(({ ruleId }) => ruleId === 'readability/explain-regexp');
+  assert.deepEqual(matches.map(({ line }) => line), [2, 5, 11]);
+});
+
+test('readability gate covers adopted modules and leaves neighboring files eligible for gradual adoption', async () => {
+  const lint = linter();
+  const source = 'function testPattern(value) {\n  return /x/.test(value);\n}\nconsole.log(testPattern(1));\n';
+  const pairs = [
+    ['apps/web/platform/index.js', 'apps/web/platform/browser-network.js'],
+    ['apps/web/study-sessions.js', 'apps/web/practice-page.js'],
+    ['apps/web/ai-prompts.js', 'apps/web/ai-results.js'],
+  ];
+  for (const [filePath, neighbor] of pairs) {
+    const [adopted] = await lint.lintText(source, { filePath });
+    const [pending] = await lint.lintText(source, { filePath: neighbor });
+    const matches = (/** @type {ESLint.LintResult} */ result) => result.messages
+      .filter(({ ruleId }) => ruleId && Object.hasOwn(readabilityReportRules, ruleId))
+      .map(({ ruleId }) => ruleId);
+    assert.deepEqual(matches(adopted), ['readability/explain-regexp', '@stylistic/padding-line-between-statements']);
+    assert.deepEqual(matches(pending), []);
+  }
+});
+
+test('readability padding respects complete statements and leading comments', async () => {
+  const lint = linter();
+  const [result] = await lint.lintText([
+    'if (valid) {',
+    '  run();',
+    '} else {',
+    '  cancel();',
+    '}',
+    '// 记录操作结果。',
+    'save();',
+    'try {',
+    '  run();',
+    '} catch (error) {',
+    '  cancel(error);',
+    '} finally {',
+    '  close();',
+    '}',
+    'const read = () => 1;',
+    'run();',
+    'rows.forEach((row) => save(row));',
+    'run();',
+    'class Builder {',
+    '  create() {}',
+    '  close() {}',
+    '}',
+    'const options = {',
+    '  read() {},',
+    '  write() {},',
+    '};',
+  ].join('\n'), { filePath: 'apps/web/training.js' });
+  const matches = result.messages.filter(({ ruleId }) => ruleId && Object.hasOwn(readabilityReportRules, ruleId));
+  assert.deepEqual(matches.map(({ line }) => line), [7, 15, 16, 18, 21, 25]);
+  assert(matches.every(({ fix }) => fix));
+});
+
+test('readability report is read-only and counts long blocks at the boundary', async (t) => {
+  const f = await repositoryFixture(t);
+  const file = 'apps/web/app.js';
+  const full = path.join(f.temporary, file);
+  const lines = Array.from({ length: 20 }, () => '  console.log(1);');
+  const source = ['if (true) {', ...lines, '}', 'if (true) {', ...lines, '  console.log(2);', '}', ''].join('\n');
+  await writeFile(full, source);
+  const recorded = f.run('lint-incremental.mjs', ['--readability-report']);
+  assert.equal(recorded.status, 0, recorded.stderr + recorded.stdout);
+  const files = /** @type {{file: string, diagnostics: {ruleId: string, line: number}[]}[]} */ (
+    JSON.parse(recorded.stdout)
+  );
+  const blockHits = files.find((entry) => entry.file === file)?.diagnostics
+    .filter(({ ruleId }) => ruleId === 'readability/review-long-block');
+  assert.deepEqual(blockHits?.map(({ line }) => line), [23]);
+  assert.equal(await readFile(full, 'utf8'), source);
+});
 
 const invalidCases = [
   ['no-var', 'var value = 1; console.log(value);\n'],

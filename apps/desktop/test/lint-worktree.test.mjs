@@ -45,7 +45,7 @@ test(
     await writeFile(probe, "console.log('valid');\n");
     const valid = f.run('lint-incremental.mjs');
     assert.equal(valid.status, 0, valid.stderr + valid.stdout);
-    assert.match(valid.stdout, /Checked 7 complete/);
+    assert.match(valid.stdout, /Checked 8 complete/);
   },
 );
 

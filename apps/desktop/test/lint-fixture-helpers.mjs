@@ -33,7 +33,8 @@ export async function repositoryFixture(t, environment = process.env) {
   await mkdir(path.join(temporary, 'apps/web'), { recursive: true });
   await mkdir(path.join(temporary, 'test/new-slice'), { recursive: true });
   await writeFile(path.join(temporary, 'apps/web/app.js'), "console.log('valid');\n");
-  for (const name of ['eslint.rules.mjs', 'eslint.migration.mjs', 'eslint.platform.config.mjs']) {
+  const configs = ['eslint.rules.mjs', 'eslint.migration.mjs', 'eslint.platform.config.mjs', 'eslint.readability.mjs'];
+  for (const name of configs) {
     await copyFile(path.join(desktop, name), path.join(project, name));
   }
   for (const name of ['lint-incremental.mjs', 'lint-debt.mjs']) {

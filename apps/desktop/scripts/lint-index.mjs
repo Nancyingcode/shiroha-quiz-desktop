@@ -13,7 +13,8 @@ const staged = git(['diff', '--cached', '--no-ext-diff', '--no-renames', '--name
   .split('\0').filter((file) => /\.(?:js|mjs|cjs)$/i.test(file));
 const configPaths = [
   '.husky/pre-commit', 'apps/desktop/eslint.platform.config.mjs',
-  'apps/desktop/eslint.rules.mjs', 'apps/desktop/eslint.migration.mjs', 'apps/desktop/package.json',
+  'apps/desktop/eslint.rules.mjs', 'apps/desktop/eslint.migration.mjs', 'apps/desktop/eslint.readability.mjs',
+  'apps/desktop/package.json',
   'apps/desktop/scripts/lint-index.mjs',
 ];
 if (staged.length || changed.some((file) => configPaths.includes(file))) {

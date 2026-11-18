@@ -22,6 +22,16 @@ test('练习模块独立提供题号范围与精确单题格式', () => {
   assert.equal(api.formatExactPracticeNumbersV58916([3]), '3-3');
 });
 
+test('题号列表中任一片段无效时拒绝整次选择', () => {
+  const api = training();
+  assert.deepEqual(plain(api.parsePracticeNumberRangeV58916('1,6', 5)), {
+    indexes: [], error: '题号格式或范围有误：6',
+  });
+  assert.deepEqual(plain(api.parsePracticeNumberRangeV58916('03、1~2；2—4，4至5', 5)), {
+    indexes: [0, 1, 2, 3, 4], error: '',
+  });
+});
+
 test('有效计时按运行段累计，重复暂停、继续及停止后重试不增加用时', () => {
   const api = training();
   let clock = api.createClock(100);

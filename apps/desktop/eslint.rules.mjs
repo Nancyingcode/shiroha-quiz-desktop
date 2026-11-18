@@ -2,6 +2,7 @@ import js from '@eslint/js';
 import stylistic from '@stylistic/eslint-plugin';
 import importX from 'eslint-plugin-import-x';
 import { styleDebt, semanticDebt } from './eslint.migration.mjs';
+import { readabilityGate, readabilityPlugin } from './eslint.readability.mjs';
 
 /** @type {import('eslint').Linter.RulesRecord} */
 export const baseRules = {
@@ -177,7 +178,7 @@ export function createConfig({ desktop = false, debt = false, semanticOnly = fal
     { ignores: excludedFiles.map(relative) },
     {
       files: ['**/*.js', '**/*.mjs', '**/*.cjs'].map(extensionPattern),
-      plugins: { '@stylistic': stylistic },
+      plugins: { '@stylistic': stylistic, readability: readabilityPlugin },
       languageOptions: { ecmaVersion: 'latest' },
       rules: semanticOnly ? semanticRules : { ...baseRules, ...semanticRules, ...styleRules },
     },
@@ -231,6 +232,12 @@ export function createConfig({ desktop = false, debt = false, semanticOnly = fal
       ].map(relative),
       rules: { '@stylistic/max-statements-per-line': ['error', { max: 1 }] },
     },
+    ...(semanticOnly ? [] : [{
+      files: [
+        'apps/web/training.js', 'apps/web/platform/index.js', 'apps/web/study-sessions.js', 'apps/web/ai-prompts.js',
+      ].map(relative),
+      rules: readabilityGate,
+    }]),
     {
       files: [
         'apps/web/quiz-core.js', 'apps/web/text-answers.js', 'apps/web/training.js',

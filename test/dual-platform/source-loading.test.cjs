@@ -314,3 +314,31 @@ test('切换练习或考试时先清理旧计时器且只清理一次', () => {
     assert.equal(cleared.length, 1);
   }
 });
+
+test('切换练习在旧轮次仍有效时依次清理计时器和弹窗', () => {
+  const events = [];
+  const context = vm.createContext({ clearInterval: (timer) => events.push(timer) });
+  runWebScripts(context, ['study-sessions.js']);
+  const session = context.ShirohaStudySessions.createPractice();
+  const previous = session.current;
+  const dialog = {
+    close() {
+      assert.equal(session.timer, null);
+      assert.strictEqual(session.current, previous);
+      assert.equal(session.request, 0);
+      events.push('close');
+    },
+    remove() {
+      assert.strictEqual(session.dialog, dialog);
+      events.push('remove');
+    },
+  };
+  session.timer = 0;
+  session.dialog = dialog;
+  const next = {};
+  session.current = next;
+  assert.deepEqual(events, [0, 'close', 'remove']);
+  assert.equal(session.dialog, null);
+  assert.strictEqual(session.current, next);
+  assert.equal(session.request, 1);
+});
