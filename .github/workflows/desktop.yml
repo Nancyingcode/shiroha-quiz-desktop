@@ -74,23 +74,27 @@ jobs:
           LINT_EXPECTED_SHA: ${{ inputs.release_commit || github.sha }}
         run: pnpm run lint:ci
       - name: Run tests and preserve their output
+        id: test
         run: |
           $log = Join-Path $env:RUNNER_TEMP 'pnpm-test.log'
           pnpm test 2>&1 | Tee-Object -FilePath $log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Surface failing test names in annotations
-        if: failure()
+        if: failure() && steps.test.outcome == 'failure'
         run: |
           $log = Join-Path $env:RUNNER_TEMP 'pnpm-test.log'
           if (-not (Test-Path $log)) {
             Write-Output '::error title=test log::pnpm test 未生成日志，无法提取失败用例'
             exit 0
           }
-          $lines = Get-Content -LiteralPath $log
-          $failing = @($lines | Select-String -Pattern '^\s*✖ ' | ForEach-Object { $_.Line.Trim() })
-          if ($failing.Count -eq 0) {
-            $failing = @($lines | Select-String -Pattern 'not ok ' | ForEach-Object { $_.Line.Trim() })
+          $summary = Select-String -LiteralPath $log -Pattern '^✖ failing tests:$' | Select-Object -Last 1
+          if (-not $summary) {
+            Write-Output '::error title=test log::pnpm test 已失败，日志中未发现 Node.js 测试失败摘要'
+            exit 0
           }
+          # 失败摘要之前的输出包含用于验证门禁的预期 lint 错误。
+          $lines = Get-Content -LiteralPath $log | Select-Object -Skip $summary.LineNumber
+          $failing = @($lines | Select-String -Pattern '^✖ ' | ForEach-Object { $_.Line })
           $position = 0
           foreach ($name in ($failing | Select-Object -First 6)) {
             $position += 1

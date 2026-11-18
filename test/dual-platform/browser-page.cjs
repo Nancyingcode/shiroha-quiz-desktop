@@ -1311,8 +1311,12 @@ for (const mode of ['single', 'total']) {
     const initial = webState(); initial.records = [];
     initial.settings.aiImportV99 = {};
     initial.banks = [initial.banks[0]]; initial.banks[0].questions = [initial.banks[0].questions[0]];
-    const page = await pageFor(t, JSON.stringify(initial)); page.setDefaultTimeout(5000);
-    await page.clock.install();
+    const clockTime = new Date('2026-11-17T12:00:00Z');
+    const page = await pageFor(t, JSON.stringify(initial), '', null, {}, clockTime);
+    page.setDefaultTimeout(5000);
+    await page.locator('body[data-storage-state="ready"]').waitFor();
+    // 让练习用时只由快进的时间决定，避免将 CI 的操作延迟计入断言。
+    await page.clock.pauseAt(clockTime.getTime() + 60_000);
     await page.locator('.nav[data-view="practice"]').click(); await page.locator('#practice-submit-mode').selectOption(mode); await page.locator('#start-practice-btn').click();
     await page.locator('.toast-item button').evaluateAll((buttons) => buttons.forEach((button) => button.click()));
     await page.locator('#practice-card .option[data-key="B"]').click();
