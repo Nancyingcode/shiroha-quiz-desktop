@@ -282,6 +282,8 @@ export function createConfig({ desktop = false, debt = false, semanticOnly = fal
         'test/dual-platform/ai-results.test.cjs', 'test/dual-platform/business.test.cjs',
         'test/dual-platform/practice-selection-performance.test.cjs', 'test/dual-platform/settings-action-page.cjs',
         'test/web-ai-practice/wrong-analysis.cjs',
+        'apps/desktop/test/native-services.test.mjs', 'apps/web/platform/browser-credentials.js',
+        'test/codebuddy-cli-stdio/probe.mjs', 'test/dual-platform/select-page.cjs',
       ].map(relative),
       rules: {
         '@stylistic/max-len': ['error', {

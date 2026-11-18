@@ -16,7 +16,10 @@ const CASE_TIMEOUT_MS = 25_000;
 const FAKE_KEY = 'shiroha-stdio-fake-key-never-real';
 const FAKE_AUTH_TOKEN = 'shiroha-stdio-fake-auth-never-real';
 const RESPONSE_TEXT = '{"ok":true,"text":"白羽测试"}';
-const CASES = ['stop', 'length', 'content_filter', 'eof', 'done_only', 'malformed', 'tool', 'cancel', 'timeout', 'password', 'interrupt'];
+const CASES = [
+  'stop', 'length', 'content_filter', 'eof', 'done_only', 'malformed', 'tool', 'cancel', 'timeout', 'password',
+  'interrupt',
+];
 
 function environment(dirs, endpoint) {
   return {
@@ -74,7 +77,11 @@ function argumentsFor(inputFormat = 'text') {
 
 async function listeningPorts(pid) {
   const powershell = path.join(process.env.SystemRoot, 'System32/WindowsPowerShell/v1.0/powershell.exe');
-  const command = `$ErrorActionPreference='Stop'; @(Get-NetTCPConnection -State Listen | Where-Object OwningProcess -eq ${pid} | Select-Object LocalAddress,LocalPort) | ConvertTo-Json -Compress`;
+  const command = (
+    `$ErrorActionPreference='Stop'; @(Get-NetTCPConnection -State Listen | Where-Object OwningProcess -eq ${
+      pid
+    } | Select-Object LocalAddress,LocalPort) | ConvertTo-Json -Compress`
+  );
   const { stdout } = await promisify(execFile)(
     powershell,
     ['-NoProfile', '-NonInteractive', '-Command', command],
@@ -153,7 +160,11 @@ async function runCase(executable, runRoot, scenario, guarded = false) {
       controlResponses.push(summary);
       events.push({ type: 'control_response', response: summary });
       if (response?.subtype !== 'success') { stop('control-error'); return; }
-      if (response.request_id === 'probe-initialize') { sendControl('get_auth_methods'); } else if (response.request_id === 'probe-get_auth_methods') { sendControl('logout'); } else if (response.request_id === 'probe-logout') {
+      if (response.request_id === 'probe-initialize') {
+        sendControl('get_auth_methods');
+      } else if (response.request_id === 'probe-get_auth_methods') {
+        sendControl('logout');
+      } else if (response.request_id === 'probe-logout') {
         child.stdin.write(`${JSON.stringify({
           type: 'user', session_id: '', message: { role: 'user', content: prompt }, parent_tool_use_id: null,
         })}\n`);
@@ -354,7 +365,9 @@ async function runCase(executable, runRoot, scenario, guarded = false) {
   if (relay) { markers.push(relay.headers['x-shiroha-run']); }
   const markerFiles = await scanMarkers(isolated, markers);
   let toolFileExists = false;
-  try { await access(path.join(dirs.work, 'tool-sentinel.txt')); toolFileExists = true; } catch (error) { if (error.code !== 'ENOENT') { throw error; } }
+  try {
+    await access(path.join(dirs.work, 'tool-sentinel.txt')); toolFileExists = true;
+  } catch (error) { if (error.code !== 'ENOENT') { throw error; } }
   const modelCalls = calls.filter((call) => call.method === 'POST' && call.url === '/chat/completions');
   const observation = {
     scenario,
@@ -391,7 +404,10 @@ async function runCase(executable, runRoot, scenario, guarded = false) {
       },
     } : {}),
   };
-  await writeFile(path.join(runRoot, `${scenario}.json`), JSON.stringify({ observation, events, stderr, calls }, null, 2));
+  await writeFile(
+    path.join(runRoot, `${scenario}.json`),
+    JSON.stringify({ observation, events, stderr, calls }, null, 2),
+  );
   console.log(JSON.stringify(observation));
   assert.deepEqual(serverErrors, [], 'Probe infrastructure failed');
   assert.ok(modelCalls.length > 0, 'No local model request observed');
@@ -401,7 +417,9 @@ async function runCase(executable, runRoot, scenario, guarded = false) {
 
 async function main() {
   assert.equal(process.platform, 'win32', 'This probe targets the fixed Windows executable');
-  const executable = path.resolve(process.argv[2] ?? path.join(ROOT, '.reports/codebuddy-cli-stdio/runtime/codebuddy.exe'));
+  const executable = path.resolve(
+    process.argv[2] ?? path.join(ROOT, '.reports/codebuddy-cli-stdio/runtime/codebuddy.exe'),
+  );
   assert.equal(createHash('sha256').update(await readFile(executable)).digest('hex'), EXPECTED_HASH);
   const guarded = process.argv.includes('--guarded');
   const requested = process.argv[3] === '--guarded' ? undefined : process.argv[3];

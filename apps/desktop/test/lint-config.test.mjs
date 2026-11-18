@@ -437,6 +437,8 @@ test('line length pilot accepts 120 characters and rejects 121 in selected modul
     'test/dual-platform/ai-results.test.cjs', 'test/dual-platform/business.test.cjs',
     'test/dual-platform/practice-selection-performance.test.cjs', 'test/dual-platform/settings-action-page.cjs',
     'test/web-ai-practice/wrong-analysis.cjs',
+    'apps/desktop/test/native-services.test.mjs', 'apps/web/platform/browser-credentials.js',
+    'test/codebuddy-cli-stdio/probe.mjs', 'test/dual-platform/select-page.cjs',
   ]) {
     const [result] = await lint.lintText(source, { filePath });
     assert.deepEqual(result.messages.filter((m) => m.ruleId === rule).map((m) => m.line), [2], filePath);

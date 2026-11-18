@@ -9,7 +9,11 @@ const { addSharedStyles } = require('./styles.cjs');
 let browser; let server;
 test.before(async () => {
   server = await startServer(WEB_ROOT);
-  browser = await chromium.launch({ headless: true, ...(process.env.SHIROHA_BROWSER_EXECUTABLE ? { executablePath: process.env.SHIROHA_BROWSER_EXECUTABLE } : { channel: 'msedge' }) });
+  browser = await chromium.launch({
+    headless: true,
+    ...(process.env.SHIROHA_BROWSER_EXECUTABLE
+      ? { executablePath: process.env.SHIROHA_BROWSER_EXECUTABLE } : { channel: 'msedge' }),
+  });
 });
 test.after(async () => {
   await browser?.close(); await server?.close();
@@ -17,7 +21,13 @@ test.after(async () => {
 
 async function component(t, desktop = false) {
   const page = await browser.newPage({ reducedMotion: 'reduce' }); t.after(() => page.close());
-  await page.setContent(`<body class="${desktop ? 'desktop-mist-blue' : ''}"><label>名称<input id="name" type="text"></label><label>说明<textarea id="note"></textarea></label><label>题型<select id="type"><option value="all">全部题型</option><option value="single">单选题</option><option value="disabled" disabled>不可用题型</option><option value="multiple">多选题</option></select></label><button id="next">下一项</button></body>`);
+  await page.setContent(
+    `<body class="${desktop ? 'desktop-mist-blue' : ''}"><label>名称<input id="name" type="text"></label>`
+      + '<label>说明<textarea id="note"></textarea></label><label>题型<select id="type">'
+      + '<option value="all">全部题型</option><option value="single">单选题</option>'
+      + '<option value="disabled" disabled>不可用题型</option><option value="multiple">多选题</option>'
+      + '</select></label><button id="next">下一项</button></body>',
+  );
   await addSharedStyles(page);
   if (desktop) { await page.addStyleTag({ path: path.join(WEB_ROOT, '../desktop/frontend/desktop.css') }); }
   return page;
@@ -47,7 +57,10 @@ for (const desktop of [false, true]) {
     await select.click();
     assert.equal(await select.evaluate((el) => el.matches(':open')), true);
     await select.getByRole('option', { name: '全部题型', exact: true }).hover();
-    assert.equal(await select.evaluate((el) => globalThis.getComputedStyle(el.options[0]).backgroundColor), 'rgb(230, 244, 255)');
+    assert.equal(
+      await select.evaluate((el) => globalThis.getComputedStyle(el.options[0]).backgroundColor),
+      'rgb(230, 244, 255)',
+    );
     await page.getByRole('option', { name: '单选题', exact: true }).click();
     assert.equal(await select.inputValue(), 'single');
     assert.equal(await select.evaluate((el) => el.matches(':open')), false);
@@ -144,13 +157,23 @@ test('收起的长题库名称不会挤掉下拉箭头', async (t) => {
   const { model } = await session.send('DOM.getBoxModel', { backendNodeId: arrow.backendNodeId });
   const control = await select.boundingBox();
   const horizontal = model.border.filter((_, index) => index % 2 === 0);
-  assert.ok(Math.min(...horizontal) >= control.x && Math.max(...horizontal) <= control.x + control.width, '箭头必须完整留在选择框内');
+  assert.ok(
+    Math.min(...horizontal) >= control.x && Math.max(...horizontal) <= control.x + control.width,
+    '箭头必须完整留在选择框内',
+  );
 });
 
 test('真实页面动态下拉框保留题型筛选、题量联动与紧凑分页', async (t) => {
   const context = await browser.newContext(); t.after(() => context.close());
-  await context.addInitScript((data) => globalThis.localStorage.setItem('shiroha_quiz_state_v28_4_c1', JSON.stringify(data)), webState());
-  await context.route('**/*', (route) => (new URL(route.request().url()).origin === new URL(server.url).origin ? route.continue() : route.abort()));
+  await context.addInitScript(
+    (data) => globalThis.localStorage.setItem('shiroha_quiz_state_v28_4_c1', JSON.stringify(data)),
+    webState(),
+  );
+  await context.route(
+    '**/*',
+    (route) => (new URL(route.request().url()).origin === new URL(server.url).origin
+      ? route.continue() : route.abort()),
+  );
   const page = await context.newPage();
   await page.goto(server.url);
   await page.locator('body[data-storage-state="ready"]').waitFor();

@@ -5,7 +5,23 @@ import vm from 'node:vm';
 
 test('整体撤销凭据后同步 Harness 修订，仍能保存直接 API 执行方式', async () => {
   let revision = 1;
-  const status = () => ({ mode: 'api', adapter: 'codex', model: '', timeoutSeconds: 120, credentialStatus: 'missing', runtimePath: '', runtimeVersion: '', runtimeSource: 'managed', runtimeState: 'unprepared', runtimeReceivedBytes: 0, runtimeTotalBytes: 0, ready: false, reason: '待配置', revision, busy: false });
+  const status = () => ({
+    mode: 'api',
+    adapter: 'codex',
+    model: '',
+    timeoutSeconds: 120,
+    credentialStatus: 'missing',
+    runtimePath: '',
+    runtimeVersion: '',
+    runtimeSource: 'managed',
+    runtimeState: 'unprepared',
+    runtimeReceivedBytes: 0,
+    runtimeTotalBytes: 0,
+    ready: false,
+    reason: '待配置',
+    revision,
+    busy: false,
+  });
   const scope = {
     Response: globalThis.Response,
     crypto: globalThis.crypto,
@@ -27,7 +43,9 @@ test('整体撤销凭据后同步 Harness 修订，仍能保存直接 API 执行
       },
     },
   };
-  for (const file of ['adapter.js', 'harness.js']) { vm.runInNewContext(await readFile(new URL(`../frontend/${file}`, import.meta.url), 'utf8'), scope); }
+  for (const file of ['adapter.js', 'harness.js']) {
+    vm.runInNewContext(await readFile(new URL(`../frontend/${file}`, import.meta.url), 'utf8'), scope);
+  }
   const platform = vm.runInNewContext('ShirohaPlatform', scope);
   await platform.harness.initialize();
   await platform.credentials.reset();
@@ -87,7 +105,8 @@ test('desktop AI configuration and redirect failures have actionable messages', 
 });
 
 test('desktop credentials expose status only and commit staged secrets explicitly', async () => {
-  /** @type {{command:string,args:{request:{kind:string,operation?:{kind:string}},secret?:string|null}}[]} */ const calls = [];
+  /** @type {{command:string,args:{request:{kind:string,operation?:{kind:string}},secret?:string|null}}[]} */
+  const calls = [];
   const scope = {
     Response: globalThis.Response,
     crypto: globalThis.crypto,
@@ -99,7 +118,10 @@ test('desktop credentials expose status only and commit staged secrets explicitl
     ShirohaSaveQueue: { create: () => ({}) },
     localStorage: { getItem: () => null },
     ShirohaDesktopHost: {
-      invoke: async (/** @type {string} */ command, /** @type {{request:{kind:string,operation?:{kind:string}},secret?:string|null}} */ args) => {
+      invoke: async (
+        /** @type {string} */ command,
+        /** @type {{request:{kind:string,operation?:{kind:string}},secret?:string|null}} */ args,
+      ) => {
         calls.push({ command, args });
         if (args.request.kind === 'stage') { return { id: 'staged' }; }
         if (args.request.kind === 'status') { return { state: 'remembered' }; }
@@ -163,7 +185,8 @@ test('desktop credential input preserves, replaces or clears each service throug
 });
 
 test('desktop network maps DAV methods to limited operations and rejects arbitrary methods', async () => {
-  /** @type {{command:string,args:{request:{kind:string,operation?:{kind:string}},secret?:string|null}}[]} */ const calls = [];
+  /** @type {{command:string,args:{request:{kind:string,operation?:{kind:string}},secret?:string|null}}[]} */
+  const calls = [];
   const scope = {
     Response: globalThis.Response,
     crypto: globalThis.crypto,
@@ -175,7 +198,10 @@ test('desktop network maps DAV methods to limited operations and rejects arbitra
     ShirohaSaveQueue: { create: () => ({}) },
     localStorage: { getItem: () => null },
     ShirohaDesktopHost: {
-      invoke: async (/** @type {string} */ command, /** @type {{request:{kind:string,operation?:{kind:string}},secret?:string|null}} */ args) => {
+      invoke: async (
+        /** @type {string} */ command,
+        /** @type {{request:{kind:string,operation?:{kind:string}},secret?:string|null}} */ args,
+      ) => {
         calls.push({ command, args }); return { status: 200, body: '{}' };
       },
     },

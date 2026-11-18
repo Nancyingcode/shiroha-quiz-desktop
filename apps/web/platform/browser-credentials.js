@@ -40,7 +40,9 @@
   function checkpoint(entries) {
     const previous = entries.map(([store, key]) => ({ store, key, value: store.getItem(key) }));
     return () => {
-      for (const { store, key, value } of previous) { if (value === null) { store.removeItem(key); } else { store.setItem(key, value); } }
+      for (const { store, key, value } of previous) {
+        if (value === null) { store.removeItem(key); } else { store.setItem(key, value); }
+      }
     };
   }
   /** @param {'ai'|'webdav'} service @param {Config} config @param {string} value @param {boolean} remember */
@@ -75,18 +77,29 @@
   }
   /** @param {Config & {apiKey?:string}} config @param {unknown} payload @param {AbortSignal} [signal] */
   function ai(config, payload, signal) {
-    return scope.ShirohaBrowserNetwork.ai({ ...config, apiKey: config.apiKey === MARKER ? read('ai', config) : config.apiKey }, payload, signal);
+    return scope.ShirohaBrowserNetwork.ai(
+      { ...config, apiKey: config.apiKey === MARKER ? read('ai', config) : config.apiKey },
+      payload,
+      signal,
+    );
   }
   /** @param {Config} config @param {string} password @param {string} path @param {Parameters<import('./runtime').BrowserNetwork['webdav']>[3]} options */
   function webdav(config, password, path, options) {
-    return scope.ShirohaBrowserNetwork.webdav(config, password === MARKER ? read('webdav', config) : password, path, options);
+    return scope.ShirohaBrowserNetwork.webdav(
+      config,
+      password === MARKER ? read('webdav', config) : password,
+      path,
+      options,
+    );
   }
   function readDav() {
     return JSON.parse(localStorage.getItem(DAV_CONFIG) || 'null');
   }
   /** @param {Config} config @param {string} password @param {boolean} storePassword */
   function saveDav(config, password, storePassword) {
-    const undo = checkpoint([[localStorage, DAV_CONFIG], [localStorage, DAV_LOCAL], [sessionStorage, DAV_SESSION], [localStorage, BINDINGS]]);
+    const undo = checkpoint([
+      [localStorage, DAV_CONFIG], [localStorage, DAV_LOCAL], [sessionStorage, DAV_SESSION], [localStorage, BINDINGS],
+    ]);
     try {
       if (storePassword) { set('webdav', config, password, !!config.rememberPassword); }
       localStorage.setItem(DAV_CONFIG, JSON.stringify(config));
@@ -94,7 +107,9 @@
   }
   function clearDav() {
     const undo = checkpoint([[localStorage, DAV_CONFIG], [localStorage, DAV_LOCAL], [sessionStorage, DAV_SESSION]]);
-    try { localStorage.removeItem(DAV_CONFIG); localStorage.removeItem(DAV_LOCAL); sessionStorage.removeItem(DAV_SESSION); } catch (error) { undo(); throw error; }
+    try {
+      localStorage.removeItem(DAV_CONFIG); localStorage.removeItem(DAV_LOCAL); sessionStorage.removeItem(DAV_SESSION);
+    } catch (error) { undo(); throw error; }
   }
   function reset() {
     /** @type {[Storage,string][]} */ const entries = [
@@ -107,5 +122,6 @@
     try { for (const [store, key] of entries) { store.removeItem(key); } } catch (error) { undo(); throw error; }
   }
   const api = { initialize, set, status, redact, ai, webdav, checkpoint, readDav, saveDav, clearDav, reset };
-  /** @type {typeof globalThis & {ShirohaBrowserCredentials?:typeof api}} */ (globalThis).ShirohaBrowserCredentials = api;
+  /** @type {typeof globalThis & {ShirohaBrowserCredentials?:typeof api}} */
+  (globalThis).ShirohaBrowserCredentials = api;
 })();
