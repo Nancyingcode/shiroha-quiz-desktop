@@ -31,7 +31,7 @@ Get-FileHash -Algorithm SHA256 '.\Shiroha-Quiz_0.1.0_windows-x64-setup.exe'
 以下命令是操作说明，不表示本次实现已经创建标签、推送或发布。应先获得相应授权并固定候选提交。
 
 1. 将工作流与脚本合入并推送到仓库；手动运行入口要求工作流存在于默认分支。推送 `main` 仍会触发既有 Pages 部署，须同时核对 Web 发布授权。
-2. 将桌面版本同步到 `apps/desktop/package.json`、`package-lock.json` 的顶层和根包、`src-tauri/tauri.conf.json`、`Cargo.toml` 与 `Cargo.lock` 中的应用包。保留锁文件中的其他依赖记录。
+2. 将桌面版本同步到 `apps/desktop/package.json`、`src-tauri/tauri.conf.json`、`Cargo.toml` 与 `Cargo.lock` 中的应用包；JS 依赖一致性由 pnpm 冻结安装保证。
 3. 对最终候选完成项目检查和适用验收，提交后再创建标签。标签只能是 `desktop-v<major>.<minor>.<patch>`，禁止多余前导零；当前流程始终保留预发布属性。
 4. 经授权后使用 SSH 远程推送该标签。示例：
 
@@ -53,7 +53,7 @@ gh workflow run desktop-release.yml --repo Nancyingcode/shiroha-quiz-desktop --r
 
 ## 检查与草稿
 
-构建复用现有 Node.js 24.17.0、Rust 1.99.1 和 `windows-2025`，执行现有 JavaScript、浏览器、Rust 两种 feature 检查。通过 `npm run build -- --target x86_64-pc-windows-msvc` 编译一次正常发行 EXE，再依次执行 `npm run bundle:nsis`、`npm run bundle:offline` 生成两种安装包；两者只切换打包配置，不重新编译。独立 EXE 在打包器修改二进制的安装类型标记前另存，普通安装包在离线打包前另存，避免同名文件被覆盖。正常 PR/main 检查默认不收集附件，也不创建草稿。
+构建复用现有 Node.js 24.17.0、Rust 1.99.1 和 `windows-2025`，执行现有 JavaScript、浏览器、Rust 两种 feature 检查。通过 `pnpm run build --target x86_64-pc-windows-msvc` 编译一次正常发行 EXE，再依次执行 `pnpm run bundle:nsis`、`pnpm run bundle:offline` 生成两种安装包；两者只切换打包配置，不重新编译。独立 EXE 在打包器修改二进制的安装类型标记前另存，普通安装包在离线打包前另存，避免同名文件被覆盖。正常 PR/main 检查默认不收集附件，也不创建草稿。
 
 Rust 依赖缓存由 [rust-cache](https://github.com/Swatinem/rust-cache) 按工具链、Cargo 清单和锁文件等构建输入区分，main 检查成功后保存，后续 Release 可以恢复主线缓存；不缓存工作区自身的应用制品，不跳过检查。首次缓存未命中时仍正常编译。上述 `bundle:*` 命令遵循 [Tauri 分离编译与打包的流程](https://v2.tauri.app/distribute/)，仅用于已对当前提交完成 x64 编译的目录；单独在本地生成安装包仍可使用原有 `build:nsis`、`build:offline` 命令。
 

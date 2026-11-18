@@ -40,6 +40,7 @@
 
 ## 工程与发布
 
+- [Windows 桌面工程从 npm 迁移到 pnpm 的实施计划](./superpowers/plans/2026-11-18-desktop-npm-to-pnpm.md)
 - [Web 共享样式拆分设计与 Stylelint 基线](./superpowers/specs/2026-11-10-web-styles-split.md)
 - [Web 共享样式拆分实施计划与验证](./superpowers/plans/2026-11-10-web-styles-split.md)
 - [Airbnb JavaScript 项目适配指南](../rules/javascript-style-guide.md)

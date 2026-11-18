@@ -37,11 +37,15 @@ jobs:
           ref: ${{ inputs.release_commit || github.sha }}
           fetch-depth: 0
           persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: apps/desktop/package.json
+          run_install: false
       - uses: actions/setup-node@v4
         with:
           node-version: '24.17.0'
-          cache: npm
-          cache-dependency-path: apps/desktop/package-lock.json
+          cache: pnpm
+          cache-dependency-path: apps/desktop/pnpm-lock.yaml
       - name: Initialize release collection
         if: inputs.collect_release == true
         run: node scripts/release-artifacts.mjs init
@@ -56,30 +60,30 @@ jobs:
           shared-key: windows-2025-x64
           cache-bin: false
           save-if: ${{ github.ref == 'refs/heads/main' }}
-      - run: npm ci --no-audit --no-fund
+      - run: pnpm install --frozen-lockfile
       - name: Check pull request commit messages
         if: github.event_name == 'pull_request'
         env:
           COMMITLINT_FROM: ${{ github.event.pull_request.base.sha }}
           COMMITLINT_TO: ${{ github.event.pull_request.head.sha }}
-        run: npm run commitlint -- --from "$env:COMMITLINT_FROM" --to "$env:COMMITLINT_TO" --verbose
-      - run: npm run typecheck
+        run: pnpm run commitlint --from "$env:COMMITLINT_FROM" --to "$env:COMMITLINT_TO" --verbose
+      - run: pnpm run typecheck
       - name: CI lint
         env:
           GITHUB_TOKEN: ${{ github.token }}
           LINT_EXPECTED_SHA: ${{ inputs.release_commit || github.sha }}
-        run: npm run lint:ci
+        run: pnpm run lint:ci
       - name: Run tests and preserve their output
         run: |
-          $log = Join-Path $env:RUNNER_TEMP 'npm-test.log'
-          npm test 2>&1 | Tee-Object -FilePath $log
+          $log = Join-Path $env:RUNNER_TEMP 'pnpm-test.log'
+          pnpm test 2>&1 | Tee-Object -FilePath $log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Surface failing test names in annotations
         if: failure()
         run: |
-          $log = Join-Path $env:RUNNER_TEMP 'npm-test.log'
+          $log = Join-Path $env:RUNNER_TEMP 'pnpm-test.log'
           if (-not (Test-Path $log)) {
-            Write-Output '::error title=test log::npm test 未生成日志，无法提取失败用例'
+            Write-Output '::error title=test log::pnpm test 未生成日志，无法提取失败用例'
             exit 0
           }
           $lines = Get-Content -LiteralPath $log
@@ -100,24 +104,24 @@ jobs:
             Write-Output "::error title=assertion::${message}"
           }
           Write-Output "::error title=failure count::共 $($failing.Count) 个失败用例"
-      - run: npm run test:web-platform
-      - run: npm run test:documents
+      - run: pnpm run test:web-platform
+      - run: pnpm run test:documents
       - run: node --test ../../test/web-webdav/request.test.cjs
-      - run: npm run prepare:web
+      - run: pnpm run prepare:web
       - run: cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
       - run: cargo clippy --manifest-path src-tauri/Cargo.toml --locked --all-targets -- -D warnings
       - run: cargo clippy --manifest-path src-tauri/Cargo.toml --locked --all-targets --features native-test -- -D warnings
       - run: cargo test --manifest-path src-tauri/Cargo.toml --locked
       - run: cargo test --manifest-path src-tauri/Cargo.toml --locked --features native-test
-      - run: npm run build -- --target x86_64-pc-windows-msvc
+      - run: pnpm run build --target x86_64-pc-windows-msvc
       - name: Preserve standalone executable
         if: inputs.collect_release == true
         run: node scripts/release-artifacts.mjs stage exe
-      - run: npm run bundle:nsis
+      - run: pnpm run bundle:nsis
       - name: Preserve online installer before offline build overwrites it
         if: inputs.collect_release == true
         run: node scripts/release-artifacts.mjs stage nsis
-      - run: npm run bundle:offline
+      - run: pnpm run bundle:offline
       - name: Preserve offline installer and verify release assets
         if: inputs.collect_release == true
         run: |

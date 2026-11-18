@@ -1,6 +1,41 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { spawnSync } from 'node:child_process';
+import { copyFile, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import test from 'node:test';
+
+test('running a desktop script refuses missing dependencies without installing them', async (t) => {
+  const project = await mkdtemp(path.join(tmpdir(), 'shiroha-pnpm-check-'));
+  t.after(() => rm(project, { recursive: true, force: true }));
+  await copyFile(new URL('../pnpm-workspace.yaml', import.meta.url), path.join(project, 'pnpm-workspace.yaml'));
+  await mkdir(path.join(project, 'sample'));
+  await writeFile(path.join(project, 'sample/package.json'), JSON.stringify({ name: 'sample', version: '1.0.0' }));
+  await writeFile(path.join(project, 'package.json'), JSON.stringify({
+    private: true,
+    devDependencies: { sample: 'file:./sample' },
+    scripts: { probe: 'node probe.cjs' },
+  }));
+  await writeFile(path.join(project, 'probe.cjs'), "require('node:fs').writeFileSync('started', 'yes');");
+
+  // pnpm 会让嵌套命令跳过重复检查。夹具模拟从独立终端启动，因此要读取自己的工作区配置。
+  const environment = Object.fromEntries(Object.entries(process.env)
+    .filter(([name]) => name.toLowerCase() !== 'pnpm_config_verify_deps_before_run'));
+  const result = spawnSync('pnpm run probe', {
+    cwd: project,
+    shell: true,
+    encoding: 'utf8',
+    windowsHide: true,
+    env: { ...environment, PNPM_CONFIG_OFFLINE: 'true', PNPM_CONFIG_STORE_DIR: path.join(project, 'store') },
+  });
+  assert.ifError(result.error);
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stdout + result.stderr, /ERR_PNPM_VERIFY_DEPS_BEFORE_RUN/);
+  const files = await readdir(project);
+  for (const name of ['started', 'node_modules', 'pnpm-lock.yaml']) {
+    assert(!files.includes(name), `Unexpected write before explicit install: ${name}`);
+  }
+});
 
 test('the main window is created from restored geometry instead of moved after creation', async () => {
   const config = JSON.parse(await readFile(new URL('../src-tauri/tauri.conf.json', import.meta.url), 'utf8'));

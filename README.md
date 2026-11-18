@@ -234,22 +234,22 @@ shiroha-quiz/
 
 ### Windows 桌面
 
-需要 Node.js 24+、npm、Rust stable（Windows MSVC 工具链）、Visual Studio C++ 构建工具 / Windows SDK 和 WebView2 Runtime。安装依赖前先退出使用当前工程依赖的开发窗口及相关进程。
+需要 Node.js 24+、pnpm（版本由 `apps/desktop/package.json` 的 `packageManager` 固定）、Rust stable（Windows MSVC 工具链）、Visual Studio C++ 构建工具 / Windows SDK 和 WebView2 Runtime。安装依赖前先退出使用当前工程依赖的开发窗口及相关进程。
 
 ```powershell
 cd apps/desktop
-npm install
-npm run dev
+pnpm install
+pnpm run dev
 ```
 
 开发命令自动从 `apps/web` 生成桌面资源并启动窗口，无需额外启动 Web 本地服务。构建独立 EXE：
 
 ```powershell
-npm run build
+pnpm run build
 .\src-tauri\target\release\shiroha-quiz-desktop.exe
 ```
 
-普通 / 离线候选安装包分别使用 `npm run build:nsis` 和 `npm run build:offline`。两者生成同名安装文件，连续构建前需另存前一份制品；完整路径、资源要求和验收限制见[桌面开发与构建说明](apps/desktop/README.md)。
+普通 / 离线候选安装包分别使用 `pnpm run build:nsis` 和 `pnpm run build:offline`。两者生成同名安装文件，连续构建前需另存前一份制品；完整路径、资源要求和验收限制见[桌面开发与构建说明](apps/desktop/README.md)。
 
 ### Web
 
@@ -273,14 +273,14 @@ npx serve apps/web
 
 ```powershell
 cd apps/desktop
-npm test
-npm run typecheck
-npm run lint
-npm run test:web-platform
-npm run test:documents
-npm run build
-npm run build:test
-npm run test:desktop
+pnpm test
+pnpm run typecheck
+pnpm run lint
+pnpm run test:web-platform
+pnpm run test:documents
+pnpm run build
+pnpm run build:test
+pnpm run test:desktop
 ```
 
 `test:desktop` 使用 `build:test` 生成的隔离测试版，隔离数据库、媒体、浏览器 profile 和凭据，并使用 mock 服务。Rust 另需在 `apps/desktop/src-tauri` 执行 `cargo fmt --all -- --check`、`cargo clippy --all-targets -- -D warnings` 与 `cargo test`；具体 feature 检查见[桌面说明](apps/desktop/README.md)。后续命令从仓库根目录开始执行。

@@ -110,7 +110,7 @@ export async function ensureInstallerIntegrity(
     return true;
   } catch (error) {
     throw new Error(
-      `安装包完整性检查失败: ${file}。低完整性安装包无法写入正常临时目录；请在普通 PowerShell 中重新运行打包命令或 npm run repair:installer。`,
+      `安装包完整性检查失败: ${file}。低完整性安装包无法写入正常临时目录；请在普通 PowerShell 中重新运行打包命令或 pnpm run repair:installer。`,
       { cause: error },
     );
   }

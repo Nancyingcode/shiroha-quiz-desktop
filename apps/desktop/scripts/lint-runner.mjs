@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { packageScript } from './package-manager.mjs';
 
 /** @typedef {{ name: string, command: string, args: string[] }} Check */
 
@@ -36,14 +37,11 @@ export async function runChecks(checks, options = {}) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
-  const npm = process.env.npm_execpath;
-  if (!npm) { throw new Error('请通过 npm run lint 启动检查。'); }
   const scripts = ['lint:incremental', 'lint:fixtures', 'lint:docs', 'lint:css'];
   // 各项只读源码或使用隔离临时目录；全部成功后提交钩子才会继续检查暂存区。
   const checks = scripts.map((name) => ({
     name,
-    command: process.execPath,
-    args: [npm, 'run', name, ...(name === 'lint:incremental' ? ['--', '--complete'] : [])],
+    ...packageScript(name, name === 'lint:incremental' ? ['--complete'] : []),
   }));
   if (!await runChecks(checks)) { process.exitCode = 1; }
 }

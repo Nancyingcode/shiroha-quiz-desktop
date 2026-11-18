@@ -99,11 +99,10 @@ export async function validateVersions(root, context) {
   /** @param {string} name */
   const read = (name) => readText(path.join(root, name));
   const pkg = JSON.parse(await read('package.json'));
-  const lock = JSON.parse(await read('package-lock.json'));
   const config = JSON.parse(await read('src-tauri/tauri.conf.json'));
-  const versions = [pkg?.version, lock?.version, lock?.packages?.['']?.version, config?.version,
+  const versions = [pkg?.version, config?.version,
     cargoVersion(await read('src-tauri/Cargo.toml'), false), cargoVersion(await read('src-tauri/Cargo.lock'), true)];
-  if (versions.some((version) => version !== context.version)) { throw new Error('Release 标签与应用/锁文件版本不一致'); }
+  if (versions.some((version) => version !== context.version)) { throw new Error('Release 标签与应用版本记录不一致'); }
 }
 
 /** @param {ReleaseContext} context */

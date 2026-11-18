@@ -42,23 +42,23 @@
 
 JavaScript/TypeScript 修改遵循 [Airbnb JavaScript 项目适配指南](./rules/javascript-style-guide.md)。新增代码和修改逻辑逐步采用规范，保留本项目的 IIFE、Node ESM/CommonJS、数据格式与安全边界；[重构设计](./docs/superpowers/specs/2026-11-05-airbnb-javascript-refactor.md)和[已批准实施计划](./docs/superpowers/plans/2026-11-05-airbnb-javascript-refactor.md)记录后续门禁与迁移批次。用户已批准的 P0—P5 分阶段任务已完成；高风险状态的保留范围、实际验证与历史债务见实施计划。ESLint 覆盖范围以下文和实际配置为准。
 
-开发工具统一安装在 `apps/desktop`，使用现有 npm 锁文件。安装依赖前，先关闭使用当前工作区依赖的开发服务和桌面窗口，详见[桌面开发说明](./apps/desktop/README.md#开发与构建)。
+开发工具统一安装在 `apps/desktop`，使用 pnpm 和 `pnpm-lock.yaml`（`packageManager` 固定 pnpm 版本）。安装依赖前，先关闭使用当前工作区依赖的开发服务和桌面窗口，详见[桌面开发说明](./apps/desktop/README.md#开发与构建)。
 
 ```powershell
 cd apps/desktop
-npm ci
-npm run typecheck
-npm run lint
-npm test
+pnpm install --frozen-lockfile
+pnpm run typecheck
+pnpm run lint
+pnpm test
 ```
 
-`npm ci` / `npm install` 会通过 `prepare` 在仓库根目录安装 Husky hooks；已有依赖时可运行 `npm run prepare` 重新安装。每个 worktree 都需安装自己的依赖和 hooks。根目录没有 `package.json`，不要在根目录直接运行 npm 脚本。
+`pnpm install` 会通过 `prepare` 在仓库根目录安装 Husky hooks；已有依赖时可运行 `pnpm run prepare` 重新安装。每个 worktree 都需安装自己的依赖和 hooks。根目录没有 `package.json`，不要在根目录直接运行 pnpm 脚本。
 
 本地提交时，`pre-commit` 对本次暂存的手写 `.js`、`.mjs` 和 `.cjs` 文件执行 ESLint（扩展名大小写均可）。它从 Git 索引读取文件全文，所以部分暂存也能检查实际提交的版本。首次提交使用相同流程。错误或警告会阻止提交，暂存内容和工作区修改均会保留。检查入口或所用规则与索引不一致时，需先处理这些工具文件的差异。`commit-msg` 继续检查提交说明。
 
 历史范围采用[逐文件迁移清单](./apps/desktop/eslint.migration.mjs)：当前 132 个手写脚本均按完整文件进入增量门禁，`app.js` 和此前门禁外的测试工具已执行全部目标规则。其余历史文件中，41 个暂缓部分 Stylistic 规则，44 个仅暂缓已列明的少量未清零语义规则，清零的规则仍为 error；新文件不继承这些例外。`question-bank.js` 数据、第三方、原始 fixture 和生成资源明确排除。暂缓范围不保证新增同类违规会被阻断，修改时仍需人工按规范审查，后续逐规则/文件迁移后删除例外；不采用总告警预算或仅检查改动行。
 
-在 `apps/desktop` 运行 `npm run lint:debt` 可查看上述历史文件的逐文件/规则数量、行列和消息。发现既有债务正常输出报告；缺失文件、语法错误、配置或规则执行失败返回非零，不能把失败当成零债务。可用 `npm run lint:debt -- --file apps/web/app.js` 单独查看语义诊断；`app.js` 的正式门禁同时检查格式。导入重复检查由 ESLint 核心规则提供；没有安装 import-x，不宣称检查缺失模块、导入循环或未使用模块。相关业务变更仍须执行对应回归。
+在 `apps/desktop` 运行 `pnpm run lint:debt` 可查看上述历史文件的逐文件/规则数量、行列和消息。发现既有债务正常输出报告；缺失文件、语法错误、配置或规则执行失败返回非零，不能把失败当成零债务。可用 `pnpm run lint:debt --file apps/web/app.js` 单独查看语义诊断；`app.js` 的正式门禁同时检查格式。导入重复检查由 ESLint 核心规则提供；没有安装 import-x，不宣称检查缺失模块、导入循环或未使用模块。相关业务变更仍须执行对应回归。
 
 `commit-msg` 使用 commitlint 的 `@commitlint/config-conventional` 校验提交信息，格式为 `type(scope): 描述`，其中 scope 可省略，描述支持中文。例如：
 
@@ -71,13 +71,13 @@ docs: 补充开发说明
 允许的 type 为 `build`、`chore`、`ci`、`docs`、`feat`、`fix`、`perf`、`refactor`、`revert`、`style`、`test`，标题最多 100 个字符。Git 自动生成的标准 merge/revert 信息遵循 commitlint 默认忽略规则。可在 `apps/desktop` 手动验证消息或提交范围：
 
 ```powershell
-'fix(web): 修复题库预览' | npm run commitlint -- --verbose
-npm run commitlint -- --from main --to HEAD --verbose
+'fix(web): 修复题库预览' | pnpm run commitlint --verbose
+pnpm run commitlint --from main --to HEAD --verbose
 ```
 
-在 `apps/desktop` 运行 `npm run lint:css` 可单独检查 Web 根目录、`apps/web/styles/` 和桌面 `frontend/` 中的 CSS，扩展名大小写均纳入。命令只读，使用 Stylelint 官方推荐规则。现有样式按文件和规则记录历史诊断数量，没有历史来源的新文件从零开始检查。修复历史问题后同步下调对应计数；同一文件同一规则一增一减时，计数无法区分具体位置，审查时仍要核对变更。[拆分设计与基线](./docs/superpowers/specs/2026-11-10-web-styles-split.md) · [历史计数](./apps/desktop/stylelint-suppressions.json)
+在 `apps/desktop` 运行 `pnpm run lint:css` 可单独检查 Web 根目录、`apps/web/styles/` 和桌面 `frontend/` 中的 CSS，扩展名大小写均纳入。命令只读，使用 Stylelint 官方推荐规则。现有样式按文件和规则记录历史诊断数量，没有历史来源的新文件从零开始检查。修复历史问题后同步下调对应计数；同一文件同一规则一增一减时，计数无法区分具体位置，审查时仍要核对变更。[拆分设计与基线](./docs/superpowers/specs/2026-11-10-web-styles-split.md) · [历史计数](./apps/desktop/stylelint-suppressions.json)
 
-Windows CI 运行类型检查、测试和 `npm run lint:ci`。有可信基线的普通 PR 按变更检查 JavaScript，涉及 CSS 增删改名或内容变更时也执行 `lint:css`。检查配置或历史计数有变动、基线无法确认及推送 `main` 时执行全量 lint。开发者可以在 `apps/desktop` 运行 `npm run lint` 一并验证 JavaScript、CSS、规则回归和文档。PR 还校验 base 到 head 的提交说明。
+Windows CI 运行类型检查、测试和 `pnpm run lint:ci`。有可信基线的普通 PR 按变更检查 JavaScript，涉及 CSS 增删改名或内容变更时也执行 `lint:css`。检查配置或历史计数有变动、基线无法确认及推送 `main` 时执行全量 lint。开发者可以在 `apps/desktop` 运行 `pnpm run lint` 一并验证 JavaScript、CSS、规则回归和文档。PR 还校验 base 到 head 的提交说明。
 
 ## 贡献者与致谢
 

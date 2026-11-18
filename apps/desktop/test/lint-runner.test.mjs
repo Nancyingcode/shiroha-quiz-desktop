@@ -4,6 +4,7 @@ import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 import { runChecks } from '../scripts/lint-runner.mjs';
 
 test('independent lint checks start together and wait for each other', async (t) => {
@@ -67,4 +68,33 @@ test('parallel checks leave the commit message on standard input untouched', () 
   });
   assert.ifError(result.error);
   assert.equal(result.status, 0, result.stdout + result.stderr);
+});
+
+test('native pnpm entries run directly and forward arguments without npm separators', async (t) => {
+  const tempRoot = await realpath(os.tmpdir());
+  const temporary = await mkdtemp(path.join(tempRoot, 'shiroha-lint-pnpm-'));
+  t.after(async () => {
+    const actual = await realpath(temporary);
+    assert.equal(path.dirname(actual).toLowerCase(), tempRoot.toLowerCase());
+    assert(path.basename(actual).startsWith('shiroha-lint-pnpm-'));
+    await rm(actual, { recursive: true, force: true });
+  });
+  // 以 Node 可执行文件模拟原生 pnpm：新实现会执行临时目录中的 run 脚本。
+  await writeFile(path.join(temporary, 'run'), 'console.log(JSON.stringify(process.argv.slice(2)));\n');
+  const runner = fileURLToPath(new URL('../scripts/lint-runner.mjs', import.meta.url));
+  const result = spawnSync(process.execPath, [runner], {
+    cwd: temporary,
+    env: { ...process.env, npm_execpath: process.execPath },
+    encoding: 'utf8',
+    windowsHide: true,
+  });
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  const calls = result.stdout.trim().split(/\r?\n/).map((line) => JSON.parse(line));
+  calls.sort((a, b) => a[0].localeCompare(b[0]));
+  assert.deepEqual(calls, [
+    ['lint:css'],
+    ['lint:docs'],
+    ['lint:fixtures'],
+    ['lint:incremental', '--complete'],
+  ]);
 });

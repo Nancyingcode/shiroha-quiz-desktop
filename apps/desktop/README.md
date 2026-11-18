@@ -9,7 +9,7 @@
 ## 环境要求
 
 - Windows，以及较新的 Microsoft Edge WebView2 Runtime。
-- Node.js 24 或更新版本、npm。
+- Node.js 24 或更新版本、pnpm。
 - Rust stable，使用 Windows MSVC 工具链。
 - Visual Studio Build Tools 的 C++ 构建工具和 Windows SDK。
 
@@ -29,22 +29,22 @@ $env:Path = "$env:USERPROFILE\.cargo\bin;$env:Path"
 
 ## 开发与构建
 
-安装或更新依赖前，先退出使用本工程依赖的开发窗口和相关进程，避免 Windows 文件锁造成依赖目录不完整。仅停止能够确认属于本工程的进程。
+安装或更新依赖前，先退出使用当前工作树依赖的开发窗口和相关进程，避免 Windows 文件锁造成依赖目录不完整。首次使用或切换分支后，若脚本提示 `ERR_PNPM_VERIFY_DEPS_BEFORE_RUN`，请按下方命令显式安装锁定的依赖。
 
 ```powershell
-npm install
-npm run dev
+pnpm install --frozen-lockfile
+pnpm run dev
 ```
 
 开发命令先生成前端资源，再使用 Tauri CLI 内置开发服务启动窗口，端口为 `51736`。不需要另行启动 Web 目录中的 Python 或 PowerShell 服务。
 开发来源仅在调试构建中接受 `http://localhost:51736` 与 CLI 实际使用的 `http://127.0.0.1:51736`；发行版不接受这两个开发来源。来源仍须来自主窗口，不放行其他主机、端口或协议。
 
-运行 `npm run test:dev` 可回归实际开发启动：脚本调用 `npm run dev -- --features native-test --no-watch`，使用临时题库、假凭据、阻断外网的隔离 WebView2 profile，检查原生初始化、页面解锁、导航、保存和重载。先关闭占用 `51736` 的开发实例；脚本不会终止其他实例。结果写入 `.reports/dev-smoke.json`，成功后清理本次临时数据，失败保留目录供排查。它不替代发行版的 `npm run test:desktop`，也不验证真实用户数据或真实凭据迁移。
+运行 `pnpm run test:dev` 可回归实际开发启动：脚本调用 `pnpm run dev --features native-test --no-watch`，使用临时题库、假凭据、阻断外网的隔离 WebView2 profile，检查原生初始化、页面解锁、导航、保存和重载。先关闭占用 `51736` 的开发实例；脚本不会终止其他实例。结果写入 `.reports/dev-smoke.json`，成功后清理本次临时数据，失败保留目录供排查。它不替代发行版的 `pnpm run test:desktop`，也不验证真实用户数据或真实凭据迁移。
 
 构建 release 可执行文件：
 
 ```powershell
-npm run build
+pnpm run build
 .\src-tauri\target\release\shiroha-quiz-desktop.exe
 ```
 
@@ -55,15 +55,15 @@ npm run build
 GitHub Release 支持通过 `desktop-v<major>.<minor>.<patch>` 标签复用 Windows 检查，在三种构建后分别保留独立 EXE、普通/离线安装包，生成 SHA-256 和构建记录，再创建预发布草稿。维护者核验后手动公开；首次公开前可能没有可下载附件。[本仓库桌面 Releases](https://github.com/Nancyingcode/shiroha-quiz-desktop/releases) 与上游 Web/Android 下载分开，操作、附件选择和失败恢复见[Windows 发布说明](../../.github/DESKTOP_RELEASE.md)。
 
 ```powershell
-npm run build:nsis
-npm run build:offline
+pnpm run build:nsis
+pnpm run build:offline
 ```
 
 两个命令均生成 x64 NSIS，目标为 `src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/Shiroha Quiz_0.1.3_x64-setup.exe`。第二次构建会覆盖同名文件，需要在构建下一种制品前另存并记录 SHA-256。普通配置缺少 WebView2 时联网下载；离线配置嵌入完整 WebView2 安装程序，构建阶段仍需联网下载运行时。不得把普通包标记为离线包。配置遵循 [Tauri Windows 安装说明](https://v2.tauri.app/distribute/windows-installer/)。
 
-`build:nsis`、`build:offline`、`bundle:nsis` 和 `bundle:offline` 完成后，npm 的 `post` 步骤会自动检查默认 x64 release 安装包的 Windows 完整性标记。若文件从工作区继承了 Low 标记，会仅将这个安装包修正为 Medium 并回读验证；文件内容和目录访问授权保持不变。使用上述完整 npm 命令，不跳过生命周期脚本；直接执行 Tauri CLI 或自定义输出位置时，需要另行处理对应产物。发布收集脚本在复制普通/离线安装包后再次修正副本，并在最终验证时拒绝仍带 Low 标记的附件。
+`build:nsis`、`build:offline`、`bundle:nsis` 和 `bundle:offline` 完成后，pnpm 的 `post` 步骤会自动检查默认 x64 release 安装包的 Windows 完整性标记。若文件从工作区继承了 Low 标记，会仅将这个安装包修正为 Medium 并回读验证；文件内容和目录访问授权保持不变。使用上述完整 pnpm 命令，不跳过生命周期脚本；直接执行 Tauri CLI 或自定义输出位置时，需要另行处理对应产物。发布收集脚本在复制普通/离线安装包后再次修正副本，并在最终验证时拒绝仍带 Low 标记的附件。
 
-Low 标记会使安装包以低完整性运行，无法写入正常临时目录，即使该目录可写且磁盘空间充足，也可能出现 `Error writing temporary file`。机制见 [Microsoft 完整性控制说明](https://learn.microsoft.com/en-us/windows/win32/secauthz/mandatory-integrity-control)。检查或修正失败会使打包命令失败；如果受限执行环境不允许修改标记，在普通用户 PowerShell 中进入本目录执行 `npm run repair:installer`，修正刚生成的默认安装包即可，无需重新编译。此步骤不需要以管理员身份运行。通过后再另存或分发安装包；复制到另一个 Low 目录仍可能重新继承标记。
+Low 标记会使安装包以低完整性运行，无法写入正常临时目录，即使该目录可写且磁盘空间充足，也可能出现 `Error writing temporary file`。机制见 [Microsoft 完整性控制说明](https://learn.microsoft.com/en-us/windows/win32/secauthz/mandatory-integrity-control)。检查或修正失败会使打包命令失败；如果受限执行环境不允许修改标记，在普通用户 PowerShell 中进入本目录执行 `pnpm run repair:installer`，修正刚生成的默认安装包即可，无需重新编译。此步骤不需要以管理员身份运行。通过后再另存或分发安装包；复制到另一个 Low 目录仍可能重新继承标记。
 
 离线 NSIS 仅包含 WebView2 离线安装程序，不包含 Codex 运行组件。首次使用 Codex Harness 仍需联网准备组件；已缓存且校验通过的组件可在本机复用，订阅登录与 AI 任务仍需联网。
 
@@ -82,10 +82,10 @@ Low 标记会使安装包以低完整性运行，无法写入正常临时目录�
 OCR 支持取消、换源后迟到结果隔离及重新识别，完成和失败都释放 PDF/Worker/Canvas。单页渲染最多 16 Mi 像素（RGBA 约 64 MiB，不代表整个 OCR 内存上限），异常尺寸要求缩小扫描页后重试；保留原有页数限制。中文识别仍会出现题号误识别和字间空格，必须人工核对后再确认导入。
 
 ```powershell
-npm run test:documents
-npm run test:web-platform
-npm run build:test
-npm run test:desktop
+pnpm run test:documents
+pnpm run test:web-platform
+pnpm run build:test
+pnpm run test:desktop
 ```
 
 文档回归自建文字 PDF、中文扫描 PDF、DOCX、XLSX，实际选择、解析、核对、导入、保存并重载检查题数和答案；外网阻断。扫描样本在测试中明确模拟人工核对，不声称 OCR 完全准确。真实系统文件对话框、长时间高负荷、所有覆盖层无障碍和正常发行制品仍有未验收项，详见[阶段验证记录](../../test/dual-platform/README.md)。Windows CI 与 Pages 独立；普通 PR/main 检查不上传制品，桌面标签发布流程额外收集附件并创建草稿。托管 CI 不替代交互式 WebView2 验收。
@@ -97,7 +97,7 @@ npm run test:desktop
 开发和构建会自动准备资源。修改 Web 源码后，也可单独重新生成：
 
 ```powershell
-npm run prepare:web
+pnpm run prepare:web
 ```
 
 资源准备按内容增量同步：未变化文件保留时间戳，只更新新增或变化的资源，并清除失效文件和目录；输出缺失或损坏时会重新生成。每次仍执行离线资源、路径和链接校验及 bridge 打包，不依赖时间戳判断内容。资源准备与读取 `dist` 的构建应串行执行。该优化主要减少重复构建的资源写入，首次 Rust 编译与安装包下载、压缩耗时仍取决于环境。
@@ -132,24 +132,24 @@ npm run prepare:web
 
 标题栏模板与脚本维护于 `frontend/titlebar.html`、`frontend/titlebar.js`，由资源准备脚本注入生成页面。标题栏使用拖动、最小化、最大化切换、最大化状态读取和关闭五项权限；阶段 C 另逐项增加受控本地数据与文件业务命令，阶段 D 增加服务凭据、服务请求及关闭协调所需事件与窗口销毁权限。官方桥接打包为本地脚本，保持 `withGlobalTauri: false`，CSP 与存储来源不变。视觉设计及历史验收记录见[标题栏设计](../../docs/superpowers/specs/2026-10-23-desktop-immersive-titlebar.md)和[实施计划](../../docs/superpowers/plans/2026-10-23-desktop-immersive-titlebar.md)。
 
-修改窗口配置后，请停止并重新运行 `npm run dev`，让原生窗口和生成资源一起更新。
+修改窗口配置后，请停止并重新运行 `pnpm run dev`，让原生窗口和生成资源一起更新。
 
 ## 验证
 
 在本目录运行：
 
 ```powershell
-npm test
-npm run typecheck
-npm run lint
-npm run build
-npm run build:test
-npm run test:desktop
+pnpm test
+pnpm run typecheck
+pnpm run lint
+pnpm run build
+pnpm run build:test
+pnpm run test:desktop
 ```
 
-`npm test` 包含资源过滤、内联事件转换和路径安全检查。其中的 Windows junction 用例可能受到沙箱创建链接权限限制，应在正常本机终端运行并记录结果，不通过跳过断言掩盖失败。`lint` 同时检查本次工程文档的 UTF-8、代码围栏和本地链接。
+`pnpm test` 包含资源过滤、内联事件转换和路径安全检查。其中的 Windows junction 用例可能受到沙箱创建链接权限限制，应在正常本机终端运行并记录结果，不通过跳过断言掩盖失败。`lint` 同时检查本次工程文档的 UTF-8、代码围栏和本地链接。
 
-`npm run test:desktop` 需要先执行 `npm run build:test`，使用 `target/native-test/release` 中带隔离 feature 的 EXE。测试根必须是 runner 本次创建且带隔离标记的临时目录，同时隔离 SQLite、媒体与 WebView2 profile，并默认阻止出站；网络用例仅允许 runner 创建的单一本机回环 mock 来源。正常 `npm run build` 不接受测试根覆盖，正常发行制品的运行验收须使用隔离 Windows 用户或虚拟机；本轮未执行该项。测试 feature 使用 fake 凭据，不访问系统凭据。单独的 Windows provider 测试使用随机测试命名空间和假凭据，结束删除；这不替代独立 Windows 用户验收。仅完成静态资源生成不能证明 PDF/OCR 已在 WebView2 中通过。
+`pnpm run test:desktop` 需要先执行 `pnpm run build:test`，使用 `target/native-test/release` 中带隔离 feature 的 EXE。测试根必须是 runner 本次创建且带隔离标记的临时目录，同时隔离 SQLite、媒体与 WebView2 profile，并默认阻止出站；网络用例仅允许 runner 创建的单一本机回环 mock 来源。正常 `pnpm run build` 不接受测试根覆盖，正常发行制品的运行验收须使用隔离 Windows 用户或虚拟机；本轮未执行该项。测试 feature 使用 fake 凭据，不访问系统凭据。单独的 Windows provider 测试使用随机测试命名空间和假凭据，结束删除；这不替代独立 Windows 用户验收。仅完成静态资源生成不能证明 PDF/OCR 已在 WebView2 中通过。
 
 2026-10-23 已在本机 WebView2 155.0.4283.62 验证：7 项单元测试、类型检查、lint 及 release 构建通过；10 项实际桌面检查通过，包括启动不加载隐藏插画、进入导入页后插画正常显示、JSON 题库通过界面导入与练习、关闭重开后的题库保留、MathJax、PDF.js 真 Worker，以及本地 Tesseract 英文 OCR。OCR 样本为 Canvas 生成的 `TEST`，该结果不代表中文扫描 PDF 全流程或大文件性能已验证。测试截图生成于 `.reports/prototype.png`。
 
@@ -161,7 +161,7 @@ npm run test:desktop
 
 双端改造以[双端设计](../../docs/superpowers/specs/2026-10-23-web-desktop-dual-platform-design.md)和[详细实施计划](../../docs/superpowers/plans/2026-10-23-web-desktop-dual-platform.md)为准。此节保留阶段 A 历史记录；当前运行状态以本文“资源与数据”和阶段 C 验证记录为准。
 
-`npm test` 现在同时执行桌面测试与 `test:shared`；共享测试也可从仓库根目录运行 `node --test test/dual-platform/*.test.cjs`。正常特征测试与已知缺陷的执行型 TODO 分开统计，退出 0 不表示所有迁移缺口已经修复。`typecheck` 增加独立浏览器配置，`lint` 增加平台和共享测试检查，文档检查覆盖双端依据和阶段记录。
+`pnpm test` 现在同时执行桌面测试与 `test:shared`；共享测试也可从仓库根目录运行 `node --test test/dual-platform/*.test.cjs`。正常特征测试与已知缺陷的执行型 TODO 分开统计，退出 0 不表示所有迁移缺口已经修复。`typecheck` 增加独立浏览器配置，`lint` 增加平台和共享测试检查，文档检查覆盖双端依据和阶段记录。
 
 环境、命令结果、失败归属、样本与性能边界见[阶段 A 验证记录](../../test/dual-platform/README.md)。依赖安装、构建与测试仍遵守前述进程核验和隔离要求。
 
@@ -169,11 +169,11 @@ npm run test:desktop
 
 桌面资源生成器移除 Web 版固定时长的启动遮罩及其专属预加载图片，非首页插画改用浏览器原生懒加载。首页图片保持即时加载；业务脚本、题库、持久化格式、Web 业务源码不因此改变，也没有通过关闭 GPU、裁剪功能或强制回收工作集降低读数。
 
-在本目录运行 `npm run bench:desktop`，或指定可执行文件与报告路径：
+在本目录运行 `pnpm run bench:desktop`，或指定可执行文件与报告路径：
 
 ```powershell
-npm run bench:desktop -- .reports/baseline.exe .reports/performance-baseline-retest.json
-npm run bench:desktop -- src-tauri/target/native-test/release/shiroha-quiz-desktop.exe .reports/performance-after.json
+pnpm run bench:desktop .reports/baseline.exe .reports/performance-baseline-retest.json
+pnpm run bench:desktop src-tauri/target/native-test/release/shiroha-quiz-desktop.exe .reports/performance-after.json
 ```
 
 旧版 EXE 需要在重新构建前另行保留；接入原生数据后的比较制品必须均支持相同测试隔离，不要将正式原生构建直接传给 runner。脚本每版启动 5 次，第一次创建隔离 profile、后四次复用，保留默认题库与 1280×860 窗口；记录进程启动至页面 load 完成、启动遮罩消失的耗时，随后空闲 5 秒并采集主进程及全部 WebView2 子进程。进程创建时间和路径用于排除 PID 复用；脚本只关闭自己启动的窗口。成功时清理临时 profile，报告保存在 `.reports`，失败时保留诊断数据。本轮 C 未重跑性能基准，下表为原型阶段历史结果。

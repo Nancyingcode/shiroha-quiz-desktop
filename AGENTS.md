@@ -9,7 +9,7 @@
 | 路径 | 职责与技术栈 |
 | --- | --- |
 | `apps/web/` | HTML、CSS、JavaScript Web 业务源码；桌面端复用此处内容 |
-| `apps/desktop/` | Tauri 2 + WebView2 Windows 原型；npm 脚本与桌面验证入口 |
+| `apps/desktop/` | Tauri 2 + WebView2 Windows 原型；pnpm 脚本与桌面验证入口 |
 | `apps/desktop/src-tauri/` | Rust 应用入口、Tauri 配置与权限边界；当前 edition 为 2021 |
 | `apps/desktop/dist/` | 自动生成的桌面资源，不手工修改，不维护第二份 Web 业务源码 |
 | `test/` | Web/Windows 回归与历史 Android 解析样例；历史预期不作为 Web 能力承诺 |
@@ -72,29 +72,29 @@
 
 ## 5. 验证要求
 
-- 开发时先运行最小相关测试集；交付前按改动涉及的平台完成下列检查。根目录没有 `package.json`，不可在根目录直接套用 npm 命令。
+- 开发时先运行最小相关测试集；交付前按改动涉及的平台完成下列检查。根目录没有 `package.json`，不可在根目录直接套用 pnpm 命令。
 - 命令以各工程的实际脚本和配置为准。缺失环境、既有失败与本次回归分别报告，不把“实现完成”当作“验证通过”；不得删除测试、放宽有效断言或隐藏错误绕过门禁。
 
 | 改动范围 | 工作目录 | 检查 |
 | --- | --- | --- |
-| 桌面代码、脚本或配置 | `apps/desktop` | `npm test`、`npm run typecheck`、`npm run lint` |
+| 桌面代码、脚本或配置 | `apps/desktop` | `pnpm test`、`pnpm run typecheck`、`pnpm run lint` |
 | Rust 源码或 Cargo 配置 | `apps/desktop/src-tauri` | `cargo fmt --all -- --check`、`cargo clippy --all-targets -- -D warnings`、`cargo test`；涉及 feature 时补充相应组合 |
-| Tauri/Rust、桌面资源生成、依赖或构建配置 | `apps/desktop` | 追加 `npm run build` |
-| 桌面窗口、资源加载、离线能力或持久化行为 | `apps/desktop` | 成功构建后追加 `npm run test:desktop`，未覆盖场景补人工验收 |
+| Tauri/Rust、桌面资源生成、依赖或构建配置 | `apps/desktop` | 追加 `pnpm run build` |
+| 桌面窗口、资源加载、离线能力或持久化行为 | `apps/desktop` | 成功构建后追加 `pnpm run test:desktop`，未覆盖场景补人工验收 |
 | WebDAV 请求行为 | 仓库根目录 | `node --test test/web-webdav/request.test.cjs` |
 | Web 单题 AI 行为 | 仓库根目录 | `node test/web-ai-practice/runner.cjs`；依赖与浏览器要求见[测试说明](./test/web-ai-practice/README.md) |
 
-- Rust 编译/测试需要前端资源时，先在 `apps/desktop` 执行 `npm run prepare:web`；npm 的 lint/typecheck 不覆盖 Rust。typecheck 分别覆盖桌面 `scripts/`、`test/` 的 Node 环境，以及 `apps/web/platform`、桌面 `frontend` 和共享契约类型样例的浏览器环境；不整体检查历史 `app.js`。
+- Rust 编译/测试需要前端资源时，先在 `apps/desktop` 执行 `pnpm run prepare:web`；pnpm 的 lint/typecheck 不覆盖 Rust。typecheck 分别覆盖桌面 `scripts/`、`test/` 的 Node 环境，以及 `apps/web/platform`、桌面 `frontend` 和共享契约类型样例的浏览器环境；不整体检查历史 `app.js`。
 - Web/Windows 保留旧 Android JSON/ZIP 的现有读写兼容，不因平台移除删除格式、字段或有效测试。历史 parser 样例在 `test/fixtures/legacy-android-parser`，无当前 Kotlin 运行器。
 - Web 业务修改运行受影响的现有回归；无自动化覆盖时补充对应测试或可重复步骤。影响桌面复用资源时，同时验证桌面生成与运行；浏览器测试不能替代 WebView2 验证。
 - `runner.cjs --self-test` 只验证测试框架，静态资源存在也不代表 PDF/OCR 已实际运行；报告应注明离线、中文扫描 PDF、大文件与真实服务等实际覆盖范围。
-- `npm run lint` 对手写 JavaScript 完整文件执行 recommended/no-var/prefer-const/no-unused-vars、语义、Stylistic 和模块图（`import-x/no-unresolved`、`no-cycle`、`no-extraneous-dependencies`）门禁，并运行违规 fixture；历史暂缓清单 `apps/desktop/eslint.migration.mjs` 已清空，测试阻止已清零规则退回。CI 普通 PR 在确认目标提交有完整检查通过记录后按合并结果中的变更文件执行单文件 lint，配置变更或基线不可确认时回退全量；规则回归仍由 `npm test` 执行。非空函数体和含 4 项及以上的对象解构在全部手写 JS 中展开。120 字符的行长上限按模块启用，试点名单和例外见 JavaScript 指南。`npm run lint:debt` 只读报告历史语义与格式债务，清单为空时返回空报告；执行或解析失败返回非零。具体覆盖范围见 JavaScript 指南。
-- `npm run lint:css` 使用 Stylelint 检查 Web 根目录、`apps/web/styles/` 和桌面 `frontend/` 的 CSS，扩展名大小写均纳入；在 recommended 之上校验动画名称（`no-unknown-animations`）、跨文件共享变量引用（`no-unknown-custom-properties`，定义来源为 `styles.css` 与 `styles/responsive-artwork.css`）、类名与自定义属性命名格式，并限制选择器复合深度不超过 4 段（两份历史样式表的既有命中按文件冻结计数）；旧规则诊断按文件和规则记录在 `apps/desktop/stylelint-suppressions.json`，`--report-needless-disables` 与 `--report-invalid-scope-disables` 使失效的 disable 注释和不存在的规则名同样导致检查失败；JavaScript 侧的复杂度与函数/文件规模只对零基线模块启用，已有超标模块随业务拆分逐个纳入。全量 lint 包含此检查，普通 PR 涉及 CSS 变动时运行该检查，历史计数变更触发全量 lint。跨文件的选择器关系仍需结合源码顺序审查，详见[样式拆分记录](./docs/superpowers/plans/2026-11-10-web-styles-split.md)。
-- 纯文档修改不要求完整代码门禁。在 `apps/desktop` 运行 `npm run lint:docs`，并对本次全部变更文档检查 UTF-8、代码围栏、本地链接和差异；脚本覆盖根 `AGENTS.md`、贡献指南、Rust 指南、适配说明、桌面说明、文档索引、原型与双端设计/计划，以及 `test/dual-platform` 的阶段说明、JavaScript 指南及设计/计划、样式拆分设计及计划、AI/WebDAV 运行说明，共 22 份文档，`npm run lint` 已包含此命令。未列入的文件须补同等检查。
+- `pnpm run lint` 对手写 JavaScript 完整文件执行 recommended/no-var/prefer-const/no-unused-vars、语义、Stylistic 和模块图（`import-x/no-unresolved`、`no-cycle`、`no-extraneous-dependencies`）门禁，并运行违规 fixture；历史暂缓清单 `apps/desktop/eslint.migration.mjs` 已清空，测试阻止已清零规则退回。CI 普通 PR 在确认目标提交有完整检查通过记录后按合并结果中的变更文件执行单文件 lint，配置变更或基线不可确认时回退全量；规则回归仍由 `pnpm test` 执行。非空函数体和含 4 项及以上的对象解构在全部手写 JS 中展开。120 字符的行长上限按模块启用，试点名单和例外见 JavaScript 指南。`pnpm run lint:debt` 只读报告历史语义与格式债务，清单为空时返回空报告；执行或解析失败返回非零。具体覆盖范围见 JavaScript 指南。
+- `pnpm run lint:css` 使用 Stylelint 检查 Web 根目录、`apps/web/styles/` 和桌面 `frontend/` 的 CSS，扩展名大小写均纳入；在 recommended 之上校验动画名称（`no-unknown-animations`）、跨文件共享变量引用（`no-unknown-custom-properties`，定义来源为 `styles.css` 与 `styles/responsive-artwork.css`）、类名与自定义属性命名格式，并限制选择器复合深度不超过 4 段（两份历史样式表的既有命中按文件冻结计数）；旧规则诊断按文件和规则记录在 `apps/desktop/stylelint-suppressions.json`，`--report-needless-disables` 与 `--report-invalid-scope-disables` 使失效的 disable 注释和不存在的规则名同样导致检查失败；JavaScript 侧的复杂度与函数/文件规模只对零基线模块启用，已有超标模块随业务拆分逐个纳入。全量 lint 包含此检查，普通 PR 涉及 CSS 变动时运行该检查，历史计数变更触发全量 lint。跨文件的选择器关系仍需结合源码顺序审查，详见[样式拆分记录](./docs/superpowers/plans/2026-11-10-web-styles-split.md)。
+- 纯文档修改不要求完整代码门禁。在 `apps/desktop` 运行 `pnpm run lint:docs`，并对本次全部变更文档检查 UTF-8、代码围栏、本地链接和差异；脚本覆盖根 `AGENTS.md`、贡献指南、Rust 指南、适配说明、桌面说明、文档索引、原型与双端设计/计划，以及 `test/dual-platform` 的阶段说明、JavaScript 指南及设计/计划、样式拆分设计及计划、AI/WebDAV 运行说明，共 22 份文档，`pnpm run lint` 已包含此命令。未列入的文件须补同等检查。
 
 ## 6. 依赖、规则与 Git
 
-- 桌面使用 npm 和 `package-lock.json`，Rust 使用 Cargo 和 `Cargo.lock`；不更换包管理器或随意更新锁文件。新增生产依赖前说明必要性及维护、许可、体积影响。
+- 桌面使用 pnpm 和 `pnpm-lock.yaml`，Rust 使用 Cargo 和 `Cargo.lock`；不更换包管理器或随意更新锁文件。新增生产依赖前说明必要性及维护、许可、体积影响。
 - 安装或重建依赖前，确认并停止使用当前工程依赖的相关进程；按命令行、路径等核实归属，不结束无关进程。安装后验证依赖和受影响命令。
 - 根规范只保留长期原则与入口。机械规则以实际配置的 ESLint、TypeScript、rustfmt、Clippy 检查为准，不声称已部署不存在的 Prettier、lint-staged、Hook 或 CI 门禁。
 - 能通过 lint、类型检查或测试执行的约束优先自动化；新增检查时同步维护命令与覆盖范围，避免只有文字要求而没有可运行验证。

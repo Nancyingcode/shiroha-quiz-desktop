@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { chromium } from 'playwright-core';
 import { markNativeIsolation } from './native-isolation.mjs';
+import { packageScript } from './package-manager.mjs';
 
 const DEV_PORT = 51736;
 const DEV_ORIGIN = `http://127.0.0.1:${DEV_PORT}`;
@@ -89,13 +90,13 @@ async function waitForDebugger(child, port, launchError) {
   while (Date.now() < deadline) {
     const error = launchError();
     if (error) { throw error; }
-    assert(running(child), 'npm run dev 在 WebView2 就绪前退出，详见开发进程日志');
+    assert(running(child), 'pnpm run dev 在 WebView2 就绪前退出，详见开发进程日志');
     const ready = await fetch(`${endpoint}/json/version`, { signal: AbortSignal.timeout(1_000) })
       .then((response) => response.ok).catch(() => false);
     if (ready) { return endpoint; }
     await delay(POLL_MS);
   }
-  throw new Error(`npm run dev 未在 ${START_TIMEOUT_MS / 1000} 秒内启动 WebView2`);
+  throw new Error(`pnpm run dev 未在 ${START_TIMEOUT_MS / 1000} 秒内启动 WebView2`);
 }
 
 /** @param {Page} page @returns {Promise<NativeState>} */
@@ -131,7 +132,7 @@ async function assertReady(page) {
 
 /** @param {ChildProcess} child @param {Page|undefined} page */
 async function stopDevelopment(child, page) {
-  // 先让本次窗口完成正常关闭；随后只结束本脚本持有的 npm PID 及其子进程树。
+  // 先让本次窗口完成正常关闭；随后只结束本脚本持有的包管理器 PID 及其子进程树。
   if (page && !page.isClosed()) {
     await Promise.race([
       page.evaluate(async () => {
@@ -168,8 +169,7 @@ async function removeProfile(profile, temporaryRoot) {
 
 async function main() {
   assert.equal(process.platform, 'win32', '开发模式回归仅支持 Windows WebView2');
-  const npm = process.env.npm_execpath;
-  assert(npm, '请通过 npm run test:dev 运行，以使用当前 npm 启动开发脚本');
+  const development = packageScript('dev', ['--features', 'native-test', '--no-watch']);
   const temporaryRoot = await realpath(tmpdir());
   /** @type {Check[]} */
   const checks = [];
@@ -238,7 +238,7 @@ async function main() {
     const proxyPort = await listen(proxy);
     const debugPort = await availablePort();
     assert(!interrupted, '开发模式回归已中断');
-    child = spawn(process.execPath, [npm, 'run', 'dev', '--', '--features', 'native-test', '--no-watch'], {
+    child = spawn(development.command, development.args, {
       cwd: DESKTOP_DIRECTORY,
       windowsHide: true,
       stdio: ['ignore', 'pipe', 'pipe'],

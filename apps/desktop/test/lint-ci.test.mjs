@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { copyFile, lstat, mkdir, rename, unlink, writeFile } from 'node:fs/promises';
+import { appendFile, copyFile, lstat, mkdir, rename, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
 import { hasPassedBaseline, lintChangedFiles, planCiLint } from '../scripts/lint-ci.mjs';
@@ -115,10 +115,10 @@ test(
 
 test('deleting or renaming a configuration or lock file forces a full check', async (t) => {
   const f = await fixture(t);
-  await writeFile(path.join(f.temporary, 'apps/desktop/package-lock.json'), '{}\n');
+  await writeFile(path.join(f.temporary, 'apps/desktop/pnpm-lock.yaml'), '{}\n');
   const base = commit(f, 'initial');
   git(f, ['switch', '-c', 'feature']);
-  git(f, ['rm', 'apps/desktop/package-lock.json']);
+  git(f, ['rm', 'apps/desktop/pnpm-lock.yaml']);
   await rename(
     path.join(f.temporary, 'apps/desktop/eslint.rules.mjs'),
     path.join(f.temporary, 'apps/desktop/previous-rules.mjs'),
@@ -270,6 +270,10 @@ async function ciEntryFixture(t, change) {
   const f = await fixture(t);
   const ciScript = path.join(f.temporary, 'apps/desktop/scripts/lint-ci.mjs');
   await copyFile(new URL('../scripts/lint-ci.mjs', import.meta.url), ciScript);
+  await copyFile(
+    new URL('../scripts/package-manager.mjs', import.meta.url),
+    path.join(f.temporary, 'apps/desktop/scripts/package-manager.mjs'),
+  );
   const driver = path.join(f.temporary, 'npm-driver.mjs');
   await writeFile(driver, [
     'console.log(process.argv[3]);',
@@ -362,5 +366,26 @@ test('changing only the Stylelint suppression baseline requires the full check',
   ));
   const result = runCi('yes');
   assert.match(result.stdout, /CI lint: full .*stylelint-suppressions\.json/);
+  assert.equal(result.status, 1, result.stderr + result.stdout);
+});
+
+test('changing pnpm workspace configuration requires the full check', async (t) => {
+  const { runCi } = await ciEntryFixture(t, (root) => writeFile(
+    path.join(root, 'apps/desktop/pnpm-workspace.yaml'),
+    'allowBuilds:\n  esbuild: true\n',
+  ));
+  const result = runCi('yes');
+  assert.match(result.stdout, /CI lint: full .*pnpm-workspace\.yaml/);
+  assert.equal(result.status, 1, result.stderr + result.stdout);
+});
+
+test('changing only the package script launcher runs the full check against a passing baseline', async (t) => {
+  const { runCi } = await ciEntryFixture(t, (root) => appendFile(
+    path.join(root, 'apps/desktop/scripts/package-manager.mjs'),
+    'export const revision = 2;\n',
+  ));
+  const result = runCi('yes');
+  assert.match(result.stdout, /CI lint: full .*package-manager\.mjs/);
+  assert.match(result.stdout, /^lint$/m);
   assert.equal(result.status, 1, result.stderr + result.stdout);
 });

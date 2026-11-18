@@ -2,6 +2,7 @@
   "name": "shiroha-quiz-desktop",
   "version": "0.1.3",
   "private": true,
+  "packageManager": "pnpm@12.16.1",
   "type": "module",
   "engines": {
     "node": ">=24"
@@ -10,7 +11,7 @@
     "prepare": "cd ../.. && husky",
     "dev": "tauri dev --port 51736",
     "prepare:web": "node scripts/prepare-web.mjs",
-    "test": "node --test test/*.test.mjs && npm run test:shared",
+    "test": "node --test test/*.test.mjs && pnpm run test:shared",
     "test:web-platform": "node --test ../../test/dual-platform/browser-page.cjs ../../test/dual-platform/dialog-page.cjs ../../test/dual-platform/select-page.cjs ../../test/dual-platform/settings-action-page.cjs",
     "test:documents": "node --test ../../test/dual-platform/document-page.cjs",
     "test:shared": "node --test ../../test/dual-platform/*.test.cjs",
@@ -32,7 +33,7 @@
     "postbundle:nsis": "node scripts/installer-integrity.mjs",
     "postbundle:offline": "node scripts/installer-integrity.mjs",
     "repair:installer": "node scripts/installer-integrity.mjs",
-    "build:test": "npm run prepare:web && cargo build --manifest-path src-tauri/Cargo.toml --release --features custom-protocol,native-test --target-dir src-tauri/target/native-test",
+    "build:test": "pnpm run prepare:web && cargo build --manifest-path src-tauri/Cargo.toml --release --features custom-protocol,native-test --target-dir src-tauri/target/native-test",
     "test:desktop": "node scripts/smoke.mjs src-tauri/target/native-test/release/shiroha-quiz-desktop.exe",
     "test:dev": "node scripts/dev-smoke.mjs",
     "bench:desktop": "node scripts/benchmark.mjs",

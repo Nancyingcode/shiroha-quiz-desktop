@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { chmod, copyFile, mkdir, mkdtemp, readFile, rm, symlink, unlink, writeFile } from 'node:fs/promises';
+import { chmod, copyFile, mkdir, mkdtemp, readFile, rm, unlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
+import { linkDesktopDependencies } from './lint-fixture-helpers.mjs';
 
 const desktop = fileURLToPath(new URL('..', import.meta.url));
 const root = path.resolve(desktop, '../..');
@@ -18,7 +19,7 @@ function expectSuccess(result) {
 
 /** @param {import('node:test').TestContext} t */
 async function fixture(t) {
-  const temporary = await mkdtemp(path.join(os.tmpdir(), 'shiroha git hooks-'));
+  const temporary = await mkdtemp(path.join(os.tmpdir(), 'shiroha-git-hooks-'));
   t.after(() => rm(temporary, { recursive: true, force: true }));
   const repository = path.join(temporary, 'repository');
   const project = path.join(repository, 'apps/desktop');
@@ -69,7 +70,7 @@ async function fixture(t) {
     devDependencies: pkg.devDependencies,
   }));
   await writeFile(path.join(repository, '.gitignore'), 'node_modules/\n');
-  await symlink(path.join(desktop, 'node_modules'), path.join(project, 'node_modules'), 'junction');
+  await linkDesktopDependencies(project);
   const install = (cwd = repository) => {
     expectSuccess(spawnSync(process.execPath, [husky], { cwd, env, encoding: 'utf8', windowsHide: true }));
     assert.equal(git(['config', '--get', 'core.hooksPath'], cwd).stdout.trim(), '.husky/_');
@@ -78,8 +79,13 @@ async function fixture(t) {
   const probe = path.join(project, 'scripts/probe.mjs');
   await writeFile(probe, "console.log('fixture');\n");
   expectSuccess(git(['add', '.']));
-  const fullLint = () => spawnSync('npm run lint', {
-    shell: true, cwd: project, env, encoding: 'utf8', windowsHide: true,
+  // 夹具通过 junction 复用已安装的依赖，无需让 pnpm 写入新的依赖树。
+  const fullLint = () => spawnSync('pnpm run lint', {
+    shell: true,
+    cwd: project,
+    encoding: 'utf8',
+    windowsHide: true,
+    env: { ...env, PNPM_CONFIG_VERIFY_DEPS_BEFORE_RUN: 'false' },
   });
   return { temporary, repository, project, probe, git, install, fullLint, env };
 }
@@ -190,7 +196,9 @@ test('a staged deletion cannot silently use a lint config left in the worktree',
 
 test('the hook checks the index while the CI lint command still runs every full check', async (t) => {
   const f = await fixture(t);
-  await copyFile(path.join(desktop, 'scripts/lint-runner.mjs'), path.join(f.project, 'scripts/lint-runner.mjs'));
+  for (const name of ['lint-runner.mjs', 'package-manager.mjs']) {
+    await copyFile(path.join(desktop, 'scripts', name), path.join(f.project, 'scripts', name));
+  }
   await writeFile(path.join(f.project, 'scripts/hook-check.mjs'), [
     "import { existsSync, writeFileSync } from 'node:fs';",
     "import path from 'node:path';",
@@ -352,7 +360,7 @@ test(
     expectSuccess(f.git(['commit', '-m', 'chore: 初始化检查样例']));
     const linked = path.join(f.temporary, 'linked worktree 中文');
     expectSuccess(f.git(['worktree', 'add', '-b', 'hook-test', linked]));
-    await symlink(path.join(desktop, 'node_modules'), path.join(linked, 'apps/desktop/node_modules'), 'junction');
+    await linkDesktopDependencies(path.join(linked, 'apps/desktop'));
     f.install(linked);
     await writeFile(path.join(linked, 'apps/desktop/scripts/probe.mjs'), "console.log('linked');\n");
     expectSuccess(f.git(['add', '.'], linked));

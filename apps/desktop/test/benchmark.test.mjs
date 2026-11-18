@@ -7,6 +7,15 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
+test('desktop benchmark examples pass the executable and report directly to pnpm', async () => {
+  const readme = await readFile(new URL('../README.md', import.meta.url), 'utf8');
+  const examples = readme.match(/^pnpm run bench:desktop .+\.json$/gm) ?? [];
+  assert.equal(examples.length, 2);
+  for (const example of examples) {
+    assert.match(example, /^pnpm run bench:desktop \S+\.exe \S+\.json$/);
+  }
+});
+
 test(
   'fixture benchmark reaches an isolated launch and records source metadata',
   { skip: process.platform !== 'win32' },

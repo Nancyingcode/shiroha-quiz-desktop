@@ -2,6 +2,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { lstat, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { packageScript } from './package-manager.mjs';
 
 /** @typedef {{ pull_request?: { base?: { sha?: string, ref?: string }, head?: { sha?: string } } }} PullRequestEvent */
 /** @typedef {{ mode: 'full' | 'changed', reason: string, changed: string[], files: string[] }} LintPlan */
@@ -29,9 +30,10 @@ function affectsLintConfiguration(file) {
     || file.startsWith('.husky/')
     || file === 'apps/desktop/.stylelintignore'
     || file === 'apps/desktop/stylelint-suppressions.json'
-    || /^apps\/desktop\/scripts\/(?:lint[^/]*|check-docs)\.mjs$/i.test(file)
+    || /^apps\/desktop\/scripts\/(?:lint[^/]*|check-docs|package-manager)\.mjs$/i.test(file)
     || /^apps\/desktop\/test\/lint-[^/]*\.mjs$/i.test(file)
     || /^(?:eslint(?:\.|$)|\.eslint|prettier(?:\.|$)|\.prettier|tsconfig(?:\.|$)|jsconfig(?:\.|$))/i.test(name)
+    || file === 'apps/desktop/pnpm-workspace.yaml'
     || /^(?:package(?:-lock)?\.json|npm-shrinkwrap\.json|yarn\.lock|pnpm-lock\.yaml|Cargo\.lock)$/i.test(name)
     || /^(?:\.gitignore|\.gitattributes|\.editorconfig|\.npmrc|\.nvmrc|\.node-version)$/i.test(name)
     || /\.config\.[^.]+$/i.test(name);
@@ -169,10 +171,9 @@ export async function lintChangedFiles(repositoryRoot, files) {
 }
 
 /** @param {string} script */
-function runNpm(script) {
-  const npm = process.env.npm_execpath;
-  if (!npm) { throw new Error('请通过 npm run lint:ci 启动检查。'); }
-  const result = spawnSync(process.execPath, [npm, 'run', script], {
+function runPackageScript(script) {
+  const invocation = packageScript(script);
+  const result = spawnSync(invocation.command, invocation.args, {
     cwd: desktop, stdio: 'inherit', windowsHide: true,
   });
   if (result.error) { throw result.error; }
@@ -205,13 +206,13 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
   });
   console.log(`CI lint: ${plan.mode} (${plan.reason})`);
   if (plan.mode === 'full') {
-    if (!runNpm('lint')) { process.exitCode = 1; }
+    if (!runPackageScript('lint')) { process.exitCode = 1; }
   } else {
     const passed = await lintChangedFiles(root, plan.files);
     const cssChanged = plan.changed.some((file) => /\.css$/i.test(file));
-    const cssPassed = !cssChanged || runNpm('lint:css');
-    // 文档检查涉及链接目标，仍保持项目级检查；规则回归由同一 CI job 的 npm test 执行。
-    const docsPassed = runNpm('lint:docs');
+    const cssPassed = !cssChanged || runPackageScript('lint:css');
+    // 文档检查涉及链接目标，仍保持项目级检查；规则回归由同一 CI job 的 pnpm test 执行。
+    const docsPassed = runPackageScript('lint:docs');
     if (!passed || !docsPassed || !cssPassed) { process.exitCode = 1; }
   }
 }

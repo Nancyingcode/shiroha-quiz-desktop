@@ -25,7 +25,6 @@ async function fixture(t) {
   t.after(() => rm(root, { recursive: true, force: true }));
   await mkdir(path.join(root, 'src-tauri'), { recursive: true });
   await writeFile(path.join(root, 'package.json'), JSON.stringify({ version: '0.1.0' }));
-  await writeFile(path.join(root, 'package-lock.json'), JSON.stringify({ version: '0.1.0', packages: { '': { version: '0.1.0' } } }));
   await writeFile(path.join(root, 'src-tauri/tauri.conf.json'), JSON.stringify({ version: '0.1.0' }));
   await writeFile(path.join(root, 'src-tauri/Cargo.toml'), '[package]\nname = "shiroha-quiz-desktop"\nversion = "0.1.0"\n');
   await writeFile(path.join(root, 'src-tauri/Cargo.lock'), 'version = 4\n\n[[package]]\nname = "dependency"\nversion = "2.0.0"\n\n[[package]]\nname = "shiroha-quiz-desktop"\nversion = "0.1.0"\n');
@@ -68,10 +67,10 @@ test('CLI context uses the resolved commit even when the event identifies an ann
   assert.equal(output.trim(), input.commit);
 });
 
-test('release validates every version source including both lockfiles without writing', async (t) => {
+test('release validates application versions without installed dependencies or an npm lockfile', async (t) => {
   const f = await fixture(t);
   await validateVersions(f.root, f.context);
-  const files = ['package.json', 'package-lock.json', 'src-tauri/tauri.conf.json', 'src-tauri/Cargo.toml', 'src-tauri/Cargo.lock'];
+  const files = ['package.json', 'src-tauri/tauri.conf.json', 'src-tauri/Cargo.toml', 'src-tauri/Cargo.lock'];
   for (const file of files) {
     const original = await readFile(path.join(f.root, file), 'utf8');
     const changed = original.replace('0.1.0', '0.2.0');
@@ -80,8 +79,6 @@ test('release validates every version source including both lockfiles without wr
     assert.equal(await readFile(path.join(f.root, file), 'utf8'), changed);
     await f.put(file, original);
   }
-  await f.put('package-lock.json', JSON.stringify({ version: '0.1.0', packages: { '': {} } }));
-  await assert.rejects(validateVersions(f.root, f.context), /version|版本/i);
 });
 
 test('collects each build before the shared NSIS output is overwritten and hashes final bytes', async (t) => {
@@ -291,11 +288,11 @@ function assertReleaseCollectionOrder(checks) {
   assert.match(releaseUpload, /^ {8}if: inputs\.collect_release == true$/m);
   assert.match(releaseUpload, /^ {10}if-no-files-found: error$/m);
   const sequence = [
-    'npm run build -- --target x86_64-pc-windows-msvc\n',
+    'pnpm run build --target x86_64-pc-windows-msvc\n',
     'release-artifacts.mjs stage exe',
-    'npm run bundle:nsis',
+    'pnpm run bundle:nsis',
     'release-artifacts.mjs stage nsis',
-    'npm run bundle:offline',
+    'pnpm run bundle:offline',
     'release-artifacts.mjs stage offline',
     'release-artifacts.mjs finalize',
     releaseUpload,
@@ -309,6 +306,18 @@ function assertReleaseCollectionOrder(checks) {
   return releaseUpload;
 }
 
+test('workflow installs the manifest pnpm before cached frozen dependency installation', async () => {
+  const checks = (await readFile(new URL('../../../.github/workflows/desktop.yml', import.meta.url), 'utf8'))
+    .replace(/\r\n/g, '\n');
+  const pnpm = checks.indexOf('      - uses: pnpm/action-setup@v4\n');
+  const node = checks.indexOf('      - uses: actions/setup-node@v4\n');
+  const install = checks.indexOf('      - run: pnpm install --frozen-lockfile\n');
+  assert.ok(pnpm >= 0 && pnpm < node && node < install);
+  assert.match(checks, /package_json_file: apps\/desktop\/package\.json/);
+  assert.match(checks, /cache: pnpm/);
+  assert.match(checks, /cache-dependency-path: apps\/desktop\/pnpm-lock\.yaml/);
+});
+
 test('workflow preserves the online build before overwrite and gates writes behind checks', async () => {
   const checks = (await readFile(new URL('../../../.github/workflows/desktop.yml', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
   const release = await readFile(new URL('../../../.github/workflows/desktop-release.yml', import.meta.url), 'utf8');
@@ -317,7 +326,7 @@ test('workflow preserves the online build before overwrite and gates writes behi
   const withoutReleaseUpload = checks.replace(releaseBlock, '');
   assert.notEqual(withoutReleaseUpload, checks);
   assert.throws(() => assertReleaseCollectionOrder(withoutReleaseUpload), /Missing verified release upload step/);
-  const buildStep = '      - run: npm run build -- --target x86_64-pc-windows-msvc\n';
+  const buildStep = '      - run: pnpm run build --target x86_64-pc-windows-msvc\n';
   const earlierLogUpload = [
     '      - name: Upload test output when checks fail',
     '        if: failure()',
@@ -346,8 +355,8 @@ test('workflow preserves the online build before overwrite and gates writes behi
 test('installer packaging reuses one x64 build and only changes bundle settings', async () => {
   const checks = await readFile(new URL('../../../.github/workflows/desktop.yml', import.meta.url), 'utf8');
   const { scripts } = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
-  assert.equal((checks.match(/- run: npm run build\b/g) ?? []).length, 1);
-  assert.doesNotMatch(checks, /npm run build:(?:nsis|offline)/);
+  assert.equal((checks.match(/- run: pnpm run build\b/g) ?? []).length, 1);
+  assert.doesNotMatch(checks, /pnpm run build:(?:nsis|offline)/);
   for (const [kind, mode] of [['nsis', 'downloadBootstrapper'], ['offline', 'offlineInstaller']]) {
     assert.equal(scripts[`bundle:${kind}`], `tauri bundle --config src-tauri/tauri.${kind}.conf.json --target x86_64-pc-windows-msvc`);
     const config = JSON.parse(await readFile(new URL(`../src-tauri/tauri.${kind}.conf.json`, import.meta.url), 'utf8'));

@@ -2,7 +2,7 @@
 
 仅使用自建安全题库和假密钥，每个用例新建 Playwright context，不接触用户浏览器数据。`page.route` 拦截 `https://mock-ai.invalid/**`，返回 OpenAI 格式解析 JSON / 追问正文；其它 API 请求一律阻断。不安装包，不调用真实账户或收费 API，不改应用文件。
 
-运行前需具备项目要求的 Node.js 24+，并已按 `apps/desktop/package-lock.json` 安装桌面开发依赖。[共享源码加载器](../dual-platform/source-tools.cjs)复用已锁定的 ESLint 解析状态键和 IIFE，避免排版变化使桥接失效。没有新增 npm 包，但 AI runner 新增了对既有桌面开发依赖的运行前提；只有 Node、Playwright 和浏览器不再足够。依赖准备遵守[根规范](../../AGENTS.md#6-依赖规则与-git)的项目进程占用检查要求，测试脚本仍不自行安装依赖。
+运行前需具备项目要求的 Node.js 24+，并已按 `apps/desktop/pnpm-lock.yaml` 安装桌面开发依赖。[共享源码加载器](../dual-platform/source-tools.cjs)复用已锁定的 ESLint 解析状态键和 IIFE，避免排版变化使桥接失效。没有新增依赖包，但 AI runner 新增了对既有桌面开发依赖的运行前提；只有 Node、Playwright 和浏览器不再足够。依赖准备遵守[根规范](../../AGENTS.md#6-依赖规则与-git)的项目进程占用检查要求，测试脚本仍不自行安装依赖。
 
 此外需预先具备可被 `require('playwright')` 解析的 Playwright 包及已安装的 Chromium 浏览器（或显式指定现有 Chromium/Edge）。脚本不安装依赖、不下载浏览器；本机 runtime 不随仓库分发。加载包时先 `require('playwright')`，仅缺包时兜底当前机器的 bundled 目录。
 
@@ -13,7 +13,7 @@ node ./test/web-ai-practice/runner.cjs
 node ./test/web-ai-practice/runner.cjs --self-test
 ```
 
-当前机器 PowerShell 示例（无需 npm，已存在 Playwright、无缓存 Chromium，使用已有 Edge）：
+当前机器 PowerShell 示例（无需安装包，已存在 Playwright、无缓存 Chromium，使用已有 Edge）：
 
 ```powershell
 & 'C:\Users\REiQEr\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe' 'E:\codex\exercise\shiroha_quiz\test\web-ai-practice\runner.cjs' --executable-path 'C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe'
@@ -33,7 +33,7 @@ node ./test/web-ai-practice/runner.cjs --self-test
 
 `--filter submit-modes` 运行提交模式回归：总提交草稿跨题保留、提交前无单题判分、简答自评、导航锁定、取消与放弃草稿、重复点击及存储失败回滚重试。`--filter practice-review-ai` 验证总提交错题答案对照、两种模式未提交时主动使用 AI、当前草稿进入请求、保存简答解析不触发自评，以及配置 AI 后返回保全草稿。未主动操作 AI 时仍不得发起请求。
 
-全题型、跨库同 ID、超过八题的完整错题一览和收藏单题入口另由 `apps/desktop` 下的 `npm run test:web-platform` 覆盖。隔离 WebView2 的 `npm run test:desktop` 使用原生 mock 服务验证答题 AI、错题对照、全对提示与原生保存，不调用真实收费服务。
+全题型、跨库同 ID、超过八题的完整错题一览和收藏单题入口另由 `apps/desktop` 下的 `pnpm run test:web-platform` 覆盖。隔离 WebView2 的 `pnpm run test:desktop` 使用原生 mock 服务验证答题 AI、错题对照、全对提示与原生保存，不调用真实收费服务。
 
 `--filter wrong-analysis` 验证错题本、逐题答错反馈、总提交错题一览和考试结果的空解析入口，覆盖主动生成、停止及迟到响应隔离、重新生成失败保留草稿、放弃草稿、配置缺失、保存失败回滚与重试、来源题删除，以及保存只改来源解析、不重写历史快照。使用 `emptyAnalysis` 自建 fixture；未确认保存前不写入题库。桌面 smoke 另通过真实界面导入空解析题目，使用原生 mock 生成、保存并重载验证。
 
