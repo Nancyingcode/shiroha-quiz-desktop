@@ -2616,6 +2616,78 @@ test('保存锁定期间阻止交互，完成后原有监听器恢复放行', as
   await page.locator('body[data-storage-state="ready"]').waitFor();
   assert.deepEqual(await dispatch(), [true, true, true, true]);
 });
+for (const { scenario, move, hasSibling } of [
+  { scenario: '最后一库移出后回退到当前题库', move: true, hasSibling: false },
+  { scenario: '原组还有其他题库时保留分组范围', move: true, hasSibling: true },
+  { scenario: '单库分组只改名时保留范围且不提示回退', move: false, hasSibling: false },
+]) {
+  test(`题库分组：${scenario}`, async (t) => {
+    const initial = webState();
+    const oldGroup = '原练习分组';
+    const newGroup = move ? '调整后的分组' : oldGroup;
+    const newName = '调整后的题库';
+    initial.banks[0].groupName = oldGroup;
+    initial.banks[1].groupName = hasSibling ? oldGroup : '独立分组';
+    const originalScope = { type: 'group', value: oldGroup };
+    const shouldFallBack = move && !hasSibling;
+    const expectedScope = shouldFallBack ? { type: 'bank', value: 'bank-a' } : originalScope;
+    const page = await pageFor(t, JSON.stringify(initial));
+    const ready = page.locator('body[data-storage-state="ready"]');
+    const navigateToBanks = page.locator('.nav[data-view="banks"]');
+    const scopeLabels = page.locator('#bank-practice-scope-v8916 b');
+    const fallbackNotice = page.locator('#app-toast')
+      .getByText('原练习分组已无题库，已切换为当前题库。', { exact: true });
+    await ready.waitFor();
+    await navigateToBanks.click();
+    await page.locator(`[data-practice-group-v8916="${oldGroup}"]`).click();
+    await ready.waitFor();
+    const before = JSON.parse(await saved(page));
+    assert.deepEqual(before.settings.practiceScope, originalScope);
+
+    const name = page.locator('#bank-rename-input');
+    const group = page.locator('#bank-group-rename-input-v58');
+    const rename = page.locator('#rename-bank-btn');
+    await name.fill(newName);
+    await group.fill(newGroup);
+    if (shouldFallBack) {
+      await page.evaluate(() => {
+        const { storage } = globalThis.ShirohaPlatform;
+        const { write } = storage;
+        storage.write = async () => {
+          storage.write = write;
+          throw new Error('模拟分组保存失败');
+        };
+      });
+      await rename.click();
+      await page.locator('#platform-status.failed').filter({ hasText: '模拟分组保存失败' }).waitFor();
+      await ready.waitFor();
+      assert.deepEqual(JSON.parse(await saved(page)), before);
+      assert.deepEqual(await scopeLabels.allTextContents(), [before.banks[0].name, oldGroup]);
+      assert.equal(await name.inputValue(), newName);
+      assert.equal(await group.inputValue(), newGroup);
+      assert.equal(await fallbackNotice.count(), 0);
+    }
+
+    await rename.click();
+    await ready.waitFor();
+    const after = JSON.parse(await saved(page));
+    assert.deepEqual(after.settings.practiceScope, expectedScope);
+    assert.equal(after.activeBankId, 'bank-a');
+    assert.equal(after.banks[0].name, newName);
+    assert.equal(after.banks[0].groupName, newGroup);
+    assert.deepEqual(after.banks[0].questions, before.banks[0].questions);
+    assert.deepEqual(after.banks[1], before.banks[1]);
+    assert.equal(await fallbackNotice.count(), shouldFallBack ? 1 : 0);
+
+    const expectedLabels = [newName, shouldFallBack ? newName : oldGroup];
+    assert.deepEqual(await scopeLabels.allTextContents(), expectedLabels);
+    await page.reload();
+    await ready.waitFor();
+    await navigateToBanks.click();
+    assert.deepEqual(await scopeLabels.allTextContents(), expectedLabels);
+  });
+}
+
 test('容量不足不清空编辑内容，重试成功后再离开编辑态', async (t) => {
   const page = await pageFor(t, JSON.stringify(webState()));
   await page.locator('body[data-storage-state="ready"]').waitFor();

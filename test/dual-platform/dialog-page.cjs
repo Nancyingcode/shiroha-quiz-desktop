@@ -157,7 +157,13 @@ test('真实练习退出取消保留作答、确认保存；事务内输入弹�
   await page.locator('#app-dialog-message').filter({ hasText: '一级分组' }).waitFor();
   await page.locator('[data-dialog-accept]').click();
   await page.locator('body[data-storage-state="ready"]').waitFor();
-  assert.equal(await page.evaluate(() => JSON.parse(globalThis.localStorage.getItem('shiroha_quiz_state_v28_4_c1')).banks.some((bank) => bank.name === '居中弹框测试题库')), true);
+  const after = await page.evaluate(() => JSON.parse(globalThis.localStorage.getItem('shiroha_quiz_state_v28_4_c1')));
+  const bank = after.banks.find((item) => item.name === '居中弹框测试题库');
+  assert(bank);
+  assert.deepEqual(bank.questions, []);
+  assert.equal(bank.groupName, '');
+  assert.equal(after.activeBankId, bank.id);
+  assert.deepEqual(after.settings.practiceScope, { type: 'bank', value: bank.id });
   assert.deepEqual(errors, []);
 });
 

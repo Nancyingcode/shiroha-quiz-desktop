@@ -365,6 +365,24 @@
     },
     progress: { answer: (...args) => getPracticeAnswerStateV26(...args) },
   });
+  const { renameActiveBank, newEmptyBank } = globalThis.ShirohaBankMetadata.create({
+    state,
+    select: $,
+    activeBank,
+    normalizeGroup: normalizeBankGroupNameV58,
+    scope: {
+      current: practiceScopeV8916,
+      setBank: setPracticeBankScopeV8916,
+      groupType: PRACTICE_SCOPE_GROUP_V8916,
+      bankType: PRACTICE_SCOPE_BANK_V8916,
+    },
+    dialogs: ShirohaDialogs,
+    storage: { transaction: runMutation, save: saveSilent },
+    renderAll,
+    toast,
+    makeId,
+    now,
+  });
   const {
     closeBankQuestionDetail,
     renderBankSelect,
@@ -3163,36 +3181,6 @@ D. 高速通过积水路段`;
     return name === 'RangeError' || /* 从运行时错误文案识别序列化字符串超限，补足仅有错误名称的判断。 */ /Invalid string length|string length|too large/i.test(msg);
   }
 
-  // 在保存事务中校验用户输入的题库名，取消或失败时不提交空名称。
-  async function renameActiveBank() {
-    return runMutation(/* 从当前界面读取新名称，确认有效后保存及刷新相关视图。 */ async () => {
-      const b = activeBank();
-      const val = $('#bank-rename-input').value.trim();
-      if (!val) {
-        await ShirohaDialogs.alert('请输入新的题库名称。');
-        return;
-      }
-
-      const oldGroup = bankGroupNameV58(b);
-      b.name = val;
-      b.groupName = normalizeBankGroupNameV58($('#bank-group-rename-input-v58')?.value || b.groupName);
-      b.updatedAt = now();
-      const scope = practiceScopeV8916();
-      if (scope.type === PRACTICE_SCOPE_GROUP_V8916 && scope.value === oldGroup && state.banks.every((x) => x.id === b.id || bankGroupNameV58(x) !== oldGroup)) {
-        ensurePracticeScopeV8916();
-        toast('原练习分组已无题库，已切换为当前题库。', 'warn');
-      }
-
-      const g = $('#bank-group-rename-input-v58');
-      if (g) {
-        g.dataset.lastBankIdV58 = '';
-      }
-
-      await saveSilent();
-      renderAll();
-    });
-  }
-
   function duplicateActiveBank() {
     duplicateBankById(activeBank().id);
   }
@@ -3219,23 +3207,6 @@ D. 高速通过积水路段`;
 
       state.banks.push(copy);
       setPracticeBankScopeV8916(copy.id, true);
-      await saveSilent();
-      renderAll();
-    });
-  }
-
-  // 新题库创建成功后立即切换过去，便于继续导入或编辑。
-  async function newEmptyBank() {
-    return runMutation(/* 用户确认名称后才创建题库，分组可以留空。 */ async () => {
-      const name = await ShirohaDialogs.prompt('请输入新题库名称：', '新建空题库');
-      if (!name) {
-        return;
-      }
-
-      const groupName = normalizeBankGroupNameV58(await ShirohaDialogs.prompt('请输入一级分组名称，可留空：', '') || '');
-      const bank = { id: makeId('bank'), name: name.trim() || '新建空题库', groupName, createdAt: now(), updatedAt: now(), questions: [] };
-      state.banks.push(bank);
-      setPracticeBankScopeV8916(bank.id, true);
       await saveSilent();
       renderAll();
     });

@@ -951,16 +951,20 @@ async function importAndPractice(page, bankName, analysisText = '1 + 1 = 2') {
 }
 
 /** @param {Page} page */
-async function appendImportSmoke(page) {
-  const readDatabase = () => page.evaluate(async () => {
+function readNativeSnapshot(page) {
+  return page.evaluate(() => {
     const { ShirohaDesktopHost: host } = /** @type {NativeTestWindow} */ (window);
     if (!host) { throw new Error('本地桥接缺失'); }
     return /** @type {Promise<import('../../web/platform/contracts.d.ts').Snapshot>} */ (host.invoke('local_read'));
   });
+}
+
+/** @param {Page} page */
+async function appendImportSmoke(page) {
   // 上一个用例补读过全部正文，重载后从应用和存储一致的摘要视图开始。
   await page.reload();
   await page.locator('body[data-storage-state="ready"]').waitFor();
-  const before = await readDatabase();
+  const before = await readNativeSnapshot(page);
   await page.locator('.nav[data-view="import"]').click();
   await page.locator('#import-mode').selectOption('json');
   await page.locator('#import-text').fill(JSON.stringify([{
@@ -995,7 +999,7 @@ async function appendImportSmoke(page) {
   const notice = page.locator('#app-toast p').filter({ hasText: /保存方式或目标题库已变化|已追加到/ });
   await notice.waitFor();
   await page.locator('body[data-storage-state="ready"]').waitFor();
-  const afterSwitch = await readDatabase();
+  const afterSwitch = await readNativeSnapshot(page);
   assert.deepEqual(
     afterSwitch.banks.map((bank) => [bank.id, bank.questions.length]),
     before.banks.map((bank) => [bank.id, bank.questions.length]),
@@ -1009,7 +1013,7 @@ async function appendImportSmoke(page) {
   assert.deepEqual(reads, [['lazy-a'], ['lazy-b']]);
   await page.reload();
   await page.locator('body[data-storage-state="ready"]').waitFor();
-  const saved = await readDatabase();
+  const saved = await readNativeSnapshot(page);
   const source = before.banks.find((bank) => bank.id === 'lazy-a');
   const original = before.banks.find((bank) => bank.id === 'lazy-b');
   const appended = saved.banks.find((bank) => bank.id === 'lazy-b');
@@ -1024,6 +1028,71 @@ async function appendImportSmoke(page) {
   assert.equal(saved.activeBankId, 'lazy-b');
   assert.deepEqual(saved.settings.practiceScope, { type: 'bank', value: 'lazy-b' });
   return { reads, savedAfterReload: true };
+}
+
+/** @param {Page} page */
+async function bankMetadataSmoke(page) {
+  const ready = page.locator('body[data-storage-state="ready"]');
+  await ready.waitFor();
+  const before = await readNativeSnapshot(page);
+  const original = before.banks.find((bank) => bank.id === before.activeBankId);
+  assert(original && original.questions.length > 0, '用有正文的题库核对分组变动');
+
+  const banks = page.locator('.nav[data-view="banks"]');
+  await banks.click();
+  const name = page.locator('#bank-rename-input');
+  const group = page.locator('#bank-group-rename-input-v58');
+  const rename = page.locator('#rename-bank-btn');
+  const oldGroup = '第五批练习分组';
+  const newGroup = '第五批移入分组';
+  const newName = '第五批改名题库';
+  await name.fill(original.name);
+  await group.fill(oldGroup);
+  await rename.click();
+  await ready.waitFor();
+  await page.locator(`[data-practice-group-v8916="${oldGroup}"]`).click();
+  await ready.waitFor();
+  const scopeLabels = page.locator('#bank-practice-scope-v8916 b');
+  assert.deepEqual(await scopeLabels.allTextContents(), [original.name, oldGroup]);
+
+  await name.fill(newName);
+  await group.fill(newGroup);
+  await rename.click();
+  await page.locator('#app-toast').getByText('原练习分组已无题库，已切换为当前题库。', { exact: true }).waitFor();
+  await page.reload();
+  await ready.waitFor();
+  const moved = await readNativeSnapshot(page);
+  const movedBank = moved.banks.find((bank) => bank.id === original.id);
+  assert(movedBank);
+  assert.equal(moved.activeBankId, original.id);
+  assert.deepEqual(moved.settings.practiceScope, { type: 'bank', value: original.id });
+  assert.equal(movedBank.name, newName);
+  assert.equal(movedBank.groupName, newGroup);
+  assert.deepEqual(movedBank.questions, original.questions);
+
+  const emptyName = '第五批空题库';
+  await banks.click();
+  await page.locator('#new-empty-bank-btn').click();
+  const dialog = page.locator('#app-dialog');
+  const input = dialog.locator('#app-dialog-input');
+  const accept = dialog.locator('[data-dialog-accept]');
+  await input.fill(emptyName);
+  await accept.click();
+  await dialog.getByText('请输入一级分组名称，可留空：', { exact: true }).waitFor();
+  await input.fill(newGroup);
+  await accept.click();
+  await ready.waitFor();
+  await page.reload();
+  await ready.waitFor();
+  const saved = await readNativeSnapshot(page);
+  const empty = saved.banks.find((bank) => bank.name === emptyName);
+  assert(empty);
+  assert.equal(empty.groupName, newGroup);
+  assert.deepEqual(empty.questions, []);
+  assert.equal(saved.activeBankId, empty.id);
+  assert.deepEqual(saved.settings.practiceScope, { type: 'bank', value: empty.id });
+  assert.deepEqual(saved.banks.find((bank) => bank.id === original.id), movedBank);
+  return { fallbackAfterReload: true, questionsPreserved: original.questions.length, emptyBankAfterReload: true };
 }
 
 /** @param {Page} page */
@@ -1908,9 +1977,10 @@ async function main() {
       assert.deepEqual(await readFile(path.join(damaged, 'library.sqlite3')), broken);
       return { imported: true, originalPreserved: true };
     });
-    // 导入会改变活动题库，把双文件样本放在依赖既有题库的用例之后。
+    // 导入和整理会改变活动题库，放在依赖既有题库的用例之后。
     await check('双文件导入自动匹配与保存重载', () => dualFileImportSmoke(importedRecovery.page));
     await check('追加目标变化后重新确认并保存到 SQLite', () => appendImportSmoke(importedRecovery.page));
+    await check('题库改名、分组范围回退和新建空库保存重载', () => bankMetadataSmoke(importedRecovery.page));
   } catch (error) {
     if (!(error instanceof SmokeCheckAborted)) { checks.push({ name: '启动或运行', ok: false, error: errorText(error) }); }
   } finally {
