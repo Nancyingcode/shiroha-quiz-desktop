@@ -950,6 +950,36 @@ async function importAndPractice(page, bankName, analysisText = '1 + 1 = 2') {
   return { ...result, findReplace: true, deselect: true, screenshot: SCREENSHOT_PATH };
 }
 
+/** @param {Page} page */
+async function dualFileImportSmoke(page) {
+  const bankName = 'WebView2 双文件匹配样本';
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.locator('.nav[data-view="import"]').click();
+  await page.locator('#import-strategy').selectOption('auto');
+  await page.locator('#import-save-mode-v59').selectOption('new');
+  await page.locator('#dual-load-sample-btn').click();
+  await page.locator('#import-bank-name').fill(bankName);
+  await page.locator('#parse-dual-import-btn').click();
+  await page.locator('#import-summary .import-report').filter({ hasText: '双文件导入' }).waitFor();
+  const previewAnswers = await page.locator('#import-preview tbody tr td:nth-child(6)').allTextContents();
+  assert.deepEqual(previewAnswers, ['B', 'A', 'ABC']);
+  await page.locator('#dual-confirm-import-btn').click();
+  await page.locator('#active-bank-select option').filter({ hasText: bankName }).waitFor({ state: 'attached' });
+  await page.reload();
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+
+  const savedAnswers = await page.evaluate(async (name) => {
+    const platform = /** @type {{storage: import('../../web/platform/runtime.d.ts').BrowserStorage}} */ (
+      Reflect.get(window, 'ShirohaPlatform'));
+    const snapshot = await platform.storage.read();
+    if (!snapshot) { throw new Error('双文件导入后没有快照'); }
+    await platform.storage.ensureAll?.(snapshot);
+    return snapshot.banks.find((bank) => bank.name === name)?.questions.map((question) => question.answer);
+  }, bankName);
+  assert.deepEqual(savedAnswers, [['B'], ['A'], ['A', 'B', 'C']]);
+  return { previewAnswers, savedAfterReload: true };
+}
+
 /** @param {Runtime} runtime @param {string} bankName @param {string} origin */
 async function totalPracticeSmoke(runtime, bankName, origin) {
   const { page } = runtime;
@@ -1802,6 +1832,8 @@ async function main() {
       assert.deepEqual(await readFile(path.join(damaged, 'library.sqlite3')), broken);
       return { imported: true, originalPreserved: true };
     });
+    // 导入会改变活动题库，把双文件样本放在依赖既有题库的用例之后。
+    await check('双文件导入自动匹配与保存重载', () => dualFileImportSmoke(importedRecovery.page));
   } catch (error) {
     if (!(error instanceof SmokeCheckAborted)) { checks.push({ name: '启动或运行', ok: false, error: errorText(error) }); }
   } finally {

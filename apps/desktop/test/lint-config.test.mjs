@@ -682,6 +682,7 @@ test('statement-per-line pilot covers zero-hit modules without affecting other f
     'apps/web/study-sessions.js',
     'apps/web/app.js',
     'apps/web/import/find-replace.js',
+    'apps/web/import/dual-answers.js',
     'apps/web/questions/rich-content.js',
   ]) {
     await t.test(filePath, async () => {
@@ -703,7 +704,10 @@ test('the entry and extracted modules require separate lines for statements and 
   const lint = linter();
   const declaration = "const button = document.querySelector('#ocr-copy-btn');";
   const expanded = [declaration, 'if (button) {', '  button.onclick = () => true;', '}', ''].join('\n');
-  for (const filePath of ['apps/web/app.js', 'apps/web/import/find-replace.js', 'apps/web/questions/rich-content.js']) {
+  for (const filePath of [
+    'apps/web/app.js', 'apps/web/import/find-replace.js', 'apps/web/import/dual-answers.js',
+    'apps/web/questions/rich-content.js',
+  ]) {
     const [compact] = await lint.lintText(
       `${declaration}if (button) { button.onclick = () => true; }\n`,
       { filePath },

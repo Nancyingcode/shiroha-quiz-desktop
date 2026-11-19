@@ -30,7 +30,11 @@ const exportedNames = [
   'needsPracticeSelfAssessment: practicePage.needsPracticeSelfAssessment',
   'mergeBackupBanksV23', 'download',
   'practiceItemKeyV8916', 'getPracticeAnswerStateV26', 'addWrong', 'markRight', 'getWrongEntries',
-  'parseTextQuestions', 'parseAnswerEntries', 'mergeQuestionAnswers', 'sourceQuestionNumberFromLineV58910: textParser.sourceQuestionNumberFromLineV58910',
+  'parseTextQuestions',
+  'parseAnswerEntries: dualAnswers.parseAnswerEntries',
+  'mergeQuestionAnswers: dualAnswers.mergeQuestionAnswers',
+  'sourceQuestionNumberFromLineV58910: textParser.sourceQuestionNumberFromLineV58910',
+  'resolveDualAnswerCandidates',
   'parseTextQuestionsBaseDetailed: textParser.parseTextQuestionsBaseDetailed', 'repairParsedQuestionsLocally: textParser.repairParsedQuestionsLocally',
   'repairMissingAndStuckQuestionsBySourceV58910: textParser.repairMissingAndStuckQuestionsBySourceV58910',
   'analyzeQuestionTextProfile: textParser.analyzeQuestionTextProfile', 'getSourceMetaV58910: textParser.getSourceMetaV58910',
@@ -119,7 +123,7 @@ function loadWeb({
   } else {
     runWebScripts(context, ['text-parser.js']);
   }
-  runWebScripts(context, ['backup-core.js', 'zip.js', 'backup-archive.js', 'backup-data.js', 'webdav-panel.js', 'docx-import.js', 'pdf-import.js', 'ocr-import.js', 'table-import.js', 'import-preview.js', 'ai-results.js', 'ai-import-sessions.js', 'ai-question-sessions.js', 'ai-settings.js', 'ai-transport.js', 'ai-prompts.js', 'question-view.js', 'bank-page.js', 'saved-questions-page.js', 'training-review-page.js', 'bank-editor.js', 'study-sessions.js', 'exam-page.js', 'practice-selection.js', 'practice-page.js', 'ai-import-panel.js', 'ai-question-panels.js', 'question-editor.js', 'import/find-replace.js']);
+  runWebScripts(context, ['import/dual-answers.js', 'backup-core.js', 'zip.js', 'backup-archive.js', 'backup-data.js', 'webdav-panel.js', 'docx-import.js', 'pdf-import.js', 'ocr-import.js', 'table-import.js', 'import-preview.js', 'ai-results.js', 'ai-import-sessions.js', 'ai-question-sessions.js', 'ai-settings.js', 'ai-transport.js', 'ai-prompts.js', 'question-view.js', 'bank-page.js', 'saved-questions-page.js', 'training-review-page.js', 'bank-editor.js', 'study-sessions.js', 'exam-page.js', 'practice-selection.js', 'practice-page.js', 'ai-import-panel.js', 'ai-question-panels.js', 'question-editor.js', 'import/find-replace.js']);
   // 在测试副本中取消页面启动；所有被测解析、评分、转换和 ZIP 代码仍来自真实业务源码。
   const bridge = `\nObject.assign(state, migrateState(${JSON.stringify(state || null)} || blankState(), KEY));\nglobalThis.__test = {${exportedNames.join(',')}, snapshot: () => JSON.parse(JSON.stringify(state)), practiceSession, practiceSnapshot: () => JSON.parse(JSON.stringify(practiceSession.current)), importState: () => ({ report: importDraft.report, warnings: importDraft.warnings, diagnostics: importDraft.diagnostics })};\n`;
   vm.runInContext(source.replaceStartup(bridge), context, { filename: sourcePath, timeout: 5000 });

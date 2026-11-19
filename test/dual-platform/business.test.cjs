@@ -189,11 +189,65 @@ test('双文件按题型与重复题号对应，不能将单选答案套到多�
   assert.deepEqual(plain(questionList.map((question) => question.number)), [1, 1, 1]);
   assert.deepEqual(plain(questionList.map((question) => question.type)), ['single', 'multiple', 'judge']);
   assert.deepEqual(plain(answers.map((entry) => entry.answer)), [['A'], ['A', 'C'], ['正确']]);
-  for (const mode of ['group', 'number', 'auto']) {
+  for (const mode of ['group', 'number', 'number-strict', 'order', 'auto']) {
     const merged = api.mergeQuestionAnswers(questionList, answers, mode);
     assert.deepEqual(plain(merged.questions.map((question) => question.answer)), [['A'], ['A', 'C'], ['A']]);
   }
   assert(questionList.every((question) => question.answer.length === 0), '合并不能修改原题目列表。');
+
+  const resolved = api.resolveDualAnswerCandidates(questionList, textFixture('dual-answers.txt'));
+  assert.equal(resolved.result.chosenMode, 'group');
+  assert.equal(resolved.result.autoScore, 300);
+  assert.deepEqual(plain(resolved.result.warnings), []);
+  assert.equal(resolved.answerSourceName, '答案表提取');
+  assert.equal(resolved.answerSourceSummary, '答案表提取3条/质量360；答案解析区提取2条/质量130');
+});
+
+test('双文件完整解析兜底保留缺答警告，混合候选去重且保留首条答案', () => {
+  const { api } = loadWeb();
+  const questionList = api.parseTextQuestions([
+    '一、单选题',
+    '1. 第一题选甲还是乙？', 'A. 甲', 'B. 乙',
+    '2. 第二题选左还是右？', 'A. 左', 'B. 右',
+    '3. 第三题选上还是下？', 'A. 上', 'B. 下',
+  ].join('\n'));
+  const before = plain(questionList);
+  assert.equal(api.importState().diagnostics.stats.single, 3);
+  const firstAnswer = ['1. 答案文件复述第一题？', 'A. 甲', 'B. 乙', '答案：A'];
+  const fullAnswer = [
+    '一、单选题', '2. 答案文件复述第二题？', 'A. 左', 'B. 右', '答案：B', ...firstAnswer,
+  ].join('\n');
+
+  const fallback = api.resolveDualAnswerCandidates(questionList, fullAnswer, 'group');
+  assert.equal(fallback.answerSourceName, '完整题库解析兜底');
+  assert.equal(fallback.candidates[0].score, 120);
+  assert.equal(api.importState().diagnostics.stats.single, 2);
+  assert.deepEqual(plain(fallback.result.questions.map((question) => question.number)), [1, 2, 3]);
+  assert.deepEqual(plain(fallback.result.questions.map((question) => question.answer)), [['A'], ['B'], []]);
+  assert.deepEqual(plain(fallback.result.warnings), [
+    '部分题目没有按“题型分组 + 题号”匹配到答案，可尝试改用“按顺序对应”或检查分组标题。',
+    '数量提示：识别到题目 3 道，答案 2 个。',
+    '合并后仍有 1 道题缺少答案。',
+  ]);
+
+  const mixedAnswer = ['一、单选题', '2. B', ...firstAnswer, '1. A'].join('\n');
+  const mixed = api.resolveDualAnswerCandidates(questionList, mixedAnswer, 'group');
+  const hybrid = mixed.candidates.find((candidate) => candidate.key === 'hybrid');
+  const entries = hybrid.entries.map(({
+    number,
+    group,
+    answer,
+    raw,
+  }) => [number, group, answer, raw]);
+  assert.deepEqual(plain(entries), [
+    ['2', '单选题', ['B'], 'B'],
+    ['', '单选题', ['A'], 'A'],
+    ['1', '单选题', ['A'], 'A'],
+    ['2', '一、单选题', ['B'], '2. B'],
+    ['1', '一、单选题', ['A'], '1. A'],
+  ]);
+  assert.equal(hybrid.detail, '混合提取5条（答案表3 + 答案解析2 + 完整题库1）');
+  assert.deepEqual(plain(questionList), before);
 });
 
 test('共享材料绑定到两道题，答案和各自选项保持独立', () => {

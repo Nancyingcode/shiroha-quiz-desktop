@@ -2800,6 +2800,38 @@ test('导入查找替换发出一次原文编辑事件并使旧表格来源失�
   assert.equal(await preview.getByText('表格旧题', { exact: true }).count(), 0);
 });
 
+test('双文件实际导入保留组内重号、预览策略与保存答案', async (t) => {
+  const page = await pageFor(t, JSON.stringify(webState()));
+  page.setDefaultTimeout(5000);
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.locator('.nav[data-view="import"]').click();
+  await page.locator('#dual-question-file').setInputFiles(path.join(__dirname, 'fixtures', 'dual-questions.txt'));
+  await page.locator('#dual-answer-file').setInputFiles(path.join(__dirname, 'fixtures', 'dual-answers.txt'));
+  await page.waitForFunction(() => globalThis.document.querySelector('#dual-question-text').value.includes('偶数')
+    && globalThis.document.querySelector('#dual-answer-text').value.includes('正确'));
+  await page.locator('#import-strategy').selectOption('auto');
+  await page.locator('#dual-match-mode').selectOption('auto');
+  await page.locator('#import-save-mode-v59').selectOption('new');
+  const bankName = '双文件重号回归';
+  await page.locator('#import-bank-name').fill(bankName);
+  await page.locator('#parse-dual-import-btn').click();
+  const preview = page.locator('#import-preview tbody tr');
+  await preview.first().waitFor();
+  assert.deepEqual(await preview.locator('td:nth-child(6)').allTextContents(), ['A', 'AC', 'A']);
+  const report = await page.locator('#import-summary .import-report').innerText();
+  assert.match(report, /实际采用：按题型分组 \+ 组内题号对应/);
+  assert.match(report, /答案候选：答案表提取3条\/质量360/);
+  assert.match(report, /按题型分组 \+ 组内题号对应3题\/缺答案0\/质量300/);
+  await page.locator('#dual-confirm-import-btn').click();
+  await page.locator('#active-bank-select option').filter({ hasText: bankName }).waitFor({ state: 'attached' });
+  await page.reload();
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+
+  const bank = JSON.parse(await saved(page)).banks.find((item) => item.name === bankName);
+  assert.deepEqual(bank.questions.map((question) => question.type), ['single', 'multiple', 'judge']);
+  assert.deepEqual(bank.questions.map((question) => question.answer), [['A'], ['A', 'C'], ['A']]);
+});
+
 test('file URL 支持 ZIP 与文本导入且不依赖可选 PDF/OCR', async (t) => {
   const context = await browser.newContext();t.after(() => context.close());
   const page = await context.newPage();
@@ -2822,6 +2854,8 @@ test('file URL 支持 ZIP 与文本导入且不依赖可选 PDF/OCR', async (t) 
   assert(findReplaceIndex >= 0 && findReplaceIndex < appIndex);
   const richContentIndex = scripts.indexOf('./questions/rich-content.js');
   assert(richContentIndex >= 0 && richContentIndex < scripts.indexOf('./text-parser.js'));
+  const dualAnswersIndex = scripts.indexOf('./import/dual-answers.js');
+  assert(dualAnswersIndex > scripts.indexOf('./text-parser.js') && dualAnswersIndex < appIndex);
   for (const name of ['./quiz-core.js', './text-answers.js', './text-parser.js', './backup-core.js', './zip.js', './backup-archive.js', './backup-data.js', './webdav-panel.js', './docx-import.js', './pdf-import.js', './ocr-import.js', './table-import.js', './import-preview.js', './ai-results.js', './ai-import-sessions.js', './ai-question-sessions.js', './ai-settings.js', './ai-transport.js', './ai-prompts.js', './question-view.js', './bank-page.js', './saved-questions-page.js', './training-review-page.js', './bank-editor.js', './study-sessions.js', './exam-page.js', './practice-selection.js', './practice-page.js', './ai-import-panel.js', './ai-question-panels.js', './question-editor.js']) {
     assert(scripts.indexOf(name) >= 0 && scripts.indexOf(name) < appIndex);
   }
@@ -2837,6 +2871,11 @@ test('file URL 支持 ZIP 与文本导入且不依赖可选 PDF/OCR', async (t) 
   );
   assert.deepEqual(scriptErrors, []);
   await page.locator('.nav[data-view="import"]').click();
+  await page.locator('#dual-load-sample-btn').click();
+  await page.locator('#parse-dual-import-btn').click();
+  await page.locator('#import-summary .import-report').filter({ hasText: '双文件导入' }).waitFor();
+  assert.deepEqual(await page.locator('#import-preview tbody tr td:nth-child(6)').allTextContents(), ['B', 'A', 'ABC']);
+  await page.locator('#clear-dual-import-btn').click();
   await page.locator('#import-mode').selectOption('normal');
   await page.locator('#import-strategy').selectOption('compact');
   await page.locator('#import-save-mode-v59').selectOption('new');
