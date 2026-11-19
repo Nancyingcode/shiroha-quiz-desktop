@@ -923,15 +923,22 @@ async function importAndPractice(page, bankName, analysisText = '1 + 1 = 2') {
   await page.locator('#import-bank-name').fill(bankName);
   await page.locator('#import-mode').selectOption('json');
   await page.locator('#import-save-mode-v59').selectOption('new');
-  await page.locator('#import-text').fill(JSON.stringify({
+  const source = page.locator('#import-text');
+  await source.fill(JSON.stringify({
     questions: [{
       type: 'single',
-      question: FIXTURE_QUESTION,
+      question: `待清理标记${FIXTURE_QUESTION}`,
       options: [{ key: 'A', text: '2' }, { key: 'B', text: '3' }],
       answer: ['A'],
       analysis: analysisText,
     }],
   }));
+  await page.locator('#find-replace-import-btn').click();
+  const findReplace = page.getByRole('dialog', { name: '查找替换' });
+  await findReplace.getByLabel('查找内容').fill('待清理标记');
+  await findReplace.getByRole('button', { name: '全部替换' }).click();
+  assert.doesNotMatch(await source.inputValue(), /待清理标记/);
+  await findReplace.getByRole('button', { name: '关闭', exact: true }).click();
   await page.locator('#parse-import-btn').click();
   await page.locator('#import-preview tbody tr').filter({ hasText: FIXTURE_QUESTION }).waitFor({ state: 'visible' });
   await page.locator('#confirm-import-btn').click();
@@ -940,7 +947,7 @@ async function importAndPractice(page, bankName, analysisText = '1 + 1 = 2') {
   await page.locator('#app-toast .toast-item').first().waitFor({ state: 'hidden' });
   await mkdir(path.dirname(SCREENSHOT_PATH), { recursive: true });
   await page.screenshot({ path: SCREENSHOT_PATH, fullPage: true });
-  return { ...result, deselect: true, screenshot: SCREENSHOT_PATH };
+  return { ...result, findReplace: true, deselect: true, screenshot: SCREENSHOT_PATH };
 }
 
 /** @param {Runtime} runtime @param {string} bankName @param {string} origin */

@@ -5,8 +5,15 @@ import { build } from 'esbuild';
 import { html as htmlStandard, parse } from 'parse5';
 
 const desktopRoot = fileURLToPath(new URL('..', import.meta.url));
-const businessScripts = ['app.js', 'training.js', 'quiz-core.js', 'text-answers.js', 'text-parser.js', 'backup-core.js', 'zip.js', 'backup-archive.js', 'backup-data.js', 'webdav-panel.js', 'docx-import.js', 'pdf-import.js', 'ocr-import.js', 'table-import.js', 'import-preview.js', 'ai-results.js', 'ai-import-sessions.js', 'ai-question-sessions.js', 'ai-settings.js', 'ai-transport.js', 'ai-prompts.js', 'question-view.js', 'bank-page.js', 'saved-questions-page.js', 'training-review-page.js', 'bank-editor.js', 'study-sessions.js', 'exam-page.js', 'practice-selection.js', 'practice-page.js', 'ai-import-panel.js', 'ai-question-panels.js', 'question-editor.js'];
-const entries = ['index.html', ...businessScripts, 'styles.css', 'styles', 'question-bank.js', 'app-icon.png', 'data', 'media', 'libs', 'platform'];
+const businessScripts = [
+  'app.js', 'training.js', 'quiz-core.js', 'text-answers.js', 'text-parser.js',
+  'backup-core.js', 'zip.js', 'backup-archive.js', 'backup-data.js', 'webdav-panel.js',
+  'docx-import.js', 'pdf-import.js', 'ocr-import.js', 'table-import.js', 'import-preview.js',
+  'ai-results.js', 'ai-import-sessions.js', 'ai-question-sessions.js', 'ai-settings.js', 'ai-transport.js',
+  'ai-prompts.js', 'question-view.js', 'bank-page.js', 'saved-questions-page.js', 'training-review-page.js',
+  'bank-editor.js', 'study-sessions.js', 'exam-page.js', 'practice-selection.js', 'practice-page.js',
+  'ai-import-panel.js', 'ai-question-panels.js', 'question-editor.js', 'import/find-replace.js',
+];
 const sharedStyles = [
   'styles.css',
   'styles/responsive-artwork.css',
@@ -17,9 +24,21 @@ const sharedStyles = [
   'styles/ai-panels.css',
   'styles/controls-and-feedback.css',
 ];
+const resourceDirectories = ['data', 'media', 'libs', 'platform'];
+const webFiles = ['index.html', ...businessScripts, ...sharedStyles, 'question-bank.js', 'app-icon.png'];
+const allowedWebPaths = new Set();
+// 精确登记业务文件及其父目录，避免将同目录的开发脚本打入桌面制品。
+for (const file of webFiles) {
+  let entry = path.normalize(file);
+  while (entry !== '.' && !allowedWebPaths.has(entry)) {
+    allowedWebPaths.add(entry);
+    entry = path.dirname(entry);
+  }
+}
+
 export const requiredAssets = [
   'platform/validation.js', 'platform/browser.js', 'platform/browser-network.js', 'platform/browser-credentials.js', 'platform/save-queue.js', 'platform/index.js',
-  'index.html', ...businessScripts, ...sharedStyles, 'question-bank.js', 'app-icon.png',
+  ...webFiles,
   'libs/pdf.min.mjs', 'libs/pdf.worker.min.mjs',
   'libs/wasm/openjpeg.wasm', 'libs/standard_fonts/LiberationSans-Regular.ttf',
   'libs/cmaps/Adobe-GB1-UCS2.bcmap', 'libs/iccs/CGATS001Compat-v2-micro.icc',
@@ -143,8 +162,8 @@ function collectAssets(source, inspected, expected) {
   // 安全扫描按父目录优先遍历，复用其结果以免再次逐文件查询元数据。
   for (const [input, metadata] of inspected) {
     const name = path.relative(source, input);
-    if (!entries.includes(name.split(path.sep)[0])) { continue; }
-    if (name.startsWith(`styles${path.sep}`) && !sharedStyles.includes(name.split(path.sep).join('/'))) { continue; }
+    const [topLevel] = name.split(path.sep);
+    if (!allowedWebPaths.has(name) && !resourceDirectories.includes(topLevel)) { continue; }
     const parent = path.dirname(name);
     if (parent !== '.' && !expected.has(parent)) { continue; }
     const basename = path.basename(input);
@@ -233,7 +252,7 @@ export async function prepareWeb(sourceDir, projectDir) {
     .replace(/<\/body>/i, '  <script src="./titlebar.js"></script>\n</body>');
   /** @type {Map<string, Asset>} */
   const expected = new Map();
-  for (const name of entries) {
+  for (const name of resourceDirectories) {
     const input = path.join(source, name);
     try { await lstat(input); } catch (error) {
       if (error instanceof Error && 'code' in error && error.code === 'ENOENT' && ['data', 'media'].includes(name)) { continue; }

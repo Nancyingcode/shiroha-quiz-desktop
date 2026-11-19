@@ -2718,6 +2718,88 @@ test('Web 和 file 入口均可解压 DEFLATE 条目', async (t) => {
     assert.deepEqual(result, { method: 8, text: '123456789' });
   }
 });
+test('导入查找替换支持文本回绕、正则分组和空匹配提示', async (t) => {
+  const page = await pageFor(t, JSON.stringify(webState()));
+  page.setDefaultTimeout(5000);
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.locator('.nav[data-view="import"]').click();
+  const source = page.locator('#import-text');
+  await source.fill('a.b AxB A.B');
+  await page.locator('#find-replace-import-btn').click();
+  const panel = page.getByRole('dialog', { name: '查找替换' });
+  const pattern = panel.getByLabel('查找内容');
+  const useRegex = panel.getByLabel('正则', { exact: true });
+  const findNext = panel.getByRole('button', { name: '查找下一个' });
+  const status = panel.locator('#import-find-status-v51');
+
+  await useRegex.uncheck();
+  await panel.getByLabel('区分大小写').uncheck();
+  await pattern.fill('a.b');
+  await findNext.click();
+  assert.match(await status.innerText(), /从头查找.*第 1 个字符/);
+  await findNext.click();
+  assert.match(await status.innerText(), /第 9 个字符/);
+
+  await useRegex.check();
+  await pattern.fill('a*');
+  await findNext.click();
+  assert.match(await status.innerText(), /不能匹配空字符串/);
+  assert.equal(await source.inputValue(), 'a.b AxB A.B');
+
+  await pattern.fill('/([a-z])\\.(b)/i');
+  await panel.getByLabel('替换为').fill('$2-$1');
+  await panel.getByRole('button', { name: '替换当前' }).click();
+  assert.equal(await source.inputValue(), 'a.b AxB B-A');
+  const replaceAll = panel.getByRole('button', { name: '全部替换' });
+  await replaceAll.click();
+  assert.equal(await source.inputValue(), 'b-a AxB B-A');
+  assert.match(await status.innerText(), /已替换 1 处/);
+  await replaceAll.click();
+  assert.match(await status.innerText(), /没有找到匹配内容/);
+  assert.equal(await source.inputValue(), 'b-a AxB B-A');
+});
+
+test('导入查找替换发出一次原文编辑事件并使旧表格来源失效', async (t) => {
+  const page = await pageFor(t, JSON.stringify(webState()));
+  page.setDefaultTimeout(5000);
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.locator('.nav[data-view="import"]').click();
+  await page.locator('#import-mode').selectOption('normal');
+  await page.locator('#import-strategy').selectOption('compact');
+  await page.locator('#import-file').setInputFiles({
+    name: '查找替换自建题库.csv',
+    mimeType: 'text/csv',
+    buffer: Buffer.from('题号,题干,A,B,答案\n1,表格旧题,甲,乙,A'),
+  });
+  const preview = page.locator('#import-preview');
+  await preview.getByText('表格旧题', { exact: true }).waitFor();
+  const source = page.locator('#import-text');
+  assert.equal(await source.getAttribute('data-table-import-v49'), '1');
+  await source.evaluate((textarea) => {
+    let edits = 0;
+    textarea.ownerDocument.addEventListener('input', (event) => {
+      if (event.target === textarea) {
+        edits += 1;
+        textarea.setAttribute('data-test-input-count', String(edits));
+      }
+    });
+  });
+
+  await page.locator('#find-replace-import-btn').click();
+  const panel = page.getByRole('dialog', { name: '查找替换' });
+  await panel.getByLabel('查找内容').fill('^[\\s\\S]*表格旧题$');
+  await panel.getByLabel('替换为').fill('1. 表格新题？ A. 甲 B. 乙');
+  await panel.getByRole('button', { name: '全部替换' }).click();
+  assert.equal(await source.inputValue(), '1. 表格新题？ A. 甲 B. 乙');
+  assert.equal(await source.getAttribute('data-table-import-v49'), null);
+  assert.equal(await source.getAttribute('data-test-input-count'), '1');
+  await panel.getByRole('button', { name: '关闭', exact: true }).click();
+
+  await page.locator('#parse-import-btn').click();
+  await preview.getByText('表格新题？', { exact: true }).waitFor();
+  assert.equal(await preview.getByText('表格旧题', { exact: true }).count(), 0);
+});
+
 test('file URL 支持 ZIP 与文本导入且不依赖可选 PDF/OCR', async (t) => {
   const context = await browser.newContext();t.after(() => context.close());
   const page = await context.newPage();
@@ -2736,6 +2818,8 @@ test('file URL 支持 ZIP 与文本导入且不依赖可选 PDF/OCR', async (t) 
     (nodes) => nodes.map((node) => node.getAttribute('src')),
   );
   const appIndex = scripts.indexOf('./app.js');
+  const findReplaceIndex = scripts.indexOf('./import/find-replace.js');
+  assert(findReplaceIndex >= 0 && findReplaceIndex < appIndex);
   for (const name of ['./quiz-core.js', './text-answers.js', './text-parser.js', './backup-core.js', './zip.js', './backup-archive.js', './backup-data.js', './webdav-panel.js', './docx-import.js', './pdf-import.js', './ocr-import.js', './table-import.js', './import-preview.js', './ai-results.js', './ai-import-sessions.js', './ai-question-sessions.js', './ai-settings.js', './ai-transport.js', './ai-prompts.js', './question-view.js', './bank-page.js', './saved-questions-page.js', './training-review-page.js', './bank-editor.js', './study-sessions.js', './exam-page.js', './practice-selection.js', './practice-page.js', './ai-import-panel.js', './ai-question-panels.js', './question-editor.js']) {
     assert(scripts.indexOf(name) >= 0 && scripts.indexOf(name) < appIndex);
   }
@@ -2755,6 +2839,12 @@ test('file URL 支持 ZIP 与文本导入且不依赖可选 PDF/OCR', async (t) 
   await page.locator('#import-strategy').selectOption('compact');
   await page.locator('#import-save-mode-v59').selectOption('new');
   await page.locator('#import-text').fill('1. 本地文本测试？ A. 甲 B. 乙\n答案：B\n2. 下一题？\nA. 左\nB. 右\n答案：A');
+  await page.locator('#find-replace-import-btn').click();
+  const panel = page.getByRole('dialog', { name: '查找替换' });
+  await panel.getByLabel('查找内容').fill('本地文本测试');
+  await panel.getByLabel('替换为').fill('离线查找替换');
+  await panel.getByRole('button', { name: '全部替换' }).click();
+  await panel.getByRole('button', { name: '关闭', exact: true }).click();
   await page.locator('#parse-import-btn').click();
   await page.locator('#import-summary').filter({ hasText: '最终识别：2题' }).waitFor();
   assert.equal(await page.locator('#import-preview tbody tr').count(), 2);
@@ -2764,6 +2854,7 @@ test('file URL 支持 ZIP 与文本导入且不依赖可选 PDF/OCR', async (t) 
   await page.reload();
   await page.locator('body[data-storage-state="ready"]').waitFor();
   const bank = JSON.parse(await saved(page)).banks.find((item) => item.name === '本地文本解析测试');
+  assert.match(bank.questions[0].question, /离线查找替换/);
   assert.deepEqual(bank.questions.map((question) => question.answer), [['B'], ['A']]);
   assert.deepEqual(bank.questions.map((question) => question.options.map((option) => option.text)), [['甲', '乙'], ['左', '右']]);
   assert.deepEqual(scriptErrors, []);
