@@ -47,6 +47,7 @@
   - [第四批导入确认保存范围与验收](./superpowers/specs/2026-11-19-web-directory-app-split.md#batch-four)
   - [第四批导入确认保存实施计划](./superpowers/plans/2026-11-19-web-import-commit.md)
   - [第五批题库名称、分组与空库拆分实施计划](./superpowers/plans/2026-11-19-web-bank-metadata.md)
+  - [第六批题库复制、合并与去重拆分实施计划](./superpowers/plans/2026-11-19-web-bank-question-operations.md)
 - [Windows 桌面工程从 npm 迁移到 pnpm 的实施计划](./superpowers/plans/2026-11-18-desktop-npm-to-pnpm.md)
 - [Web 共享样式拆分设计与 Stylelint 基线](./superpowers/specs/2026-11-10-web-styles-split.md)
 - [Web 共享样式拆分实施计划与验证](./superpowers/plans/2026-11-10-web-styles-split.md)

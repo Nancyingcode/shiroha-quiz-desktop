@@ -384,6 +384,23 @@
     now,
   });
   const {
+    duplicateActiveBank,
+    duplicateBankById,
+    mergeBankIntoActive,
+    dedupeActiveBank,
+  } = globalThis.ShirohaBankQuestionOperations.create({
+    state,
+    select: $,
+    activeBank,
+    setPracticeBankScope: setPracticeBankScopeV8916,
+    normalizeText,
+    storage: { loadBanks: loadNativeBanks, transaction: runMutation, save: saveSilent },
+    dialogs: ShirohaDialogs,
+    renderAll,
+    makeId,
+    now,
+  });
+  const {
     closeBankQuestionDetail,
     renderBankSelect,
     renderMergeSelect,
@@ -3181,79 +3198,6 @@ D. 高速通过积水路段`;
     return name === 'RangeError' || /* 从运行时错误文案识别序列化字符串超限，补足仅有错误名称的判断。 */ /Invalid string length|string length|too large/i.test(msg);
   }
 
-  function duplicateActiveBank() {
-    duplicateBankById(activeBank().id);
-  }
-
-  // 先读取原题库完整试题，再复制到拥有独立标识的新题库。
-  async function duplicateBankById(id) {
-    if (!await loadNativeBanks([id])) {
-      return;
-    }
-
-    return runMutation(/* 仅在源题库仍存在时复制内容，保存后切换到副本。 */ async () => {
-      const b = state.banks.find((x) => x.id === id);
-      if (!b) {
-        return;
-      }
-
-      const copy = JSON.parse(JSON.stringify(b));
-      copy.id = makeId('bank');
-      // eslint-disable-next-line prefer-template -- 历史数据字段可能是对象，保留 + 的默认转换；字段类型受约束后移除此例外。
-      copy.name = b.name + ' - 副本';
-      copy.createdAt = now();
-      copy.updatedAt = now();
-      copy.questions = (copy.questions || []).map((q, i) => ({ ...q, id: makeId('q', i), number: i + 1 }));
-
-      state.banks.push(copy);
-      setPracticeBankScopeV8916(copy.id, true);
-      await saveSilent();
-      renderAll();
-    });
-  }
-
-  // 合并前确保来源与目标题库数据均可用，避免将未加载的题目当作完整内容。
-  async function mergeBankIntoActive() {
-    if (!await loadNativeBanks([activeBank().id, $('#merge-bank-select').value])) {
-      return;
-    }
-
-    return runMutation(/* 在同一事务内确认两个题库仍可定位和合并，随后保存目标库。 */ async () => {
-      const sourceId = $('#merge-bank-select').value;
-      const target = activeBank();
-      const src = state.banks.find((b) => b.id === sourceId);
-      if (!src) {
-        await ShirohaDialogs.alert('没有可合并的来源题库。');
-        return;
-      }
-
-      if (!await ShirohaDialogs.confirm(`将“${src.name}”的 ${src.questions.length} 道题合并到当前题库“${target.name}”？`)) {
-        return;
-      }
-
-      const before = target.questions.length;
-      const existing = new Set(target.questions.map((q) => normalizeText(q.question)));
-      let added = 0;
-      let skipped = 0;
-      src.questions.forEach(/* 合并时按规范化题干去重，新题按目标库顺序编号。 */ (q) => {
-        const k = normalizeText(q.question);
-        if (existing.has(k)) {
-          skipped += 1;
-          return;
-        }
-
-        existing.add(k);
-        target.questions.push({ ...JSON.parse(JSON.stringify(q)), id: makeId('q', target.questions.length + 1), number: target.questions.length + 1 });
-        added += 1;
-      });
-
-      target.updatedAt = now();
-      await saveSilent();
-      renderAll();
-      await ShirohaDialogs.alert(`合并完成：新增 ${added} 题，跳过重复 ${skipped} 题。合并前 ${before} 题，当前 ${target.questions.length} 题。`);
-    });
-  }
-
   // 导出指定题库前加载原生按需数据，确保导出包含完整题目。
   async function exportBankById(id) {
     try {
@@ -3279,33 +3223,6 @@ D. 高速通过积水路段`;
       platformStatus('导出失败：' + error.message, true);
       return false;
     }
-  }
-
-  // 对当前题库进行去重前先加载原生题目正文。
-  async function dedupeActiveBank() {
-    if (!await loadNativeBanks([activeBank().id])) {
-      return;
-    }
-
-    return runMutation(/* 按归一化题干保留第一道重复题，并按去重后的顺序重新编号。 */ async () => {
-      const b = activeBank();
-      const map = new Map();
-      const dups = [];
-      b.questions.forEach(/* 保留首次出现的题，后续同题干条目进入待删除集合。 */ (q) => {
-        const k = normalizeText(q.question);
-        if (map.has(k)) {
-          dups.push(q);
-        } else {
-          map.set(k, q);
-        }
-      });
-
-      b.questions = [...map.values()].map((q, i) => ({ ...q, number: i + 1 }));
-
-      await saveSilent();
-      renderAll();
-      await ShirohaDialogs.alert(`去重完成：删除 ${dups.length} 道重复题，剩余 ${b.questions.length} 道。`);
-    });
   }
 
   // 洗牌时复制输入，避免打乱原有题库顺序。
@@ -5010,7 +4927,8 @@ D. 高速通过积水路段`;
   }
 
   // 串行保护需要保存的数据变更，确认修订未推进时才恢复原快照。
-  async function runMutation(action) {
+  // 需要预读原生正文的操作可以在重试时重新执行完整入口。
+  async function runMutation(action, retry = () => runMutation(action)) {
     if (enteringMutation) {
       return action();
     }
@@ -5079,7 +4997,7 @@ D. 高速通过积水路段`;
         }
       });
 
-      retryMutation = () => runMutation(action);
+      retryMutation = retry;
 
       platformStatus(error?.message || '保存失败，原数据与编辑内容已保留，请重试。', true);
       return false;
