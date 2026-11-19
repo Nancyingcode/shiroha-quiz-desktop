@@ -226,7 +226,7 @@ export function createConfig({ desktop = false, debt = false, semanticOnly = fal
     {
       files: [
         'apps/web/app.js', 'apps/web/import/find-replace.js', 'apps/web/import/dual-answers.js',
-        'apps/web/questions/rich-content.js',
+        'apps/web/import/commit.js', 'apps/web/questions/rich-content.js',
       ].map(relative),
       rules: semanticOnly ? {} : { '@stylistic/brace-style': ['error', '1tbs', { allowSingleLine: false }] },
     },
@@ -236,7 +236,8 @@ export function createConfig({ desktop = false, debt = false, semanticOnly = fal
         'apps/web/quiz-core.js', 'apps/web/training.js', 'apps/web/practice-selection.js',
         'apps/web/ai-results.js', 'apps/web/bank-editor.js', 'apps/web/platform/index.js', 'apps/web/text-answers.js',
         'apps/web/platform/save-queue.js', 'apps/web/study-sessions.js', 'apps/web/app.js',
-        'apps/web/import/find-replace.js', 'apps/web/import/dual-answers.js', 'apps/web/questions/rich-content.js',
+        'apps/web/import/find-replace.js', 'apps/web/import/dual-answers.js', 'apps/web/import/commit.js',
+        'apps/web/questions/rich-content.js',
       ].map(relative),
       rules: { '@stylistic/max-statements-per-line': ['error', { max: 1 }] },
     },
@@ -256,7 +257,8 @@ export function createConfig({ desktop = false, debt = false, semanticOnly = fal
         'apps/web/docx-import.js', 'apps/web/practice-page.js', 'apps/web/practice-selection.js',
         'apps/web/exam-page.js', 'apps/web/training-review-page.js',
         'apps/web/bank-page.js', 'apps/web/question-editor.js', 'apps/web/question-view.js',
-        'apps/web/import/find-replace.js', 'apps/web/import/dual-answers.js', 'apps/web/questions/rich-content.js',
+        'apps/web/import/find-replace.js', 'apps/web/import/dual-answers.js', 'apps/web/import/commit.js',
+        'apps/web/questions/rich-content.js',
       ].map(relative),
       rules: readabilityGate,
     }]),

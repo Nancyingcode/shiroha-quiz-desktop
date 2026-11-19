@@ -5,8 +5,9 @@ const assert = require('node:assert/strict');
 const { chromium } = require('../../apps/desktop/node_modules/playwright-core');
 const { startServer, WEB_ROOT } = require('../web-ai-practice/harness.cjs');
 const { observeAppDialogs } = require('../web-ai-practice/dialogs.cjs');
-const { IMAGE, image } = require('./fixtures/dataset.cjs');
+const { IMAGE, image, webState } = require('./fixtures/dataset.cjs');
 
+const STATE_KEY = 'shiroha_quiz_state_v28_4_c1';
 let browser; let server;
 test.before(async () => {
   server = await startServer(WEB_ROOT);
@@ -16,7 +17,7 @@ test.after(async () => {
   await browser?.close();await server?.close();
 });
 
-async function openPage(t) {
+async function openPage(t, snapshot) {
   const context = await browser.newContext();
   t.after(() => context.close());
   const page = await context.newPage();
@@ -25,6 +26,14 @@ async function openPage(t) {
   const errors = [];
   page.on('pageerror', (error) => errors.push(error.message));
   t.after(() => assert.deepEqual(errors, []));
+  if (snapshot) {
+    await page.addInitScript(({ key, initial }) => {
+      if (globalThis.localStorage.getItem(key) === null) {
+        globalThis.localStorage.setItem(key, JSON.stringify(initial));
+      }
+    }, { key: STATE_KEY, initial: snapshot });
+  }
+
   await page.goto(server.url);
   await page.locator('body[data-storage-state="ready"]').waitFor();
   await page.locator('.nav[data-view="import"]').click();
@@ -46,6 +55,193 @@ async function createPreview(page) {
   await page.locator('#import-bank-name').fill('本机待核对');
   await page.locator('#import-preview-filter').selectOption('problem');
 }
+
+async function openAppendPreview(t) {
+  const initial = webState();
+  initial.settings.practiceScope = { type: 'group', value: initial.banks[0].groupName };
+  const page = await openPage(t, initial);
+  await createPreview(page);
+  await page.locator('#import-save-mode-v59').selectOption('append');
+  return page;
+}
+
+async function controlAppendStorage(page, failFirstWrite = false) {
+  await page.evaluate((failWrite) => {
+    const { storage } = globalThis.ShirohaPlatform;
+    const { write } = storage;
+    const probe = { reads: [], writes: 0 };
+    const pendingRead = new Promise((resolve, reject) => {
+      probe.releaseRead = resolve;
+      probe.rejectRead = () => reject(new Error('模拟正文读取失败'));
+    });
+    globalThis.__appendStorage = probe;
+    storage.ensureQuestions = async (snapshot, refs) => {
+      if (globalThis.document.body.dataset.storageState !== 'ready') {
+        return undefined;
+      }
+
+      const { banks, activeBankId, settings } = snapshot;
+      probe.reads.push({
+        ids: [...new Set(refs.map((ref) => ref.bankId))],
+        // 对照实际保存的 JSON，忽略会被序列化省略的可选字段。
+        before: JSON.parse(JSON.stringify({ banks, activeBankId, scope: settings.practiceScope })),
+      });
+      return pendingRead;
+    };
+    storage.write = async (...args) => {
+      probe.writes += 1;
+      if (failWrite && probe.writes === 1) {
+        await new Promise((_resolve, reject) => {
+          probe.failWrite = () => reject(new Error('模拟追加写入失败'));
+        });
+      }
+
+      return write(...args);
+    };
+  }, failFirstWrite);
+}
+
+for (const { name, selector, value } of [
+  { name: '改选题库', selector: '#import-target-bank-v59', value: 'bank-b' },
+  { name: '改为新建', selector: '#import-save-mode-v59', value: 'new' },
+]) {
+  test(`追加读取期间${name}须重新确认，旧确认不写入`, async (t) => {
+    const page = await openAppendPreview(t);
+    const persisted = await page.evaluate((key) => globalThis.localStorage.getItem(key), STATE_KEY);
+    await controlAppendStorage(page);
+    await page.locator('#confirm-import-btn').click();
+    await page.waitForFunction(() => globalThis.__appendStorage.reads.length > 0);
+    await page.locator(selector).selectOption(value);
+    await page.evaluate(() => {
+      globalThis.__appendStorage.releaseRead();
+    });
+    const notice = page.locator('#app-toast p')
+      .filter({ hasText: /保存方式或目标题库已变化|已追加到|已创建题库/ });
+    await notice.waitFor();
+    const { reads, writes } = await page.evaluate(() => globalThis.__appendStorage);
+    assert.equal(writes, 0, await notice.innerText());
+    assert.deepEqual(reads.map((read) => read.ids), [['bank-a']]);
+    assert.match(await notice.innerText(), /保存方式或目标题库已变化/);
+    assert.equal(await page.evaluate((key) => globalThis.localStorage.getItem(key), STATE_KEY), persisted);
+    assert.match(await page.locator('#import-summary').innerText(), /识别到 2 道题/);
+  });
+}
+
+test('追加正文读取失败保留预览，未写入题库', async (t) => {
+  const page = await openAppendPreview(t);
+  await controlAppendStorage(page);
+  await page.locator('#confirm-import-btn').click();
+  await page.waitForFunction(() => globalThis.__appendStorage.reads.length > 0);
+  await page.evaluate(() => {
+    globalThis.__appendStorage.rejectRead();
+  });
+  await page.locator('#platform-status').filter({ hasText: '模拟正文读取失败' }).waitFor();
+  assert.equal(await page.evaluate(() => globalThis.__appendStorage.writes), 0);
+  assert.match(await page.locator('#import-summary').innerText(), /识别到 2 道题/);
+  assert.equal(await page.locator('#confirm-import-btn').isEnabled(), true);
+});
+
+test('两个确认入口共用追加，写入失败回滚并保留草稿，重试只追加一次', async (t) => {
+  const page = await openAppendPreview(t);
+  const targetSelect = page.locator('#import-target-bank-v59');
+  await targetSelect.selectOption('bank-b');
+  await page.locator('#save-import-draft-btn').click();
+  const draftStatus = page.locator('#import-draft-status');
+  await draftStatus.filter({ hasText: '已保存' }).waitFor();
+  const persisted = await page.evaluate((key) => globalThis.localStorage.getItem(key), STATE_KEY);
+  await controlAppendStorage(page, true);
+
+  const single = page.locator('#confirm-import-btn');
+  const dual = page.locator('#dual-confirm-import-btn');
+  await single.click();
+  await page.waitForFunction(() => globalThis.__appendStorage.reads.length > 0);
+  await dual.click();
+  await page.evaluate(() => {
+    globalThis.__appendStorage.releaseRead();
+  });
+  await page.waitForFunction(() => typeof globalThis.__appendStorage.failWrite === 'function');
+  for (const button of [single, dual]) {
+    assert.equal(await button.isDisabled(), true);
+    assert.equal(await button.getAttribute('aria-busy'), 'true');
+    assert.equal(await button.textContent(), '正在追加…');
+  }
+
+  await page.evaluate(() => {
+    globalThis.__appendStorage.failWrite();
+  });
+  await page.locator('#app-toast p').filter({ hasText: '模拟追加写入失败' }).waitFor();
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  for (const button of [single, dual]) {
+    assert.equal(await button.isEnabled(), true);
+    assert.equal(await button.getAttribute('aria-busy'), null);
+    assert.equal(await button.textContent(), '确认追加');
+  }
+
+  assert.equal(await page.evaluate((key) => globalThis.localStorage.getItem(key), STATE_KEY), persisted);
+  assert.equal(await page.locator('#active-bank-select').inputValue(), 'bank-a');
+  await targetSelect.selectOption('bank-a');
+  await page.locator('#platform-status').getByRole('button', { name: '重试', exact: true }).click();
+  await page.locator('#app-toast p').filter({ hasText: '保存方式或目标题库已变化' }).waitFor();
+  assert.equal(await page.evaluate(() => globalThis.__appendStorage.writes), 1);
+  await targetSelect.selectOption('bank-b');
+  await page.locator('#restore-import-draft-btn').click();
+  await draftStatus.filter({ hasText: '当前预览已是保存的草稿' }).waitFor();
+  await dual.click();
+  await draftStatus.filter({ hasText: '已清除' }).waitFor();
+  const { reads, writes } = await page.evaluate(() => globalThis.__appendStorage);
+  assert.deepEqual(reads.map((read) => read.ids), [['bank-b'], ['bank-b']]);
+  assert.deepEqual(reads[1].before, reads[0].before);
+  assert.equal(writes, 2);
+
+  await page.reload();
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  const stored = await page.evaluate((key) => JSON.parse(globalThis.localStorage.getItem(key)), STATE_KEY);
+  const source = stored.banks.find((bank) => bank.id === 'bank-a');
+  const target = stored.banks.find((bank) => bank.id === 'bank-b');
+  const original = reads[0].before.banks.find((bank) => bank.id === 'bank-b');
+  assert.deepEqual(source, reads[0].before.banks.find((bank) => bank.id === 'bank-a'));
+  assert.deepEqual(target.questions[0], original.questions[0]);
+  assert.notEqual(target.updatedAt, original.updatedAt);
+  assert.deepEqual(target.questions.slice(1).map(({ number, answer }) => [number, answer]), [[2, ['A']], [3, []]]);
+  assert.equal(new Set(target.questions.map((question) => question.id)).size, 3);
+  assert.equal(stored.activeBankId, 'bank-b');
+  assert.deepEqual(stored.settings.practiceScope, { type: 'bank', value: 'bank-b' });
+});
+
+test('入库后重绘失败保留已提交的数据和待核对草稿', async (t) => {
+  const page = await openPage(t);
+  await createPreview(page);
+  await page.locator('#save-import-draft-btn').click();
+  await page.locator('#import-draft-status').filter({ hasText: '已保存' }).waitFor();
+  await page.evaluate(() => {
+    const { storage } = globalThis.ShirohaPlatform;
+    const { write } = storage;
+    storage.write = async (...args) => {
+      const receipt = await write(...args);
+      const bankSelect = globalThis.document.getElementById('active-bank-select');
+      // 故障发生在持久化回执之后，触发重绘的第一处题库控件写入。
+      Object.defineProperty(bankSelect, 'innerHTML', {
+        configurable: true,
+        set() {
+          Reflect.deleteProperty(this, 'innerHTML');
+          throw new Error('模拟重绘失败');
+        },
+      });
+      return receipt;
+    };
+  });
+  await page.locator('#confirm-import-btn').click();
+  const status = page.locator('#platform-status');
+  await status.filter({ hasText: '数据已保存，但界面刷新失败' }).waitFor();
+  assert.equal(await status.getByRole('button', { name: '重试' }).count(), 0);
+  await page.reload();
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.locator('#active-bank-select option').filter({ hasText: '本机待核对' }).waitFor({ state: 'attached' });
+  await page.locator('.nav[data-view="import"]').click();
+  await page.locator('#restore-import-draft-btn').click();
+  await page.locator('#import-draft-status').filter({ hasText: '已恢复本地草稿' }).waitFor();
+  assert.match(await page.locator('#import-summary').innerText(), /识别到 2 道题/);
+});
 
 test('保存的导入草稿刷新后恢复编辑、图片、异常和筛选，确认入库后删除', async (t) => {
   const page = await openPage(t);

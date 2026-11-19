@@ -951,6 +951,82 @@ async function importAndPractice(page, bankName, analysisText = '1 + 1 = 2') {
 }
 
 /** @param {Page} page */
+async function appendImportSmoke(page) {
+  const readDatabase = () => page.evaluate(async () => {
+    const { ShirohaDesktopHost: host } = /** @type {NativeTestWindow} */ (window);
+    if (!host) { throw new Error('本地桥接缺失'); }
+    return /** @type {Promise<import('../../web/platform/contracts.d.ts').Snapshot>} */ (host.invoke('local_read'));
+  });
+  // 上一个用例补读过全部正文，重载后从应用和存储一致的摘要视图开始。
+  await page.reload();
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  const before = await readDatabase();
+  await page.locator('.nav[data-view="import"]').click();
+  await page.locator('#import-mode').selectOption('json');
+  await page.locator('#import-text').fill(JSON.stringify([{
+    type: 'single', question: 'WebView2 追加样本', options: [{ key: 'A', text: '答案' }], answer: ['A'],
+  }]));
+  await page.locator('#parse-import-btn').click();
+  await page.locator('#import-save-mode-v59').selectOption('append');
+  const target = page.locator('#import-target-bank-v59');
+  await target.selectOption('lazy-a');
+  await page.evaluate(() => {
+    const { storage } = /** @type {{storage: import('../../web/platform/runtime.d.ts').BrowserStorage}} */ (
+      Reflect.get(window, 'ShirohaPlatform'));
+    const { ensureQuestions } = storage;
+    if (!ensureQuestions) { throw new Error('原生按需加载未启用'); }
+    const gate = { ids: /** @type {string[][]} */ ([]), release: /** @type {null | (() => void)} */ (null) };
+    Reflect.set(window, '__appendReadGate', gate);
+    storage.ensureQuestions = async (snapshot, refs) => {
+      gate.ids.push([...new Set(refs.map((ref) => ref.bankId))]);
+      await ensureQuestions(snapshot, refs);
+      if (gate.ids.length === 1) {
+        await new Promise((resolve) => {
+          gate.release = () => resolve(undefined);
+        });
+      }
+    };
+  });
+  const confirmImport = page.locator('#confirm-import-btn');
+  await confirmImport.click();
+  await page.waitForFunction(() => typeof Reflect.get(window, '__appendReadGate')?.release === 'function');
+  await target.selectOption('lazy-b');
+  await page.evaluate(() => Reflect.get(window, '__appendReadGate').release());
+  const notice = page.locator('#app-toast p').filter({ hasText: /保存方式或目标题库已变化|已追加到/ });
+  await notice.waitFor();
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  const afterSwitch = await readDatabase();
+  assert.deepEqual(
+    afterSwitch.banks.map((bank) => [bank.id, bank.questions.length]),
+    before.banks.map((bank) => [bank.id, bank.questions.length]),
+    await notice.innerText(),
+  );
+  assert.deepEqual(afterSwitch, before);
+  assert.match(await notice.innerText(), /保存方式或目标题库已变化/);
+  await confirmImport.click();
+  await page.locator('#app-toast p').filter({ hasText: /已追加到.*lazy-b/ }).waitFor();
+  const reads = await page.evaluate(() => Reflect.get(window, '__appendReadGate').ids);
+  assert.deepEqual(reads, [['lazy-a'], ['lazy-b']]);
+  await page.reload();
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  const saved = await readDatabase();
+  const source = before.banks.find((bank) => bank.id === 'lazy-a');
+  const original = before.banks.find((bank) => bank.id === 'lazy-b');
+  const appended = saved.banks.find((bank) => bank.id === 'lazy-b');
+  assert(source && original && appended);
+  assert.deepEqual(saved.banks.find((bank) => bank.id === 'lazy-a')?.questions, source.questions);
+  assert.deepEqual(appended.questions.slice(0, -1), original.questions);
+  const added = appended.questions.at(-1);
+  assert(added);
+  assert.equal(added.number, original.questions.length + 1);
+  assert.equal(added.question, 'WebView2 追加样本');
+  assert.deepEqual(added.answer, ['A']);
+  assert.equal(saved.activeBankId, 'lazy-b');
+  assert.deepEqual(saved.settings.practiceScope, { type: 'bank', value: 'lazy-b' });
+  return { reads, savedAfterReload: true };
+}
+
+/** @param {Page} page */
 async function dualFileImportSmoke(page) {
   const bankName = 'WebView2 双文件匹配样本';
   await page.locator('body[data-storage-state="ready"]').waitFor();
@@ -1834,6 +1910,7 @@ async function main() {
     });
     // 导入会改变活动题库，把双文件样本放在依赖既有题库的用例之后。
     await check('双文件导入自动匹配与保存重载', () => dualFileImportSmoke(importedRecovery.page));
+    await check('追加目标变化后重新确认并保存到 SQLite', () => appendImportSmoke(importedRecovery.page));
   } catch (error) {
     if (!(error instanceof SmokeCheckAborted)) { checks.push({ name: '启动或运行', ok: false, error: errorText(error) }); }
   } finally {

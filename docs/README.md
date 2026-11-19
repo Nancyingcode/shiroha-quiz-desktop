@@ -44,6 +44,8 @@
   - [首批查找替换拆分实施计划](./superpowers/plans/2026-11-19-web-import-find-replace.md)
   - [第二批题目富文本和图片拆分实施计划](./superpowers/plans/2026-11-19-web-question-rich-content.md)
   - [第三批双文件答案匹配拆分实施计划](./superpowers/plans/2026-11-19-web-dual-answers.md)
+  - [第四批导入确认保存范围与验收](./superpowers/specs/2026-11-19-web-directory-app-split.md#batch-four)
+  - [第四批导入确认保存实施计划](./superpowers/plans/2026-11-19-web-import-commit.md)
 - [Windows 桌面工程从 npm 迁移到 pnpm 的实施计划](./superpowers/plans/2026-11-18-desktop-npm-to-pnpm.md)
 - [Web 共享样式拆分设计与 Stylelint 基线](./superpowers/specs/2026-11-10-web-styles-split.md)
 - [Web 共享样式拆分实施计划与验证](./superpowers/plans/2026-11-10-web-styles-split.md)

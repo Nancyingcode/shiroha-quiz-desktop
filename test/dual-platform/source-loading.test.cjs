@@ -185,7 +185,7 @@ test('共享脚本在同一沙箱按显式次序加载，不允许越界路径',
       },
     });
   }
-  runWebScripts(context, ['platform/validation.js', 'platform/browser.js', 'training.js', 'quiz-core.js', 'text-answers.js', 'questions/rich-content.js', 'text-parser.js', 'import/dual-answers.js', 'backup-core.js', 'zip.js', 'backup-archive.js', 'backup-data.js', 'webdav-panel.js', 'docx-import.js', 'pdf-import.js', 'ocr-import.js', 'table-import.js', 'import-preview.js', 'ai-results.js', 'ai-import-sessions.js', 'ai-question-sessions.js', 'ai-settings.js', 'ai-transport.js', 'ai-prompts.js', 'question-view.js', 'bank-page.js', 'saved-questions-page.js', 'training-review-page.js', 'bank-editor.js', 'study-sessions.js', 'exam-page.js', 'practice-selection.js', 'practice-page.js', 'ai-import-panel.js', 'ai-question-panels.js', 'question-editor.js', 'import/find-replace.js']);
+  runWebScripts(context, ['platform/validation.js', 'platform/browser.js', 'training.js', 'quiz-core.js', 'text-answers.js', 'questions/rich-content.js', 'text-parser.js', 'import/dual-answers.js', 'backup-core.js', 'zip.js', 'backup-archive.js', 'backup-data.js', 'webdav-panel.js', 'docx-import.js', 'pdf-import.js', 'ocr-import.js', 'table-import.js', 'import-preview.js', 'ai-results.js', 'ai-import-sessions.js', 'ai-question-sessions.js', 'ai-settings.js', 'ai-transport.js', 'ai-prompts.js', 'question-view.js', 'bank-page.js', 'saved-questions-page.js', 'training-review-page.js', 'bank-editor.js', 'study-sessions.js', 'exam-page.js', 'practice-selection.js', 'practice-page.js', 'ai-import-panel.js', 'ai-question-panels.js', 'question-editor.js', 'import/find-replace.js', 'import/commit.js']);
   assert.deepEqual(loaded, names);
   assert.equal(typeof context.ShirohaPlatformValidation, 'object');
   assert.equal(typeof context.ShirohaBrowser, 'object');
@@ -248,7 +248,7 @@ test('页面工厂装配不访问 DOM，事件绑定留给页面初始化', () =
     'question-view.js', 'bank-page.js', 'saved-questions-page.js', 'training-review-page.js',
     'bank-editor.js', 'study-sessions.js', 'exam-page.js', 'practice-selection.js',
     'practice-page.js', 'ai-import-panel.js', 'ai-question-panels.js', 'question-editor.js',
-    'import/find-replace.js', 'import/dual-answers.js',
+    'import/find-replace.js', 'import/dual-answers.js', 'import/commit.js',
   ]);
   const empty = {};
   const practice = context.ShirohaStudySessions.createPractice();
@@ -267,6 +267,7 @@ test('页面工厂装配不访问 DOM，事件绑定留给页面初始化', () =
     () => context.ShirohaQuestionEditor.create({ parser: empty, suggestions: empty, editor: empty, practice: empty, view: empty, storage: empty }),
     () => context.ShirohaImportFindReplace.create({}),
     () => context.ShirohaDualAnswers.create({}),
+    () => context.ShirohaImportCommit.create({ view: empty }),
   ];
   for (const create of factories) {
     assert.equal(typeof create(), 'object');
