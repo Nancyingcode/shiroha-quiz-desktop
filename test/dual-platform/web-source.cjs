@@ -111,7 +111,7 @@ function loadWeb({
   const context = vm.createContext(sandbox);
   runWebScripts(context, ['platform/validation.js', 'platform/browser.js']);
   context.ShirohaPlatform = { files: context.ShirohaBrowser.files, media: context.ShirohaBrowser.media };
-  runWebScripts(context, ['training.js', 'quiz-core.js', 'text-answers.js']);
+  runWebScripts(context, ['training.js', 'quiz-core.js', 'text-answers.js', 'questions/rich-content.js']);
   if (parserSourceTransform) {
     const parserPath = path.join(path.dirname(sourcePath), 'text-parser.js');
     const parserSource = parserSourceTransform(readFileSync(parserPath, 'utf8'));

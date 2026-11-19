@@ -2820,6 +2820,8 @@ test('file URL 支持 ZIP 与文本导入且不依赖可选 PDF/OCR', async (t) 
   const appIndex = scripts.indexOf('./app.js');
   const findReplaceIndex = scripts.indexOf('./import/find-replace.js');
   assert(findReplaceIndex >= 0 && findReplaceIndex < appIndex);
+  const richContentIndex = scripts.indexOf('./questions/rich-content.js');
+  assert(richContentIndex >= 0 && richContentIndex < scripts.indexOf('./text-parser.js'));
   for (const name of ['./quiz-core.js', './text-answers.js', './text-parser.js', './backup-core.js', './zip.js', './backup-archive.js', './backup-data.js', './webdav-panel.js', './docx-import.js', './pdf-import.js', './ocr-import.js', './table-import.js', './import-preview.js', './ai-results.js', './ai-import-sessions.js', './ai-question-sessions.js', './ai-settings.js', './ai-transport.js', './ai-prompts.js', './question-view.js', './bank-page.js', './saved-questions-page.js', './training-review-page.js', './bank-editor.js', './study-sessions.js', './exam-page.js', './practice-selection.js', './practice-page.js', './ai-import-panel.js', './ai-question-panels.js', './question-editor.js']) {
     assert(scripts.indexOf(name) >= 0 && scripts.indexOf(name) < appIndex);
   }
@@ -3030,6 +3032,51 @@ test('题库详情：富内容复制、分页重置与异步反馈隔离', async
   assert.match(await page.locator('#bank-question-detail').innerText(), /该题型无需选项/);
   await page.locator('[data-close-detail]').click();
   assert.equal(await page.locator('[data-preview-question="blank"]').evaluate((e) => e === globalThis.document.activeElement), true);
+});
+
+test('富文本题导入、详情与备份保留公式和两张图片的顺序', async (t) => {
+  const page = await pageFor(t, JSON.stringify(webState()));
+  page.setDefaultTimeout(5000);
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  const bankName = '富文本导入回归';
+  const gif = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+  const stem = ['富文本题面 $x^2$。', `![第一张](${IMAGE})`, `![第二张](${gif})`].join('\n');
+  const question = {
+    type: 'single',
+    question: '旧格式题干',
+    options: [{ key: 'A', text: '甲' }, { key: 'B', text: '乙' }],
+    answer: ['A'],
+    richContent: { fields: { question: { markdown: stem } } },
+    images: [{ dataUrl: IMAGE }, { dataUrl: gif }],
+  };
+  await page.locator('.nav[data-view="import"]').click();
+  await page.locator('#import-mode').selectOption('json');
+  await page.locator('#import-save-mode-v59').selectOption('new');
+  await page.locator('#import-bank-name').fill(bankName);
+  await page.locator('#import-text').fill(JSON.stringify({ questions: [question] }));
+  await page.locator('#parse-import-btn').click();
+  await page.locator('#import-preview tbody tr').filter({ hasText: '富文本题面' }).waitFor();
+  await page.locator('#confirm-import-btn').click();
+  await page.locator('#active-bank-select option').filter({ hasText: bankName }).waitFor({ state: 'attached' });
+
+  await page.locator('.nav[data-view="banks"]').click();
+  await page.locator('#bank-preview [data-preview-question]').click();
+  const detail = page.locator('#bank-question-detail .bank-detail-body');
+  await detail.locator('mjx-container').waitFor({ timeout: 15000 });
+  const imageSources = await detail.locator('img').evaluateAll((images) => images.map((image) => image.getAttribute('src')));
+  assert.deepEqual(imageSources, [IMAGE, gif]);
+
+  await page.locator('.nav[data-view="settings"]').click();
+  const before = await saved(page);
+  await page.locator('#export-all-btn').click();
+  await page.waitForFunction(() => globalThis.document.querySelector('#export-output').value.length > 0);
+  const payload = JSON.parse(await page.locator('#export-output').inputValue());
+  const exported = payload.banks.find((bank) => bank.name === bankName).questions[0];
+  assert.equal(payload.richContentVersion, 'shiroha-web-rich-v1');
+  assert.deepEqual(exported.images.map((image) => image.dataUrl), [IMAGE, gif]);
+  assert.match(exported.richContent.fields.question.text, /\$x\^2\$/);
+  assert.deepEqual(exported.richContent.features, ['latex_formula', 'image']);
+  assert.equal(await saved(page), before);
 });
 
 test('题库详情：段落、表格和代码复制保留原意', async (t) => {

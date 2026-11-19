@@ -189,18 +189,22 @@ test('stages offline resources and licenses, excludes tooling, and leaves Web so
   assert.equal((await readdir(f.dist)).includes('stale.js'), false);
 });
 
-test('copies only scripts listed for a nested business directory', async (t) => {
+test('copies only scripts listed for nested business directories', async (t) => {
   const f = await fixture(t);
-  const module = 'import/find-replace.js';
-  const localScript = 'import/local-debug.js';
-  await mkdir(path.join(f.web, 'import'), { recursive: true });
-  await writeFile(path.join(f.web, module), 'find replace fixture');
-  await writeFile(path.join(f.web, localScript), 'local fixture');
+  const scripts = ['import/find-replace.js', 'questions/rich-content.js'];
+  for (const script of scripts) {
+    const directory = path.dirname(script);
+    await mkdir(path.join(f.web, directory), { recursive: true });
+    await writeFile(path.join(f.web, script), script);
+    await writeFile(path.join(f.web, directory, 'local-debug.js'), 'local fixture');
+  }
 
   await prepareWeb(f.web, f.desktop);
 
-  assert.equal(await readFile(path.join(f.dist, module), 'utf8'), 'find replace fixture');
-  await assert.rejects(readFile(path.join(f.dist, localScript)), { code: 'ENOENT' });
+  for (const script of scripts) {
+    assert.equal(await readFile(path.join(f.dist, script), 'utf8'), script);
+    await assert.rejects(readFile(path.join(f.dist, path.dirname(script), 'local-debug.js')), { code: 'ENOENT' });
+  }
 });
 
 test('adds the independent account script after the native bridge without changing the Web entry', async (t) => {

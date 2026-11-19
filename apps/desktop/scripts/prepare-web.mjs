@@ -13,6 +13,7 @@ const businessScripts = [
   'ai-prompts.js', 'question-view.js', 'bank-page.js', 'saved-questions-page.js', 'training-review-page.js',
   'bank-editor.js', 'study-sessions.js', 'exam-page.js', 'practice-selection.js', 'practice-page.js',
   'ai-import-panel.js', 'ai-question-panels.js', 'question-editor.js', 'import/find-replace.js',
+  'questions/rich-content.js',
 ];
 const sharedStyles = [
   'styles.css',

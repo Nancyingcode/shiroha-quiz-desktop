@@ -327,6 +327,28 @@ test('现有富文本公式和所有可显示图片位置保持在解析后的�
   assert.equal(question.images[0].dataUrl, IMAGE);
 });
 
+test('长解析截断后保留跨过边界的完整图片与公式', () => {
+  const { api } = loadWeb();
+  const formula = '解析公式 $x^2$。';
+  const prefix = [formula, '甲'.repeat(199_940), ''].join('\n');
+  const image = `![解析图](${IMAGE})`;
+  const analysis = `${prefix}${image}${'乙'.repeat(200)}`;
+  const input = {
+    type: 'short',
+    question: '自建简答题',
+    answer: ['自建答案'],
+    richContent: { analysis: { markdown: analysis } },
+  };
+  const before = JSON.stringify(input);
+  assert(prefix.length < 200_000 && prefix.length + image.length > 200_000);
+
+  const normalized = api.normalizeQuestion(input);
+
+  assert(normalized.analysis.startsWith(`${prefix}${image}`));
+  assert(normalized.analysis.length < analysis.length);
+  assert.equal(JSON.stringify(input), before);
+});
+
 test('跨端导出保持正文图片顺序并去重结构化图片', () => {
   const { api } = loadWeb();
   const first = 'data:image/png;base64,AAAA';
