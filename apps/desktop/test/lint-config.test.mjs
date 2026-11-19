@@ -680,6 +680,7 @@ test('statement-per-line pilot covers zero-hit modules without affecting other f
     'apps/web/text-answers.js',
     'apps/web/platform/save-queue.js',
     'apps/web/study-sessions.js',
+    'apps/web/app.js',
   ]) {
     await t.test(filePath, async () => {
       const [result] = await lint.lintText(source, { filePath });
@@ -694,6 +695,23 @@ test('statement-per-line pilot covers zero-hit modules without affecting other f
       filePath,
     );
   }
+});
+
+test('app.js requires separate lines for event-binding statements and control block bodies', async () => {
+  const lint = linter();
+  const filePath = 'apps/web/app.js';
+  const declaration = "const button = document.querySelector('#ocr-copy-btn');";
+  const [compact] = await lint.lintText(
+    `${declaration}if (button) { button.onclick = () => true; }\n`,
+    { filePath },
+  );
+  const rules = compact.messages.map(({ ruleId }) => ruleId);
+  assert(rules.includes('@stylistic/max-statements-per-line'));
+  assert(rules.includes('@stylistic/brace-style'));
+
+  const expanded = [declaration, 'if (button) {', '  button.onclick = () => true;', '}', ''].join('\n');
+  const [result] = await lint.lintText(expanded, { filePath });
+  assert.deepEqual(result.messages, []);
 });
 
 test('clean semantic and formatting rules remain blocking across complete legacy files', async () => {

@@ -222,13 +222,14 @@ export function createConfig({ desktop = false, debt = false, semanticOnly = fal
           renderExportBankSelectorV23: 'readonly',
         },
       },
+      rules: semanticOnly ? {} : { '@stylistic/brace-style': ['error', '1tbs', { allowSingleLine: false }] },
     },
     {
-      // 每行只允许一条语句：先在已零命中的拆分模块试点，其余模块随业务修改逐个纳入。
+      // 已清理的 Web 文件每行只允许一条语句，其余模块逐个纳入。
       files: [
         'apps/web/quiz-core.js', 'apps/web/training.js', 'apps/web/practice-selection.js',
         'apps/web/ai-results.js', 'apps/web/bank-editor.js', 'apps/web/platform/index.js', 'apps/web/text-answers.js',
-        'apps/web/platform/save-queue.js', 'apps/web/study-sessions.js',
+        'apps/web/platform/save-queue.js', 'apps/web/study-sessions.js', 'apps/web/app.js',
       ].map(relative),
       rules: { '@stylistic/max-statements-per-line': ['error', { max: 1 }] },
     },
