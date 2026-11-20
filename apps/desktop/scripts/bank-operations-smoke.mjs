@@ -103,24 +103,28 @@ async function setupExportFixture(page, readSnapshot) {
     });
   }
 
+  const [first, second] = banks;
   await replaceFixture(page, {
     schemaVersion: 1,
     banks,
     activeBankId: banks[0].id,
     settings: { suppressDefaultBank: false, aiImportV99: { provider: 'custom', rememberKey: false } },
-    favorites: {},
-    wrongBook: {},
+    favorites: { [second.id]: ['q2'] },
+    wrongBook: { [first.id]: [{ id: 'q2', wrongCount: 3, lastAnswer: ['A'], status: '未掌握' }] },
     records: [{
       id: 'export-record',
       mode: '练习',
       name: '导出历史成绩',
+      bankId: first.id,
       bankName: '删除后保留的题库名称',
       date: banks[0].createdAt,
       total: 1,
       correct: 1,
       details: [{ question: '记录中仍可读取的历史题干', type: 'single', answer: ['A'], chosen: ['A'], correct: true }],
     }],
-    crossPlatformMeta: {},
+    crossPlatformMeta: {
+      favoriteQuestions: { [second.id]: { q2: { favoritedAt: 1792713600000, extension: { source: 'restore-fixture' } } } },
+    },
   });
   return readAfterReload(page, readSnapshot);
 }
@@ -204,6 +208,32 @@ async function exportFile(page, button) {
     capturedQueries.length = 0;
   });
   return { name, bytes, queries };
+}
+
+/** 从真实下载入口获取用于恢复对照的同一份多页样本。
+ * @param {Page} page @param {ReadSnapshot} readSnapshot
+ */
+export async function captureBackupRestoreFixture(page, readSnapshot) {
+  const source = await setupExportFixture(page, readSnapshot);
+  await page.locator('.nav[data-view="settings"]').click();
+  await captureExportFiles(page);
+  const json = await exportFile(page, page.locator('#export-all-btn'));
+  const zip = await exportFile(page, page.locator('#settings-export-native-backup-v611'));
+  const existing = fixtureBank('restore-existing', '恢复前的题库', 12);
+  const resetTarget = async () => {
+    await replaceFixture(page, {
+      schemaVersion: 1,
+      banks: [existing],
+      activeBankId: existing.id,
+      settings: { suppressDefaultBank: true },
+      favorites: {},
+      wrongBook: {},
+      records: [{ id: 'restore-existing-record', mode: '练习', name: '恢复前的记录' }],
+      crossPlatformMeta: {},
+    });
+    return readAfterReload(page, readSnapshot);
+  };
+  return { source, json, zip, resetTarget };
 }
 
 /** @param {Bank} bank @param {number} [start] */

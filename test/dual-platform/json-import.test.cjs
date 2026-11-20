@@ -36,9 +36,6 @@ function setup(data, { mode = 'auto', accepted = true } = {}) {
       },
     },
     runMutation: async (action) => action(),
-    applyBackupImportV23: async (...args) => {
-      imports.push(args);
-    },
     renderImportPreview: (questions) => previews.push(plain(questions)),
     collectImportWarnings: () => [],
     collectSoftRiskWarnings: () => [],
@@ -48,8 +45,18 @@ function setup(data, { mode = 'auto', accepted = true } = {}) {
     showNotice: (...args) => notices.push(args),
     toast: (...args) => notices.push(args),
   });
-  runWebScripts(context, ['import-preview.js']);
+  runWebScripts(context, ['import-preview.js', 'backup/restore.js']);
   context.importDraft = context.ShirohaImportPreview.create({ readers: {}, ocr: {} });
+  context.backupRestore = context.ShirohaBackupRestore.create({
+    platform: context.ShirohaPlatform,
+    data: {
+      merge: (normalized) => imports.push([normalized, 'merge']),
+      upgrade() {},
+      ensureDefaultBank() {},
+    },
+    storage: { save: async () => {} },
+    view: { refresh() {}, toast() {} },
+  });
   context.importDraft.questions = original;
   context.importDraft.sourceMeta = { name: 'fixture.json' };
   vm.runInContext(source.between('tryParseAutoJsonImportV58922', 'loadDualSample'), context);

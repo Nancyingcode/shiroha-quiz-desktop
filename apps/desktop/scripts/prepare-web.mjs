@@ -7,7 +7,7 @@ import { html as htmlStandard, parse } from 'parse5';
 const desktopRoot = fileURLToPath(new URL('..', import.meta.url));
 const businessScripts = [
   'app.js', 'training.js', 'quiz-core.js', 'text-answers.js', 'text-parser.js',
-  'backup-core.js', 'zip.js', 'backup-archive.js', 'backup-data.js', 'backup/export.js', 'webdav-panel.js',
+  'backup-core.js', 'zip.js', 'backup-archive.js', 'backup-data.js', 'backup/export.js', 'backup/restore.js', 'webdav-panel.js',
   'docx-import.js', 'pdf-import.js', 'ocr-import.js', 'table-import.js', 'import-preview.js',
   'ai-results.js', 'ai-import-sessions.js', 'ai-question-sessions.js', 'ai-settings.js', 'ai-transport.js',
   'ai-prompts.js', 'question-view.js', 'bank-page.js', 'saved-questions-page.js', 'training-review-page.js',

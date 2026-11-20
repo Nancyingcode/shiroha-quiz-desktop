@@ -86,3 +86,27 @@
 | WebView2 与 SQLite | `pnpm run test:desktop` 最终 56 项全部通过。旧 C8 用例直接调用 `ensureAll`。新增三项从真实按钮验证导出文件名、适配器交付字节及剪贴板写入，覆盖三库 13、14、12 道题的首末页、跨库同 ID、空图片字段、去重 ZIP 媒体、记录详情及 SQLite 重载。失败预读和两种目标变化均零文件输出并保留预览。只在显式切库时有一次预期 SQLite 写入。 |
 
 桌面首轮读取失败用例等待注入异常的原始文案，实际桌面适配器显示已有的通用本地操作提示。按实际提示修正测试断言后，重新通过类型、完整 lint 和 WebView2 检查。保留 `test-desktop.log` 和 `test-desktop-final.log` 两份日志。桌面的文件授权与剪贴板由隔离测试宿主捕获。浏览器另从实际下载及系统剪贴板接口读取了导出结果。系统保存对话框和安装升级未纳入本批验收。[桌面导出用例](../../../apps/desktop/scripts/bank-operations-smoke.mjs)
+
+### 第九批 · 本地与 WebDAV 恢复
+
+- 负责人为 `batch09_restore`（GPT-6.2-Sol Max）。沿用第七、八批已验收的工作树。分支为 `codex/web-app-remaining`，工作树为 `C:/Users/30728/.codex/worktrees/31f4/shiroha-quiz-desktop`，`HEAD` 为 `ac4f4c64adc773040eb2b06bf5831003c2803ab0`。
+- [`backup/restore.js`](../../../apps/web/backup/restore.js) 持有设置页备份面板、文件选择、附件回填、共享的备份字段应用及原生 WebDAV 配置事务。设置页合并直接应用，覆盖时单次确认。导入页保留一次合并确认和保存后的预览清理。WebDAV 面板保留文件哈希校验、模式确认、传输诊断与完成反馈。三条入口共用应用事务及保存队列，正常恢复点与损坏数据库修复仍由应用入口协调重入。`app.js` 由 4,936 行、171 个入口闭包内直接声明的具名函数减至 4,763 行、164 个。
+- 在旧实现的实际浏览器按钮注入一次写失败。WebDAV 全局重试写入后待恢复弹窗仍保留，面板未报告完成。浏览器模拟原生凭据接口，使用真实保存队列复现保存和清除各自暂存、写失败、撤销待处理 ID 后，再点按钮仍不恢复写入。接线后原生配置由表单按钮重新发起事务并暂存。全局备份重试固定输入、模式和来源。WebDAV 成功后关窗并把焦点还给发起按钮，模式变更时旧重试不写入。[浏览器用例](../../../test/dual-platform/browser-page.cjs)
+- 首次迁移后的定向浏览器测试发现导入页的读取代次检查只在草稿工厂内部可用。公开同一检查方法后，原文本和预览继续保留到保存成功，导入页全局重试也可成功。历史 ZIP 先回填附件，桌面缺图在修改数据前拒绝，Web 继续提示缺图数量。覆盖对原生凭据的撤销由宿主管理，其结果独立于 SQLite 修订与界面回滚。[文件与修复入口](../../../test/dual-platform/backup-entry-performance.test.cjs)
+
+在 Windows 10（19045）、Node 24.22.2、pnpm 12.16.1 和 Rust 1.99.1 上验证。使用本工作树原有依赖及构建缓存。完整测试、生成和桌面验收按现有 Windows 夹具需要经自动审查运行，在隔离目录使用合成数据、假凭据和本地模拟服务。两个桌面构建使用 `CARGO_NET_OFFLINE=true`，生产构建通过进程级 `CARGO_TARGET_DIR` 复用本工作树缓存。第九批日志位于 `apps/desktop/.reports/batch09/`。
+
+| 验证项 | 实际命令与结果 |
+| --- | --- |
+| 原始回归和接线 | 根目录运行 `node --test test/dual-platform/backup-entry-performance.test.cjs test/dual-platform/json-import.test.cjs test/dual-platform/format.test.cjs test/dual-platform/source-loading.test.cjs test/web-webdav/request.test.cjs`，61 项通过。单独运行 `node --test test/web-webdav/request.test.cjs`，10 项通过。 |
+| 类型和 lint | 在 `apps/desktop` 运行 `pnpm run typecheck`、`pnpm run lint`。完整 JavaScript 门禁覆盖 179 个文件。规则夹具 91 项通过，1 项按规则在大小写不敏感的临时目录跳过。 |
+| 桌面和共享 Node 测试 | `pnpm test` 桌面 285 项通过、1 项环境跳过，共享 510 项通过。 |
+| 完整浏览器 | `pnpm run test:web-platform` 的 246 项全部通过，覆盖 HTTP、本地 HTML、恢复失败重试、确认与预览。 |
+| 资源与构建 | `pnpm run prepare:web`、`pnpm run build`、`pnpm run build:test` 依次通过。`dist/backup/restore.js` 与源文件 SHA-256 一致。 |
+| WebView2 和 SQLite | `pnpm run test:desktop` 最终 60 项全部通过。用同一份实际导出产物验证设置页合并 JSON 和覆盖 ZIP、导入页合并 JSON、模拟 WebDAV 合并和覆盖 JSON。逐题核对 13、14、12 道题，另检查同 ID 旁库、分组、末页图片、错题、按库和题目 ID 定位的收藏时间及扩展字段、历史记录和设置。历史 ZIP 不含 Web 设置时沿用原值。 |
+
+- 三库逐题使用独立预期。既有导入规范会为样本客观题解析补答案前缀，并在有图题干中补内联图片 Markdown。重载核对了这两种明确的格式变化，题干正文、选项、答案、解析正文、题目扩展字段及图片内容仍按对应题目比较。[恢复桌面用例](../../../apps/desktop/scripts/backup-restore-smoke.mjs)
+- 桌面缺图、完整读取失败和检查点失败均未替换题库。读取和检查点故障均未撤销凭据。写入失败后内存活动库、SQLite 修订和 SQLite 数据保持原值，正确重试后修订只推进一次。原生 WebDAV 实测保存与清除的暂存 ID 对应写入 `operationId`，失败后撤销，成功后确认。另模拟确认失败，重载根据实际写入回执完成凭据核对。上传元数据只写一次设置，实际上传请求正文无测试密码。正常恢复点操作等待保存队列完成后才切换和重载。
+- 两条损坏库修复都在未就绪页触发一次原生修复，启动后输入事件各调用一次原文来源与 AI 选区监听器，并保留原主库字节和旧活动代。首次全量桌面运行把这两个既有监听器误计为一个，第二次在人工构造的无效 WAL 断言处停止。复验在用户点击前记录旧路径上的 WAL，两条路径在进入恢复界面时该无效侧车文件均已不在原路径。有效且尚未 checkpoint 的 WAL 在损坏数据库修复中的保全未由此场景验收。保留两次原始日志及 `test-desktop-final.log`。[启动修复用例](../../../apps/desktop/scripts/smoke.mjs)
+
+文件授权由现有桌面测试协议接收实际备份字节，未人工验收系统文件对话框。WebDAV 使用本地或页内模拟，未连接真实服务。交付边界截至第九批，下一批迁移题库组名时可继续通过现有归一化回调连接备份转换和恢复。

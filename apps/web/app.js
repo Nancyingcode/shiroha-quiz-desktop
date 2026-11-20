@@ -35,7 +35,6 @@
   const practiceSession = globalThis.ShirohaStudySessions.createPractice();
   const examSession = globalThis.ShirohaStudySessions.createExam();
   let exportBankSelectedV23 = new Set();
-  let backupImportModeV23 = 'merge';
   const $ = (s) => document.querySelector(s);
 
   const $$ = (s) => [...document.querySelectorAll(s)];
@@ -2067,14 +2066,6 @@
       exportAllBtn.onclick = backupExport.exportAllBackup;
     }
 
-    const importBackupQuickBtnV598 = $('#import-backup-quick-btn-v598');
-    if (importBackupQuickBtnV598) {
-      importBackupQuickBtnV598.onclick = () => {
-        backupImportModeV23 = $('#settings-backup-mode-v23')?.value || 'overwrite';
-        $('#backup-json-file-v23')?.click();
-      };
-    }
-
     $('#reset-data-btn').onclick = resetData;
     bindLimitControlsV60();
     bindPracticeStartControlsV58916();
@@ -2948,12 +2939,13 @@ D、高速通过积水路段`;
       return;
     }
 
-    importDraft.invalidateRead('single');
+    const generation = importDraft.invalidateRead('single');
     try {
       importDraft.warnings = [];
       importDraft.report = '';
       importDraft.diagnostics = null;
-      const explicitJson = $('#import-mode').value === 'json';
+      const inputMode = $('#import-mode').value;
+      const explicitJson = inputMode === 'json';
       const autoJson = explicitJson ? null : tryParseAutoJsonImportV58922(text);
       if (explicitJson || autoJson !== null) {
         const data = explicitJson ? JSON.parse(text) : autoJson;
@@ -2970,13 +2962,30 @@ D、高速通过积水路段`;
             return;
           }
 
-          await runMutation(/* 等待备份合并成功后再清空题目预览。 */ async () => {
-            await applyBackupImportV23(normalized, 'merge', countUnresolvedBackupImagesV24(data));
-            importDraft.questions = [];
-            importDraft.selected.clear();
-            renderImportPreview([]);
-            showNotice('备份导入完成', `已合并导入 ${normalized.banks.length} 个题库、${total} 道题及对应的错题、收藏和学习记录。`, 'ok');
-          });
+          // 失败期间可能换文件或离页，不能继续使用已失效的合并确认。
+          const retry = () => {
+            const sameSource = importDraft.isCurrentRead('single', generation)
+              && textEl.value.trim() === text && $('#import-mode').value === inputMode;
+            if (!sameSource || !$('#import')?.classList.contains('active')) {
+              toast('备份来源已变化，请重新识别。', 'warn');
+              return false;
+            }
+
+            return applyImport();
+          };
+
+          // 全局重试沿用已经确认的归一化备份和预览清理流程。
+          const applyImport = () => runMutation(/* 等待备份合并成功后再清空题目预览。 */ async () => {
+            const restored = await backupRestore.applyLocalBackup(normalized, 'merge', countUnresolvedBackupImagesV24(data));
+            if (restored) {
+              importDraft.questions = [];
+              importDraft.selected.clear();
+              renderImportPreview([]);
+              showNotice('备份导入完成', `已合并导入 ${normalized.banks.length} 个题库、${total} 道题及对应的错题、收藏和学习记录。`, 'ok');
+            }
+          }, retry);
+
+          await applyImport();
 
           return;
         }
@@ -3261,24 +3270,13 @@ D. 高速通过积水路段`;
 */
   function setupEnhancedDataToolsV23() {
     injectDataToolsStyleV23();
-    ensureBackupFileInputV23();
     setupBankManagement();
-    ensureSettingsBackupPanelV23();
-  }
-
-  // 按需装配备份文件输入，用独立控件承接恢复文件选择。
-  function ensureBackupFileInputV23() {
-    if ($('#backup-json-file-v23')) {
-      return;
-    }
-
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.id = 'backup-json-file-v23';
-    input.accept = '.json,.zip,application/json,application/zip';
-    input.style.display = 'none';
-    input.onchange = importBackupJsonFileV23;
-    document.body.appendChild(input);
+    ensureNativeRecoveryPanel();
+    backupRestore.mountSettings({
+      exportZip: backupExport.exportNativeCompatibleBackupZip,
+      copyBackup: backupExport.copyAllBackupJson,
+      mountWebdav: webdavPanel.mount,
+    });
   }
 
   /* v28.4.4: 导入配置 / 备份 JSON 入口已移动到设置/导出页，不再插入导入题库页。 */
@@ -3322,16 +3320,41 @@ D. 高速通过积水路段`;
       }
     };
 
-    restore.onclick = /* 恢复点切换完成后重新载入应用。 */ () => runMutation(/* 等旧保存队列结束再切换，避免旧状态覆盖恢复结果。 */ async () => {
-      if (!select.value || !await ShirohaDialogs.confirm('用选中的恢复点替换当前题库和学习数据？当前数据会先保留为新的恢复点。')) {
+    restore.onclick = /* 恢复点切换完成后重新载入应用。 */ async () => {
+      const name = select.value;
+      if (!name) {
         return;
       }
 
-      await ShirohaPlatform.harness?.cancelAll();
-      await ShirohaPlatform.saves.idle();
-      await ShirohaPlatform.storage.restoreSnapshot(select.value);
-      location.reload();
-    });
+      // 解锁页面后再重载，避免正常恢复触发正在保存时的退出拦截。
+      const attempt = async () => {
+        const restored = await runMutation(/* 等旧保存队列结束再切换，避免旧状态覆盖恢复结果。 */ async () => {
+          if (!await ShirohaDialogs.confirm('用选中的恢复点替换当前题库和学习数据？当前数据会先保留为新的恢复点。')) {
+            return false;
+          }
+
+          await ShirohaPlatform.harness?.cancelAll();
+          await ShirohaPlatform.saves.idle();
+          await ShirohaPlatform.storage.restoreSnapshot(name);
+          return true;
+        }, retry);
+        if (restored) {
+          location.reload();
+        }
+      };
+
+      // 重试不能切换到未确认过的恢复点。
+      const retry = () => {
+        if (select.value !== name || !$('#settings')?.classList.contains('active')) {
+          toast('恢复点选择已变化，请重新选择。', 'warn');
+          return false;
+        }
+
+        return attempt();
+      };
+
+      await attempt();
+    };
 
     panel.append(title, refresh, select, restore, status);
     document.getElementById('settings').appendChild(panel);
@@ -3341,43 +3364,6 @@ D. 高速通过积水路段`;
     repair.appendChild(summary);
     offerNativeRecovery(repair);
     panel.appendChild(repair);
-  }
-
-  // 装配设置页的备份恢复工具，并挂载原生侧支持的恢复入口。
-  function ensureSettingsBackupPanelV23() {
-    ensureNativeRecoveryPanel();
-    if ($('#settings-backup-panel-v23')) {
-      return;
-    }
-
-    const settingsCard = $('#settings .card');
-    if (!settingsCard) {
-      return;
-    }
-
-    settingsCard.insertAdjacentHTML('beforeend', `<div id="settings-backup-panel-v23" class="data-tools-v23">
-    <h2>备份与恢复</h2>
-    <p class="muted">设置页只处理完整数据备份：包含题库、错题本、收藏夹、练习记录和设置。单个题库或选中题库 JSON 请到“题库管理”页导出。</p>
-    <div class="form-grid">
-      <label>恢复方式<select id="settings-backup-mode-v23"><option value="merge">合并导入：保留当前数据，新增备份中的题库</option><option value="overwrite" selected>覆盖恢复：用备份替换当前本地数据</option></select></label>
-      <label>备份范围<input disabled value="全部题库、错题本、收藏夹、记录、设置" /></label>
-    </div>
-    <div class="actions wrap-v23">
-      <button class="ghost" id="settings-export-native-backup-v611" type="button">导出含图片备份 ZIP</button>
-      <button class="ghost" id="settings-import-backup-v23" type="button">导入备份 JSON/ZIP</button>
-      <button class="ghost" id="settings-copy-all-backup-v23" type="button">复制 Web 备份文本</button>
-    </div>
-    <p class="muted">提示：顶部“导出 Web 完整备份”用于 Web 端完整恢复；“含图片备份 ZIP”保存题库、图片及现有可交换学习数据，兼容旧版备份格式，不包含所有平台专属设置；复制文本只作为浏览器下载失败时的兜底。覆盖恢复会替换本机数据；合并导入遇到同名题库会自动追加“_导入”。</p>
-    <details class="asset-reference-details"><summary>角色基准素材预览</summary><img src="./media/mascot_character_sheet.webp" alt="角色基准素材" /></details>
-  </div>`);
-    $('#settings-export-native-backup-v611').onclick = backupExport.exportNativeCompatibleBackupZip;
-    $('#settings-copy-all-backup-v23').onclick = backupExport.copyAllBackupJson;
-    $('#settings-import-backup-v23').onclick = () => {
-      backupImportModeV23 = $('#settings-backup-mode-v23')?.value || 'overwrite';
-      $('#backup-json-file-v23').click();
-    };
-
-    webdavPanel.mount(settingsCard);
   }
 
   // 旧页面没有数据工具样式时按需补齐，避免重复注入。
@@ -3963,6 +3949,39 @@ D. 高速通过积水路段`;
     schemaVersion: CURRENT_SCHEMA_VERSION,
     now,
   });
+  const backupRestore = globalThis.ShirohaBackupRestore.create({
+    state,
+    schemaVersion: CURRENT_SCHEMA_VERSION,
+    platform: ShirohaPlatform,
+    archive: {
+      read: readBackupFileV24,
+      applyAssets: applyBackupAssetsV24,
+      countUnresolvedImages: countUnresolvedBackupImagesV24,
+    },
+    data: {
+      normalize: normalizeBackupPayloadV23,
+      merge: mergeBackupBanksV23,
+      normalizeGroup: normalizeBankGroupNameV58,
+      upgrade: upgradeState,
+      ensureDefaultBank,
+    },
+    storage: {
+      transaction: runMutation,
+      loadAll: loadNativeAll,
+      save: saveSilent,
+      saveFailed: () => Boolean(mutationSaveError),
+    },
+    view: {
+      select: $,
+      confirm: ShirohaDialogs.confirm,
+      setPreview: setBackupPreviewV23,
+      toast,
+      refresh: () => {
+        setupEnhancedDataToolsV23();
+        renderAll();
+      },
+    },
+  });
 
   function downloadBlob(name, blob) {
     return ShirohaPlatform.download(name || 'download.bin', blob);
@@ -4000,209 +4019,23 @@ D. 高速通过积水路段`;
     return String(s ?? '').replace(/* 转义会改变 DOCX XML 结构的字符，让 OCR 内容只作为文本解释。 */ /[&<>"']/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' }[m]));
   }
 
-  // 调用方须先进入页面写入事务，确保两个导入入口共用保存和失败回滚边界。
-  async function applyBackupImportV23(normalized, mode, unresolvedImageCount = 0) {
-    if (unresolvedImageCount && ShirohaPlatform.storage.checkpoint) {
-      throw new Error('备份缺少图片，尚未更改本地数据。请补齐原始图片后重试。');
-    }
-
-    if (!normalized.banks.length) {
-      toast('没有在 JSON 中找到可导入的题库。', 'warn');
-      return;
-    }
-
-    const previousStateJson = JSON.stringify(state);
-    if (mode === 'overwrite') {
-      if (!await ShirohaDialogs.confirm(`覆盖恢复会清空当前本地数据，并导入 ${normalized.banks.length} 个题库。确定继续？`)) {
-        return;
-      }
-
-      if (!await loadNativeAll()) {
-        throw new Error('恢复前读取失败，原数据已保留。');
-      }
-
-      await ShirohaPlatform.storage.checkpoint?.();
-      await ShirohaPlatform.harness?.cancelAll();
-      if (ShirohaPlatform.credentials.native) {
-        await ShirohaPlatform.credentials.reset();
-      }
-
-      const previousWebSettings = state.settings && typeof state.settings === 'object' ? state.settings : {};
-      state.schemaVersion = CURRENT_SCHEMA_VERSION;
-      state.banks = normalized.banks.map((b) => ({ ...b, groupName: normalizeBankGroupNameV58(b.groupName) }));
-
-      state.activeBankId = normalized.activeBankId || state.banks[0]?.id || '';
-      state.wrongBook = normalized.wrongBook || {};
-      state.favorites = normalized.favorites || {};
-      state.records = Array.isArray(normalized.records) ? normalized.records : [];
-      state.settings = normalized.hasWebSettings && normalized.settings && typeof normalized.settings === 'object' ? normalized.settings : previousWebSettings;
-      state.crossPlatformMeta = normalized.crossPlatformMeta && typeof normalized.crossPlatformMeta === 'object' ? normalized.crossPlatformMeta : { favoriteQuestions: {} };
-    } else {
-      mergeBackupBanksV23(normalized);
-    }
-
-    upgradeState();
-    ensureDefaultBank();
-    try {
-      await saveSilent();
-    } catch {
-      const previous = JSON.parse(previousStateJson);
-      Object.keys(state).forEach((k) => delete state[k]);
-
-      Object.assign(state, previous);
-      upgradeState();
-      throw new Error('导入内容超过浏览器本地存储容量，已恢复导入前数据。可减少图片后重试，或只导入部分题库。');
-    }
-
-    setupEnhancedDataToolsV23();
-    renderAll();
-    const total = normalized.banks.reduce((n, b) => n + (b.questions || []).length, 0);
-    toast(`导入完成：${normalized.banks.length} 个题库，${total} 道题。${unresolvedImageCount ? ` 另有 ${unresolvedImageCount} 张图片未包含在备份文件中，Web 端无法显示。` : ''}`, unresolvedImageCount ? 'warn' : 'ok');
-  }
-
-  // 在文件选择事件后按当前模式读取、检查和应用兼容备份。
-  function importBackupJsonFileV23(e) {
-    const file = e.target.files && e.target.files[0];
-    if (!file) {
-      return;
-    }
-
-    // 启动不返回给 DOM 事件的异步导入，并把错误收敛到事务中的用户提示。
-    (async () => runMutation(/* 在解析和关联备份资源后才应用导入，失败时保留可重试的文件选择。 */ async () => {
-      try {
-        const loaded = await readBackupFileV24(file);
-        const { text } = loaded;
-        setBackupPreviewV23(text);
-        const data = JSON.parse(text);
-        const assets = loaded.assets || {};
-        if (Object.keys(assets).length) {
-          applyBackupAssetsV24(data, assets);
-        }
-
-        const unresolvedImageCount = countUnresolvedBackupImagesV24(data);
-        const normalized = normalizeBackupPayloadV23(data, file.name);
-        await applyBackupImportV23(normalized, backupImportModeV23 || 'merge', unresolvedImageCount);
-      } catch (err) {
-        // eslint-disable-next-line prefer-template -- 异常信息可能是对象，保留 + 的默认转换；统一异常类型后移除此例外。
-        toast('导入备份失败：' + err.message, 'danger');
-      } finally {
-        if (!mutationSaveError) {
-          e.target.value = '';
-        }
-      }
-    }))();
-  }
-
   /* SHIROHA_WEB_V37_8_WEBDAV_CLOUD_BACKUP_START
    v37.8: 手动 WebDAV 完整备份、远程历史列表与事务恢复。
 */
-  async function storeWebdavConfigV378(config, password, storePassword = true) {
-    const safe = { ...defaultWebdavConfigV378(), ...config };
-    delete safe.password;
-    delete safe.authorization;
-    const undo = await ShirohaPlatform.credentials.saveDav(safe, password, storePassword);
-    if (ShirohaPlatform.credentials.native) {
-      const previous = state.serviceConfigurations;
-      state.serviceConfigurations = { ...previous, webdav: safe };
-      try {
-        await saveSilent(ShirohaPlatform.credentials.operationId?.(undo));
-      } catch (error) {
-        state.serviceConfigurations = previous;
-        await undo?.();
-        throw error;
-      }
-
-      if (undo) {
-        await ShirohaPlatform.credentials.finalize(undo);
-      }
-
-      ShirohaPlatform.credentials.updateDav(safe);
-    }
-  }
-
-  // 清除备份恢复前的 WebDAV 配置，按照平台凭据接口完成后续处理。
-  async function clearWebdavStorageV378() {
-    const undo = await ShirohaPlatform.credentials.clearDav();
-    if (ShirohaPlatform.credentials.native) {
-      const previous = state.serviceConfigurations;
-      state.serviceConfigurations = { ...previous };
-      delete state.serviceConfigurations.webdav;
-      try {
-        await saveSilent(ShirohaPlatform.credentials.operationId?.(undo));
-      } catch (error) {
-        state.serviceConfigurations = previous;
-        await undo?.();
-        throw error;
-      }
-
-      if (undo) {
-        await ShirohaPlatform.credentials.finalize(undo);
-      }
-
-      ShirohaPlatform.credentials.updateDav(null);
-    }
-  }
-
-  // 执行备份合并或替换前保留可恢复快照，使失败不会留下半写入状态。
-  async function applyNormalizedBackupV378(normalized, mode) {
-    return runMutation(/* 区分合并和覆盖的前置步骤，数据保存成功之前保留旧状态及回滚路径。 */ async () => {
-      let previousStateJson;
-      try {
-        previousStateJson = JSON.stringify(state);
-      } catch {
-        throw new Error('当前本地数据过大，无法创建恢复前回滚快照。请先导出本地完整备份。');
-      }
-
-      try {
-        if (mode === 'overwrite') {
-          if (!await loadNativeAll()) {
-            throw new Error('恢复前读取失败，原数据已保留。');
-          }
-
-          await ShirohaPlatform.storage.checkpoint?.();
-          await ShirohaPlatform.harness?.cancelAll();
-          if (ShirohaPlatform.credentials.native) {
-            await ShirohaPlatform.credentials.reset();
-          }
-
-          const previousWebSettings = state.settings && typeof state.settings === 'object' ? state.settings : {};
-          state.schemaVersion = CURRENT_SCHEMA_VERSION;
-          state.banks = normalized.banks.map((b) => ({ ...b, groupName: normalizeBankGroupNameV58(b.groupName) }));
-
-          state.activeBankId = normalized.activeBankId || state.banks[0]?.id || '';
-          state.wrongBook = normalized.wrongBook || {};
-          state.favorites = normalized.favorites || {};
-          state.records = Array.isArray(normalized.records) ? normalized.records : [];
-          state.settings = normalized.hasWebSettings && normalized.settings && typeof normalized.settings === 'object' ? normalized.settings : previousWebSettings;
-          state.crossPlatformMeta = normalized.crossPlatformMeta && typeof normalized.crossPlatformMeta === 'object' ? normalized.crossPlatformMeta : { favoriteQuestions: {} };
-        } else {
-          mergeBackupBanksV23(normalized);
-        }
-
-        upgradeState();
-        ensureDefaultBank();
-        await saveSilent();
-      } catch {
-        const previous = JSON.parse(previousStateJson);
-        Object.keys(state).forEach((k) => delete state[k]);
-
-        Object.assign(state, previous);
-        upgradeState();
-        throw new Error('恢复内容未能写入浏览器本地存储，已回滚到恢复前数据。请检查本地存储空间，或减少备份中的大图片。');
-      }
-    });
-  }
-
   const webdavPanel = globalThis.ShirohaWebdavPanel.create({
     platform: ShirohaPlatform,
-    storeWebdavConfigV378,
-    clearWebdavStorageV378,
+    storeWebdavConfigV378: (config, password, storePassword) => {
+      const defaults = defaultWebdavConfigV378();
+      return backupRestore.storeWebdavConfig(defaults, config, password, storePassword);
+    },
+
+    clearWebdavStorageV378: backupRestore.clearWebdavConfig,
     loadNativeAll,
     getState: () => state,
 
     buildBackupPayloadV23,
     normalizeBackupPayloadV23,
-    applyNormalizedBackupV378,
+    applyNormalizedBackupV378: backupRestore.applyWebdavBackup,
     isStringTooLargeErrorV376,
     isMutationBusy: () => mutationBusy,
 
@@ -4668,14 +4501,8 @@ D. 高速通过积水路段`;
 
       backup.disabled = true;
       try {
-        const loaded = await readBackupFileV24(file);
-        const data = JSON.parse(loaded.text);
-        const assets = loaded.assets || {};
-        if (Object.keys(assets).length) {
-          applyBackupAssetsV24(data, assets);
-        }
-
-        if (countUnresolvedBackupImagesV24(data)) {
+        const { data, unresolvedImageCount } = await backupRestore.readBackupContents(file);
+        if (unresolvedImageCount) {
           throw new Error('备份缺少图片，未切换本地数据。');
         }
 

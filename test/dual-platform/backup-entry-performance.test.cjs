@@ -3,7 +3,7 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const vm = require('node:vm');
-const { loadWebSource } = require('./source-tools.cjs');
+const { loadWebSource, runWebScripts } = require('./source-tools.cjs');
 const { loadWeb, plain } = require('./web-source.cjs');
 
 const source = loadWebSource();
@@ -15,35 +15,15 @@ function payload(path = '') {
     records: [],
   };
 }
-function setup(entry, data, assets) {
+function setup(data, assets) {
   const calls = { apply: 0, unresolved: 0, imports: [], messages: [] };
-  let finish;
-  const finished = new Promise((resolve) => {
-    finish = resolve;
-  });
   const elements = [];
   const context = vm.createContext({
     CURRENT_SCHEMA_VERSION: 1,
-    readBackupFileV24: async () => ({ text: JSON.stringify(data), assets }),
-    applyBackupAssetsV24(value, map) {
-      calls.apply += 1;api.applyBackupAssetsV24(value, map);
-    },
-    countUnresolvedBackupImagesV24(value) {
-      calls.unresolved += 1;return api.countUnresolvedBackupImagesV24(value);
-    },
     normalizeBackupPayloadV23: (value) => value,
-    setBackupPreviewV23() {},
-    backupImportModeV23: 'merge',
-    mutationSaveError: null,
-    runMutation: (action) => action(),
-    applyBackupImportV23: async (...args) => {
-      calls.imports.push(args);finish();
-    },
-    toast: (message) => {
-      calls.messages.push(message);finish();
-    },
     ShirohaDialogs: { confirm: async () => true },
     ShirohaPlatform: {
+      credentials: {},
       storage: {
         recoverySnapshots: async () => [],
         recoverImport: async (snapshot) => {
@@ -53,44 +33,72 @@ function setup(entry, data, assets) {
     },
     startApplication: async () => {},
     document: {
+      body: { appendChild() {} },
       createElement(tag) {
-        const element = { tag, setAttribute() {}, appendChild() {}, replaceChildren() {} };
+        const element = { tag, style: {}, setAttribute() {}, appendChild() {}, replaceChildren() {} };
         elements.push(element);
         return element;
       },
     },
   });
-  vm.runInContext(source.functionSource(entry), context);
-  return { context, calls, elements, finished };
+  runWebScripts(context, ['backup/restore.js']);
+  context.backupRestore = context.ShirohaBackupRestore.create({
+    platform: context.ShirohaPlatform,
+    archive: {
+      read: async () => ({ text: JSON.stringify(data), assets }),
+      applyAssets(value, map) {
+        calls.apply += 1;
+        api.applyBackupAssetsV24(value, map);
+      },
+      countUnresolvedImages(value) {
+        calls.unresolved += 1;
+        return api.countUnresolvedBackupImagesV24(value);
+      },
+    },
+    data: {
+      normalize: context.normalizeBackupPayloadV23,
+      merge: (value) => calls.imports.push([value]),
+      upgrade() {},
+      ensureDefaultBank() {},
+    },
+    storage: { transaction: (action) => action(), save: async () => {} },
+    view: {
+      select: () => null,
+      setPreview() {},
+      refresh() {},
+      toast: (message) => calls.messages.push(message),
+    },
+  });
+  vm.runInContext(source.functionSource('offerNativeRecovery'), context);
+  return { context, calls, elements };
 }
 
-for (const entry of ['importBackupJsonFileV23', 'offerNativeRecovery']) {
+for (const entry of ['设置页备份', '启动修复']) {
   for (const scenario of ['空资产', '缺图', '含图']) {
     test(`${entry}：${scenario}仅在资产非空时替换，始终检测缺图`, async () => {
       const path = scenario === '空资产' ? '' : 'assets/pixel.png';
       const data = payload(path);
       const assets = scenario === '含图' ? { 'assets/pixel.png': 'data:image/png;base64,AAE=' } : {};
-      const run = setup(entry, data, assets);
+      const run = setup(data, assets);
       const file = { name: 'fixture.json' };
-      if (entry === 'importBackupJsonFileV23') {
-        run.context.importBackupJsonFileV23({ target: { files: [file], value: 'selected' } });
-        await run.finished;
+      if (entry === '设置页备份') {
+        run.context.backupRestore.mountSettings({});
       } else {
-        const container = { append() {} };
-        run.context.offerNativeRecovery(container);
-        const input = run.elements.find((element) => element.tag === 'input');
-        input.files = [file];
-        await input.onchange();
+        run.context.offerNativeRecovery({ append() {} });
       }
+
+      const input = run.elements.find((element) => element.tag === 'input');
+      input.files = [file];
+      await input.onchange({ target: input });
       assert.equal(run.calls.apply, scenario === '含图' ? 1 : 0);
       assert.equal(run.calls.unresolved, 1);
-      if (entry === 'offerNativeRecovery' && scenario === '缺图') {
+      if (entry === '启动修复' && scenario === '缺图') {
         assert.equal(run.calls.imports.length, 0);
         assert(run.elements.some((element) => String(element.textContent || '').includes('备份缺少图片')));
       } else {
         assert.equal(run.calls.imports.length, 1);
         const result = run.calls.imports[0][0];
-        if (scenario === '缺图') { assert.equal(run.calls.imports[0][2], 1); }
+        if (scenario === '缺图') { assert(run.calls.messages.some((message) => message.includes('另有 1 张图片'))); }
         if (scenario === '含图') { assert.match(plain(result).banks[0].questions[0].images[0].localPath, /^data:image\/png/); }
       }
     });
@@ -99,7 +107,7 @@ for (const entry of ['importBackupJsonFileV23', 'offerNativeRecovery']) {
 
 test('恢复入口失败保留原数据和文件选择，修复后同文件可重试', async () => {
   const data = payload();
-  const run = setup('offerNativeRecovery', data, {});
+  const run = setup(data, {});
   const original = { banks: [{ id: 'old-bank', questions: [{ id: 'old-question' }] }] };
   let persisted = structuredClone(original);
   let attempts = 0;

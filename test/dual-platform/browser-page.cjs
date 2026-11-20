@@ -793,8 +793,8 @@ test('设置页以含图片备份展示 ZIP，实际下载仍使用旧兼容载�
   assert.equal(await saved(page), before);
 });
 
-for (const mode of ['merge', 'overwrite']) {
-  test(`WebDAV mock 上传、校验与${mode}失败重试保全数据`, async (t) => {
+for (const [mode, retryFrom] of [['merge', '确认框'], ['overwrite', '确认框'], ['merge', '全局重试']]) {
+  test(`WebDAV mock 上传、校验与${mode}失败经${retryFrom}保全数据`, async (t) => {
     const page = await pageFor(t, JSON.stringify(webState()));
     await page.locator('body[data-storage-state="ready"]').waitFor();
     await page.evaluate(() => {
@@ -866,8 +866,21 @@ for (const mode of ['merge', 'overwrite']) {
     assert.deepEqual(JSON.parse(await saved(page)), before);
     assert.equal(await page.locator('#webdav-restore-modal-v378').isVisible(), true);
     await page.evaluate(() => globalThis.__resumeDavWrite());
-    await page.locator('#webdav-restore-confirm-v378').click();
-    await page.locator('#webdav-status-v378').filter({ hasText: '恢复完成' }).waitFor();
+    const retry = retryFrom === '全局重试'
+      ? page.locator('#platform-status').getByRole('button', { name: '重试', exact: true })
+      : page.locator('#webdav-restore-confirm-v378');
+    if (retryFrom === '全局重试') {
+      await page.locator('#webdav-restore-mode-v378').selectOption('overwrite');
+      await retry.click();
+      await page.locator('#import-summary').filter({ hasText: '远程备份或恢复方式已变化' }).waitFor({ state: 'attached' });
+      assert.deepEqual(JSON.parse(await saved(page)), before);
+      await page.locator('#webdav-restore-mode-v378').selectOption(mode);
+    }
+
+    await retry.click();
+    await page.locator('#webdav-status-v378').filter({ hasText: '恢复完成' }).waitFor({ timeout: 5000 });
+    assert.equal(await page.locator('#webdav-restore-modal-v378').isHidden(), true, '保存重试成功后仍保留待恢复备份');
+    assert.equal(await remote.evaluate((button) => button === globalThis.document.activeElement), true);
     const after = JSON.parse(await saved(page));
     if (mode === 'merge') {
       assert.equal(after.banks.length, before.banks.length * 2);
@@ -881,6 +894,77 @@ for (const mode of ['merge', 'overwrite']) {
     const requests = await page.evaluate(() => globalThis.__davMock.requests);
     assert.equal(requests.filter((request) => request.method === 'PUT' && /shiroha-web-backup-/.test(request.relativePath)).length, 1);
     assert(requests.some((request) => request.method === 'GET' && /shiroha-web-backup-/.test(request.relativePath)));
+    await page.reload();
+    await page.locator('body[data-storage-state="ready"]').waitFor();
+    assert.deepEqual(JSON.parse(await saved(page)), after);
+  });
+}
+
+for (const action of ['save', 'clear']) {
+  test(`第九批 WebDAV 原生配置 ${action} 写失败后再次点击可以保存`, async (t) => {
+    const initial = webState();
+    const configured = { endpoint: 'https://old.example.invalid', username: 'fixture', remoteDir: 'Backup' };
+    initial.serviceConfigurations = { webdav: configured };
+    const injection = `
+      const platform = globalThis.ShirohaPlatform;
+      const { credentials, storage } = platform;
+      const calls = [];
+      let config;
+      let stageId = 0;
+      function stage() {
+        const id = 'credential-fixture-' + (stageId += 1);
+        calls.push(['stage', id]);
+        const undo = async () => { calls.push(['undo', id]); };
+        undo.id = id;
+        return undo;
+      }
+      platform.credentials = {
+        ...credentials,
+        native: true,
+        initialize: (_ai, configs) => { config = configs?.webdav; },
+        readDav: () => config,
+        updateDav: (next) => { config = next; },
+        saveDav: async () => stage(),
+        clearDav: async () => stage(),
+        operationId: (undo) => undo.id,
+        finalize: async (undo) => { calls.push(['finalize', undo.id]); },
+      };
+      const write = storage.write;
+      let fail = true;
+      storage.write = async (snapshot, id, revision) => {
+        calls.push(['write', id]);
+        if (fail) { fail = false; throw new Error('模拟原生配置保存失败'); }
+        return write(snapshot, id, revision);
+      };
+      globalThis.__davConfigCalls = calls;
+    `;
+    const page = await pageFor(t, JSON.stringify(initial), injection);
+    await page.locator('body[data-storage-state="ready"]').waitFor();
+    await page.locator('.nav[data-view="settings"]').click();
+    const before = await saved(page);
+    const button = page.locator(`#webdav-${action}-v378`);
+    const status = page.locator('#webdav-status-v378');
+    if (action === 'save') {
+      await page.locator('#webdav-endpoint-v378').fill('https://new.example.invalid');
+      await page.locator('#webdav-password-v378').fill('fake-dav-password');
+    }
+
+    await button.click();
+    await status.filter({ hasText: '模拟原生配置保存失败' }).waitFor();
+    assert.equal(await saved(page), before);
+    assert.deepEqual(await page.evaluate(() => globalThis.__davConfigCalls), [
+      ['stage', 'credential-fixture-1'], ['write', 'credential-fixture-1'], ['undo', 'credential-fixture-1'],
+    ]);
+
+    await button.click();
+    const done = action === 'save' ? '配置已保存' : '配置和密码已清除';
+    await status.filter({ hasText: done }).waitFor({ timeout: 5000 });
+    assert.deepEqual(await page.evaluate(() => globalThis.__davConfigCalls.slice(3)), [
+      ['stage', 'credential-fixture-2'], ['write', 'credential-fixture-2'], ['finalize', 'credential-fixture-2'],
+    ]);
+    const after = JSON.parse(await saved(page));
+    assert.equal(after.serviceConfigurations.webdav?.endpoint, action === 'save' ? 'https://new.example.invalid' : undefined);
+    assert.equal(JSON.stringify(after).includes('fake-dav-password'), false);
   });
 }
 
@@ -971,7 +1055,16 @@ for (const mode of ['merge', 'overwrite']) {
     assert.deepEqual(JSON.parse(await saved(page)), before);
     assert.equal(await page.locator('#backup-json-file-v23').evaluate((element) => element.files.length), 1);
     await page.evaluate(() => globalThis.__resumeLocalBackupWrite());
-    await page.locator('#platform-status').getByRole('button', { name: '重试', exact: true }).click();
+    const retry = page.locator('#platform-status').getByRole('button', { name: '重试', exact: true });
+    if (mode === 'merge') {
+      await page.locator('#settings-backup-mode-v23').selectOption('overwrite');
+      await retry.click();
+      await page.locator('#import-summary').filter({ hasText: '恢复来源或方式已变化' }).waitFor({ state: 'attached' });
+      assert.deepEqual(JSON.parse(await saved(page)), before);
+      await page.locator('#settings-backup-mode-v23').selectOption(mode);
+    }
+
+    await retry.click();
     await page.waitForFunction(() => globalThis.document.getElementById('import-summary').textContent.includes('导入完成'));
     const after = JSON.parse(await saved(page));
     assert.equal(after.banks.length, mode === 'merge' ? before.banks.length + backup.banks.length : backup.banks.length);

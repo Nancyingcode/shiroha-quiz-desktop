@@ -43,6 +43,11 @@ export async function createNativeMock(root) {
         if (request.url?.endsWith('/latest.json')) { response.writeHead(507); response.end(); return; }
         files.set(request.url, Buffer.concat(chunks)); response.writeHead(201); response.end(); return;
       }
+      if (request.method === 'MKCOL') {
+        response.writeHead(201);
+        response.end();
+        return;
+      }
       if (request.method === 'GET' && files.has(request.url)) { response.end(files.get(request.url)); return; }
       if (request.method === 'PROPFIND') { response.writeHead(207, { 'Content-Type': 'application/xml' }); response.end('<d:multistatus xmlns:d="DAV:"><d:response><d:href>/dav/ShirohaQuiz/Web/</d:href></d:response></d:multistatus>'); return; }
       response.writeHead(404); response.end();

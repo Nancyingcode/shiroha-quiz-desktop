@@ -13,6 +13,13 @@ import {
   fullBackupExportSmoke,
   questionDeletionRetrySmoke,
 } from './bank-operations-smoke.mjs';
+import {
+  backupRestoreFailuresSmoke,
+  backupRestorePathsSmoke,
+  nativeDavConfigurationSmoke,
+  normalRecoveryPointSmoke,
+  trackRecoveryStartup,
+} from './backup-restore-smoke.mjs';
 import { harnessSmoke, harnessSwitchingSmoke } from './harness-smoke.mjs';
 import { codebuddyCliSmoke, codebuddyCliAfterRestart, codebuddyCliPersistenceSmoke } from './codebuddy-cli-smoke.mjs';
 import { requiredAssets } from './prepare-web.mjs';
@@ -969,6 +976,21 @@ function readNativeSnapshot(page) {
   });
 }
 
+/** 比较恢复入口仍可见的日志，SQLite 启动检查可能已经移除了无效 WAL。
+ * @param {string} file
+ */
+async function readRecoveryWal(file) {
+  try {
+    return await readFile(file);
+  } catch (error) {
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+      return null;
+    }
+
+    throw error;
+  }
+}
+
 /** @param {Page} page */
 async function appendImportSmoke(page) {
   // 上一个用例补读过全部正文，重载后从应用和存储一致的摘要视图开始。
@@ -1366,6 +1388,9 @@ async function main() {
       assert.equal(networkMock.requests.filter((request) => request.method === 'PUT' && request.url?.includes('shiroha-web-backup-')).length, 1, '重试重复写入历史文件');
       return result;
     });
+    await check('原生 WebDAV 配置保存和清除失败可重试，上传元数据不暂存密码', () => (
+      nativeDavConfigurationSmoke(page, readNativeSnapshot, networkMock.origin)
+    ));
     await check('原生 IPC 白名单与非法输入保全', async () => page.evaluate(async () => {
       const host = (/** @type {NativeTestWindow} */ (window)).ShirohaDesktopHost;
       if (!host) { throw new Error('本地桥接缺失'); }
@@ -1950,14 +1975,19 @@ async function main() {
     const repaired = runtime;
     await check('损坏数据库界面恢复且保留原文件', async () => {
       const status = repaired.page.locator('#platform-status');
+      const assertStarted = await trackRecoveryStartup(repaired.page);
+      const wal = path.join(migrationProfile, 'library.sqlite3-wal');
+      const originalWal = await readRecoveryWal(wal);
       await status.getByRole('button', { name: '查找本机恢复点', exact: true }).click();
       await status.getByLabel('修复使用的恢复点').selectOption(repairCheckpoint.snapshotId);
       await status.getByRole('button', { name: '从恢复点修复数据', exact: true }).click();
       await repaired.page.locator('#app-dialog [data-dialog-accept]').click();
       await repaired.page.locator('#active-bank-select option[value="lazy-a"]').waitFor({ state: 'attached' });
+      await assertStarted('recover');
       assert.deepEqual(await readFile(path.join(migrationProfile, 'library.sqlite3')), broken);
+      assert.deepEqual(await readRecoveryWal(wal), originalWal);
       assert.match(await readFile(path.join(migrationProfile, 'active.json'), 'utf8'), /[a-f0-9-]{36}/);
-      return { recovered: true, originalPreserved: true };
+      return { recovered: true, originalPreserved: true, walAvailableAtRepair: Boolean(originalWal) };
     });
     await stop(runtime);runtime = undefined;
     runtime = await launchOwned(executable, migrationProfile, proxyPort);
@@ -1979,13 +2009,18 @@ async function main() {
     runtime = await launchOwned(executable, migrationProfile, proxyPort);
     const importedRecovery = runtime;
     await check('损坏数据库从兼容备份修复', async () => {
+      const assertStarted = await trackRecoveryStartup(importedRecovery.page);
+      const wal = path.join(damaged, 'library.sqlite3-wal');
+      const originalWal = await readRecoveryWal(wal);
       const input = importedRecovery.page.locator('#platform-status').getByLabel('选择兼容备份修复数据');
       await input.waitFor();
       await input.setInputFiles({ name: 'synthetic-recovery.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(repairBackup)) });
       await importedRecovery.page.locator('#app-dialog [data-dialog-accept]').click();
       await importedRecovery.page.locator('#active-bank-select option[value="lazy-a"]').waitFor({ state: 'attached' });
+      await assertStarted('recover_import');
       assert.deepEqual(await readFile(path.join(damaged, 'library.sqlite3')), broken);
-      return { imported: true, originalPreserved: true };
+      assert.deepEqual(await readRecoveryWal(wal), originalWal);
+      return { imported: true, originalPreserved: true, walAvailableAtRepair: Boolean(originalWal) };
     });
     // 导入和整理会改变活动题库，放在依赖既有题库的用例之后。
     await check('双文件导入自动匹配与保存重载', () => dualFileImportSmoke(importedRecovery.page));
@@ -1997,6 +2032,15 @@ async function main() {
     await check('题库和学习记录各入口仅补读对应范围并导出', () => bankExportScopeSmoke(importedRecovery.page, readNativeSnapshot));
     await check('预读失败或切换目标时不导出，原学习数据保留', () => bankExportChangesSmoke(importedRecovery.page, readNativeSnapshot));
     await check('完整 JSON、ZIP 和复制补齐正文、记录和媒体', () => fullBackupExportSmoke(importedRecovery.page, readNativeSnapshot));
+    await check('本地文件、导入页和 WebDAV 恢复真实导出数据并重载', () => (
+      backupRestorePathsSmoke(importedRecovery.page, readNativeSnapshot)
+    ));
+    await check('恢复缺图和原生读取、检查点、写入故障保全，重试保存到 SQLite', () => (
+      backupRestoreFailuresSmoke(importedRecovery.page, readNativeSnapshot)
+    ));
+    await check('设置页正常恢复点等待保存队列再切换并重载', () => (
+      normalRecoveryPointSmoke(importedRecovery.page, readNativeSnapshot)
+    ));
     await check('删题校验零写入、离页后全局重试补读并保存重载', () => questionDeletionRetrySmoke(importedRecovery.page, readNativeSnapshot));
     await check('整库删除回滚选库、分组范围回退和历史成绩保全', () => bankDeletionSmoke(importedRecovery.page, readNativeSnapshot));
     await check('删空题库后冷启动保留空状态和历史成绩', async () => {
