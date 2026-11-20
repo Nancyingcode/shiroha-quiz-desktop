@@ -249,6 +249,29 @@
       el.className = `notice${type ? ` ${type}` : ''}`;
     }
 
+    function isConnectionTestingV99() {
+      return $('#ai-test-connection-v99')?.getAttribute?.('aria-busy') === 'true';
+    }
+
+    // 完成测试时按当前表单的执行方式恢复按钮，保留用户等待期间修改的表单草稿。
+    function setConnectionTestingV99(testing) {
+      const button = $('#ai-test-connection-v99');
+      if (!button) {
+        return;
+      }
+
+      if (testing) {
+        button.setAttribute?.('aria-busy', 'true');
+      } else {
+        button.removeAttribute?.('aria-busy');
+      }
+
+      const { harness } = ShirohaPlatform;
+      const awaitingHarness = harness?.formMode() === 'harness' && !harness.snapshot().ready;
+      button.disabled = testing || awaitingHarness;
+      button.textContent = testing ? '测试中……' : '测试连接';
+    }
+
     // 普通页面使用 Origin，本地文件诊断保留有用的地址信息。
     function aiCurrentOriginV375() {
       try {
@@ -613,9 +636,18 @@
       ShirohaPlatform.harness?.render();
     }
 
-    function setState(connection, diagnostic) {
-      aiConnectionStateV99 = connection;
-      aiLastDiagnosticV375 = diagnostic;
+    // API 保存后只回填归一化的端点并重置诊断，保留表单其他输入。
+    function renderSavedApiSettingsV99(config) {
+      aiConnectionStateV99 = 'idle';
+      aiLastDiagnosticV375 = buildAiDiagnosticV375(null, config, 'idle');
+      const endpoint = $('#ai-endpoint-v99');
+      if (endpoint) {
+        endpoint.value = config.endpoint;
+      }
+
+      setAiSettingsStatusV99('设置已保存。API Key 与题库状态分离存储，不会写入 Web 完整备份。', 'ok');
+      updateAiConnectionPillV99();
+      renderAiDiagnosticV375();
     }
 
     function reset() {
@@ -624,7 +656,39 @@
       aiDiagnosticsVisibleV375 = false;
     }
 
-    return { defaultAiConfigV99, normalizeAiConfigV99, aiProviderLabelV99, isAiHarnessExecutionV99, aiHarnessLabelV99, aiHarnessTaskReasonV99, aiUnavailableReasonV99, aiHarnessPrivacyV99, aiExecutionConfigV99, aiConfiguredV99, aiAvailabilityV99, aiExecutionLabelV99, aiRequestConfigV99, normalizeAiEndpointV99, isLocalAiEndpointV99, readAiFormV99, setAiSettingsStatusV99, sanitizeAiDiagnosticDetailV375, aiOllamaCorsCommandV375, buildAiDiagnosticV375, renderAiDiagnosticV375, setAiDiagnosticV375, toggleAiDiagnosticV375, copyAiDiagnosticV375, copyAiOllamaCorsCommandV375, updateAiConnectionPillV99, renderAiSettingsV99, setState, reset };
+    return {
+      defaultAiConfigV99,
+      normalizeAiConfigV99,
+      aiProviderLabelV99,
+      isAiHarnessExecutionV99,
+      aiHarnessLabelV99,
+      aiHarnessTaskReasonV99,
+      aiUnavailableReasonV99,
+      aiHarnessPrivacyV99,
+      aiExecutionConfigV99,
+      aiConfiguredV99,
+      aiAvailabilityV99,
+      aiExecutionLabelV99,
+      aiRequestConfigV99,
+      normalizeAiEndpointV99,
+      isLocalAiEndpointV99,
+      readAiFormV99,
+      setAiSettingsStatusV99,
+      isConnectionTestingV99,
+      setConnectionTestingV99,
+      sanitizeAiDiagnosticDetailV375,
+      aiOllamaCorsCommandV375,
+      buildAiDiagnosticV375,
+      renderAiDiagnosticV375,
+      setAiDiagnosticV375,
+      toggleAiDiagnosticV375,
+      copyAiDiagnosticV375,
+      copyAiOllamaCorsCommandV375,
+      updateAiConnectionPillV99,
+      renderAiSettingsV99,
+      renderSavedApiSettingsV99,
+      reset,
+    };
   }
 
   const AI_PROVIDER_PRESETS_V99_DEFAULT = AI_PROVIDER_PRESETS_V99;

@@ -1,7 +1,7 @@
 'use strict';
 const { installAiTransport } = require('./ai-transport-helper.cjs');
-const { installAiSettings } = require('./ai-settings-helper.cjs');
-const { loadWebSource, runWebScripts } = require('./source-tools.cjs');
+const { installAiSettings, installAiSettingsActions } = require('./ai-settings-helper.cjs');
+const { runWebScripts } = require('./source-tools.cjs');
 const assert = require('node:assert/strict');
 const { readFileSync } = require('node:fs');
 const vm = require('node:vm');
@@ -298,7 +298,10 @@ for (const outcome of ['success', 'failure']) {
 }
 
 test('shared connection button reaches CodeBuddy test without reading hidden Codex form', async () => {
-  const source = loadWebSource();let tested = 0;const notices = [];const button = { disabled: false };
+  let tested = 0;
+  const button = { disabled: false };
+  const message = {};
+  const elements = { '#ai-test-connection-v99': button, '#ai-settings-status-v99': message };
   const context = vm.createContext({
     ShirohaPlatform: {
       harness: {
@@ -310,13 +313,13 @@ test('shared connection button reaches CodeBuddy test without reading hidden Cod
         },
       },
     },
-    $: () => button,
-    setAiSettingsStatusV99: (message) => notices.push(message),
-    updateAiConnectionPillV99() {},
+    $: (selector) => elements[selector],
   });
-  installAiSettings(context);
-  vm.runInContext(source.functionSource('testAiConnectionV99'), context);
-  await context.testAiConnectionV99();assert.equal(tested, 1);assert.equal(button.disabled, false);assert(notices.some((message) => message.includes('CodeBuddy 测试执行成功')));
+  const actions = installAiSettingsActions(context);
+  await actions.testAiConnectionV99();
+  assert.equal(tested, 1);
+  assert.equal(button.disabled, false);
+  assert.match(message.textContent, /CodeBuddy 测试执行成功/);
 });
 
 test('known CodeBuddy failures retain one fixed diagnostic code through repeated wrapping', async () => {

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { markNativeIsolation } from './native-isolation.mjs';
 import { cleanupAfterShutdown, createSmokeControl, deadline, reportSmoke, SmokeCheckAborted, SmokeStopFailedError, SmokeUnsettledError, spawnOwned } from './smoke-control.mjs';
-import { createNativeMock, nativeServiceSmoke, NativeMockStartupCleanupError } from './network-smoke.mjs';
+import { aiSettingsCredentialSmoke, createNativeMock, nativeServiceSmoke, NativeMockStartupCleanupError } from './network-smoke.mjs';
 import { documentSmoke } from './document-smoke.mjs';
 import {
   bankContentOperationsSmoke,
@@ -1389,6 +1389,9 @@ async function main() {
       assert.equal(networkMock.requests.filter((request) => request.method === 'PUT' && request.url?.includes('shiroha-web-backup-')).length, 1, '重试重复写入历史文件');
       return result;
     });
+    await check('AI 设置凭据随配置提交及撤销，确认失败按回执恢复', () => (
+      aiSettingsCredentialSmoke(page, readNativeSnapshot, networkMock.origin)
+    ));
     await check('原生 WebDAV 配置保存和清除失败可重试，上传元数据不暂存密码', () => (
       nativeDavConfigurationSmoke(page, readNativeSnapshot, networkMock.origin)
     ));

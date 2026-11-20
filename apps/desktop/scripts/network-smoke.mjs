@@ -133,3 +133,147 @@ export async function nativeServiceSmoke(page, origin) {
     return { nativeAi: true, nativeDav: true, backupRoundtrip: true, partialLatest: partial, cancelled, revoked, snapshotSecretFree: true };
   }, origin);
 }
+
+/** @typedef {import('playwright-core').Page} Page */
+/** @typedef {import('../../web/platform/contracts.d.ts').Snapshot} Snapshot */
+/** @typedef {(page: Page) => Promise<Snapshot>} ReadSnapshot */
+/** @typedef {{invoke(command: string, args?: Record<string, unknown>): Promise<unknown>}} NativeHost */
+
+/** 沿用隔离实例中的真实凭据和 SQLite 命令，按需拒绝写入或确认。仅记录操作类型与 ID。
+ * @param {Page} page @param {'write' | 'commit' | null} failure
+ * @param {() => Promise<void>} click @param {string} feedback
+ */
+async function checkAiCredentialWrite(page, failure, click, feedback) {
+  const trace = await page.evaluateHandle((failAt) => {
+    const host = /** @type {NativeHost} */ (Reflect.get(globalThis, 'ShirohaDesktopHost'));
+    const original = host.invoke;
+    /** @type {{kind: string, id?: string}[]} */
+    const calls = [];
+    host.invoke = async (command, args) => {
+      const request = /** @type {{kind?: string, id?: string} | undefined} */ (args?.request);
+      let call;
+      if (['local_commit', 'local_write'].includes(command)) {
+        call = { kind: 'write', id: String(args?.operationId) };
+      } else if (command === 'service_credential' && request?.kind && ['stage', 'commit', 'rollback'].includes(request.kind)) {
+        call = { kind: request.kind, id: request.id };
+      }
+
+      if (call) {
+        calls.push(call);
+        if (call.kind === failAt) {
+          throw Object.assign(new Error('模拟 AI 配置事务故障'), { code: failAt === 'commit' ? 'credential_unavailable' : 'storage_unavailable' });
+        }
+      }
+
+      const result = await original(command, args);
+      if (call?.kind === 'stage') {
+        call.id = String(Reflect.get(/** @type {object} */ (result), 'id'));
+      }
+
+      return result;
+    };
+
+    return {
+      calls,
+      async revision() {
+        return (/** @type {{revision: number}} */ (await original('local_initialize'))).revision;
+      },
+      stop() {
+        host.invoke = original;
+      },
+    };
+  }, failure);
+  try {
+    const revision = await trace.evaluate((value) => value.revision());
+    await click();
+    await page.locator('#ai-settings-status-v99').filter({ hasText: feedback }).waitFor();
+    await page.locator('body[data-storage-state="ready"]').waitFor();
+    const calls = await trace.evaluate((value) => value.calls);
+    const [stage, write, end] = calls;
+    assert.deepEqual(calls.map(({ kind }) => kind), ['stage', 'write', failure === 'write' ? 'rollback' : 'commit']);
+    assert(stage.id);
+    assert.equal(write.id, `credential-${stage.id}`);
+    assert.equal(end.id, stage.id);
+    const expectedRevision = failure === 'write' ? revision : revision + 1;
+    assert.equal(await trace.evaluate((value) => value.revision()), expectedRevision);
+  } finally {
+    await trace.evaluate((value) => value.stop());
+    await trace.dispose();
+  }
+}
+
+/** @param {Page} page @param {string} endpoint */
+function aiCredentialStatus(page, endpoint) {
+  return page.evaluate((url) => {
+    const platform = /** @type {import('../../web/platform/runtime.d.ts').BrowserGlobals['ShirohaPlatform']} */ (
+      Reflect.get(globalThis, 'ShirohaPlatform')
+    );
+    return platform.credentials.status('ai', { endpoint: url, rememberKey: true });
+  }, endpoint);
+}
+
+/** @param {Page} page @param {ReadSnapshot} readSnapshot @param {string} origin */
+export async function aiSettingsCredentialSmoke(page, readSnapshot, origin) {
+  const endpoint = `${origin}/chat`;
+  await page.locator('.nav[data-view="ai-settings"]').click();
+  await page.locator('#ai-provider-v99').selectOption('custom');
+  await page.locator('#ai-endpoint-v99').fill(endpoint);
+  await page.locator('#ai-model-v99').fill('fixture-saved-model');
+  await page.locator('#ai-api-key-v99').fill('synthetic-ai-write-key');
+  await page.locator('#ai-remember-key-v99').check();
+  const save = page.locator('#ai-save-settings-v99');
+  const clear = page.locator('#ai-clear-settings-v99');
+  const retry = page.locator('#platform-status').getByRole('button', { name: '重试' });
+  const before = await readSnapshot(page);
+  const clickSave = () => save.click();
+  await checkAiCredentialWrite(page, 'write', clickSave, '本地操作未完成');
+  assert.deepEqual(await readSnapshot(page), before);
+  assert.equal(await aiCredentialStatus(page, endpoint), '');
+
+  await checkAiCredentialWrite(page, null, () => retry.click(), '设置已保存');
+  const saved = await readSnapshot(page);
+  assert.match(JSON.stringify(saved.settings.aiImportV99), /fixture-saved-model/);
+  assert.doesNotMatch(JSON.stringify(saved), /synthetic-ai-write-key/);
+  assert.equal(await aiCredentialStatus(page, endpoint), '[已保存的凭据]');
+
+  const reconciledEndpoint = `${origin}/chat-reconciled`;
+  await page.locator('#ai-endpoint-v99').fill(reconciledEndpoint);
+  await page.locator('#ai-model-v99').fill('fixture-reconciled-model');
+  await checkAiCredentialWrite(page, 'commit', clickSave, '系统凭据不可用');
+  await page.locator('#platform-status').filter({ hasText: '数据已保存' }).waitFor();
+  assert.match(JSON.stringify((await readSnapshot(page)).settings.aiImportV99), /fixture-reconciled-model/);
+  assert.equal(await aiCredentialStatus(page, reconciledEndpoint), '');
+  await page.reload();
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.locator('.nav[data-view="ai-settings"]').click();
+  assert.equal(await page.locator('#ai-model-v99').inputValue(), 'fixture-reconciled-model');
+  assert.equal(await page.locator('#ai-endpoint-v99').inputValue(), reconciledEndpoint);
+  assert.equal(await aiCredentialStatus(page, reconciledEndpoint), '[已保存的凭据]');
+  const reconciled = await readSnapshot(page);
+
+  await clear.click();
+  await page.locator('#app-dialog [data-dialog-cancel]').click();
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  assert.deepEqual(await readSnapshot(page), reconciled);
+  assert.equal(await aiCredentialStatus(page, reconciledEndpoint), '[已保存的凭据]');
+
+  const accept = page.locator('#app-dialog [data-dialog-accept]');
+  await checkAiCredentialWrite(page, 'write', async () => {
+    await clear.click();
+    await accept.click();
+  }, '清除失败，原配置已保留');
+  assert.deepEqual(await readSnapshot(page), reconciled);
+  assert.equal(await aiCredentialStatus(page, reconciledEndpoint), '[已保存的凭据]');
+  await checkAiCredentialWrite(page, null, async () => {
+    await retry.click();
+    await accept.click();
+  }, 'AI 配置已清除');
+  assert.equal(await aiCredentialStatus(page, reconciledEndpoint), '');
+  await page.reload();
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.locator('.nav[data-view="ai-settings"]').click();
+  assert.equal(await page.locator('#ai-provider-v99').inputValue(), 'ollama');
+  assert.equal(await page.locator('#ai-model-v99').inputValue(), '');
+  assert.equal(await aiCredentialStatus(page, reconciledEndpoint), '');
+  return { saveRollback: true, clearRollback: true, confirmedAndRetried: true, reconciled: true };
+}

@@ -1,5 +1,6 @@
 'use strict';
 const { loadWebSource } = require('./source-tools.cjs');
+const { installAiSettings, installAiSettingsActions } = require('./ai-settings-helper.cjs');
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const vm = require('node:vm');
@@ -31,9 +32,16 @@ function fixture(overrides = {}) {
   context.ShirohaDialogs = { confirm: context.confirm };
   context.practiceSession = { current: context.practice };
   context.examSession = { current: context.exam };
+  const settings = installAiSettings(context);
   vm.runInContext(source.functionSource('aiTasksBusyV99'), context);
   vm.runInContext(source.closeHookSource(), context);
-  return { close: context.ShirohaDesktopHost.canClose, prompts, status };
+  return {
+    close: context.ShirohaDesktopHost.canClose,
+    prompts,
+    status,
+    context,
+    settings,
+  };
 }
 
 test('saving and failed saves retain the window until an explicit decision', async () => {
@@ -53,6 +61,58 @@ test('unfinished exam, OCR and single-question AI can cancel exit', async () => 
     assert.equal(await f.close(), false);
     assert.equal(f.prompts.length, 1);
   }
+});
+
+test('退出共用连接测试在途标记，普通禁用按钮不拦截退出', async () => {
+  const attributes = new Map();
+  const button = {
+    disabled: true,
+    getAttribute: (key) => attributes.get(key),
+    setAttribute: (key, value) => attributes.set(key, value),
+    removeAttribute: (key) => attributes.delete(key),
+  };
+  const elements = {
+    '#ai-test-connection-v99': button,
+    '#ai-provider-v99': { value: 'custom' },
+    '#ai-endpoint-v99': { value: 'https://mock.invalid/ai' },
+    '#ai-model-v99': { value: 'fake-model' },
+  };
+  const f = fixture({
+    URL,
+    $: (selector) => elements[selector],
+    ShirohaPlatform: {
+      network: {},
+      credentials: { redact: (_config, text) => text },
+      saves: { idle: async () => {} },
+    },
+  });
+  assert.equal(await f.close(), true);
+  assert.deepEqual(f.prompts, []);
+
+  let finish;
+  const pending = new Promise((resolve) => {
+    finish = resolve;
+  });
+  const actions = installAiSettingsActions(f.context, {
+    settings: f.settings,
+    transport: {
+      requestAiChatV99: () => pending,
+      withAiTimeoutV99: (_timeout, request) => request(),
+    },
+  });
+  const testing = actions.testAiConnectionV99();
+  try {
+    assert.equal(attributes.get('aria-busy'), 'true');
+    assert.equal(await f.close(), false);
+    assert.match(f.prompts[0], /网络任务尚未结束/);
+  } finally {
+    finish({ payload: {} });
+    await testing;
+  }
+
+  assert.equal(attributes.has('aria-busy'), false);
+  assert.equal(await f.close(), true);
+  assert.equal(f.prompts.length, 1);
 });
 
 test('确认退出时取消当前 OCR 并继续完成退出检查', async () => {

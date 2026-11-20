@@ -69,7 +69,7 @@ test('coercion exceptions stay local, explained and cannot increase', async () =
     'apps/desktop/frontend/harness.js': { 'prefer-template': 1 },
     'apps/web/ai-question-sessions.js': { 'no-plusplus': 6 },
     'apps/web/ai-results.js': { 'prefer-template': 1 },
-    'apps/web/app.js': { 'prefer-template': 2 },
+    'apps/web/ai/settings-actions.js': { 'prefer-template': 2 },
     'apps/web/backup-data.js': { 'prefer-template': 1 },
     'apps/web/backup/export.js': { 'prefer-template': 2 },
     'apps/web/backup/restore.js': { 'prefer-template': 1 },

@@ -625,10 +625,8 @@
     view: { select: $, escape: esc, copy: copyTextV23, toast },
   });
   const {
-    defaultAiConfigV99,
     normalizeAiConfigV99,
     isAiHarnessExecutionV99,
-    aiHarnessLabelV99,
     aiHarnessTaskReasonV99,
     aiUnavailableReasonV99,
     aiHarnessPrivacyV99,
@@ -638,23 +636,20 @@
     aiExecutionLabelV99,
     aiRequestConfigV99,
     isLocalAiEndpointV99,
-    readAiFormV99,
-    setAiSettingsStatusV99,
+    isConnectionTestingV99,
     sanitizeAiDiagnosticDetailV375,
-    buildAiDiagnosticV375,
-    renderAiDiagnosticV375,
-    setAiDiagnosticV375,
     toggleAiDiagnosticV375,
     copyAiDiagnosticV375,
     copyAiOllamaCorsCommandV375,
     updateAiConnectionPillV99,
     renderAiSettingsV99,
   } = aiSettings;
-  const { requestAiChatV99, withAiTimeoutV99 } = globalThis.ShirohaAiTransport.create({
+  const aiTransport = globalThis.ShirohaAiTransport.create({
     platform: ShirohaPlatform,
     harness: { isHarness: isAiHarnessExecutionV99, taskReason: aiHarnessTaskReasonV99, configured: aiConfiguredV99, unavailableReason: aiUnavailableReasonV99 },
     response: { content: aiResponseContentV99, httpErrorMessage: aiHttpErrorMessage },
   });
+  const { requestAiChatV99, withAiTimeoutV99 } = aiTransport;
   const importIdentity = globalThis.ShirohaAiImportSessions.createIdentity(importDraft);
   const {
     aiRefactorQuestionSnapshotV384,
@@ -1182,6 +1177,29 @@
     resetPractice,
     bindPracticeClockLifecycle,
   } = practicePage;
+  const aiSettingsActions = globalThis.ShirohaAiSettingsActions.create({
+    platform: ShirohaPlatform,
+    settings: aiSettings,
+    transport: aiTransport,
+    storage: {
+      readConfig: ensureAiImportStateV99,
+      setConfig: (config) => {
+        state.settings.aiImportV99 = config;
+      },
+
+      transaction: runMutation,
+      save: saveSilent,
+      recordSaveError: (error) => {
+        mutationSaveError = error;
+      },
+    },
+    confirm: (message) => ShirohaDialogs.confirm(message),
+
+    isBusy: aiTasksBusyV99,
+    syncImportAction: () => syncAiImportActionV99(),
+
+    showNotice,
+  });
   const aiImportPanel = globalThis.ShirohaAiImportPanel.create({
     draft: importDraft,
     sessions: aiImportSessions,
@@ -1207,9 +1225,9 @@
       toggleDiagnostic: toggleAiDiagnosticV375,
       copyDiagnostic: copyAiDiagnosticV375,
       copyCors: copyAiOllamaCorsCommandV375,
-      save: saveAiSettingsV99,
-      test: testAiConnectionV99,
-      clear: clearAiSettingsV99,
+      save: aiSettingsActions.saveAiSettingsV99,
+      test: aiSettingsActions.testAiConnectionV99,
+      clear: aiSettingsActions.clearAiSettingsV99,
     },
     requests: {
       busy: aiTasksBusyV99,
@@ -1789,217 +1807,9 @@
 
   // 按钮未就绪也会禁用，只有连接测试的在途标记才代表业务占用。
   function aiTasksBusyV99() {
-    return aiImportSessions.importRequest.running || aiImportSessions.previewRequest.running || practiceAiSessions.isBusy() || reviewAiSessions.isBusy() || !!ShirohaPlatform.harness?.status().busy || $('#ai-test-connection-v99')?.getAttribute?.('aria-busy') === 'true';
-  }
-
-  // AI 任务空闲后才保存执行配置，区分桌面 Harness 和 API 设置。
-  async function saveAiSettingsV99() {
-    if (aiTasksBusyV99()) {
-      setAiSettingsStatusV99('AI 任务仍在执行或停止中，请等待结束后保存设置。', 'warn');
-      return;
-    }
-
-    if (ShirohaPlatform.harness?.formMode() === 'harness') {
-      try {
-        await ShirohaPlatform.harness.saveMode('harness');
-        setAiSettingsStatusV99('Harness 设置已保存；原直接 API 设置已保留。', 'ok');
-        syncAiImportActionV99();
-        updateAiConnectionPillV99('idle');
-      } catch (error) {
-        setAiSettingsStatusV99(error.message || 'Harness 设置保存失败。', 'warn');
-      }
-
-      return;
-    }
-
-    return runMutation(/* 将 API 设置及凭据写入纳入同一次保存，失败后恢复原设置。 */ async () => {
-      const previousConfig = { ...ensureAiImportStateV99() };
-      try {
-        const config = readAiFormV99();
-        state.settings.aiImportV99 = { provider: config.provider, endpoint: config.endpoint, model: config.model, timeoutSeconds: config.timeoutSeconds, rememberKey: config.rememberKey };
-        const undoCredential = await ShirohaPlatform.credentials.set('ai', config, config.apiKey, config.rememberKey);
-        try {
-          await saveSilent(ShirohaPlatform.credentials.operationId?.(undoCredential));
-        } catch (error) {
-          state.settings.aiImportV99 = previousConfig;
-          await undoCredential();
-          throw error;
-        }
-
-        await ShirohaPlatform.credentials.finalize?.(undoCredential);
-        if (ShirohaPlatform.harness) {
-          try {
-            await ShirohaPlatform.harness.saveMode('api');
-          } catch (error) {
-            // eslint-disable-next-line prefer-template -- 异常信息可能是对象，保留 + 的默认转换；统一异常类型后移除此例外。
-            setAiSettingsStatusV99('API 配置已保存，但执行方式切换失败，原执行方式仍生效：' + (error.message || error), 'warn');
-            return;
-          }
-        }
-
-        aiSettings.setState('idle', buildAiDiagnosticV375(null, config, 'idle'));
-        const endpoint = $('#ai-endpoint-v99');
-        if (endpoint) {
-          endpoint.value = config.endpoint;
-        }
-
-        setAiSettingsStatusV99('设置已保存。API Key 与题库状态分离存储，不会写入 Web 完整备份。', 'ok');
-        updateAiConnectionPillV99();
-        renderAiDiagnosticV375();
-        syncAiImportActionV99();
-        showNotice('AI 设置', '设置已保存。', 'ok');
-      } catch (error) {
-        mutationSaveError = error;
-        setAiSettingsStatusV99(error.message || '保存失败。', 'warn');
-        updateAiConnectionPillV99('error');
-        showNotice('AI 设置', error.message || '保存失败。', 'danger');
-      }
-    });
-  }
-
-  // 按执行模式清除相应 AI 设置，运行中的任务仍由各模式的状态约束。
-  async function clearAiSettingsV99() {
-    if (ShirohaPlatform.harness?.formMode() === 'harness') {
-      const execution = ShirohaPlatform.harness.snapshot();
-      const adapter = ShirohaPlatform.harness.formAdapter?.() ?? execution.adapter;
-      if (adapter !== 'codex') {
-        setAiSettingsStatusV99(`${aiHarnessLabelV99(adapter)} 的账户操作请使用对应面板；其他提供方配置已保留。`, 'warn');
-        return;
-      }
-
-      if (execution.adapter !== adapter) {
-        setAiSettingsStatusV99('提供方选择尚未保存，请等待保存完成后再清除配置。', 'warn');
-        return;
-      }
-
-      if (!await ShirohaDialogs.confirm('确定停止 Harness 任务并清除 Codex 配置和订阅授权？原直接 API 配置将保留。')) {
-        return;
-      }
-
-      try {
-        await ShirohaPlatform.harness.cancelAll();
-        await ShirohaPlatform.harness.clear();
-        setAiSettingsStatusV99('Codex 配置已清除；如需使用直接 API，请明确选择并保存执行方式。');
-        updateAiConnectionPillV99('idle');
-        syncAiImportActionV99();
-      } catch (error) {
-        setAiSettingsStatusV99(error.message || '清除失败。', 'warn');
-      }
-
-      return;
-    }
-
-    if (aiTasksBusyV99()) {
-      setAiSettingsStatusV99('请等待 AI 任务结束后清除配置。', 'warn');
-      return;
-    }
-
-    return runMutation(/* 经用户确认后清除 API 配置及凭据，并用保存结果更新提示。 */ async () => {
-      if (!await ShirohaDialogs.confirm('确定清除 AI 接口配置和已保存的 API Key？')) {
-        return;
-      }
-
-      const undoCredential = await ShirohaPlatform.credentials.set('ai', ensureAiImportStateV99(), '', false);
-      state.settings.aiImportV99 = defaultAiConfigV99();
-      try {
-        await saveSilent(ShirohaPlatform.credentials.operationId?.(undoCredential));
-      } catch (error) {
-        await undoCredential();
-        // eslint-disable-next-line prefer-template -- 异常信息可能是对象，保留 + 的默认转换；统一异常类型后移除此例外。
-        setAiSettingsStatusV99('清除失败，原配置已保留：' + (error.message || error), 'warn');
-        return;
-      }
-
-      await ShirohaPlatform.credentials.finalize?.(undoCredential);
-      aiSettings.reset();
-      renderAiSettingsV99();
-      setAiSettingsStatusV99('AI 配置已清除。');
-      syncAiImportActionV99();
-      showNotice('AI 设置', '配置已清除。', 'ok');
-    });
-  }
-
-  // 使用当前配置测试 AI 服务可用性，保护按钮状态并提供错误指引。
-  async function testAiConnectionV99() {
-    const btn = $('#ai-test-connection-v99');
-    let config = null;
-    if (ShirohaPlatform.harness?.formMode() === 'harness') {
-      try {
-        const execution = ShirohaPlatform.harness.snapshot();
-        const adapter = ShirohaPlatform.harness.formAdapter?.() ?? execution.adapter;
-        const unavailable = aiHarnessTaskReasonV99({ execution: { ...execution, adapter } }, 'connection_test');
-        if (unavailable) {
-          throw new Error(unavailable);
-        }
-
-        if (execution.mode !== 'harness' || execution.adapter !== adapter) {
-          throw new Error('请先保存当前提供方和执行方式，再测试执行。');
-        }
-
-        if (!aiConfiguredV99({ execution }, 'connection_test')) {
-          throw new Error(execution.reason || '当前 Harness 尚未就绪，请先检查设置。');
-        }
-
-        if (btn) {
-          btn.disabled = true;
-          btn.setAttribute?.('aria-busy', 'true');
-          btn.textContent = '测试中……';
-        }
-
-        await ShirohaPlatform.harness.test();
-        setAiSettingsStatusV99(`${aiHarnessLabelV99(adapter)} 测试执行成功，结果已通过校验。`, 'ok');
-        updateAiConnectionPillV99('ok', true);
-      } catch (error) {
-        setAiSettingsStatusV99(error.message || 'Harness 测试执行失败。', 'warn');
-        updateAiConnectionPillV99('error');
-      } finally {
-        if (btn) {
-          btn.removeAttribute?.('aria-busy');
-          btn.disabled = !ShirohaPlatform.harness.snapshot().ready;
-          btn.textContent = '测试连接';
-        }
-      }
-
-      return;
-    }
-
-    try {
-      config = readAiFormV99();
-      if (btn) {
-        btn.disabled = true;
-        btn.setAttribute?.('aria-busy', 'true');
-        btn.textContent = '测试中……';
-      }
-
-      setAiSettingsStatusV99('正在连接接口并调用所选模型……');
-      setAiDiagnosticV375(buildAiDiagnosticV375(null, config, 'idle'));
-      const messages = [{ role: 'system', content: '只回复一个 JSON 对象。' }, { role: 'user', content: '回复 {"ok":true}' }];
-      const result = await withAiTimeoutV99(config.timeoutSeconds, (controller) => requestAiChatV99(config, messages, { controller, maxTokens: 32, testMode: true, task: 'connection_test' }));
-      if (!result.payload) {
-        throw new Error('接口没有返回有效结果。');
-      }
-
-      const diag = buildAiDiagnosticV375(null, config, 'ok');
-      updateAiConnectionPillV99('ok', true);
-      setAiDiagnosticV375(diag);
-      setAiSettingsStatusV99(diag.statusMessage, 'ok');
-      showNotice('AI 连接', '连接测试成功。', 'ok');
-    } catch (error) {
-      const diag = config ? buildAiDiagnosticV375(error, config, 'error') : null;
-      updateAiConnectionPillV99('error', !!config);
-      if (diag) {
-        setAiDiagnosticV375(diag, true);
-      }
-
-      setAiSettingsStatusV99(diag?.statusMessage || error.message || '连接测试失败。', 'warn');
-      showNotice('AI 连接', diag?.summary || error.message || '连接测试失败。', 'danger');
-    } finally {
-      if (btn) {
-        btn.removeAttribute?.('aria-busy');
-        btn.disabled = false;
-        btn.textContent = '测试连接';
-      }
-    }
+    const importBusy = aiImportSessions.importRequest.running || aiImportSessions.previewRequest.running;
+    return importBusy || practiceAiSessions.isBusy() || reviewAiSessions.isBusy()
+      || !!ShirohaPlatform.harness?.status().busy || isConnectionTestingV99();
   }
 
   /* SHIROHA_WEB_ISSUE_99_AI_IMPORT_END */

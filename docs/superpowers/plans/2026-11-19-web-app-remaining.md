@@ -225,3 +225,24 @@ Web 的资源失败和保存失败使用隔离浏览器夹具注入。Windows �
 完整 `pnpm test` 首轮有 23 项因 Windows 沙箱权限失败。esbuild 无法读取隔离临时目录的父路径，完整性测试夹具的 `icacls` 被拒绝。保留 `test.log`，以原命令和原隔离夹具复跑通过，结果见 `test-final.log`。定向 lint 首轮发现新迁入代码的空行和对象排版问题，调整后定向与全量检查通过。
 
 中文扫描件和题库均为自建夹具。OCR 原始结果保留用于核对，模拟人工校正后才确认保存。通过 Web 的实际下载验证 DOCX 文件，WebView2 覆盖识别与保存入库。桌面 DOCX 系统保存对话框和真实远端 AI 服务不在本批验收路径内。
+
+### 第十五批 · AI 设置与连接
+
+- 负责人为 `batch15_ai_settings`（GPT-6.2-Sol Max）。从第十四批冻结的工作树继续，分支为 `codex/web-app-remaining`，工作树为 `C:/Users/30728/.codex/worktrees/31f4/shiroha-quiz-desktop`，`HEAD` 为 `ac4f4c64adc773040eb2b06bf5831003c2803ab0`。`app.js` 从 3,445 行、82 个入口闭包内直接声明的具名函数减至 3,255 行、79 个，末尾启动点唯一。
+- [设置动作](../../../apps/web/ai/settings-actions.js)编排保存、清除和连接测试，需要持久化时调用应用事务。保存 Harness 模式只操作 Harness 配置。Codex 清除经确认后先停止任务，再清理配置和授权。API 配置继续使用原凭据与写入接口。应用将导入、预览、练习、复盘、Harness 和连接测试的在途状态合成一个判断，供动作限制、Harness 面板和退出守卫共用。[Harness 回归](../../../test/dual-platform/ai-harness.test.cjs) · [退出回归](../../../test/dual-platform/exit.test.cjs)
+- 浏览器先从实际按钮复现两个方向的错误。直连测试等待期间切换到未就绪的 Harness，成功、失败、取消三种结果均错误启用了按钮。Harness 测试后期失去就绪状态时，切回直连仍会被旧状态禁用。四条回归先红后绿。测试仍按触发时的模式执行，完成后由设置面板根据当前表单和 Harness 就绪状态恢复按钮，保留等待期间切换的执行方式与表单输入。连接测试的 `aria-busy` 按在途标记处理，禁用但未就绪的按钮允许退出。[设置面板](../../../apps/web/ai-settings.js) · [实际按钮回归](../../../test/dual-platform/browser-page.cjs)
+- 直连设置已写入、凭据已确认后才尝试切换执行方式。浏览器复验切换失败时的提示、原 Harness 仍然生效、重载后 API 端点和模型仍在，且完整备份排除了假密钥。桌面凭据以 SQLite 操作回执区分写入失败和事后确认失败，后一种情况保留已写入的配置，重载时由原生完成凭据绑定。[桌面凭据用例](../../../apps/desktop/scripts/network-smoke.mjs)
+
+本批在 Windows 10（19045）、Node 24.22.2、pnpm 12.16.1 和 Rust 1.99.1 上验证。日志位于 `apps/desktop/.reports/batch15/`，保留了红测、夹具修正和完整门禁输出。
+
+| 验证项 | 实际命令与结果 |
+| --- | --- |
+| 定向基线与迁移结果 | `node --test` 先跑连接、Harness、CodeBuddy、退出、按钮绑线、浏览器凭据和桌面原生服务，178 项通过。迁移后加上源码加载回归，196 项通过。 |
+| 实际按钮和本地页面 | `node --test --test-name-pattern='第十五批连接按钮' ../../test/dual-platform/browser-page.cjs` 在原实现上 4 项失败。修复后追加执行方式切换失败和 `file:` 入口，6 项通过。 |
+| 类型与 lint | 在 `apps/desktop` 运行 `pnpm run typecheck`、`pnpm run lint`，均通过。检查 188 个手写 JavaScript 文件，规则夹具 98 项通过，1 项因临时目录不区分大小写跳过。 |
+| 完整 Node 与 Web | `pnpm test` 桌面 292 项通过、1 项环境跳过，共享 526 项通过。因 Windows 沙箱限制临时夹具父目录读取和权限标签查询，经授权运行原命令。`pnpm run test:web-platform` 269 项全部通过。 |
+| 桌面资源与构建 | `pnpm run prepare:web`、`pnpm run build`、`pnpm run build:test` 依次通过。首轮资源生成在沙箱内被拒绝读取工作树父目录，经授权运行原命令后通过。两次构建使用进程级 `CARGO_NET_OFFLINE=true`，生产构建借用本工作树目标缓存。`ai-settings.js`、`ai/settings-actions.js` 和 `app.js` 的生成文件与源码 SHA-256 一致，Web 和桌面 HTML 均按依赖顺序各加载一次。[加载验证](../../../test/dual-platform/source-loading.test.cjs) |
+| WebView2 与 SQLite | `pnpm run test:desktop` 63 项通过。界面保存和清除分别注入本地写入失败，核对同一暂存 ID 对应的 SQLite 写入与撤销、原修订和数据保全、重试写入后确认凭据。注入凭据确认失败时，SQLite 修订已推进，新端点与模型重载后仍在，原生凭据完成新端点绑定。取消清除保持原配置和凭据。既有 Codex 与 CodeBuddy 假运行时用例通过，并核对 Harness 操作后直接 API 配置保留。 |
+| 文档与差异 | `pnpm run lint:docs`、本计划的 UTF-8、围栏与本地链接检查、`git diff --check` 通过。 |
+
+首次定向运行的退出夹具缺少假凭据的脱敏回调，补齐后原断言通过。首次全量 lint 发现新回调缺少用途说明及测试箭头函数的排版问题，修正后通过。AI 验证使用隔离浏览器和 WebView2 配置、假凭据、本地模拟服务和假 CLI。

@@ -2,6 +2,7 @@
 const { observeAppDialogs } = require('../web-ai-practice/dialogs.cjs');
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { readFileSync } = require('node:fs');
 const { chromium } = require('../../apps/desktop/node_modules/playwright-core');
 const { startServer, WEB_ROOT } = require('../web-ai-practice/harness.cjs');
 const {
@@ -54,6 +55,144 @@ async function pageFor(t, raw, injection = '', appTransform = null, sourceTransf
   return page;
 }
 const saved = (page) => page.evaluate((key) => globalThis.localStorage.getItem(key), KEY);
+
+// 保留真实桌面 Harness 与页面按钮，只替换原生调用和网络响应。
+function deferredAiConnection(mode) {
+  const harnessSource = readFileSync(require.resolve('../../apps/desktop/frontend/harness.js'), 'utf8');
+  return `
+    (() => {
+      const mode = ${JSON.stringify(mode)};
+      const ready = mode === 'harness';
+      const native = {
+        mode, adapter: 'codex', model: 'gpt-6.1-sol', timeoutSeconds: 120, ready,
+        credentialStatus: ready ? 'subscription' : 'missing', runtimeState: ready ? 'ready' : 'failed',
+        runtimeSource: 'managed', revision: 1, busy: false,
+      };
+      function delay() {
+        return new Promise((resolve, reject) => {
+          globalThis.__finishAiConnection = (outcome) => {
+            delete globalThis.__finishAiConnection;
+            if (outcome === '取消') {
+              reject(new DOMException('本次测试已取消。', 'AbortError'));
+            } else if (outcome === '失败') {
+              reject(new Error('模拟连接失败。'));
+            } else {
+              resolve();
+            }
+          };
+        });
+      }
+      globalThis.ShirohaPlatform.network.ai = async () => {
+        await delay();
+        return new Response('{}');
+      };
+      globalThis.ShirohaDesktopHost = {
+        async invoke(command, { request }) {
+          if (command === 'harness_execute') {
+            await delay();
+            native.ready = false;
+            return { content: '{"ok":true}' };
+          }
+          if (command === 'harness_control' && ['status', 'inspect', 'check_readiness'].includes(request.kind)) {
+            return { ...native };
+          }
+          if (command === 'harness_control' && request.kind === 'save' && request.mode === 'api') {
+            throw new Error('模拟执行方式切换失败');
+          }
+          throw new Error('测试未配置该原生请求。');
+        },
+      };
+    })();
+    ${harnessSource}
+  `;
+}
+
+for (const outcome of ['成功', '失败', '取消']) {
+  test(`第十五批连接按钮：直连测试${outcome}后仍按当前 Harness 就绪状态禁用`, async (t) => {
+    const page = await pageFor(t, JSON.stringify(webState()), deferredAiConnection('api'));
+    await page.locator('body[data-storage-state="ready"]').waitFor();
+    await page.locator('.nav[data-view="ai-settings"]').click();
+    const button = page.locator('#ai-test-connection-v99');
+    const status = page.locator('#ai-settings-status-v99');
+    const before = await saved(page);
+    await page.locator('#ai-model-v99').fill('待保存的本地模型');
+    await button.click();
+    assert.equal(await button.getAttribute('aria-busy'), 'true');
+    assert.equal(await button.innerText(), '测试中……');
+    assert.equal(await button.isDisabled(), true);
+
+    await page.locator('#ai-save-settings-v99').click();
+    await status.filter({ hasText: '请等待结束后保存设置' }).waitFor();
+    await page.locator('#ai-clear-settings-v99').click();
+    await status.filter({ hasText: '请等待 AI 任务结束后清除配置' }).waitFor();
+    assert.equal(await saved(page), before);
+
+    await page.locator('#ai-execution-harness').check();
+    await page.locator('#ai-harness-timeout').fill('240');
+    await page.evaluate((result) => globalThis.__finishAiConnection(result), outcome);
+    await button.filter({ hasText: '测试连接' }).waitFor();
+    const resultMessage = { 成功: /连接测试成功/, 失败: /无法访问|无法连接/, 取消: /取消/ };
+    assert.match(await status.innerText(), resultMessage[outcome]);
+    assert.equal(await button.getAttribute('aria-busy'), null);
+    assert.equal(await button.isDisabled(), true, '未就绪的 Harness 连接按钮被已结束的直连测试启用');
+    assert.equal(await page.locator('#ai-harness-timeout').inputValue(), '240');
+    await page.locator('#ai-execution-api').check();
+    assert.equal(await button.isEnabled(), true);
+    assert.equal(await page.locator('#ai-model-v99').inputValue(), '待保存的本地模型');
+    assert.equal(await saved(page), before);
+  });
+}
+
+test('第十五批连接按钮：Harness 测试结束后按当前直连方式启用', async (t) => {
+  const page = await pageFor(t, JSON.stringify(webState()), deferredAiConnection('harness'));
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.locator('.nav[data-view="ai-settings"]').click();
+  const button = page.locator('#ai-test-connection-v99');
+  await button.click();
+  assert.equal(await button.getAttribute('aria-busy'), 'true');
+  await page.locator('#ai-execution-api').check();
+  await page.locator('#ai-model-v99').fill('待保存的直连模型');
+  await page.evaluate(() => globalThis.__finishAiConnection('成功'));
+  await button.filter({ hasText: '测试连接' }).waitFor();
+  assert.equal(await button.getAttribute('aria-busy'), null);
+  assert.equal(await button.isEnabled(), true, '旧 Harness 就绪状态阻止了直连测试');
+  assert.equal(await page.locator('#ai-model-v99').inputValue(), '待保存的直连模型');
+});
+
+test('第十五批设置：执行方式切换失败后仍可重载新的 API 配置', async (t) => {
+  const page = await pageFor(t, JSON.stringify(webState()), deferredAiConnection('harness'));
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.locator('.nav[data-view="ai-settings"]').click();
+  await page.locator('#ai-execution-api').check();
+  await page.locator('#ai-provider-v99').selectOption('custom');
+  await page.locator('#ai-endpoint-v99').fill('https://mock.invalid/v1');
+  await page.locator('#ai-model-v99').fill('mock-model');
+  await page.locator('#ai-api-key-v99').fill('synthetic-ai-settings-key');
+  await page.locator('#ai-remember-key-v99').check();
+  await page.locator('#ai-save-settings-v99').click();
+  const status = page.locator('#ai-settings-status-v99');
+  await status.filter({ hasText: 'API 配置已保存，但执行方式切换失败，原执行方式仍生效：模拟执行方式切换失败' }).waitFor();
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  assert.equal(await page.evaluate(() => globalThis.ShirohaPlatform.harness.snapshot().mode), 'harness');
+  const persisted = await saved(page);
+  assert.doesNotMatch(persisted, /synthetic-ai-settings-key/);
+  assert.equal(JSON.parse(persisted).settings.aiImportV99.endpoint, 'https://mock.invalid/v1/chat/completions');
+
+  await page.reload();
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.locator('.nav[data-view="ai-settings"]').click();
+  await page.locator('#ai-codex-settings').waitFor();
+  assert.equal(await page.locator('#ai-execution-harness').isChecked(), true);
+  await page.locator('#ai-execution-api').check();
+  assert.equal(await page.locator('#ai-endpoint-v99').inputValue(), 'https://mock.invalid/v1/chat/completions');
+  assert.equal(await page.locator('#ai-model-v99').inputValue(), 'mock-model');
+  assert.equal(await page.locator('#ai-api-key-v99').inputValue(), '');
+  assert.match(await page.locator('#ai-api-key-v99').getAttribute('placeholder'), /已保存/);
+  await page.locator('.nav[data-view="settings"]').click();
+  await page.locator('#export-all-btn').click();
+  await page.waitForFunction(() => globalThis.document.getElementById('export-output').value.includes('mock-model'));
+  assert.doesNotMatch(await page.locator('#export-output').inputValue(), /synthetic-ai-settings-key/);
+});
 
 test('题库搜索：匹配分页外题干、选项和富文本，并叠加题型', async (t) => {
   const initial = webState();
@@ -3488,6 +3627,12 @@ test('file URL 支持 ZIP 与文本导入且不依赖可选 PDF/OCR', async (t) 
     assert.equal(scripts.filter((script) => script === name).length, 1);
     assert(scripts.indexOf(name) > scripts.indexOf('./import/commit.js') && scripts.indexOf(name) < appIndex);
   }
+
+  const aiSettingsScript = './ai/settings-actions.js';
+  const aiSettingsIndex = scripts.indexOf(aiSettingsScript);
+  assert.equal(scripts.filter((script) => script === aiSettingsScript).length, 1);
+  assert(aiSettingsIndex > scripts.indexOf('./ai-transport.js') && aiSettingsIndex < scripts.indexOf('./ai-import-panel.js'));
+  assert.equal(await page.evaluate(() => typeof globalThis.ShirohaAiSettingsActions.create), 'function');
 
   for (const name of ['./quiz-core.js', './text-answers.js', './text-parser.js', './backup-core.js', './zip.js', './backup-archive.js', './backup-data.js', './webdav-panel.js', './docx-import.js', './pdf-import.js', './ocr-import.js', './table-import.js', './import-preview.js', './ai-results.js', './ai-import-sessions.js', './ai-question-sessions.js', './ai-settings.js', './ai-transport.js', './ai-prompts.js', './question-view.js', './bank-page.js', './saved-questions-page.js', './training-review-page.js', './bank-editor.js', './study-sessions.js', './exam-page.js', './practice-selection.js', './practice-page.js', './ai-import-panel.js', './ai-question-panels.js', './question-editor.js']) {
     assert(scripts.indexOf(name) >= 0 && scripts.indexOf(name) < appIndex);
