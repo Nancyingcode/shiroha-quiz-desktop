@@ -3,7 +3,13 @@ import { markNativeIsolation } from './native-isolation.mjs';
 import { cleanupAfterShutdown, createSmokeControl, deadline, reportSmoke, SmokeCheckAborted, SmokeStopFailedError, SmokeUnsettledError, spawnOwned } from './smoke-control.mjs';
 import { createNativeMock, nativeServiceSmoke, NativeMockStartupCleanupError } from './network-smoke.mjs';
 import { documentSmoke } from './document-smoke.mjs';
-import { bankContentOperationsSmoke, changedMergeSourceSmoke, dedupeRetrySmoke } from './bank-operations-smoke.mjs';
+import {
+  bankContentOperationsSmoke,
+  bankDeletionSmoke,
+  changedMergeSourceSmoke,
+  dedupeRetrySmoke,
+  questionDeletionRetrySmoke,
+} from './bank-operations-smoke.mjs';
 import { harnessSmoke, harnessSwitchingSmoke } from './harness-smoke.mjs';
 import { codebuddyCliSmoke, codebuddyCliAfterRestart, codebuddyCliPersistenceSmoke } from './codebuddy-cli-smoke.mjs';
 import { requiredAssets } from './prepare-web.mjs';
@@ -1985,6 +1991,21 @@ async function main() {
     await check('题库双入口复制和合并按需读取并保存重载', () => bankContentOperationsSmoke(importedRecovery.page, readNativeSnapshot));
     await check('合并预读期间改变来源须重新确认', () => changedMergeSourceSmoke(importedRecovery.page, readNativeSnapshot));
     await check('题库去重写入失败后重试重新加载正文并保存重载', () => dedupeRetrySmoke(importedRecovery.page, readNativeSnapshot));
+    await check('删题校验零写入、离页后全局重试补读并保存重载', () => questionDeletionRetrySmoke(importedRecovery.page, readNativeSnapshot));
+    await check('整库删除回滚选库、分组范围回退和历史成绩保全', () => bankDeletionSmoke(importedRecovery.page, readNativeSnapshot));
+    await check('删空题库后冷启动保留空状态和历史成绩', async () => {
+      const saved = await readNativeSnapshot(importedRecovery.page);
+      await stop(importedRecovery);
+      runtime = undefined;
+      const restartedEmpty = await launchOwned(executable, migrationProfile, proxyPort);
+      runtime = restartedEmpty;
+      await restartedEmpty.page.locator('body[data-storage-state="ready"]').waitFor();
+      assert.equal(await restartedEmpty.page.locator('#active-bank-select option').count(), 0);
+      assert.equal(await restartedEmpty.page.locator('#bank-current-select-v28 option').innerText(), '暂无题库');
+      assert.deepEqual(await readNativeSnapshot(restartedEmpty.page), saved);
+      assert.deepEqual(restartedEmpty.errors, []);
+      return { preservedEmptyAfterRestart: true };
+    });
   } catch (error) {
     if (!(error instanceof SmokeCheckAborted)) { checks.push({ name: '启动或运行', ok: false, error: errorText(error) }); }
   } finally {

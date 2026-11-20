@@ -2458,6 +2458,57 @@ test('题库删除：二次编辑删除保留未编辑题目，允许保存空�
   assert.equal(JSON.parse(await saved(page)).banks[0].questions.length, 0);
 });
 
+test('题库删除：二次编辑写入失败并离页后重新读题再保存', async (t) => {
+  const page = await pageFor(t, JSON.stringify(webState()));
+  page.setDefaultTimeout(5000);
+  const ready = page.locator('body[data-storage-state="ready"]');
+  await ready.waitFor();
+  await page.locator('#save-all-btn').click();
+  await ready.waitFor();
+  const before = JSON.parse(await saved(page));
+  await page.locator('.nav[data-view="banks"]').click();
+  const edit = page.locator('[data-editbank-v45="bank-a"]');
+  await page.locator('.bank-item').filter({ has: edit }).locator('summary').click();
+  await edit.click();
+  await page.locator('[data-delete-import="0"]').click();
+  await page.evaluate(() => {
+    const { storage } = globalThis.ShirohaPlatform;
+    const { write } = storage;
+    const calls = { readsAfterRelease: 0, writes: 0 };
+    globalThis.__editDeletionCalls = calls;
+    let questionBodies = null;
+    storage.write = async (...args) => {
+      calls.writes += 1;
+      if (calls.writes === 1) { throw new Error('模拟二次编辑保存失败'); }
+      return write(...args);
+    };
+    storage.releaseView = (snapshot) => {
+      if (questionBodies) { return; }
+      const bank = snapshot.banks.find(({ id }) => id === 'bank-a');
+      questionBodies = bank.questions;
+      bank.questions = bank.questions.map(({ id, type, number }) => ({ id, type, number }));
+    };
+    storage.ensureQuestions = async (snapshot, refs) => {
+      if (!questionBodies || !refs.some(({ bankId }) => bankId === 'bank-a')) { return; }
+      calls.readsAfterRelease += 1;
+      const bank = snapshot.banks.find(({ id }) => id === 'bank-a');
+      bank.questions = questionBodies;
+      questionBodies = null;
+    };
+  });
+  await page.locator('#bank-edit-save-v45').click();
+  await page.locator('#platform-status.failed').waitFor();
+  assert.deepEqual(JSON.parse(await saved(page)), before);
+  await page.locator('.nav[data-view="dashboard"]').click();
+  await page.locator('#dashboard.active').waitFor();
+  await page.locator('#platform-status').getByRole('button', { name: '重试' }).click();
+  await page.locator('#platform-status').waitFor({ state: 'hidden' });
+  assert.deepEqual(await page.evaluate(() => globalThis.__editDeletionCalls), { readsAfterRelease: 1, writes: 2 });
+  const after = JSON.parse(await saved(page));
+  assert.deepEqual(after.banks[0].questions, before.banks[0].questions.slice(1));
+  assert.deepEqual(after.banks[1], before.banks[1]);
+});
+
 test('题库删除：进行中练习阻止删除和编辑绕过，其他题库不受影响，完成后可删除', async (t) => {
   const initial = webState();initial.banks[0].questions = initial.banks[0].questions.slice(0, 1);
   const page = await pageFor(t, JSON.stringify(initial));page.setDefaultTimeout(5000);
@@ -2928,6 +2979,9 @@ test('file URL 支持 ZIP 与文本导入且不依赖可选 PDF/OCR', async (t) 
   assert(richContentIndex >= 0 && richContentIndex < scripts.indexOf('./text-parser.js'));
   const dualAnswersIndex = scripts.indexOf('./import/dual-answers.js');
   assert(dualAnswersIndex > scripts.indexOf('./text-parser.js') && dualAnswersIndex < appIndex);
+  const bankDeletionScript = './banks/deletion.js';
+  assert.equal(scripts.filter((script) => script === bankDeletionScript).length, 1);
+  assert(scripts.indexOf(bankDeletionScript) < appIndex);
   for (const name of ['./quiz-core.js', './text-answers.js', './text-parser.js', './backup-core.js', './zip.js', './backup-archive.js', './backup-data.js', './webdav-panel.js', './docx-import.js', './pdf-import.js', './ocr-import.js', './table-import.js', './import-preview.js', './ai-results.js', './ai-import-sessions.js', './ai-question-sessions.js', './ai-settings.js', './ai-transport.js', './ai-prompts.js', './question-view.js', './bank-page.js', './saved-questions-page.js', './training-review-page.js', './bank-editor.js', './study-sessions.js', './exam-page.js', './practice-selection.js', './practice-page.js', './ai-import-panel.js', './ai-question-panels.js', './question-editor.js']) {
     assert(scripts.indexOf(name) >= 0 && scripts.indexOf(name) < appIndex);
   }

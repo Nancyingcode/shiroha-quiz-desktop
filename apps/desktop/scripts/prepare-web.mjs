@@ -14,7 +14,7 @@ const businessScripts = [
   'bank-editor.js', 'study-sessions.js', 'exam-page.js', 'practice-selection.js', 'practice-page.js',
   'ai-import-panel.js', 'ai-question-panels.js', 'question-editor.js', 'import/find-replace.js',
   'questions/rich-content.js', 'import/dual-answers.js', 'import/commit.js',
-  'banks/metadata.js', 'banks/question-operations.js',
+  'banks/metadata.js', 'banks/question-operations.js', 'banks/deletion.js',
 ];
 const sharedStyles = [
   'styles.css',

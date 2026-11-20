@@ -179,26 +179,32 @@
       toast('已进入题库二次编辑。', 'ok');
     }
 
+    function saveBankEditSessionV45() {
+      return saveBankEditSession(bankEditSessionV45);
+    }
+
     // 读取当前题库后再进入保存事务，避免用过期题库写入。
-    async function saveBankEditSessionV45() {
-      if (bankEditSessionV45 && !await loadNativeBanks([bankEditSessionV45.bankId])) {
+    async function saveBankEditSession(session) {
+      const isCurrentSession = () => session && bankEditSessionV45 === session;
+
+      if (isCurrentSession() && !await loadNativeBanks([session.bankId])) {
         return;
       }
 
       return runMutation(
         // 对比原始快照并确认删除，在同一事务内保存题库及其关联引用。
         async () => {
-          if (!bankEditSessionV45) {
+          if (!isCurrentSession()) {
             return;
           }
 
-          const bank = state.banks.find((b) => b.id === bankEditSessionV45.bankId);
+          const bank = state.banks.find((b) => b.id === session.bankId);
           if (!bank) {
             toast('原题库不存在，无法保存。', 'danger');
             return;
           }
 
-          if (bankEditQuestionSnapshot(bank.questions) !== bankEditSessionV45.sourceQuestions) {
+          if (bankEditQuestionSnapshot(bank.questions) !== session.sourceQuestions) {
             toast('题库已变化，请退出编辑后重新打开，避免覆盖其他修改。', 'warn');
             return;
           }
@@ -217,7 +223,7 @@
           bank.name = name;
           bank.groupName = groupName;
           bank.updatedAt = now();
-          bank.questions = importDraft.questions.map((q, i) => (bankEditSessionV45.previewQuestions.get(q.id) === JSON.stringify(q) ? originals.get(q.id) : cleanImportedQuestion({ ...q, id: q.id || makeId('q', i) })));
+          bank.questions = importDraft.questions.map((q, i) => (session.previewQuestions.get(q.id) === JSON.stringify(q) ? originals.get(q.id) : cleanImportedQuestion({ ...q, id: q.id || makeId('q', i) })));
 
           removeBankQuestionReferences(bank.id, deletedIds);
           const scopeBefore = practiceScopeV8916();
@@ -237,6 +243,8 @@
           await switchViewV45('banks');
           toast(`已保存题库“${name}”：${bank.questions.length} 道题${warnings.length ? `，仍有 ${warnings.length} 条提示可后续再核对` : ''}。`, warnings.length ? 'warn' : 'ok');
         },
+        // 离开编辑页可释放题目正文，重试仍需为原编辑会话重新预读。
+        () => saveBankEditSession(session),
       );
     }
 

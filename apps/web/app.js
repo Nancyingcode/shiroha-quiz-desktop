@@ -400,6 +400,50 @@
     makeId,
     now,
   });
+  // 保存失败可能替换选中集合，题库页和删除操作每次使用同一个当前集合。
+  const bankSelection = {
+    get: () => exportBankSelectedV23,
+
+    set: (value) => {
+      exportBankSelectedV23 = value;
+    },
+  };
+  const {
+    confirmBankQuestionDeletion,
+    removeBankQuestionReferences,
+    deleteBankQuestions,
+    deleteBanksV32,
+  } = globalThis.ShirohaBankDeletion.create({
+    state,
+    sessions: {
+      practice: practiceSession,
+      exam: examSession,
+      bankIdOf: practiceItemBankIdV8916,
+      questionOf: practiceQuestionV8916,
+    },
+    scope: {
+      normalize: normalizePracticeScopeV8916,
+      ensure: ensurePracticeScopeV8916,
+      groupType: PRACTICE_SCOPE_GROUP_V8916,
+      bankType: PRACTICE_SCOPE_BANK_V8916,
+    },
+    selection: bankSelection,
+    storage: {
+      canStart: () => !mutationBusy && applicationReady,
+
+      loadBanks: loadNativeBanks,
+      transaction: runMutation,
+      save: saveSilent,
+    },
+    dialogs: ShirohaDialogs,
+    rendering: {
+      all: renderAll,
+      resetQuestionSelection: () => resetBankQuestionSelection(),
+
+      toast,
+    },
+    now,
+  });
   const {
     closeBankQuestionDetail,
     renderBankSelect,
@@ -444,13 +488,7 @@
       itemsForBanks: practiceSessionItemsForBanksV8916,
     },
     rendering: { all: renderAll, exportSummary: renderExportBankSummaryV23, toast },
-    selection: {
-      get: () => exportBankSelectedV23,
-
-      set: (value) => {
-        exportBankSelectedV23 = value;
-      },
-    },
+    selection: bankSelection,
     actions: {
       activeBank,
       transaction: runMutation,
@@ -2641,76 +2679,6 @@
     }
   }
 
-  function bankQuestionDeletionBlocked(bankId, ids) {
-    const contains = (items) => (items || []).some((item) => practiceItemBankIdV8916(item) === bankId && ids.has(practiceQuestionV8916(item).id));
-
-    return (!practiceSession.current.completed && contains(practiceSession.current.items)) || (!examSession.current.submitted && contains(examSession.current.items));
-  }
-
-  // 删除试题前保护正在用题的会话，再确认关联数据的清理范围。
-  async function confirmBankQuestionDeletion(bank, ids) {
-    if (bankQuestionDeletionBlocked(bank.id, ids)) {
-      toast('这些试题正在练习或考试中，请先结束相关会话后再删除。', 'warn');
-      return false;
-    }
-
-    return ShirohaDialogs.confirm(`确定从“${bank.name}”删除 ${ids.size} 道试题？对应错题和收藏会一并移除，历史成绩保留。删除后不能直接撤销。`);
-  }
-
-  // 删除试题后清理它对应的本库错题及收藏引用，避免留下失效入口。
-  function removeBankQuestionReferences(bankId, ids) {
-    if (Array.isArray(state.wrongBook[bankId])) {
-      state.wrongBook[bankId] = state.wrongBook[bankId].filter((entry) => !ids.has(typeof entry === 'string' ? entry : entry.id));
-    }
-
-    if (Array.isArray(state.favorites?.[bankId])) {
-      state.favorites[bankId] = state.favorites[bankId].filter((id) => !ids.has(id));
-    }
-
-    const metadata = state.crossPlatformMeta?.favoriteQuestions?.[bankId];
-    if (metadata) {
-      ids.forEach((id) => delete metadata[id]);
-    }
-  }
-
-  // 仅在可保存时发起删除，并将题目和关联引用变更放在同一事务里。
-  async function deleteBankQuestions(bankId, questionIds) {
-    if (mutationBusy || !applicationReady) {
-      return false;
-    }
-
-    if (!await loadNativeBanks([bankId])) {
-      return false;
-    }
-
-    return runMutation(/* 保存前重新定位目标库并确认有效的删除范围，随后保存和刷新视图。 */ async () => {
-      const bank = state.banks.find((b) => b.id === bankId);
-      if (!bank) {
-        return;
-      }
-
-      const requested = new Set(questionIds);
-      const ids = new Set(bank.questions.filter((q) => requested.has(q.id)).map((q) => q.id));
-      if (!ids.size) {
-        toast('请先选择要删除的试题。', 'warn');
-        return;
-      }
-
-      if (!await confirmBankQuestionDeletion(bank, ids)) {
-        return;
-      }
-
-      bank.questions = bank.questions.filter((q) => !ids.has(q.id));
-
-      bank.updatedAt = now();
-      removeBankQuestionReferences(bankId, ids);
-      await saveSilent();
-      resetBankQuestionSelection();
-      renderAll();
-      toast(`已删除 ${ids.size} 道试题。`, 'ok');
-    });
-  }
-
   function label(t) {
     return TYPE_LABEL[t] || t || '未知';
   }
@@ -3665,55 +3633,6 @@ D. 高速通过积水路段`;
 
   function deleteSelectedBanksV32() {
     deleteBanksV32([...exportBankSelectedV23]);
-  }
-
-  // 将批量删库及依赖数据清理放在同一保存事务内。
-  async function deleteBanksV32(ids) {
-    return runMutation(/* 重新确认目标题库和用户选择后再清理，防止延迟操作影响其他题库。 */ async () => {
-      const unique = [...new Set((ids || []).filter(Boolean))];
-      const targets = state.banks.filter((b) => unique.includes(b.id));
-      if (!targets.length) {
-        toast('请先选择要删除的题库。', 'warn');
-        return;
-      }
-
-      // eslint-disable-next-line prefer-template -- 历史数据字段可能是对象，保留 + 的默认转换；字段类型受约束后移除此例外。
-      const preview = targets.slice(0, 4).map((b) => '“' + b.name + '”').join('、') + (targets.length > 4 ? ' 等' : '');
-      if (!await ShirohaDialogs.confirm(`确定删除 ${targets.length} 个题库：${preview}？删除后不会影响已导出的备份，但本机数据不可恢复。`)) {
-        return;
-      }
-
-      const delIds = new Set(targets.map((b) => b.id));
-      state.banks = state.banks.filter((b) => !delIds.has(b.id));
-
-      delIds.forEach(/* 删除题库时清理关联索引，避免收藏或错题指向已删除的题库。 */ (id) => {
-        delete state.wrongBook[id];
-        if (state.favorites) {
-          delete state.favorites[id];
-        }
-
-        if (state.crossPlatformMeta && state.crossPlatformMeta.favoriteQuestions) {
-          delete state.crossPlatformMeta.favoriteQuestions[id];
-        }
-
-        exportBankSelectedV23.delete(id);
-      });
-
-      if (!state.banks.length) {
-        state.activeBankId = '';
-        state.settings = { ...(state.settings || {}), suppressDefaultBank: true };
-      } else if (!state.banks.some((b) => b.id === state.activeBankId)) {
-        state.activeBankId = state.banks[0]?.id || '';
-      }
-
-      const beforeScope = normalizePracticeScopeV8916(state.settings && state.settings.practiceScope);
-      ensurePracticeScopeV8916();
-      const afterScope = practiceScopeV8916();
-      await saveSilent();
-      renderAll();
-      const groupWasCleared = beforeScope.type === PRACTICE_SCOPE_GROUP_V8916 && afterScope.type === PRACTICE_SCOPE_BANK_V8916;
-      toast(groupWasCleared ? `已删除 ${targets.length} 个题库。原练习分组已无题库，已切换为当前题库。` : `已删除 ${targets.length} 个题库。`, groupWasCleared ? 'warn' : 'ok');
-    });
   }
 
   function cleanFileNameV23(s) {
