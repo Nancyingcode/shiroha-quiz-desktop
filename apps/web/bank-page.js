@@ -21,8 +21,8 @@
   }) {
     const {
       ensureGroupUi: ensureBankGroupUiV58,
-      ensure: ensurePracticeScopeV8916,
       current: practiceScopeV8916,
+      banks: practiceScopeBanksV8916,
       groupName: bankGroupNameV58,
       pathLabel: bankPathLabelV58,
       normalizeGroup: normalizeBankGroupNameV58,
@@ -164,7 +164,7 @@
     <div class="bank-current-bar-v28">
       <label>当前题库<select id="bank-current-select-v28"></select></label>
       <button class="ghost" id="export-json-btn" type="button">导出当前题库 JSON</button>
-      <span class="muted">切换后会同步预览、练习、考试和错题范围。</span>
+      <span class="muted">切换后更新题库预览和错题本。练习与考试沿用已选范围。</span>
     </div>
     <div class="actions wrap-v23 bank-toolbar-actions-v28">
       <label class="check-line-v23"><input id="export-bank-all-v23" type="checkbox">全选</label>
@@ -243,7 +243,7 @@
     // 按分组及排序方式显示题库，重绘前后保留当前可用的批量选择。
     function renderBankList() {
       ensureBankGroupUiV58();
-      ensurePracticeScopeV8916();
+      const scope = practiceScopeV8916();
       const box = $('#bank-list');
       let banks = [...state.banks];
       const sort = $('#bank-sort-mode')?.value || 'created';
@@ -266,7 +266,6 @@
         return;
       }
 
-      const scope = practiceScopeV8916();
       const groups = new Map();
       banks.forEach(/* 按当前展示顺序把题库放入分组，保留组内已有顺序。 */ (b) => {
         const g = bankGroupNameV58(b);
@@ -278,7 +277,7 @@
       });
 
       box.innerHTML = [...groups.entries()].map(/* 按组汇总题量和选择状态，并为每个题库生成其操作入口。 */ ([groupName, items]) => {
-        const groupBanks = state.banks.filter((b) => bankGroupNameV58(b) === groupName);
+        const groupBanks = practiceScopeBanksV8916({ type: PRACTICE_SCOPE_GROUP_V8916, value: groupName });
         const total = groupBanks.reduce((n, b) => n + (b.questions?.length || 0), 0);
         const groupActive = scope.type === PRACTICE_SCOPE_GROUP_V8916 && scope.value === groupName;
         const body = items.map(/* 以当前题库身份标识状态，显示题型数和适用于该库的操作。 */ (b) => {

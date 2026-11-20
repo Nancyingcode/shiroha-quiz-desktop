@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto';
 /** @typedef {import('../../web/platform/contracts.d.ts').Snapshot} Snapshot */
 /** @typedef {import('../../web/platform/contracts.d.ts').Bank} Bank */
 /** @typedef {(page: Page) => Promise<Snapshot>} ReadSnapshot */
+/** @typedef {Snapshot['records'][number] & {details: readonly {sourceBankId: string, questionId: string, chosen: string[]}[]}} ScopeRecord */
 /** @typedef {{invoke(command: string, args?: Record<string, unknown>): Promise<unknown>}} NativeHost */
 /** @typedef {typeof globalThis & {ShirohaDesktopHost?: NativeHost}} TestGlobal */
 /** @typedef {{kind: 'details' | 'read-failure', bankId: string, ids: string[]} | {kind: 'write'}} Call */
@@ -377,6 +378,93 @@ async function copyBank(page, readSnapshot, card) {
   assert.equal(new Set(questionIds(copy)).size, copy.questions.length);
   assert.deepEqual(copy.questions.map((question) => question.number), bank.questions.map((question) => question.number));
   return copy.questions.length;
+}
+
+/** @param {Page} page @param {ReadSnapshot} readSnapshot */
+export async function practiceScopeScoresSmoke(page, readSnapshot) {
+  const group = '第十批练习分组';
+  const first = fixtureBank('scope-a', '范围甲库', 3);
+  const second = fixtureBank('scope-a#x', '范围乙库', 2);
+  first.groupName = group;
+  second.groupName = group;
+  ['same-id', 'x#y', 'x#y#1'].forEach((id, index) => {
+    Object.assign(first.questions[index], { id, score: 2 });
+  });
+  ['y', 'same-id'].forEach((id, index) => {
+    Object.assign(second.questions[index], { id, score: 2 });
+  });
+  await replaceFixture(page, {
+    schemaVersion: 1,
+    banks: [first, second],
+    activeBankId: first.id,
+    settings: {},
+    favorites: {},
+    wrongBook: {},
+    records: [],
+    crossPlatformMeta: {},
+  });
+  await page.reload();
+  const ready = page.locator('body[data-storage-state="ready"]');
+  await ready.waitFor();
+  await page.locator('.nav[data-view="banks"]').click();
+  await page.locator(`[data-practice-group-v8916="${group}"]`).click();
+  await ready.waitFor();
+
+  const rows = [first, second].flatMap((bank) => bank.questions.map((question, index) => ({ bank, question, number: index + 1 })));
+  const chosen = ['A', 'B', 'B', 'A', 'A'];
+  for (const mode of ['practice', 'exam']) {
+    const exam = mode === 'exam';
+    await page.locator(`.nav[data-view="${mode}"]`).click();
+    if (exam) {
+      await page.locator('#exam-count').fill(String(rows.length));
+      await page.locator('#exam-order').selectOption('sequence');
+      await page.locator('#exam-minutes').fill('0');
+    } else {
+      await page.locator('#practice-limit').selectOption('all');
+      await page.locator('#practice-submit-mode').selectOption('total');
+    }
+
+    await page.locator(`#start-${mode}-btn`).click();
+    for (const [index, row] of rows.entries()) {
+      const card = exam ? page.locator('#exam-card .exam-q').nth(index) : page.locator('#practice-card');
+      if (!exam && index) {
+        await page.locator('#p-next').click();
+      }
+
+      assert((await card.locator('.question-title').innerText()).endsWith(row.question.question));
+      await card.locator(`.option[data-key="${chosen[index]}"]`).click();
+    }
+
+    await page.locator(exam ? '#exam-submit-focus-bottom' : '#p-submit-all').click();
+    if (!exam) {
+      const confirmation = page.locator('#app-dialog[open]').filter({ hasText: '确认总提交？' });
+      await confirmation.locator('[data-dialog-accept]').click();
+    }
+
+    await page.locator(exam ? '#exam-back-setup' : '#back-practice-setup').waitFor();
+    await page.reload();
+    await ready.waitFor();
+  }
+
+  const saved = await readSnapshot(page);
+  assert.equal(saved.activeBankId, first.id);
+  assert.deepEqual(saved.settings.practiceScope, { type: 'group', value: group });
+  assert.deepEqual(saved.records.map(({ mode, correct, score }) => [mode, correct, score]), [['考试', 3, 6], ['练习', 3, null]]);
+  const expected = rows.map(({ bank, question }, index) => [bank.id, question.id, chosen[index]]);
+  await page.locator('.nav[data-view="records"]').click();
+  for (const record of saved.records) {
+    const { details } = /** @type {ScopeRecord} */ (record);
+    assert.deepEqual(details.map((detail) => [detail.sourceBankId, detail.questionId, detail.chosen[0]]), expected);
+    assert.deepEqual(record.review?.items.map((item) => item.bankQuestionNumber), rows.map((row) => row.number));
+    await page.locator(`#records [data-training-review="${record.id}"]`).click();
+    await page.locator('[data-training-question="3"]').click();
+    const question = page.locator('#training-question');
+    assert.equal(await question.locator('.question-title').innerText(), second.questions[0].question);
+    assert.match(await question.locator('.qmeta').innerText(), /题库第 1 题.*范围乙库/s);
+    await page.locator('#training-review-back').click();
+  }
+
+  return { recordedModes: ['练习', '考试'], questions: rows.length, distinctSourcesAfterReload: true };
 }
 
 /** @param {Page} page @param {ReadSnapshot} readSnapshot */

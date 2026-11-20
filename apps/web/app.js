@@ -16,7 +16,21 @@
     buildRichContentFieldV57,
     buildRichContentCapabilitiesV57,
   } = globalThis.ShirohaRichContent;
-  const BANK_DEFAULT_GROUP_V58 = '未分组';
+  const {
+    bankGroupName: bankGroupNameV58,
+    bankNameKey: bankNameKeyV58,
+    bankPathLabel: bankPathLabelV58,
+    groupSuggestions,
+    normalizeGroupName: normalizeBankGroupNameV58,
+    pickGroupNameFromJson: pickBankGroupNameFromJsonV58,
+  } = globalThis.ShirohaBankMetadata;
+  const {
+    bankType: PRACTICE_SCOPE_BANK_V8916,
+    groupType: PRACTICE_SCOPE_GROUP_V8916,
+    itemsForBanks: practiceSessionItemsForBanksV8916,
+    normalize: normalizePracticeScopeV8916,
+    question: practiceQuestionV8916,
+  } = globalThis.ShirohaStudyScope;
   const CURRENT_SCHEMA_VERSION = 1;
   const KEY = 'shiroha_quiz_state_v28_4_c1';
   const AI_IMPORT_MAX_CHARS_V99 = 50000;
@@ -29,8 +43,6 @@
   const PRACTICE_START_FROM_V58916 = 'from_start';
   const PRACTICE_START_CONTINUE_V58916 = 'continue';
   const PRACTICE_START_CUSTOM_V58916 = 'custom';
-  const PRACTICE_SCOPE_BANK_V8916 = 'bank';
-  const PRACTICE_SCOPE_GROUP_V8916 = 'group';
   const state = blankState();
   const practiceSession = globalThis.ShirohaStudySessions.createPractice();
   const examSession = globalThis.ShirohaStudySessions.createExam();
@@ -42,11 +54,13 @@
   // 将本轮试题连同源题库和原题号固化进训练记录，便于跨库复盘时定位。
   function trainingSessionItems(items) {
     return items.map(/* 复制题目快照，防止题库后续编辑影响已保存的记录。 */ (item) => {
-      const bankId = practiceItemBankIdV8916(item);
       const q = practiceQuestionV8916(item);
-      const bank = state.banks.find((value) => value.id === bankId);
-      const position = bank?.questions.findIndex((value) => value.id === q.id) ?? -1;
-      return { bankId, bankName: practiceItemBankNameV8916(item), bankQuestionNumber: position < 0 ? null : position + 1, question: JSON.parse(JSON.stringify(q)) };
+      return {
+        bankId: practiceItemBankIdV8916(item),
+        bankName: practiceItemBankNameV8916(item),
+        bankQuestionNumber: practiceBankQuestionNumber(item),
+        question: JSON.parse(JSON.stringify(q)),
+      };
     });
   }
 
@@ -144,6 +158,31 @@
   const LIST_PAGE_SIZES = [10, 20, 50, 100];
   const nativeOpenRecords = new Set();
   const nativeRenderVersions = new Map();
+  const {
+    activeBank,
+    current: practiceScopeV8916,
+    banks: practiceScopeBanksV8916,
+    label: practiceScopeLabelV8916,
+    summary: practiceScopeSummaryV8916,
+    setBank: setPracticeBankScopeV8916,
+    setGroup: setPracticeGroupScopeV8916,
+    itemKey: practiceItemKeyV8916,
+    itemBankId: practiceItemBankIdV8916,
+    itemBankName: practiceItemBankNameV8916,
+    questionRef: practiceQuestionRef,
+    bankQuestionNumber: practiceBankQuestionNumber,
+    sourceMeta: practiceSourceMeta,
+    render: renderPracticeScopeUiV8916,
+  } = globalThis.ShirohaStudyScope.create({
+    state,
+    select: $,
+    escape: esc,
+    resetPages() {
+      for (const entry of nativePages.values()) {
+        entry.page = 0;
+      }
+    },
+  });
   // 首页的午夜刷新计时器随页面存活；每次统计重绘时替换，避免累积任务。
   let dueReviewTimer = null;
   let dueReviewVisibilityBound = false;
@@ -177,7 +216,7 @@
       return true;
     }
 
-    return readNative(() => ShirohaPlatform.storage.ensureQuestions(state, items.map((item) => ({ bankId: practiceItemBankIdV8916(item), questionId: practiceQuestionV8916(item).id }))), shouldReport);
+    return readNative(() => ShirohaPlatform.storage.ensureQuestions(state, items.map(practiceQuestionRef)), shouldReport);
   }
 
   async function loadNativeBanks(ids, shouldReport) {
@@ -374,7 +413,6 @@
     state,
     select: $,
     activeBank,
-    normalizeGroup: normalizeBankGroupNameV58,
     scope: {
       current: practiceScopeV8916,
       setBank: setPracticeBankScopeV8916,
@@ -428,7 +466,7 @@
     },
     scope: {
       normalize: normalizePracticeScopeV8916,
-      ensure: ensurePracticeScopeV8916,
+      ensure: practiceScopeV8916,
       groupType: PRACTICE_SCOPE_GROUP_V8916,
       bankType: PRACTICE_SCOPE_BANK_V8916,
     },
@@ -473,8 +511,8 @@
     countTypes,
     scope: {
       ensureGroupUi: ensureBankGroupUiV58,
-      ensure: ensurePracticeScopeV8916,
       current: practiceScopeV8916,
+      banks: practiceScopeBanksV8916,
       groupName: bankGroupNameV58,
       pathLabel: bankPathLabelV58,
       normalizeGroup: normalizeBankGroupNameV58,
@@ -873,8 +911,7 @@
     scope: {
       current: practiceScopeV8916,
       groupType: PRACTICE_SCOPE_GROUP_V8916,
-      ensure: ensurePracticeScopeV8916,
-      groupName: bankGroupNameV58,
+      bankType: PRACTICE_SCOPE_BANK_V8916,
       normalizeGroup: normalizeBankGroupNameV58,
       readGroup: readImportBankGroupV58,
       ensureGroupUi: ensureBankGroupUiV58,
@@ -1503,7 +1540,8 @@
       return;
     }
 
-    ShirohaPlatform.storage.releaseView?.(state, [...(practiceSession.current.items || []), ...(examSession.current.items || [])].map((item) => ({ bankId: practiceItemBankIdV8916(item), questionId: practiceQuestionV8916(item).id })));
+    const activeItems = [...(practiceSession.current.items || []), ...(examSession.current.items || [])];
+    ShirohaPlatform.storage.releaseView?.(state, activeItems.map(practiceQuestionRef));
 
     nativeOpenRecords.clear();
   }
@@ -1524,180 +1562,8 @@
     renderRecords();
   }
 
-  function activeBank() {
-    return state.banks.find((b) => b.id === state.activeBankId) || state.banks[0] || { questions: [] };
-  }
-
-  function normalizePracticeScopeV8916(scope) {
-    const raw = scope && typeof scope === 'object' ? scope : {};
-    const type = String(raw.type || '').toLowerCase() === PRACTICE_SCOPE_GROUP_V8916 ? PRACTICE_SCOPE_GROUP_V8916 : PRACTICE_SCOPE_BANK_V8916;
-    return { type, value: String(raw.value || '').trim() };
-  }
-
-  // 校准历史设置里的练习范围，失效分组或题库回退到可用范围。
-  function ensurePracticeScopeV8916() {
-    state.settings = state.settings && typeof state.settings === 'object' ? state.settings : {};
-    let scope = normalizePracticeScopeV8916(state.settings.practiceScope);
-    if (scope.type === PRACTICE_SCOPE_GROUP_V8916) {
-      const group = normalizeBankGroupNameV58(scope.value);
-      if (group && (state.banks || []).some((b) => bankGroupNameV58(b) === group)) {
-        scope = { type: PRACTICE_SCOPE_GROUP_V8916, value: group };
-      } else {
-        scope = { type: PRACTICE_SCOPE_BANK_V8916, value: activeBank().id || '' };
-      }
-    } else {
-      const bank = (state.banks || []).find((b) => b.id === scope.value) || activeBank();
-      scope = { type: PRACTICE_SCOPE_BANK_V8916, value: (bank && bank.id) || '' };
-    }
-
-    state.settings.practiceScope = scope;
-    return scope;
-  }
-
-  function practiceScopeV8916() {
-    return ensurePracticeScopeV8916();
-  }
-
-  // 为选题和统计解析练习范围，单库选择失效时回退到活动题库。
-  function practiceScopeBanksV8916(scopeOverride) {
-    const scope = scopeOverride ? normalizePracticeScopeV8916(scopeOverride) : practiceScopeV8916();
-    if (scope.type === PRACTICE_SCOPE_GROUP_V8916) {
-      const group = normalizeBankGroupNameV58(scope.value);
-      return (state.banks || []).filter((b) => bankGroupNameV58(b) === group);
-    }
-
-    const bank = (state.banks || []).find((b) => b.id === scope.value) || activeBank();
-    return bank && bank.id ? [bank] : [];
-  }
-
-  // 练习和考试使用同一套范围名称，兼容题库尚未加载的情况。
-  function practiceScopeLabelV8916(scopeOverride) {
-    const scope = scopeOverride ? normalizePracticeScopeV8916(scopeOverride) : practiceScopeV8916();
-    if (scope.type === PRACTICE_SCOPE_GROUP_V8916) {
-      return normalizeBankGroupNameV58(scope.value) || BANK_DEFAULT_GROUP_V58;
-    }
-
-    return practiceScopeBanksV8916(scope)[0]?.name || '当前题库';
-  }
-
-  // 分组范围同时显示题库数和题数，方便用户核对跨库选题范围。
-  function practiceScopeSummaryV8916(scopeOverride) {
-    const scope = scopeOverride ? normalizePracticeScopeV8916(scopeOverride) : practiceScopeV8916();
-    const banks = practiceScopeBanksV8916(scope);
-    const total = banks.reduce((n, b) => n + (b.questions || []).length, 0);
-    return scope.type === PRACTICE_SCOPE_GROUP_V8916 ? `${banks.length} 个题库 · ${total} 题` : `${total} 题`;
-  }
-
-  // 只允许已有题库成为练习范围，按调用场景决定是否同步切换当前题库。
-  function setPracticeBankScopeV8916(bankId, setActive = true) {
-    const bank = (state.banks || []).find((b) => b.id === bankId);
-    if (!bank) {
-      return false;
-    }
-
-    if (setActive && state.activeBankId !== bank.id) {
-      for (const entry of nativePages.values()) {
-        entry.page = 0;
-      }
-    }
-
-    if (setActive) {
-      state.activeBankId = bank.id;
-    }
-
-    state.settings = state.settings && typeof state.settings === 'object' ? state.settings : {};
-    state.settings.practiceScope = { type: PRACTICE_SCOPE_BANK_V8916, value: bank.id };
-    return true;
-  }
-
-  // 从分组选项切换练习范围时，拒绝已经不存在的分组。
-  function setPracticeGroupScopeV8916(groupName) {
-    const group = normalizeBankGroupNameV58(groupName);
-    if (!group || (state.banks || []).every((b) => bankGroupNameV58(b) !== group)) {
-      return false;
-    }
-
-    state.settings = state.settings && typeof state.settings === 'object' ? state.settings : {};
-    state.settings.practiceScope = { type: PRACTICE_SCOPE_GROUP_V8916, value: group };
-    return true;
-  }
-
-  // 为跨库练习准备带来源的题目条目，并保证本轮标识不会碰撞。
-  function practiceSessionItemsForBanksV8916(banks) {
-    const used = new Map();
-    const keys = new Set();
-    const out = [];
-    // 历史题号或题库 ID 可能包含分隔符，去重后缀也可能与另一题的原始键相同。
-    (banks || []).forEach(/* 按题库和原题顺序展开范围，为各条练习数据保留题库来源。 */ (bank) => (bank.questions || []).forEach(/* 为历史重复标识选择唯一后缀，避免碰撞覆盖本轮答案。 */ (question) => {
-      const base = `${bank.id}#${question.id}`;
-      let n = used.get(base) || 0;
-      let key = n ? `${base}#${n}` : base;
-      while (keys.has(key)) {
-        n += 1;
-        key = `${base}#${n}`;
-      }
-
-      used.set(base, n + 1);
-      keys.add(key);
-      out.push({ sessionKey: key, bankId: bank.id, bankName: bank.name || '', groupName: bankGroupNameV58(bank), question });
-    }));
-
-    return out;
-  }
-
   function currentPracticeItemV8916() {
     return (practiceSession.current && practiceSession.current.items && practiceSession.current.items[practiceSession.current.idx]) || null;
-  }
-
-  function practiceQuestionV8916(item) {
-    return item && item.question && typeof item.question === 'object' ? item.question : item;
-  }
-
-  function practiceItemKeyV8916(item) {
-    const q = practiceQuestionV8916(item);
-    return (item && item.sessionKey) || `${(item && item.bankId) || activeBank().id}#${(q && q.id) || ''}`;
-  }
-
-  function practiceItemBankIdV8916(item) {
-    return (item && item.bankId) || activeBank().id;
-  }
-
-  function practiceItemBankNameV8916(item) {
-    return (item && item.bankName) || state.banks.find((b) => b.id === practiceItemBankIdV8916(item))?.name || activeBank().name || '';
-  }
-
-  // 显示来源题库里的原题序号，原题已不可定位时明确显示未知。
-  function practiceSourceMeta(item) {
-    const bank = state.banks.find((value) => value.id === practiceItemBankIdV8916(item));
-    const index = bank ? bank.questions.findIndex((question) => question.id === practiceQuestionV8916(item).id) : -1;
-    const number = index < 0 ? '题库题号未知' : `题库第 ${index + 1} 题`;
-    return `<span class="pill practice-source-number">${number}</span><span class="practice-source-bank">${esc(practiceItemBankNameV8916(item))}</span>`;
-  }
-
-  // 让首页与题库页反映同一个练习范围和题量。
-  function renderPracticeScopeUiV8916() {
-    const scope = practiceScopeV8916();
-    const label = practiceScopeLabelV8916(scope);
-    const summary = practiceScopeSummaryV8916(scope);
-    const home = $('#home-practice-scope-v8916');
-    if (home) {
-      home.innerHTML = `<span>${scope.type === PRACTICE_SCOPE_GROUP_V8916 ? '当前练习范围' : '当前题库'}</span><b>${esc(label)}</b><small>${esc(summary)}</small>`;
-    }
-
-    const bank = $('#bank-practice-scope-v8916');
-    if (bank) {
-      bank.innerHTML = `<div><span>当前题库</span><b>${esc(activeBank().name || '暂无题库')}</b></div><div><span>练习范围</span><b>${esc(label)}</b><small>${esc(summary)}</small></div>`;
-    }
-
-    const practiceEl = $('#practice-scope-summary-v8916');
-    if (practiceEl) {
-      practiceEl.innerHTML = `<span>题目来源</span><b>${esc(label)}</b><small>${esc(summary)}</small>`;
-    }
-
-    const examEl = $('#exam-bank-summary-v8916');
-    if (examEl) {
-      examEl.textContent = `考试范围：${label}（跟随当前练习范围 · ${summary}）`;
-    }
   }
 
   // 切换页面时复位内容滚动，兼容不提供窗口滚动能力的宿主。
@@ -2393,36 +2259,6 @@
 
   /* SHIROHA_WEB_ISSUE_99_AI_IMPORT_END */
 
-  function normalizeBankGroupNameV58(value) {
-    return String(value ?? '').replace(/* 将空白折叠成单个空格，使导入标签保持单行。 */ /\s+/g, ' ').trim().slice(0, 60);
-  }
-
-  function bankGroupNameV58(bank) {
-    return normalizeBankGroupNameV58(bank && bank.groupName) || BANK_DEFAULT_GROUP_V58;
-  }
-
-  function pickBankGroupNameFromJsonV58(bank) {
-    if (!bank || typeof bank !== 'object') {
-      return '';
-    }
-
-    return normalizeBankGroupNameV58(bank.groupName ?? bank.bankGroup ?? bank.parentName ?? bank.groupTitle ?? '');
-  }
-
-  function bankNameKeyV58(groupName, name) {
-    return `${normalizeBankGroupNameV58(groupName).toLocaleLowerCase('zh-CN')}::${String(name || '题库').trim().toLocaleLowerCase('zh-CN')}`;
-  }
-
-  function bankPathLabelV58(bank) {
-    const group = bankGroupNameV58(bank);
-    return `${group} / ${bank?.name || '题库'}`;
-  }
-
-  function existingBankGroupsV58() {
-    const groups = [...new Set((state.banks || []).map((b) => normalizeBankGroupNameV58(b.groupName)).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'zh-CN'));
-    return groups;
-  }
-
   function readImportBankGroupV58() {
     return normalizeBankGroupNameV58($('#import-bank-group-v58')?.value || '');
   }
@@ -2571,7 +2407,7 @@
       return;
     }
 
-    list.innerHTML = existingBankGroupsV58().map((g) => `<option value="${esc(g)}"></option>`).join('');
+    list.innerHTML = groupSuggestions(state.banks).map((g) => `<option value="${esc(g)}"></option>`).join('');
   }
 
   // 日统计按本地日历日期归类，避免 UTC 跨日偏移。
@@ -3510,7 +3346,7 @@ D. 高速通过积水路段`;
       state.favorites[bid] = Array.isArray(state.favorites[bid]) ? [...new Set(state.favorites[bid].filter(Boolean))] : [];
     }
 
-    ensurePracticeScopeV8916();
+    practiceScopeV8916();
   }
 
   function serializeState() {
@@ -3520,7 +3356,7 @@ D. 高速通过积水路段`;
   // 数据切换后集中刷新界面，保持题库、练习范围和各处计数一致。
   function renderAll() {
     ensureBankGroupUiV58();
-    ensurePracticeScopeV8916();
+    practiceScopeV8916();
     updateAiConnectionPillV99();
     syncAiImportActionV99();
     renderStats();

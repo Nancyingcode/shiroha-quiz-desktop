@@ -11,6 +11,7 @@ import {
   changedMergeSourceSmoke,
   dedupeRetrySmoke,
   fullBackupExportSmoke,
+  practiceScopeScoresSmoke,
   questionDeletionRetrySmoke,
 } from './bank-operations-smoke.mjs';
 import {
@@ -2026,6 +2027,7 @@ async function main() {
     await check('双文件导入自动匹配与保存重载', () => dualFileImportSmoke(importedRecovery.page));
     await check('追加目标变化后重新确认并保存到 SQLite', () => appendImportSmoke(importedRecovery.page));
     await check('题库改名、分组范围回退和新建空库保存重载', () => bankMetadataSmoke(importedRecovery.page));
+    await check('跨库同 ID 与历史后缀的练习和考试成绩保存重载', () => practiceScopeScoresSmoke(importedRecovery.page, readNativeSnapshot));
     await check('题库双入口复制和合并按需读取并保存重载', () => bankContentOperationsSmoke(importedRecovery.page, readNativeSnapshot));
     await check('合并预读期间改变来源须重新确认', () => changedMergeSourceSmoke(importedRecovery.page, readNativeSnapshot));
     await check('题库去重写入失败后重试重新加载正文并保存重载', () => dedupeRetrySmoke(importedRecovery.page, readNativeSnapshot));

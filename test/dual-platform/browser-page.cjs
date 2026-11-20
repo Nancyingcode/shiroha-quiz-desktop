@@ -2832,6 +2832,110 @@ for (const { scenario, move, hasSibling } of [
   });
 }
 
+for (const move of [false, true]) {
+  test(`第十批范围：二次编辑${move ? '移出分组末库后提示回退' : '只改名时不提示回退'}`, async (t) => {
+    const initial = webState();
+    initial.banks[0].groupName = '独立练习组';
+    initial.settings.practiceScope = { type: 'group', value: '独立练习组' };
+    const page = await pageFor(t, JSON.stringify(initial));
+    const ready = page.locator('body[data-storage-state="ready"]');
+    const goToBanks = page.locator('.nav[data-view="banks"]');
+    await ready.waitFor();
+    await page.locator('#save-all-btn').click();
+    await ready.waitFor();
+    const before = JSON.parse(await saved(page));
+    await goToBanks.click();
+    const menu = page.locator('.bank-item').filter({ has: page.locator('[data-editbank-v45="bank-a"]') });
+    await menu.locator('summary').click();
+    await menu.locator('[data-editbank-v45="bank-a"]').click();
+    await page.locator('#import-bank-name').fill('二次编辑练习库');
+    if (move) {
+      await page.locator('#import-bank-group-v58').fill('移入分组');
+    }
+
+    await page.locator('#bank-edit-save-v45').click();
+    await page.locator('#banks.active').waitFor();
+    await ready.waitFor();
+    const data = JSON.parse(await saved(page));
+    const expectedScope = move ? { type: 'bank', value: 'bank-a' } : initial.settings.practiceScope;
+    assert.deepEqual(data.settings.practiceScope, expectedScope);
+    assert.equal(data.activeBankId, 'bank-a');
+    assert.equal(data.banks[0].name, '二次编辑练习库');
+    assert.deepEqual(data.banks[0].questions, before.banks[0].questions);
+    assert.deepEqual(data.banks[1], before.banks[1]);
+    const fallback = page.locator('#app-toast').getByText('原练习分组已无题库，已切换为当前题库。', { exact: true });
+    assert.equal(await fallback.count(), Number(move));
+
+    await page.reload();
+    await ready.waitFor();
+    await goToBanks.click();
+    assert.deepEqual(await page.locator('#bank-practice-scope-v8916 b').allTextContents(), [
+      '二次编辑练习库', move ? '二次编辑练习库' : '独立练习组',
+    ]);
+  });
+}
+
+test('第十批范围：工具栏仅切当前库，分组与卡片各自写入练习范围', async (t) => {
+  const initial = webState();
+  initial.banks[1].groupName = '另一练习组';
+  const page = await pageFor(t, JSON.stringify(initial));
+  const ready = page.locator('body[data-storage-state="ready"]');
+  await ready.waitFor();
+  await page.locator('.nav[data-view="banks"]').click();
+  await page.locator('[data-practice-group-v8916="另一练习组"]').click();
+  await ready.waitFor();
+  const selectedGroup = JSON.parse(await saved(page));
+  assert.equal(selectedGroup.activeBankId, 'bank-a');
+  assert.deepEqual(selectedGroup.settings.practiceScope, { type: 'group', value: '另一练习组' });
+
+  await page.locator('#bank-current-select-v28').selectOption('bank-b');
+  await ready.waitFor();
+  const toolbarSwitch = JSON.parse(await saved(page));
+  const scopeLabels = page.locator('#bank-practice-scope-v8916 b');
+  assert.equal(toolbarSwitch.activeBankId, 'bank-b');
+  assert.deepEqual(toolbarSwitch.settings.practiceScope, selectedGroup.settings.practiceScope);
+  assert.deepEqual(await scopeLabels.allTextContents(), [initial.banks[1].name, '另一练习组']);
+  assert.match(await page.locator('.bank-current-bar-v28 .muted').innerText(), /练习与考试沿用已选范围/);
+
+  await page.locator('[data-openbank="bank-b"]').click();
+  await ready.waitFor();
+  assert.deepEqual(JSON.parse(await saved(page)).settings.practiceScope, { type: 'bank', value: 'bank-b' });
+  assert.deepEqual(await scopeLabels.allTextContents(), [initial.banks[1].name, initial.banks[1].name]);
+});
+
+for (const { title, original, empty } of [
+  { title: '旧设置指向不存在的题库', original: { type: 'BANK', value: ' 已删除库 ' }, empty: false },
+  { title: '旧设置指向不存在的分组', original: { type: 'GROUP', value: ' 已删除组 ' }, empty: false },
+  { title: '显式空库可保存和重载', original: { type: 'group', value: '自建样本' }, empty: true },
+]) {
+  test(`第十批范围：${title}`, async (t) => {
+    const initial = webState();
+    initial.settings.practiceScope = original;
+    initial.activeBankId = empty ? '' : 'bank-b';
+    if (empty) {
+      initial.banks = [];
+    }
+
+    const page = await pageFor(t, JSON.stringify(initial));
+    const ready = page.locator('body[data-storage-state="ready"]');
+    await ready.waitFor();
+    const summary = page.locator('#home-practice-scope-v8916');
+    const label = empty ? '当前题库' : initial.banks[1].name;
+    assert.equal(await summary.locator('b').textContent(), label);
+    assert.equal(await summary.locator('small').textContent(), empty ? '0 题' : '1 题');
+    await page.locator('#save-all-btn').click();
+    await ready.waitFor();
+    const data = JSON.parse(await saved(page));
+    assert.deepEqual(data.settings.practiceScope, { type: 'bank', value: initial.activeBankId });
+    assert.equal(data.activeBankId, initial.activeBankId);
+    assert.equal(data.banks.length, initial.banks.length);
+    await page.reload();
+    await ready.waitFor();
+    assert.equal(await summary.locator('b').textContent(), label);
+    assert.equal(await summary.locator('small').textContent(), empty ? '0 题' : '1 题');
+  });
+}
+
 test('容量不足不清空编辑内容，重试成功后再离开编辑态', async (t) => {
   const page = await pageFor(t, JSON.stringify(webState()));
   await page.locator('body[data-storage-state="ready"]').waitFor();
@@ -3075,6 +3179,12 @@ test('file URL 支持 ZIP 与文本导入且不依赖可选 PDF/OCR', async (t) 
   const bankDeletionScript = './banks/deletion.js';
   assert.equal(scripts.filter((script) => script === bankDeletionScript).length, 1);
   assert(scripts.indexOf(bankDeletionScript) < appIndex);
+  const scopeScript = './study/scope.js';
+  assert.equal(scripts.filter((script) => script === scopeScript).length, 1);
+  const metadataIndex = scripts.indexOf('./banks/metadata.js');
+  assert(metadataIndex >= 0 && metadataIndex < scripts.indexOf(scopeScript) && scripts.indexOf(scopeScript) < appIndex);
+  assert.equal(await page.evaluate(() => typeof globalThis.ShirohaStudyScope.create), 'function');
+  assert.equal(await page.locator('#home-practice-scope-v8916 b').count(), 1);
   for (const name of ['./quiz-core.js', './text-answers.js', './text-parser.js', './backup-core.js', './zip.js', './backup-archive.js', './backup-data.js', './webdav-panel.js', './docx-import.js', './pdf-import.js', './ocr-import.js', './table-import.js', './import-preview.js', './ai-results.js', './ai-import-sessions.js', './ai-question-sessions.js', './ai-settings.js', './ai-transport.js', './ai-prompts.js', './question-view.js', './bank-page.js', './saved-questions-page.js', './training-review-page.js', './bank-editor.js', './study-sessions.js', './exam-page.js', './practice-selection.js', './practice-page.js', './ai-import-panel.js', './ai-question-panels.js', './question-editor.js']) {
     assert(scripts.indexOf(name) >= 0 && scripts.indexOf(name) < appIndex);
   }
@@ -3864,6 +3974,110 @@ test('审查回归：特殊字符与跨题库键碰撞不能让考试文本答�
   const record = JSON.parse(await saved(page)).records[0];
   assert.deepEqual(record.details.map((detail) => detail.chosen), [['答案1'], ['答案2']]);
 });
+
+for (const mode of ['practice', 'exam']) {
+  test(`第十批范围：${mode === 'exam' ? '考试' : '练习'}的跨库同 ID 和历史后缀成绩重载`, async (t) => {
+    const initial = webState();
+    const [first, second] = initial.banks;
+    const sample = first.questions[0];
+    const rows = [
+      [first, 'same-id', '第一库的同 ID 题', 'A', 'A', 1],
+      [first, 'x#y', '第一库的分隔符题', 'B', 'B', 2],
+      [first, 'x#y#1', '第一库已占用后缀一的题', 'B', 'A', 3],
+      [second, 'y', '第二库碰撞到既有键的题', 'A', 'A', 1],
+      [second, 'same-id', '第二库的同 ID 题', 'A', 'B', 2],
+    ];
+    first.questions = [];
+    second.id = `${first.id}#x`;
+    second.questions = [];
+    for (const [bank, id, question, answer] of rows) {
+      bank.questions.push({ ...sample, id, question, answer: [answer] });
+    }
+
+    initial.records = [];
+    initial.wrongBook = {};
+    initial.favorites = {};
+    initial.crossPlatformMeta = {};
+    const page = await pageFor(t, JSON.stringify(initial));
+    const ready = page.locator('body[data-storage-state="ready"]');
+    await ready.waitFor();
+    await page.locator('.nav[data-view="banks"]').click();
+    await page.locator('[data-practice-group-v8916="自建样本"]').click();
+    await ready.waitFor();
+    await page.locator(`.nav[data-view="${mode}"]`).click();
+
+    const isExam = mode === 'exam';
+    if (isExam) {
+      await page.locator('#exam-order').selectOption('sequence');
+      await page.locator('#exam-count').fill(String(rows.length));
+      await page.locator('#exam-minutes').fill('0');
+    } else {
+      await page.locator('#practice-submit-mode').selectOption('total');
+      await page.locator('#practice-limit').selectOption('all');
+    }
+
+    await page.locator(`#start-${mode}-btn`).click();
+    const practice = page.locator('#practice-card');
+    const paper = page.locator('#exam-card .exam-q');
+    if (isExam) {
+      await paper.nth(rows.length - 1).waitFor();
+      assert.deepEqual(await paper.evaluateAll((cards) => cards.map((card) => card.dataset.qid)), [
+        'bank-a#same-id', 'bank-a#x#y', 'bank-a#x#y#1', 'bank-a#x#y#2', 'bank-a#x#same-id',
+      ]);
+    }
+
+    for (const [index, [bank, , title, , answer, bankNumber]] of rows.entries()) {
+      const card = isExam ? paper.nth(index) : practice;
+      if (!isExam) {
+        if (index) {
+          await page.locator('#p-next').click();
+        }
+
+        assert.equal(await card.locator('.practice-source-number').textContent(), `题库第 ${bankNumber} 题`);
+        assert.equal(await card.locator('.practice-source-bank').textContent(), bank.name);
+      }
+
+      assert.ok((await card.locator('.question-title').innerText()).endsWith(title));
+      await card.locator(`.option[data-key="${answer}"]`).click();
+    }
+
+    await page.locator(isExam ? '#exam-submit-focus-bottom' : '#p-submit-all').click();
+    await page.locator(isExam ? '#exam-back-setup' : '#back-practice-setup').waitFor();
+    const { records } = JSON.parse(await saved(page));
+    const [record] = records;
+    assert.equal(records.length, 1);
+    assert.equal(record.mode, isExam ? '考试' : '练习');
+    assert.equal(record.scopeType, 'GROUP');
+    assert.equal(record.scopeName, '自建样本');
+    assert.equal(record.answered, rows.length);
+    assert.equal(record.correct, 3);
+    assert.equal(record.wrong, 2);
+    assert.equal(record.accuracy, 60);
+    assert.equal(record.score, isExam ? 6 : null);
+    assert.deepEqual(record.details.map((detail) => [
+      detail.sourceBankId, detail.questionId, detail.nativeQuestion.question, detail.answer[0], detail.chosen[0],
+    ]), rows.map(([bank, id, title, answer, chosen]) => [bank.id, id, title, answer, chosen]));
+    assert.deepEqual(
+      record.review.items.map((item) => [item.sourceBankId, item.questionId, item.bankQuestionNumber]),
+      rows.map(([bank, id, , , , bankNumber]) => [bank.id, id, bankNumber]),
+    );
+
+    await page.reload();
+    await ready.waitFor();
+    assert.deepEqual(JSON.parse(await saved(page)).records, records);
+    await page.locator('.nav[data-view="records"]').click();
+    await page.locator(`#records [data-training-review="${record.id}"]`).click();
+    for (const [index, [bank, , title, answer, chosen, bankNumber]] of rows.entries()) {
+      await page.locator(`[data-training-question="${index}"]`).click();
+      const question = page.locator('#training-question');
+      assert.equal(await question.locator('.question-title').textContent(), title);
+      const metadata = await question.locator('.qmeta').innerText();
+      assert.ok(metadata.includes(bank.name) && metadata.includes(`题库第 ${bankNumber} 题`), metadata);
+      const status = answer === chosen ? 'correct' : 'wrong';
+      assert.equal(await question.locator(`.option.${status}[data-key="${chosen}"]`).count(), 1);
+    }
+  });
+}
 
 test('第三批考试：局部更新计数、焦点与同卷重绘后的迟到事件', async (t) => {
   const initial = webState();

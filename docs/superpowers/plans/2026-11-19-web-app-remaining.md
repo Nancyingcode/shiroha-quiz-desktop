@@ -110,3 +110,27 @@
 - 两条损坏库修复都在未就绪页触发一次原生修复，启动后输入事件各调用一次原文来源与 AI 选区监听器，并保留原主库字节和旧活动代。首次全量桌面运行把这两个既有监听器误计为一个，第二次在人工构造的无效 WAL 断言处停止。复验在用户点击前记录旧路径上的 WAL，两条路径在进入恢复界面时该无效侧车文件均已不在原路径。有效且尚未 checkpoint 的 WAL 在损坏数据库修复中的保全未由此场景验收。保留两次原始日志及 `test-desktop-final.log`。[启动修复用例](../../../apps/desktop/scripts/smoke.mjs)
 
 文件授权由现有桌面测试协议接收实际备份字节，未人工验收系统文件对话框。WebDAV 使用本地或页内模拟，未连接真实服务。交付边界截至第九批，下一批迁移题库组名时可继续通过现有归一化回调连接备份转换和恢复。
+
+### 第十批 · 练习范围与题目来源
+
+- 负责人为 `batch10_scope`（GPT-6.2-Sol Max）。在第七至九批已验收的工作树上继续。分支为 `codex/web-app-remaining`，工作树为 `C:/Users/30728/.codex/worktrees/31f4/shiroha-quiz-desktop`，`HEAD` 为 `ac4f4c64adc773040eb2b06bf5831003c2803ab0`。
+- [范围模块](../../../apps/web/study/scope.js)提供当前库查询、练习范围校准和设置、四处范围摘要及本轮题目的标识和来源。应用通过 `resetPages` 在主动切换到不同当前库时归零页码，通过来源库和题 ID 请求及保留原生正文。原生读取、释放和保存事务由应用入口协调。选题及续练进度仍由 [practice-selection.js](../../../apps/web/practice-selection.js) 持有。`app.js` 由 4,763 行、164 个入口闭包内直接声明的具名函数减至 4,599 行、142 个。
+- [题库元数据](../../../apps/web/banks/metadata.js)提供组名归一化、显示默认值、历史 JSON 别名、同名比较键和分组建议。导入、状态升级及备份沿用同一规则，显式空组名保留未分组含义。工具栏选择器切换当前库，组范围保留。卡片设为当前库时同步设置单库练习范围。修订了工具栏提示，并实测从另一个库所在的分组选取范围时保留当前库。
+- 用启动后实际保存的快照逐字段对照原题和旁库。迁移前从二次编辑保存按钮复现两处提示偏差，只改名时多提示一次，移出组内最后一库时缺少提示。修正为修改前后读取已校准的范围，且在成功保存后显示。题库改名已有用例继续覆盖组内仍有成员及保存失败回滚。补测失效题库、失效分组及显式空库，保存后重载检查范围与计数。[浏览器回归](../../../test/dual-platform/browser-page.cjs)
+- 练习与考试各有 5 道题，两库共享一个 ID，一组旧 ID 同时造成跨库键冲突并占用 `#1`。原算法按题库和题目原序分配 `#2`，在迁移前后均正确。经实际提交、重载记录页和打开复盘，核对原题号、来源库、题干、各题答案和分数。库内 ID 唯一的存储校验继续生效，历史库内重复 ID 的本轮键分配由[模块测试](../../../test/dual-platform/study-scope.test.cjs)覆盖。
+
+本批在 Windows 10（19045）、Node 24.22.2、pnpm 12.16.1 和 Rust 1.99.1 上验证。沿用本工作树依赖和构建缓存。生产构建通过进程级 `CARGO_TARGET_DIR` 复用缓存，两次构建使用 `CARGO_NET_OFFLINE=true`。浏览器和桌面使用隔离测试配置、自建题库及模拟服务。日志位于 `apps/desktop/.reports/batch10/`。
+
+| 验证项 | 实际命令与结果 |
+| --- | --- |
+| 浏览器定向 | 根目录运行 `node --test --test-name-pattern='第十批范围\|题库分组：\|特殊字符与跨题库键碰撞\|清空选项：.*跨库同 ID\|训练复盘：提前结束\|file URL 支持' test/dual-platform/browser-page.cjs`，16 项通过。HTTP 与本地 HTML 验证了范围脚本的加载，兼容场景继续使用真实保存与复盘入口。 |
+| 共享定向 | 根目录运行 `node --test test/dual-platform/study-scope.test.cjs test/dual-platform/due-review.test.cjs test/dual-platform/practice-selection-performance.test.cjs test/dual-platform/training.test.cjs test/dual-platform/json-import.test.cjs test/dual-platform/preview-performance.test.cjs test/dual-platform/format.test.cjs test/dual-platform/source-loading.test.cjs test/dual-platform/backup-entry-performance.test.cjs`，78 项通过。验证旧备份与旧键、无 DOM 工厂装配、加载次序及唯一末尾启动点。 |
+| 类型和 lint | 在 `apps/desktop` 运行 `pnpm run typecheck` 和 `pnpm run lint`，均通过。完整 JavaScript 门禁检查 181 个文件，规则夹具 92 项通过，1 项按规则在大小写不敏感的临时目录跳过。加强切组浏览器夹具后，该文件通过定向 ESLint。 |
+| 桌面与共享测试 | `pnpm test` 桌面 286 项通过、1 项环境跳过，共享 514 项通过。 |
+| 完整浏览器 | `pnpm run test:web-platform` 的 254 项全部通过。 |
+| 资源与构建 | `pnpm run prepare:web`、`pnpm run build`、`pnpm run build:test` 依次通过。生成的 `dist/study/scope.js` 与 Web 源码 SHA-256 一致。 |
+| WebView2 与 SQLite | `pnpm run test:desktop` 最终 61 项全部通过。从实际按钮提交两库 5 题的练习与考试，两轮均答对 3 题，考试为 6 分。重载后读 SQLite 记录并从记录页打开复盘，按原顺序验证答案、不同库的同 ID、原题号和来源正文。另通过既有的换组、原生按需读取和零库冷启动场景。 |
+
+首轮桌面烟测在新增用例的练习提交确认处停下，前 48 项通过。补齐点击实际确认按钮的步骤后，最新类型检查和烟测文件定向 ESLint 通过，同一隔离构建的桌面套件复跑通过。保留 `test-desktop.log` 和 `test-desktop-final.log`。[桌面用例](../../../apps/desktop/scripts/bank-operations-smoke.mjs)
+
+应用入口生成训练快照和答题明细，来源库、原题号和题目引用通过范围模块查询。第十一批可继续复用这些查询。第十二批首页统计可继续通过同一范围读到题库集合。

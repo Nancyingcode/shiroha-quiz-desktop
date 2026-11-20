@@ -196,6 +196,7 @@ test('copies only scripts listed for nested business directories', async (t) => 
     'questions/rich-content.js', 'banks/metadata.js', 'banks/question-operations.js', 'banks/deletion.js',
     'backup/export.js',
     'backup/restore.js',
+    'study/scope.js',
   ];
   for (const script of scripts) {
     const directory = path.dirname(script);
