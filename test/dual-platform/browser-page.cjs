@@ -3484,6 +3484,11 @@ test('file URL 支持 ZIP 与文本导入且不依赖可选 PDF/OCR', async (t) 
   assert(dashboardIndex > scripts.indexOf('./practice-selection.js') && dashboardIndex < appIndex);
   assert.equal(await page.evaluate(() => typeof globalThis.ShirohaStudyDashboard.create), 'function');
   assert.equal(await page.locator('#home-practice-scope-v8916 b').count(), 1);
+  for (const name of ['./import/ocr-output.js', './import/page.js']) {
+    assert.equal(scripts.filter((script) => script === name).length, 1);
+    assert(scripts.indexOf(name) > scripts.indexOf('./import/commit.js') && scripts.indexOf(name) < appIndex);
+  }
+
   for (const name of ['./quiz-core.js', './text-answers.js', './text-parser.js', './backup-core.js', './zip.js', './backup-archive.js', './backup-data.js', './webdav-panel.js', './docx-import.js', './pdf-import.js', './ocr-import.js', './table-import.js', './import-preview.js', './ai-results.js', './ai-import-sessions.js', './ai-question-sessions.js', './ai-settings.js', './ai-transport.js', './ai-prompts.js', './question-view.js', './bank-page.js', './saved-questions-page.js', './training-review-page.js', './bank-editor.js', './study-sessions.js', './exam-page.js', './practice-selection.js', './practice-page.js', './ai-import-panel.js', './ai-question-panels.js', './question-editor.js']) {
     assert(scripts.indexOf(name) >= 0 && scripts.indexOf(name) < appIndex);
   }
@@ -5451,6 +5456,28 @@ async function batch4SelectDelayed(page, selector, name) {
   await page.locator(selector).setInputFiles({ name, mimeType: 'text/plain', buffer: Buffer.from('模拟文件') });
   await page.waitForFunction((fileName) => !!globalThis.__batch4Reads[fileName], name);
 }
+
+test('第十四批导入：表格预览后填入并解析文本示例使用新的来源', async (t) => {
+  const page = await pageFor(t, JSON.stringify(webState()));
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.locator('.nav[data-view="import"]').click();
+  const before = await saved(page);
+  const preview = page.locator('#import-preview tbody');
+  await page.locator('#import-file').setInputFiles({
+    name: '上一份题库.csv',
+    mimeType: 'text/csv',
+    buffer: Buffer.from('题干,选项A,选项B,答案\n上一份表格题,甲,乙,A'),
+  });
+  await preview.getByText('上一份表格题').waitFor();
+  await page.locator('#load-sample-btn').click();
+  assert.match(await page.locator('#import-text').inputValue(), /机动车驾驶人初次申领/);
+  await page.locator('#parse-import-btn').click();
+  const parsed = await preview.innerText();
+  assert.match(parsed, /机动车驾驶人初次申领/);
+  assert.doesNotMatch(parsed, /上一份表格题/);
+  assert.equal(await page.locator('[data-edit-import]').count(), 3);
+  assert.equal(await saved(page), before);
+});
 
 test('第四批导入：单文件重选、清空、手动编辑复原和程序替换后拒绝迟到读取', async (t) => {
   const page = await pageFor(t, JSON.stringify(webState()), batch4DelayedFileInjection);

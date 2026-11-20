@@ -1,7 +1,6 @@
 // 隔离应用状态和共享模块装配，待浏览器或桌面平台准备好后启动页面。
 (function () {
   const APP_VERSION = 'V38：单题AI解析与追问版';
-  const { zipStoreFiles } = globalThis.ShirohaZip;
   const {
     RICH_CONTENT_VERSION_V57,
     pickRichTextFieldV57,
@@ -272,12 +271,6 @@
     toast,
     warnDev,
   });
-  const {
-    resetOcrImportState,
-    setOcrStatus,
-    startPdfOcrImport,
-    currentOcrText,
-  } = ocrSession;
   const textParser = globalThis.ShirohaTextParser.create({
     makeId,
     warnDev,
@@ -526,13 +519,15 @@
     now,
     countTypes,
     scope: {
-      ensureGroupUi: ensureBankGroupUiV58,
+      ensureGroupUi: () => importPage.ensureBankGroupUi(),
+
       current: practiceScopeV8916,
       banks: practiceScopeBanksV8916,
       groupName: bankGroupNameV58,
       pathLabel: bankPathLabelV58,
       normalizeGroup: normalizeBankGroupNameV58,
-      renderGroups: renderBankGroupDatalistV58,
+      renderGroups: () => importPage.renderBankGroups(),
+
       setBank: setPracticeBankScopeV8916,
       setGroup: setPracticeGroupScopeV8916,
       groupType: PRACTICE_SCOPE_GROUP_V8916,
@@ -603,11 +598,12 @@
   const importDraft = globalThis.ShirohaImportPreview.create({
     readers: { readText: readPlainTextFileV49, readTable: readTableImportFileV49, readDocx: extractDocxText, readPdf: extractPdfText },
     ocr: ocrSession,
-    setBankName: setImportBankNameFromFile,
-    applyTable: applyTableImportResultV49,
+    setBankName: (fileName) => importPage.setBankNameFromFile(fileName),
+
+    applyTable: (result, fileName) => importPage.applyTable(result, fileName),
+
     toast,
   });
-  const { readImportFile, readDualFile } = importDraft;
   const importFindReplace = globalThis.ShirohaImportFindReplace.create({
     select: $,
     escapeRegExp: escapeRegExpV51,
@@ -659,6 +655,7 @@
     harness: { isHarness: isAiHarnessExecutionV99, taskReason: aiHarnessTaskReasonV99, configured: aiConfiguredV99, unavailableReason: aiUnavailableReasonV99 },
     response: { content: aiResponseContentV99, httpErrorMessage: aiHttpErrorMessage },
   });
+  const importIdentity = globalThis.ShirohaAiImportSessions.createIdentity(importDraft);
   const {
     aiRefactorQuestionSnapshotV384,
     buildAiMessagesV99,
@@ -670,10 +667,11 @@
     buildAiSingleAnalysisMessagesV613,
     buildAiSingleFollowUpMessagesV613,
   } = globalThis.ShirohaAiPrompts.create({
-    question: practiceQuestionV8916, importKey: aiQuestionKeyV991, validate: validateQuestion, maxChars: AI_IMPORT_MAX_CHARS_V99,
+    question: practiceQuestionV8916, importKey: importIdentity.key, validate: validateQuestion, maxChars: AI_IMPORT_MAX_CHARS_V99,
   });
   const aiImportSessions = globalThis.ShirohaAiImportSessions.create({
     draft: importDraft,
+    identity: importIdentity,
     configuration: {
       isEditing: () => !!bankEditor.current(),
 
@@ -686,19 +684,18 @@
     organizer: {
       range: (...args) => aiImportRangeV992(...args),
 
-      context: aiRefactorContextV384,
+      snapshotQuestion: aiRefactorQuestionSnapshotV384,
       messages: buildAiMessagesV99,
       parse: parseAiRefactorPayloadV384,
-      parseText: parseTextQuestions,
-      risk: largeImportRiskMessageV376,
+      parseText: (...args) => importPage.parseTextQuestions(...args),
+
+      risk: (...args) => importPage.riskMessage(...args),
     },
     preview: {
       mode: () => aiImportPanel.mode(),
 
       collectTargets: (...args) => collectAiPreviewTargetDetailsV992(...args),
 
-      key: aiQuestionKeyV991,
-      fingerprint: aiQuestionFingerprintV991,
       payload: aiQuestionPayloadV991,
       issueStatus: importIssueStatus,
       label: (...args) => aiPreviewModeLabelV991(...args),
@@ -708,7 +705,6 @@
       resultArray: aiResultArrayV991,
       normalizeReview: normalizeAiReviewResultV991,
       normalizeAnalysis: normalizeAiAnalysisResultV991,
-      findIndex: findImportIndexByAiKeyV991,
     },
     view: {
       select: $,
@@ -934,8 +930,10 @@
       groupType: PRACTICE_SCOPE_GROUP_V8916,
       bankType: PRACTICE_SCOPE_BANK_V8916,
       normalizeGroup: normalizeBankGroupNameV58,
-      readGroup: readImportBankGroupV58,
-      ensureGroupUi: ensureBankGroupUiV58,
+      readGroup: () => importPage.readBankGroup(),
+
+      ensureGroupUi: () => importPage.ensureBankGroupUi(),
+
     },
     data: {
       normalize: normalizeQuestion,
@@ -1230,8 +1228,8 @@
     },
     preview: {
       status: importIssueStatus,
-      key: aiQuestionKeyV991,
-      findIndex: findImportIndexByAiKeyV991,
+      key: importIdentity.key,
+      findIndex: importIdentity.findIndex,
       render: (...args) => renderImportPreview(...args),
 
       renderPracticeAi: (...args) => renderPracticeAiPanelV613(...args),
@@ -1355,7 +1353,12 @@
       bind: bindAiSuggestionActionsV991,
       sync: syncAiPreviewToolsV991,
     },
-    editor: { updateBankUi: updateBankEditUiV45, syncAppend: syncImportAppendUiV59, saveDraft: (index) => importDraftPersistence.save(index) },
+    editor: {
+      updateBankUi: updateBankEditUiV45,
+      syncAppend: () => importPage.syncAppend(),
+
+      saveDraft: (index) => importDraftPersistence.save(index),
+    },
     practice: {
       currentItem: currentPracticeItemV8916,
       question: practiceQuestionV8916,
@@ -1387,38 +1390,7 @@
       makeId: () => makeId('import-draft'),
 
       notify: toast,
-      // 恢复草稿前使旧的 AI、OCR 和文件读取失效，避免迟到结果覆盖恢复内容。
-      invalidate: () => {
-        cancelAiImportRequestV99(true);
-        cancelAiPreviewRequestV991(true);
-        closeAiImportPanelV99();
-        closeAiPreviewPanelV991();
-        resetOcrImportState();
-        ['single', 'question', 'answer'].forEach((slot) => importDraft.invalidateRead(slot));
-
-        importDraft.invalidatePreview();
-        importDraft.invalidateBankName();
-        ['import-file', 'dual-question-file', 'dual-answer-file'].forEach(/* 清理旧的文件选择和控件显示，恢复后允许再次选择同一个文件。 */ (id) => {
-          const input = $(`#${id}`);
-          if (!input) {
-            return;
-          }
-
-          input.value = '';
-          const control = input.closest('.file-control-v615');
-          const name = control?.querySelector('.file-name-v615');
-          if (name) {
-            name.textContent = name.dataset.emptyText || '未选择文件';
-          }
-
-          control?.classList.remove('has-file-v615');
-        });
-
-        const name = $('#import-bank-name');
-        if (name) {
-          name.dataset.autoName = '0';
-        }
-      },
+      invalidate: () => importPage.resetSourcesForRestore(),
 
       render: () => {
         renderImportPreview(importDraft.questions);
@@ -1430,7 +1402,8 @@
     state,
     draft: importDraft,
     editor: { current: bankEditor.current, save: saveBankEditSessionV45 },
-    readBankGroup: readImportBankGroupV58,
+    readBankGroup: () => importPage.readBankGroup(),
+
     bankPathLabel: bankPathLabelV58,
     setPracticeBankScope: setPracticeBankScopeV8916,
     loadNativeBanks,
@@ -1444,15 +1417,6 @@
     onImported: importDraftPersistence.imported,
     view: { select: $, renderAll, showNotice, toast, warnDev },
   });
-
-  // 解析导入文本，并从同一次解析中保留预览使用的诊断和来源信息。
-  function parseTextQuestions(text, strategy = 'auto') {
-    const result = parseTextQuestionsDetailed(text, strategy, (report) => {
-      importDraft.report = report;
-    });
-    importDraft.diagnostics = result.diagnostics;
-    return result.questions;
-  }
 
   // 为宽窄布局建立可切换的页码与每页条数控件，两组按钮共用翻页行为。
   function renderNativePageActions({
@@ -1728,158 +1692,6 @@
     });
   }
 
-  /* 文件名回显只负责界面提示；文件读取仍由原有 onchange 绑定处理，因此用
-     addEventListener 叠加，避免覆盖 readImportFile / readDualFile。 */
-  function bindFileFieldsV615() {
-    $$('.file-control-v615').forEach(/* 为尚未绑定的文件控件回显文件名，实际读取仍由导入流程负责。 */ (control) => {
-      if (control.dataset.fileBoundV615 === '1') {
-        return;
-      }
-
-      const input = control.querySelector('input[type="file"]');
-      const nameEl = control.querySelector('.file-name-v615');
-      if (!input || !nameEl) {
-        return;
-      }
-
-      control.dataset.fileBoundV615 = '1';
-      const emptyText = nameEl.dataset.emptyText || nameEl.textContent;
-      input.addEventListener('change', () => {
-        const file = input.files && input.files[0];
-        nameEl.textContent = file ? file.name : emptyText;
-        control.classList.toggle('has-file-v615', Boolean(file));
-      });
-    });
-  }
-
-  // 单文件和双文件导入与同一预览区联动，原文编辑时使对应读取失效。
-  function bindImportControls() {
-    $('#load-sample-btn').onclick = loadSample;
-    $('#import-file').onchange = readImportFile;
-    $('#parse-import-btn').onclick = parseImport;
-    $('#confirm-import-btn').onclick = confirmImport;
-    const findReplaceBtnV51 = $('#find-replace-import-btn');
-    if (findReplaceBtnV51) {
-      findReplaceBtnV51.onclick = importFindReplace.open;
-    }
-
-    const dualConfirmBtn = $('#dual-confirm-import-btn');
-    if (dualConfirmBtn) {
-      dualConfirmBtn.onclick = confirmImport;
-    }
-
-    const importTextAreaV49 = $('#import-text');
-    if (importTextAreaV49 && !importTextAreaV49.dataset.sourceBoundV49) {
-      importTextAreaV49.dataset.sourceBoundV49 = '1';
-      importTextAreaV49.addEventListener('input', /* 手工修改原文后，旧表格结果不能再作为导入来源。 */ () => {
-        importDraft.invalidateRead('single');
-        if (importTextAreaV49.dataset.tableImportV49 === '1') {
-          importDraft.tableResult = null;
-          delete importTextAreaV49.dataset.tableImportV49;
-        }
-
-        importDraft.sourceMeta = { name: '手动文本', size: new Blob([importTextAreaV49.value || '']).size, type: 'text' };
-      });
-    }
-
-    const ocrStartBtn = $('#ocr-start-btn');
-    if (ocrStartBtn) {
-      ocrStartBtn.onclick = startPdfOcrImport;
-    }
-
-    const ocrUseBtn = $('#ocr-use-text-btn');
-    if (ocrUseBtn) {
-      ocrUseBtn.onclick = applyOcrTextToImport;
-    }
-
-    const ocrCopyBtn = $('#ocr-copy-btn');
-    if (ocrCopyBtn) {
-      ocrCopyBtn.onclick = copyOcrText;
-    }
-
-    const ocrDocxBtn = $('#ocr-download-docx-btn');
-    if (ocrDocxBtn) {
-      ocrDocxBtn.onclick = downloadOcrDocx;
-    }
-
-    $('#clear-import-btn').onclick = /* 清空草稿前停止识别，避免异步结果重新填充已清空的内容。 */ () => {
-      cancelAiImportRequestV99(true);
-      cancelAiPreviewRequestV991(true);
-      closeAiImportPanelV99();
-      closeAiPreviewPanelV991();
-      resetAiSuggestionsV991();
-      $('#import-text').value = '';
-      if ($('#import-text')) {
-        delete $('#import-text').dataset.tableImportV49;
-      }
-
-      importDraft.clearSingle();
-      resetOcrImportState();
-      renderImportPreview([]);
-      syncAiImportActionV99();
-    };
-
-    $('#dual-question-file').onchange = (e) => readDualFile(e, 'question');
-
-    $('#dual-answer-file').onchange = (e) => readDualFile(e, 'answer');
-
-    [['#dual-question-text', 'question'], ['#dual-answer-text', 'answer']].forEach(/* 将双文件文本框与各自的读取槽位关联，用户编辑时使原读取失效。 */ ([selector, slot]) => {
-      const field = $(selector);
-      if (field && !field.dataset.readBoundV4) {
-        field.dataset.readBoundV4 = '1';
-        field.addEventListener('input', () => importDraft.invalidateRead(slot));
-      }
-    });
-
-    $('#parse-dual-import-btn').onclick = parseDualImport;
-    $('#clear-dual-import-btn').onclick = /* 清空双文件时撤销 AI 请求，避免迟到结果回写。 */ () => {
-      invalidateAiImportRequestV99();
-      cancelAiPreviewRequestV991(true);
-      resetAiSuggestionsV991();
-      $('#dual-question-text').value = '';
-      $('#dual-answer-text').value = '';
-      importDraft.clearDual();
-      renderImportPreview([]);
-    };
-
-    $('#dual-load-sample-btn').onclick = loadDualSample;
-    $('#revalidate-import-btn').onclick = () => renderImportPreview(importDraft.questions);
-
-    $('#edit-close-btn').onclick = closeEditModal;
-    $('#edit-save-btn').onclick = saveEditQuestion;
-    $('#edit-delete-btn').onclick = deleteEditQuestion;
-    const pf = $('#import-preview-filter');
-    if (pf) {
-      pf.onchange = /* 筛选变化时使旧预览失效，避免迟到结果覆盖当前筛选。 */ (e) => {
-        invalidateAiImportRequestV99();
-        if (importDraft.filter !== e.target.value) {
-          importDraft.invalidatePreview();
-        }
-
-        importDraft.filter = e.target.value;
-        renderImportPreview(importDraft.questions);
-      };
-    }
-
-    const bid = $('#batch-delete-import-btn');
-    if (bid) {
-      bid.onclick = batchDeleteImportSelected;
-    }
-
-    const cis = $('#clear-import-selection-btn');
-    if (cis) {
-      cis.onclick = /* 清除选择时使基于原选题的预览失效。 */ () => {
-        invalidateAiImportRequestV99();
-        if (importDraft.selected.size) {
-          importDraft.invalidatePreview();
-        }
-
-        importDraft.selected.clear();
-        renderImportPreview(importDraft.questions);
-      };
-    }
-  }
-
   // 让错题、收藏和学习记录从各自入口触发复习、刷新或经确认清理。
   function bindLearningRecordActions() {
     $('#clear-wrong-btn').onclick = savedQuestions.clearCurrentWrong;
@@ -1916,14 +1728,9 @@
 
   // 在应用初始化时集中绑定界面操作及生命周期事件，保留已有模块的入口。
   function bindEvents() {
-    bindFileFieldsV615();
     bindReviewAnalysisEvents();
     bindTrainingReviewEvents();
     bindPracticeClockLifecycle();
-    $('#save-import-draft-btn').onclick = () => importDraftPersistence.save();
-
-    $('#restore-import-draft-btn').onclick = importDraftPersistence.restore;
-    $('#delete-import-draft-btn').onclick = importDraftPersistence.remove;
     studyDashboard.bind();
     $('#active-bank-select').onchange = /* 一起更新练习范围和活动题库，避免两个选择分离。 */ async (e) => runMutation(async () => {
       setPracticeBankScopeV8916(e.target.value, true);
@@ -1931,17 +1738,8 @@
       renderAll();
     });
 
-    const importNameInput = $('#import-bank-name');
-    if (importNameInput && !importNameInput.dataset.autoNameBound) {
-      importNameInput.dataset.autoNameBound = '1';
-      importNameInput.addEventListener('input', () => {
-        importDraft.invalidateBankName();
-        importNameInput.dataset.autoName = '0';
-      });
-    }
-
     $('#save-all-btn').onclick = saveState;
-    bindImportControls();
+    importPage.bind();
 
     $('#dedupe-btn').onclick = dedupeActiveBank;
     $('#rename-bank-btn').onclick = renameActiveBank;
@@ -1965,28 +1763,6 @@
     bindLimitControlsV60();
     bindPracticeStartControlsV58916();
     bindAiImportEventsV99();
-  }
-
-  function cleanImportBankNameFromFile(fileName) {
-    return String(fileName || '').replace(/* 去掉最后一个文件扩展名，保留前面可能用于分组或命名的点号。 */ /\.[^.]+$/, '').trim() || '导入题库';
-  }
-
-  // 文件名只覆盖空白或上一次自动命名，保留用户手工输入的题库名。
-  function setImportBankNameFromFile(fileName) {
-    const inp = $('#import-bank-name');
-    if (!inp) {
-      return;
-    }
-
-    const next = cleanImportBankNameFromFile(fileName);
-    const current = inp.value.trim();
-    const lastAuto = inp.dataset.autoNameValue || '';
-    const canOverwrite = !current || inp.dataset.autoName === '1' || current === lastAuto;
-    if (canOverwrite) {
-      inp.value = next;
-      inp.dataset.autoName = '1';
-      inp.dataset.autoNameValue = next;
-    }
   }
 
   // 保存失败时保留错误供外层变更回滚，并把错误传给调用者。
@@ -2143,22 +1919,6 @@
     });
   }
 
-  /* SHIROHA_WEB_V38_4_AI_REFACTOR_STRUCTURED_FIRST_START
-   对齐原生端 AI 重构：结构化 questions 优先，严格校验不可用时再退回 clean_text；所有结果仍只进入人工确认预览。 */
-
-  // 从当前导入范围组织 AI 清洗上下文，局部选区不附带无关题库诊断。
-  function aiRefactorContextV384(range) {
-    if (range?.scope === 'selection') {
-      return { currentQuestions: [], warnings: [] };
-    }
-
-    const current = (importDraft.questions || []).slice(0, AI_PREVIEW_MAX_ITEMS_V991).map(aiRefactorQuestionSnapshotV384);
-    const warnings = (importDraft.warnings || []).slice(0, 40).map((x) => String(x || '').trim()).filter(Boolean);
-    return { currentQuestions: current, warnings };
-  }
-
-  /* SHIROHA_WEB_V38_4_AI_REFACTOR_STRUCTURED_FIRST_END */
-
   // 使用当前配置测试 AI 服务可用性，保护按钮状态并提供错误指引。
   async function testAiConnectionV99() {
     const btn = $('#ai-test-connection-v99');
@@ -2242,202 +2002,7 @@
     }
   }
 
-  // 无 ID 题目的临时身份仅属于当前页面；弱引用随草稿释放，不写入题库或备份。
-  const aiImportAnonymousKeysV991 = new WeakMap();
-  let aiImportAnonymousSequenceV991 = 0;
-  // 保留已有题号标识，缺少 ID 时为同一草稿对象分配稳定的临时键。
-  function aiQuestionKeyV991(q) {
-    if (!q || typeof q !== 'object') {
-      return '';
-    }
-
-    const id = String(q.id ?? '');
-    if (id) {
-      return id;
-    }
-
-    let key = aiImportAnonymousKeysV991.get(q);
-    if (!key) {
-      aiImportAnonymousSequenceV991 += 1;
-      key = `import-anonymous-${aiImportAnonymousSequenceV991}`;
-      aiImportAnonymousKeysV991.set(q, key);
-    }
-
-    return key;
-  }
-
-  function aiQuestionFingerprintV991(q) {
-    return JSON.stringify(q);
-  }
-
-  // 只有唯一键的导入题才可被 AI 建议定位，避免重复题误写。
-  function findImportIndexByAiKeyV991(key) {
-    if (!key) {
-      return -1;
-    }
-
-    const matches = importDraft.questions.reduce((indexes, question, index) => {
-      if (aiQuestionKeyV991(question) === key) {
-        indexes.push(index);
-      }
-
-      return indexes;
-    }, []);
-    return matches.length === 1 ? matches[0] : -1;
-  }
-
   /* SHIROHA_WEB_ISSUE_99_AI_IMPORT_END */
-
-  function readImportBankGroupV58() {
-    return normalizeBankGroupNameV58($('#import-bank-group-v58')?.value || '');
-  }
-
-  // 为缺少题库分组样式的旧页面补齐界面规则，多次初始化只插入一次。
-  function ensureBankGroupStylesV58() {
-    if (typeof document === 'undefined' || document.getElementById('shiroha-bank-group-style-v58')) {
-      return;
-    }
-
-    const style = document.createElement('style');
-    style.id = 'shiroha-bank-group-style-v58';
-    style.textContent = `
-    .bank-group-field-v58{display:flex;flex-direction:column;gap:6px;min-width:180px;flex:1 1 180px;}
-    .bank-group-field-v58 input{width:100%;}
-    .bank-group-section-v58{margin:14px 0 18px;}
-    .bank-group-head-v58{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 2px 8px;}
-    .bank-group-head-v58 b{font-size:1rem;}
-    .bank-group-head-v58 .muted{font-size:.88rem;}
-    .bank-group-list-v58{display:grid;gap:10px;}
-    .bank-group-badge-v58{display:inline-flex;align-items:center;border-radius:999px;padding:3px 9px;background:rgba(79,124,255,.10);color:var(--primary,#4f7cff);font-size:.78rem;font-weight:600;margin-left:8px;}
-    .import-target-bank-field-v59{display:none;}
-    .import-target-bank-field-v59.is-visible{display:grid;}
-  `;
-    document.head.appendChild(style);
-  }
-
-  // 题库命名和重命名使用相同的一级分组候选项，只在各自控件缺失时插入。
-  function appendBankGroupInput(input, groupInputId) {
-    if (input && !$(`#${groupInputId}`)) {
-      const holder = document.createElement('label');
-      holder.className = 'bank-group-field-v58';
-      holder.innerHTML = `一级分组<input id="${groupInputId}" list="bank-group-list-v58" placeholder="留空则归入未分组">`;
-      const anchor = input.closest('label') || input;
-      anchor.insertAdjacentElement('afterend', holder);
-    }
-  }
-
-  // 将分组控件接到导入题库名称，并让已有分组可被输入框发现。
-  function ensureBankGroupUiV58() {
-    ensureBankGroupStylesV58();
-    appendBankGroupInput($('#import-bank-name'), 'import-bank-group-v58');
-
-    if (!$('#bank-group-list-v58')) {
-      const datalist = document.createElement('datalist');
-      datalist.id = 'bank-group-list-v58';
-      document.body.appendChild(datalist);
-    }
-
-    renderBankGroupDatalistV58();
-    appendBankGroupInput($('#bank-rename-input'), 'bank-group-rename-input-v58');
-    ensureImportAppendUiV59();
-  }
-
-  // 当导入区缺少追加控件时装配保存方式和目标题库选择。
-  function ensureImportAppendUiV59() {
-    const nameInput = $('#import-bank-name');
-    if (nameInput && !$('#import-save-mode-v59')) {
-      const mode = document.createElement('label');
-      mode.className = 'bank-group-field-v58 import-save-mode-field-v59';
-      mode.innerHTML = '导入方式<select id="import-save-mode-v59"><option value="new">新建题库</option><option value="append">追加到已有题库</option></select>';
-      const anchor = $('#import-bank-group-v58')?.closest('label') || nameInput.closest('label') || nameInput;
-      anchor.insertAdjacentElement('afterend', mode);
-      const select = mode.querySelector('select');
-      if (select) {
-        select.onchange = syncImportAppendUiV59;
-      }
-    }
-
-    if (nameInput && !$('#import-target-bank-v59')) {
-      const target = document.createElement('label');
-      target.id = 'import-target-bank-label-v59';
-      target.className = 'bank-group-field-v58 import-target-bank-field-v59';
-      target.innerHTML = '追加到<select id="import-target-bank-v59"></select>';
-      const anchor = $('#import-save-mode-v59')?.closest('label') || $('#import-bank-group-v58')?.closest('label') || nameInput.closest('label') || nameInput;
-      anchor.insertAdjacentElement('afterend', target);
-    }
-
-    renderImportTargetBankOptionsV59();
-    syncImportAppendUiV59();
-  }
-
-  // 重建可追加的目标题库列表，维持仍然有效的选择。
-  function renderImportTargetBankOptionsV59() {
-    const select = $('#import-target-bank-v59');
-    if (!select) {
-      return;
-    }
-
-    const previous = select.value || state.activeBankId || '';
-    const banks = Array.isArray(state.banks) ? state.banks : [];
-    select.innerHTML = banks.map((b) => `<option value="${esc(b.id)}">${esc(bankPathLabelV58(b))}（${(b.questions || []).length}题）</option>`).join('');
-
-    if (banks.some((b) => b.id === previous)) {
-      select.value = previous;
-    } else {
-      select.value = banks[0]?.id || '';
-    }
-
-    select.disabled = !banks.length;
-  }
-
-  // 根据新增、追加和二次编辑模式同步目标题库控件状态。
-  function syncImportAppendUiV59() {
-    const mode = $('#import-save-mode-v59');
-    const modeLabel = mode?.closest('label');
-    const targetLabel = $('#import-target-bank-label-v59');
-    const confirmBtn = $('#confirm-import-btn');
-    const dualConfirm = $('#dual-confirm-import-btn');
-    if (bankEditor.current()) {
-      if (modeLabel) {
-        modeLabel.style.display = 'none';
-      }
-
-      if (targetLabel) {
-        targetLabel.style.display = 'none';
-        targetLabel.classList.remove('is-visible');
-      }
-
-      return;
-    }
-
-    if (modeLabel) {
-      modeLabel.style.display = '';
-    }
-
-    const isAppend = mode?.value === 'append';
-    if (targetLabel) {
-      targetLabel.classList.toggle('is-visible', isAppend);
-      targetLabel.style.display = isAppend ? 'grid' : 'none';
-    }
-
-    if (confirmBtn) {
-      confirmBtn.textContent = isAppend ? '确认追加' : '确认导入';
-    }
-
-    if (dualConfirm) {
-      dualConfirm.textContent = isAppend ? '确认追加' : '确认导入';
-    }
-  }
-
-  // 分组变动后刷新建议列表，供题库编辑表单复用。
-  function renderBankGroupDatalistV58() {
-    const list = $('#bank-group-list-v58');
-    if (!list) {
-      return;
-    }
-
-    list.innerHTML = groupSuggestions(state.banks).map((g) => `<option value="${esc(g)}"></option>`).join('');
-  }
 
   function label(t) {
     return TYPE_LABEL[t] || t || '未知';
@@ -2499,11 +2064,6 @@
     }, type === 'danger' ? 6500 : 4200);
   }
 
-  function summarizeImportResult(arr, warnings = []) {
-    const stats = countTypes(arr || []);
-    return `识别到 ${(arr || []).length} 道题：单选${stats.single || 0}、多选${(stats.multiple || 0) + (stats.multi || 0)}、判断${stats.judge || 0}、填空${stats.blank || 0}、简答${stats.short || 0}。${warnings && warnings.length ? `发现 ${warnings.length} 条需要确认的问题。` : '未发现明显异常。'}`;
-  }
-
   // 以当前数量级格式化导入体积，便于界面提示用户判断拆分规模。
   function formatBytesV376(bytes) {
     const n = Math.max(0, Number(bytes) || 0);
@@ -2518,370 +2078,8 @@
     return `${n} B`;
   }
 
-  // 导入风险提示采用序列化后的字节数，涵盖多字节文本。
-  function estimateImportPayloadSizeV376(arr) {
-    try {
-      return new Blob([JSON.stringify(arr || [])]).size;
-    } catch {
-      return 0;
-    }
-  }
-
-  // 汇总题量、来源文件和序列化负载的风险，给出适用于当前导入的提示。
-  function largeImportRiskMessageV376(arr = importDraft.questions) {
-    const count = (arr || []).length;
-    const sourceSize = Number(importDraft.sourceMeta?.size || 0);
-    const payloadSize = estimateImportPayloadSizeV376(arr);
-    const reasons = [];
-    if (sourceSize >= 5 * 1024 * 1024) {
-      reasons.push(`源文件约 ${formatBytesV376(sourceSize)}`);
-    }
-
-    if (count >= 3000) {
-      reasons.push(`识别题数 ${count.toLocaleString('zh-CN')} 道`);
-    }
-
-    if (payloadSize >= 4 * 1024 * 1024) {
-      reasons.push(`预估题目数据约 ${formatBytesV376(payloadSize)}`);
-    }
-
-    if (!reasons.length) {
-      return '';
-    }
-
-    return `大文件提醒：${reasons.join('，')}。浏览器本地保存空间有限，确认导入时可能失败；建议先分批导入、清理旧题库/记录，或导入前先导出完整备份。`;
-  }
-
-  function summarizeImportResultV376(arr, warnings = []) {
-    const base = summarizeImportResult(arr, warnings);
-    const risk = largeImportRiskMessageV376(arr);
-    return risk ? `${base} ${risk}` : base;
-  }
-
-  // 加载示例前取消旧文件读取与自动命名，避免异步结果覆盖示例。
-  function loadSample() {
-    importDraft.invalidateRead('single');
-    importDraft.invalidateBankName();
-    $('#import-bank-name').value = 'C1导入示例题库';
-    $('#import-text').value = `1. 机动车驾驶人初次申领驾驶证后的实习期是多长时间？
-A. 6个月
-B. 12个月
-C. 16个月
-D. 18个月
-答案：B
-解析：初次取得汽车类准驾车型后的实习期为12个月。
-
-2. 初次申领的机动车驾驶证有效期为6年。[判断题]
-A、正确(正确答案)
-B、错误
-
-3. 雨天安全驾驶应注意哪些事项？ [多选题]
-A、降低车速(正确答案)
-B、加大跟车距离(正确答案)
-C、避免急刹急打方向(正确答案)
-D、高速通过积水路段`;
-  }
-
   async function readPlainTextFileV49(file) {
     return ShirohaPlatform.files.readText(file);
-  }
-
-  // 将表格解析结果应用到导入草稿，并使已有 AI 任务与预览失效。
-  function applyTableImportResultV49(result, fileName) {
-    invalidateAiImportRequestV99();
-    cancelAiPreviewRequestV991(true);
-    resetAiSuggestionsV991();
-    importDraft.tableResult = result;
-    importDraft.questions = (result.questions || []).map((q, i) => normalizeQuestion(q, i)).filter((q) => q.question);
-
-    importDraft.warnings = [];
-    importDraft.report = result.report || '解析策略：Excel/CSV 表格题库解析。';
-    importDraft.diagnostics = { mode: 'Excel/CSV 表格题库解析', strategy: '表格题库解析', profile: { tableImport: true }, candidates: [{ name: '表格题库解析', questions: importDraft.questions.length, score: importDraft.questions.length * 12, warnings: collectImportWarnings(importDraft.questions) }], expected: { total: importDraft.questions.length, types: {} }, stats: countTypes(importDraft.questions), warnings: result.warnings || [] };
-    importDraft.selected.clear();
-    importDraft.filter = 'priority';
-    const textEl = $('#import-text');
-    if (textEl) {
-      textEl.dataset.tableImportV49 = '1';
-      textEl.value = tableImportPreviewTextV49(result, fileName);
-    }
-
-    renderImportPreview(importDraft.questions);
-    $('#confirm-import-btn').disabled = !importDraft.questions.length;
-    const warnings = collectSoftRiskWarnings(importDraft.questions, importDraft.diagnostics.profile || {});
-    if (importDraft.questions.length) {
-      const risk = largeImportRiskMessageV376(importDraft.questions);
-      showNotice('表格识别完成', summarizeImportResultV376(importDraft.questions, warnings), (warnings.length || risk) ? 'warn' : 'ok');
-    } else {
-      showNotice('表格识别失败', '没有从表格中识别到有效题目，请检查表头是否包含题干、答案、选项等字段。', 'danger');
-    }
-  }
-
-  // 把当前 OCR 输出交给文本导入区，缺少识别内容时保留原文。
-  function applyOcrTextToImport() {
-    const text = currentOcrText();
-    if (!text) {
-      setOcrStatus('没有可填入的 OCR 文本。', 'warn');
-      return;
-    }
-
-    importDraft.invalidateRead('single');
-    invalidateAiImportRequestV99();
-    const textEl = $('#import-text');
-    if (textEl) {
-      textEl.value = text;
-      delete textEl.dataset.tableImportV49;
-    }
-
-    importDraft.tableResult = null;
-    setOcrStatus('已填入导入文本。请检查内容后点击“开始识别”。', 'ok');
-  }
-
-  // 复制以当前 OCR 文本为准，文本为空时在原面板提示。
-  async function copyOcrText() {
-    const text = currentOcrText();
-    if (!text) {
-      setOcrStatus('没有可复制的 OCR 文本。', 'warn');
-      return;
-    }
-
-    await copyTextV23(text, '已复制 OCR 文本。');
-  }
-
-  // 将当前 OCR 文本封装成可下载的离线 DOCX，错误交给 OCR 界面。
-  async function downloadOcrDocx() {
-    try {
-      const text = currentOcrText();
-      if (!text) {
-        setOcrStatus('没有可下载的 OCR 文本。', 'warn');
-        return;
-      }
-
-      const name = `${cleanImportBankNameFromFile(ocrSession.getFile()?.name || 'OCR识别结果')}_OCR.docx`;
-      const blob = createOcrDocxBlob(text, ocrSession.getFile()?.name || 'OCR识别结果');
-      await downloadBlob(name, blob);
-      setOcrStatus('已生成 DOCX 下载文件。请打开后人工核对 OCR 结果。', 'ok');
-    } catch (error) {
-      // eslint-disable-next-line prefer-template -- 异常信息可能是对象，保留 + 的默认转换；统一异常类型后移除此例外。
-      platformStatus('导出失败：' + error.message, true);
-      return false;
-    }
-  }
-
-  // 自动导入先辨别 JSON 外形，解析失败时交由原有文本识别路径。
-  function tryParseAutoJsonImportV58922(text) {
-    const source = String(text || '').trim();
-    if (!source || !['[', '{'].includes(source[0])) {
-      return null;
-    }
-
-    try {
-      const data = JSON.parse(source);
-      return data && typeof data === 'object' ? data : null;
-    } catch {
-      return null;
-    }
-  }
-
-  // 按导入模式解析当前原文；来源更换后的旧读取和 AI 建议不能回写结果。
-  async function parseImport() {
-    invalidateAiImportRequestV99();
-    cancelAiPreviewRequestV991(true);
-    resetAiSuggestionsV991();
-    closeAiPreviewPanelV991();
-    const textEl = $('#import-text');
-    const text = textEl.value.trim();
-    const strategy = $('#import-strategy')?.value || 'auto';
-    if (importDraft.tableResult && textEl?.dataset.tableImportV49 === '1') {
-      importDraft.invalidateRead('single');
-      applyTableImportResultV49(importDraft.tableResult, $('#import-bank-name')?.value || '表格题库');
-      return;
-    }
-
-    if (!text) {
-      toast('请先粘贴或上传题库文本。', 'warn', '导入未开始');
-      return;
-    }
-
-    const generation = importDraft.invalidateRead('single');
-    try {
-      importDraft.warnings = [];
-      importDraft.report = '';
-      importDraft.diagnostics = null;
-      const inputMode = $('#import-mode').value;
-      const explicitJson = inputMode === 'json';
-      const autoJson = explicitJson ? null : tryParseAutoJsonImportV58922(text);
-      if (explicitJson || autoJson !== null) {
-        const data = explicitJson ? JSON.parse(text) : autoJson;
-        if (Array.isArray(data.banks)) {
-          const normalized = normalizeBackupPayloadV23(data, importDraft.sourceMeta.name || '导入备份.json');
-          if (!normalized.banks.length) {
-            showNotice('识别失败', '备份中没有可导入的题库。', 'danger');
-            return;
-          }
-
-          const total = normalized.banks.reduce((n, bank) => n + bank.questions.length, 0);
-          const accepted = await ShirohaDialogs.confirm(`识别到备份：${normalized.banks.length} 个题库，${total} 道题，${normalized.records.length} 条学习记录。将按原分组合并导入题库、错题、收藏和学习记录，保留当前数据；同名题库会自动重命名。确定导入？`);
-          if (!accepted) {
-            return;
-          }
-
-          // 失败期间可能换文件或离页，不能继续使用已失效的合并确认。
-          const retry = () => {
-            const sameSource = importDraft.isCurrentRead('single', generation)
-              && textEl.value.trim() === text && $('#import-mode').value === inputMode;
-            if (!sameSource || !$('#import')?.classList.contains('active')) {
-              toast('备份来源已变化，请重新识别。', 'warn');
-              return false;
-            }
-
-            return applyImport();
-          };
-
-          // 全局重试沿用已经确认的归一化备份和预览清理流程。
-          const applyImport = () => runMutation(/* 等待备份合并成功后再清空题目预览。 */ async () => {
-            const restored = await backupRestore.applyLocalBackup(normalized, 'merge', countUnresolvedBackupImagesV24(data));
-            if (restored) {
-              importDraft.questions = [];
-              importDraft.selected.clear();
-              renderImportPreview([]);
-              showNotice('备份导入完成', `已合并导入 ${normalized.banks.length} 个题库、${total} 道题及对应的错题、收藏和学习记录。`, 'ok');
-            }
-          }, retry);
-
-          await applyImport();
-
-          return;
-        }
-
-        const arr = Array.isArray(data) ? data : (data.questions || []);
-        importDraft.questions = arr.map(normalizeQuestion).filter((q) => q.question);
-
-        importDraft.report = '解析策略：JSON结构化导入。';
-        importDraft.diagnostics = { mode: 'JSON结构化导入', strategy: 'JSON结构化导入', profile: {}, candidates: [{ name: 'JSON结构化导入', questions: importDraft.questions.length, score: importDraft.questions.length * 10, warnings: collectImportWarnings(importDraft.questions) }], expected: { total: 0, types: {} }, stats: countTypes(importDraft.questions) };
-      } else {
-        importDraft.questions = parseTextQuestions(text, strategy);
-      }
-
-      importDraft.selected.clear();
-      renderImportPreview(importDraft.questions);
-      $('#confirm-import-btn').disabled = !importDraft.questions.length;
-      const warnings = collectSoftRiskWarnings(importDraft.questions, importDraft.diagnostics?.profile || {});
-      if (importDraft.questions.length) {
-        const risk = largeImportRiskMessageV376(importDraft.questions);
-        showNotice('识别完成', summarizeImportResultV376(importDraft.questions, warnings), (warnings.length || risk) ? 'warn' : 'ok');
-      } else {
-        showNotice('识别失败', '没有识别到有效题目。请检查题号、选项或答案格式，也可以先粘贴纯文本后再试。', 'danger');
-      }
-    } catch (e) {
-      // eslint-disable-next-line prefer-template -- 异常信息可能是对象，保留 + 的默认转换；统一异常类型后移除此例外。
-      toast('识别失败：' + e.message, 'danger', '识别失败');
-    }
-  }
-
-  // 双文件样例保留跨题型重复题号，以演示需结合分组对齐答案。
-  const DUAL_SAMPLE_QUESTIONS = `一、单选题
-1. 机动车驾驶人初次申领驾驶证后的实习期是多长时间？
-A. 6个月
-B. 12个月
-C. 16个月
-D. 18个月
-
-二、判断题
-1. 初次申领的机动车驾驶证有效期为6年。
-A. 正确
-B. 错误
-
-三、多选题
-1. 雨天安全驾驶应注意哪些事项？
-A. 降低车速
-B. 加大跟车距离
-C. 避免急刹急打方向
-D. 高速通过积水路段`;
-  const DUAL_SAMPLE_ANSWERS = `一、单选题
-1. B
-
-二、判断题
-1. A
-
-三、多选题
-1. ABC`;
-
-  // 装载成对的题目与答案样例，清理双文件读取及旧预览关联。
-  function loadDualSample() {
-    importDraft.invalidateBankName();
-    importDraft.invalidateRead('question');
-    importDraft.invalidateRead('answer');
-    $('#import-bank-name').value = 'C1双文件导入示例题库';
-    $('#dual-question-text').value = DUAL_SAMPLE_QUESTIONS;
-    $('#dual-answer-text').value = DUAL_SAMPLE_ANSWERS;
-    $('#dual-match-mode').value = 'auto';
-    toast('已填入C1双文件示例，请点击“识别并合并双文件”。', 'ok');
-  }
-
-  // 独立读取题目与答案文本，再按用户选择或自动策略匹配并给出诊断。
-  function parseDualImport() {
-    invalidateAiImportRequestV99();
-    cancelAiPreviewRequestV991(true);
-    resetAiSuggestionsV991();
-    closeAiPreviewPanelV991();
-    const qText = $('#dual-question-text').value.trim();
-    const aText = $('#dual-answer-text').value.trim();
-    if (!qText || !aText) {
-      toast('请先提供题目文本和答案文本。', 'warn', '双文件导入未开始');
-      return;
-    }
-
-    importDraft.invalidateRead('question');
-    importDraft.invalidateRead('answer');
-    importDraft.invalidatePreview();
-    try {
-      importDraft.warnings = [];
-      importDraft.report = '';
-      const qStrategy = $('#import-strategy')?.value || 'auto';
-      const questions = parseTextQuestions(qText, qStrategy).map((q, i) => ({ ...q, answer: [], number: q.number || i + 1 }));
-      const mode = $('#dual-match-mode').value;
-      const resolved = resolveDualAnswerCandidates(questions, aText, mode);
-      const answerEntries = resolved.answerEntries || [];
-      const result = resolved.result || dualAnswers.mergeQuestionAnswers(questions, answerEntries, mode);
-      importDraft.questions = result.questions;
-      importDraft.warnings = result.warnings;
-      importDraft.report = `解析策略：双文件导入；题目文件和答案文件分别识别后按自动/所选规则合并。${
-        result.strategyName ? ` 实际采用：${result.strategyName}。` : ''
-      }${resolved.answerSourceName ? ` 答案文件识别：${resolved.answerSourceName}。` : ''
-      }${resolved.answerSourceSummary ? ` 答案候选：${resolved.answerSourceSummary}。` : ''
-      }${result.autoSummary ? ` 合并候选：${result.autoSummary}。` : ''}`;
-      importDraft.diagnostics = { ...(importDraft.diagnostics || {}), mode: '双文件导入', matchMode: mode, chosenMatchMode: result.chosenMode || mode, answerCount: answerEntries.length, questionCount: questions.length, stats: countTypes(result.questions || []), mergeWarnings: result.warnings || [], autoSummary: result.autoSummary || '', answerSource: resolved.answerSourceName || '', answerSourceSummary: resolved.answerSourceSummary || '' };
-      importDraft.selected.clear();
-      renderImportPreview(importDraft.questions);
-      $('#confirm-import-btn').disabled = !importDraft.questions.length;
-      const warnings = [...new Set(collectSoftRiskWarnings(importDraft.questions, importDraft.diagnostics?.profile || {}).concat(importDraft.warnings || []))];
-      if (importDraft.questions.length) {
-        const risk = largeImportRiskMessageV376(importDraft.questions);
-        showNotice('双文件合并完成', `题目文件识别 ${questions.length} 道，答案文件识别 ${answerEntries.length} 条；答案策略：${resolved.answerSourceName || '答案表提取'}；合并后 ${importDraft.questions.length} 道。${warnings.length ? `存在 ${warnings.length} 条提示，请在预览中确认。` : '未发现明显异常。'}${risk ? ` ${risk}` : ''}`, (warnings.length || risk) ? 'warn' : 'ok');
-      } else {
-        showNotice('双文件合并失败', '没有得到可导入题目，请检查题目文件和答案文件的对应方式。', 'danger');
-      }
-    } catch (e) {
-      // eslint-disable-next-line prefer-template -- 异常信息可能是对象，保留 + 的默认转换；统一异常类型后移除此例外。
-      toast('双文件识别失败：' + e.message, 'danger', '双文件识别失败');
-    }
-  }
-
-  // 依序准备答案来源，让完整题库兜底沿用原来的草稿诊断写入时机。
-  function resolveDualAnswerCandidates(questions, text, mode) {
-    const standardEntries = dualAnswers.parseAnswerEntries(text);
-    const analysisEntries = parseAnswerAnalysisEntries(text);
-    let fallbackQuestions;
-    try {
-      fallbackQuestions = parseTextQuestions(text, 'auto') || [];
-    } catch (error) {
-      warnDev('普通文本解析失败，返回空结果。', error);
-      fallbackQuestions = [];
-    }
-
-    return dualAnswers.resolveDualAnswerCandidates(questions, {
-      standardEntries, analysisEntries, fallbackQuestions,
-    }, mode);
   }
 
   // 导入与 WebDAV 共用同一判断，保持字符串超限的反馈一致。
@@ -3140,7 +2338,7 @@ D. 高速通过积水路段`;
     upgradeState();
     ensureAiImportStateV99();
     ensureDefaultBank();
-    ensureBankGroupUiV58();
+    importPage.ensureBankGroupUi();
     bindNav();
     bindEvents();
     bindMultiBlankEditorV58914();
@@ -3184,7 +2382,7 @@ D. 高速通过积水路段`;
 
   // 数据切换后集中刷新界面，保持题库、练习范围和各处计数一致。
   function renderAll() {
-    ensureBankGroupUiV58();
+    importPage.ensureBankGroupUi();
     practiceScopeV8916();
     updateAiConnectionPillV99();
     syncAiImportActionV99();
@@ -3204,8 +2402,7 @@ D. 高速通过积水路段`;
       renderExportBankSelectorV23();
     }
 
-    renderImportTargetBankOptionsV59();
-    syncImportAppendUiV59();
+    importPage.refreshAppendTarget();
     syncHomeVersionPromptV586();
     syncPracticeStartUiV58916(true);
   }
@@ -3478,40 +2675,57 @@ D. 高速通过积水路段`;
     },
   });
 
+  const ocrOutput = globalThis.ShirohaOcrOutput.create({
+    draft: importDraft,
+    ocr: ocrSession,
+    select: $,
+    invalidateAiImportRequestV99,
+    cleanImportBankNameFromFile: globalThis.ShirohaImportPage.cleanImportBankNameFromFile,
+    copyTextV23,
+    downloadBlob,
+    platformStatus,
+  });
+  const importPage = globalThis.ShirohaImportPage.create({
+    state,
+    draft: importDraft,
+    view: {
+      select: $,
+      selectAll: $$,
+      escape: esc,
+      renderImportPreview,
+      showNotice,
+      toast,
+      warnDev,
+      formatBytesV376,
+    },
+    parsing: {
+      parseTextQuestionsDetailed,
+      normalizeQuestion,
+      countTypes,
+      collectImportWarnings,
+      collectSoftRiskWarnings,
+      parseAnswerAnalysisEntries,
+      dualAnswers,
+      tableImportPreviewTextV49,
+    },
+    banks: { normalizeBankGroupNameV58, bankPathLabelV58, groupSuggestions },
+    editor: { current: bankEditor.current, closeEditModal, saveEditQuestion, deleteEditQuestion, batchDeleteImportSelected },
+    actions: { confirmImport, openFindReplace: importFindReplace.open, isBusy: () => mutationBusy },
+    ai: aiImportSessions,
+    panel: { closeAiImportPanelV99, closeAiPreviewPanelV991, syncAiImportActionV99 },
+    ocr: { bind: ocrOutput.bind, resetOcrImportState: ocrSession.resetOcrImportState },
+    persistence: importDraftPersistence,
+    backup: {
+      confirm: ShirohaDialogs.confirm,
+      runMutation,
+      normalizeBackupPayloadV23,
+      countUnresolvedBackupImagesV24,
+      applyLocalBackup: backupRestore.applyLocalBackup,
+    },
+  });
+
   function downloadBlob(name, blob) {
     return ShirohaPlatform.download(name || 'download.bin', blob);
-  }
-
-  // 将 OCR 输出转为可离线下载的最小 DOCX，转义识别文本后写入文档部件。
-  function createOcrDocxBlob(text, sourceName) {
-    const title = 'Shiroha Quiz OCR 识别结果';
-    const paragraphs = [
-      title,
-      // eslint-disable-next-line prefer-template -- 外部值可能是对象，保留 + 的默认转换；输入类型受约束后移除此例外。
-      '来源文件：' + (sourceName || '未命名 PDF'),
-      '说明：本文件由 OCR 自动识别生成，可能存在错字、漏字和段落错位，请人工核对后再用于题库整理。',
-      '',
-    ];
-    String(text || '').replace(/* 先去掉 CR，统一按 LF 分段而不把回车写进 DOCX 文本。 */ /\r/g, '').split('\n').forEach((line) => paragraphs.push(line));
-
-    const body = paragraphs.map(docxParagraphXml).join('');
-    const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${body}<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="720" w:gutter="0"/></w:sectPr></w:body></w:document>`;
-    const files = [
-      { name: '[Content_Types].xml', text: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>' },
-      { name: '_rels/.rels', text: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>' },
-      { name: 'word/document.xml', text: documentXml },
-    ];
-    return new Blob([zipStoreFiles(files)], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
-  }
-
-  function docxParagraphXml(line) {
-    const text = String(line ?? '');
-    return `<w:p><w:r><w:t xml:space="preserve">${xmlEscape(text)}</w:t></w:r></w:p>`;
-  }
-
-  function xmlEscape(s) {
-    return String(s ?? '').replace(/* 转义会改变 DOCX XML 结构的字符，让 OCR 内容只作为文本解释。 */ /[&<>"']/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' }[m]));
   }
 
   /* SHIROHA_WEB_V37_8_WEBDAV_CLOUD_BACKUP_START
@@ -4133,36 +3347,7 @@ D. 高速通过积水路段`;
     }
   });
 
-  // HTML 文件拖放只读取用户交付的 File，不接收本机路径；与选择文件共用解析和确认流程。
-  function createFileDragHandler(type) {
-    return /* 仅在导入页空闲时接收单一题库文件，其他文件拖放也阻止浏览器导航。 */ (event) => {
-      if (!Array.from(event.dataTransfer?.types || []).includes('Files')) {
-        return;
-      }
-
-      event.preventDefault();
-      if (type !== 'drop' || !event.target.closest?.('#import') || mutationBusy) {
-        return;
-      }
-
-      const files = Array.from(event.dataTransfer.files || []);
-      if (files.length !== 1) {
-        toast('请每次拖入一个文件。', 'warn');
-        return;
-      }
-
-      if (!/* 检查拖入文件是否属于导入流程能识别的扩展名，大小写不影响判断。 */ /\.(txt|json|csv|xlsx|docx|doc|pdf)$/i.test(files[0].name)) {
-        toast('不支持此文件类型，请选择 TXT、JSON、CSV、XLSX、DOCX 或 PDF。', 'warn');
-        return;
-      }
-
-      void readImportFile({ target: { files } });
-    };
-  }
-
-  for (const type of ['dragover', 'drop']) {
-    document.addEventListener(type, createFileDragHandler(type));
-  }
+  importPage.bindFileDrop();
 
   document.addEventListener('keydown', /* 保存快捷键让出文本编辑和输入法组合输入。 */ (event) => {
     if (!(event.ctrlKey || event.metaKey) || event.altKey || event.isComposing || event.repeat) {

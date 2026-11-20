@@ -199,3 +199,29 @@ Web 和桌面均使用隔离配置、自建题库、假凭据和本地模拟服�
 保留首轮日志。HTTP 基线首轮因共享测试服务默认屏蔽内置脚本而读到 0 题，为该场景单独提供原文件后 6 项通过。lint 首轮报两个资源回调间缺少空行，调整格式后全量通过。桌面首轮原有 61 项通过，新增用例在等待 CDP 响应事件时超时。隔离探针记录到本地资源的计时状态为 HTTP 200，平台返回 393 题，SQLite 已保存，且 CDP 未报告该请求或响应。调整烟测，在实际按钮路径中观察平台原函数返回并在结束时恢复，使用同一隔离构建复跑通过。
 
 Web 的资源失败和保存失败使用隔离浏览器夹具注入。Windows 验收使用打包资源与隔离 WebView2 配置，检查了实际 SQLite 保存和重载。正式安装和升级另随发行验收。
+
+### 第十四批 · 导入识别与 OCR 输出
+
+- 负责人为 `batch14_import`（GPT-6.2-Sol Max）。从第十三批冻结的工作树继续，分支为 `codex/web-app-remaining`，工作树为 `C:/Users/30728/.codex/worktrees/31f4/shiroha-quiz-desktop`，`HEAD` 为 `ac4f4c64adc773040eb2b06bf5831003c2803ab0`。`app.js` 从 4,260 行、117 个入口闭包内直接声明的具名函数减至 3,445 行、82 个。
+- [导入页面](../../../apps/web/import/page.js)负责单／双文件识别、示例、自动命名、文件名回显、拖放、表格预览、分组和追加目标控件。题库页、二次编辑器和导入确认通过延迟回调共享控件，组名沿用题库元数据规则。恢复时废弃三个读槽与预览、命名代次，清理原文件选择和 OCR，再由原草稿持久化模块恢复内容。输入框与文件名监听继续按节点挂载一次。
+- 普通文本、题目数组和 `questions` 对象进入原有预览草稿。`banks` 经用户确认后调用第九批合并接口，进入共享事务时核对原文、模式和读取代次。确认等待、原生待读阶段或失败重试期间换源均使旧确认失效。保存完成后只清理仍属于原来源的预览，失败保留原报告、警告、勾选和诊断。双文件继续依次准备标准答案、带解析答案和完整题库兜底，匹配、确认保存仍由既有模块负责。[备份合并回归](../../../test/dual-platform/json-import.test.cjs)
+- [导入 AI 会话](../../../apps/web/ai-import-sessions.js)提供一次创建的匿名键、指纹和唯一定位，提示词、会话、面板共享这套身份。全文整理保留既有题目摘要和诊断上限，局部选区不附带其他题目与警告。真实 DOM 选区仍由面板保存。草稿恢复和换源继续使用原来的请求归属和代次检查。[导入 AI 回归](../../../test/dual-platform/ai-import-retry.test.cjs)
+- [OCR 输出](../../../apps/web/import/ocr-output.js)复用原识别会话，负责回填、复制和 DOCX 下载。浏览器红测确认两项问题。CSV 识别后点击“填入示例”仍会使用旧表格解析，改为通过原文 `input` 事件废弃旧表格来源。真实中文扫描 PDF 识别后清空结果框，基线回填了旧 OCR 缓存，现以结果框当前值为准。非空 OCR 回填只更新原文，等用户手动开始识别。用真实下载按钮生成 DOCX，从下载文件解包并检查中文、两行段落和 `&<>"'` 的转义与回读。[浏览器用例](../../../test/dual-platform/browser-page.cjs) · [文档验证](../../../test/dual-platform/document-page.cjs)
+- 备份在真实模块入口的红测还复现了首次确认期间换源后仍执行合并、保存失败清空原诊断。修复后补查事务等待原生读取期间的代次变化，以及失败后换源再点全局重试。事务和保存故障使用隔离夹具。保留原有取消、仅预览、旧格式和 SQLite 重载用例，源码片段测试改由实际模块接线。[备份模块回归](../../../test/dual-platform/json-import.test.cjs) · [启动及经典脚本验证](../../../test/dual-platform/source-loading.test.cjs)
+
+本批在 Windows 10（19045）、Node 24.22.2、pnpm 12.16.1 和 Rust 1.99.1 上验证。日志位于 `apps/desktop/.reports/batch14/`，包含修复前失败和修复后通过的输出。
+
+| 验证项 | 实际命令与结果 |
+| --- | --- |
+| 红绿验证 | 根目录用 `node --test --test-name-pattern='第十四批导入\|恢复后重复初始化' test/dual-platform/browser-page.cjs` 复现 CSV 问题，修复后 2 项通过。在 `apps/desktop` 用 `pnpm run test:documents` 复现 OCR 问题，局部修复后通过。备份用 `node --test test/dual-platform/json-import.test.cjs` 先复现 2 项失败，最终复跑 10 项通过。 |
+| 迁移后定向 | 根目录执行 `node --test` 对导入生命周期、草稿归属、JSON、AI 导入与连接、预览、共享业务、表格、ZIP、启动和备份入口共 11 份测试文件检查，293 项通过。浏览器按导入、备份、AI 选区、文件拖放、双文件匹配、恢复重入及 `file:` 入口筛选，28 项通过。 |
+| 类型与 lint | 在 `apps/desktop` 运行 `pnpm run typecheck`、`pnpm run lint`，均通过。完整 lint 检查 187 个手写 JavaScript 文件，规则夹具 97 项通过，1 项因临时目录不区分大小写跳过。 |
+| 完整 Node 与 Web | `pnpm test` 桌面 291 项通过、1 项环境跳过，共享 523 项通过。`pnpm run test:web-platform` 264 项全部通过。 |
+| 离线文档 | `pnpm run test:documents` 通过。限制为本地 HTTP 来源，确认 CSV、XLSX、DOCX、altChunk DOCX、文本 PDF 和中文扫描 PDF 分别可保存并重载，检查 OCR 实际识别、识别期间取消、空结果回填与 DOCX 下载读回。 |
+| 桌面资源与构建 | `pnpm run prepare:web`、`pnpm run build`、`pnpm run build:test` 依次通过。两次构建使用进程级 `CARGO_NET_OFFLINE=true`，生产构建用进程级 `CARGO_TARGET_DIR` 复用本工作树缓存。`page.js`、`ocr-output.js`、`ai-import-sessions.js`、`ocr-import.js` 和 `app.js` 的生成文件与源码 SHA-256 一致，Web 与桌面 HTML 均按依赖顺序各加载一次。 |
+| WebView2 与 SQLite | `pnpm run test:desktop` 62 项通过。隔离测试版运行本地中文 OCR、识别期间取消及六种文档文件的入库重载，保留包含富文本媒体的 DOCX 断言。双文件合并重载得到 `B`、`A`、`ABC`，追加目标重确认和导入页备份合并通过 SQLite 重载核对。[桌面文档用例](../../../apps/desktop/scripts/document-smoke.mjs) |
+| 文档与差异 | `pnpm run lint:docs`、本计划的 UTF-8、围栏与本地链接检查、`git diff --check` 通过。 |
+
+完整 `pnpm test` 首轮有 23 项因 Windows 沙箱权限失败。esbuild 无法读取隔离临时目录的父路径，完整性测试夹具的 `icacls` 被拒绝。保留 `test.log`，以原命令和原隔离夹具复跑通过，结果见 `test-final.log`。定向 lint 首轮发现新迁入代码的空行和对象排版问题，调整后定向与全量检查通过。
+
+中文扫描件和题库均为自建夹具。OCR 原始结果保留用于核对，模拟人工校正后才确认保存。通过 Web 的实际下载验证 DOCX 文件，WebView2 覆盖识别与保存入库。桌面 DOCX 系统保存对话框和真实远端 AI 服务不在本批验收路径内。

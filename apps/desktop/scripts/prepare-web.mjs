@@ -14,7 +14,7 @@ const businessScripts = [
   'bank-editor.js', 'study/scope.js', 'study-sessions.js', 'exam-page.js', 'practice-selection.js',
   'study/dashboard.js', 'practice-page.js',
   'ai-import-panel.js', 'ai-question-panels.js', 'question-editor.js', 'import/find-replace.js',
-  'questions/rich-content.js', 'import/dual-answers.js', 'import/commit.js',
+  'questions/rich-content.js', 'import/dual-answers.js', 'import/commit.js', 'import/ocr-output.js', 'import/page.js',
   'banks/metadata.js', 'banks/question-operations.js', 'banks/deletion.js', 'banks/built-in.js',
   'study/saved-questions.js',
 ];

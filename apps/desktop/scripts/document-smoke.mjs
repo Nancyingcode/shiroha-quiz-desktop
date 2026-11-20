@@ -19,8 +19,9 @@ function pdfFile(objects) {
   return Buffer.concat(parts);
 }
 
-/** @param {import('playwright-core').Page} page */
-export async function documentSmoke(page) {
+/** @param {import('playwright-core').Page} page
+ * @param {(page: import('playwright-core').Page) => Promise<void>} [verifyOcrOutput] */
+export async function documentSmoke(page, verifyOcrOutput) {
   const require = createRequire(import.meta.url);
   /** @type {{loadWeb: () => {api: {zipStoreFiles(files: Array<{name: string, text?: string, data?: Uint8Array}>): Blob}}}} */
   const { loadWeb } = require(fileURLToPath(new URL('../../../test/dual-platform/web-source.cjs', import.meta.url)));
@@ -122,6 +123,7 @@ export async function documentSmoke(page) {
       assert.match(await page.locator('#ocr-status').innerText(), /OCR 完成/);
       recognized = await page.locator('#ocr-result').inputValue();
       assert.match(recognized.replace(/\s/g, ''), /北京/);
+      await verifyOcrOutput?.(page);
       // OCR 保留人工核对语义；记录原始输出后模拟核对题号、选项分隔和字间空格。
       await page.locator('#ocr-result').fill(lines.join('\n'));
       await page.locator('#ocr-use-text-btn').click();

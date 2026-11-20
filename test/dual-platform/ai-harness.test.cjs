@@ -1032,7 +1032,7 @@ test('共享测试与统一请求入口拒绝缺少账户修订的CodeBuddy和�
       updateAiConnectionPillV99() {},
     });
     installAiSettings(context);
-    vm.runInContext(source.between('testAiConnectionV99', 'aiQuestionKeyV991'), context);
+    vm.runInContext(source.functionSource('testAiConnectionV99'), context);
     installAiTransport(context);
     await context.testAiConnectionV99();
     for (const task of ['connection_test', 'import_organize', 'batch_review', 'batch_analysis', 'question_analysis', 'question_followup']) {

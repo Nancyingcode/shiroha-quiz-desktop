@@ -227,6 +227,7 @@ export function createConfig({ desktop = false, debt = false, semanticOnly = fal
       files: [
         'apps/web/app.js', 'apps/web/import/find-replace.js', 'apps/web/import/dual-answers.js',
         'apps/web/import/commit.js', 'apps/web/questions/rich-content.js', 'apps/web/banks/metadata.js',
+        'apps/web/import/page.js', 'apps/web/import/ocr-output.js',
         'apps/web/banks/question-operations.js', 'apps/web/banks/deletion.js', 'apps/web/banks/built-in.js',
         'apps/web/backup/export.js', 'apps/web/backup/restore.js', 'apps/web/study/scope.js',
         'apps/web/study/saved-questions.js', 'apps/web/study/dashboard.js',
@@ -240,6 +241,7 @@ export function createConfig({ desktop = false, debt = false, semanticOnly = fal
         'apps/web/ai-results.js', 'apps/web/bank-editor.js', 'apps/web/platform/index.js', 'apps/web/text-answers.js',
         'apps/web/platform/save-queue.js', 'apps/web/study-sessions.js', 'apps/web/app.js',
         'apps/web/import/find-replace.js', 'apps/web/import/dual-answers.js', 'apps/web/import/commit.js',
+        'apps/web/import/page.js', 'apps/web/import/ocr-output.js',
         'apps/web/questions/rich-content.js', 'apps/web/banks/metadata.js', 'apps/web/banks/question-operations.js',
         'apps/web/banks/deletion.js', 'apps/web/banks/built-in.js',
         'apps/web/backup/export.js', 'apps/web/backup/restore.js',
@@ -264,6 +266,7 @@ export function createConfig({ desktop = false, debt = false, semanticOnly = fal
         'apps/web/exam-page.js', 'apps/web/training-review-page.js',
         'apps/web/bank-page.js', 'apps/web/question-editor.js', 'apps/web/question-view.js',
         'apps/web/import/find-replace.js', 'apps/web/import/dual-answers.js', 'apps/web/import/commit.js',
+        'apps/web/import/page.js', 'apps/web/import/ocr-output.js',
         'apps/web/questions/rich-content.js', 'apps/web/banks/metadata.js', 'apps/web/banks/question-operations.js',
         'apps/web/banks/deletion.js', 'apps/web/banks/built-in.js',
         'apps/web/backup/export.js', 'apps/web/backup/restore.js',

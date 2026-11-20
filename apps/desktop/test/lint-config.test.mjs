@@ -684,6 +684,8 @@ test('statement-per-line pilot covers zero-hit modules without affecting other f
     'apps/web/import/find-replace.js',
     'apps/web/import/dual-answers.js',
     'apps/web/import/commit.js',
+    'apps/web/import/page.js',
+    'apps/web/import/ocr-output.js',
     'apps/web/questions/rich-content.js',
     'apps/web/banks/metadata.js',
     'apps/web/banks/question-operations.js',
@@ -715,6 +717,7 @@ test('the entry and extracted modules require separate lines for statements and 
   for (const filePath of [
     'apps/web/app.js', 'apps/web/import/find-replace.js', 'apps/web/import/dual-answers.js',
     'apps/web/import/commit.js', 'apps/web/questions/rich-content.js', 'apps/web/banks/metadata.js',
+    'apps/web/import/page.js', 'apps/web/import/ocr-output.js',
     'apps/web/banks/question-operations.js', 'apps/web/banks/deletion.js', 'apps/web/banks/built-in.js',
     'apps/web/backup/export.js', 'apps/web/backup/restore.js',
     'apps/web/study/scope.js',
