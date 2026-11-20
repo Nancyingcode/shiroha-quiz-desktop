@@ -53,20 +53,12 @@
 
   // 将本轮试题连同源题库和原题号固化进训练记录，便于跨库复盘时定位。
   function trainingSessionItems(items) {
-    return items.map(/* 复制题目快照，防止题库后续编辑影响已保存的记录。 */ (item) => {
-      const q = practiceQuestionV8916(item);
-      return {
-        bankId: practiceItemBankIdV8916(item),
-        bankName: practiceItemBankNameV8916(item),
-        bankQuestionNumber: practiceBankQuestionNumber(item),
-        question: JSON.parse(JSON.stringify(q)),
-      };
-    });
-  }
-
-  function attachTrainingReview(record, items, metadata) {
-    record.review = ShirohaTraining.buildReview(items, record.details || [], metadata);
-    record.reviewSummary = ShirohaTraining.reviewSummary(record.review, record.details || []);
+    return items.map(/* 开轮已补读正文，此处记录范围模块提供的来源。 */ (item) => ShirohaTraining.snapshotItem({
+      bankId: practiceItemBankIdV8916(item),
+      bankName: practiceItemBankNameV8916(item),
+      bankQuestionNumber: practiceBankQuestionNumber(item),
+      question: practiceQuestionV8916(item),
+    }));
   }
 
   // 初始化时补齐缺失题库，保留用户清空题库后的空状态。
@@ -182,6 +174,16 @@
         entry.page = 0;
       }
     },
+  });
+  const savedQuestions = globalThis.ShirohaSavedQuestions.create({
+    state,
+    activeBank,
+    transaction: runMutation,
+    confirm: (...args) => ShirohaDialogs.confirm(...args),
+
+    save: saveSilent,
+    renderAll,
+    toast,
   });
   // 首页的午夜刷新计时器随页面存活；每次统计重绘时替换，避免累积任务。
   let dueReviewTimer = null;
@@ -402,8 +404,8 @@
     questions: {
       itemsForBanks: practiceSessionItemsForBanksV8916,
       key: practiceItemKeyV8916,
-      wrongEntries: getWrongEntries,
-      favorites: getFavoriteIdsV27,
+      wrongEntries: savedQuestions.getWrongEntries,
+      favorites: savedQuestions.getFavoriteIds,
       shuffle,
       parseNumbers: parsePracticeNumberRangeV58916,
     },
@@ -786,7 +788,6 @@
     label,
     short,
     formatDate: fmt,
-    now,
     toast,
     paging: {
       visible: nativeViewVisible,
@@ -797,8 +798,16 @@
       itemsForBanks: practiceSessionItemsForBanksV8916,
     },
     bank: { active: activeBank, closeDetail: closeBankQuestionDetail, copyText: bankQuestionCopyText, openDetail: openBankQuestionDetail },
-    favorites: { ids: getFavoriteIdsV27, toggle: toggleFavoriteV27, isFavorite: isFavoriteV27 },
-    wrong: { get: getWrongEntries, set: setWrongEntries, remove: removeWrong },
+    favorites: {
+      ids: savedQuestions.getFavoriteIds,
+      toggle: savedQuestions.toggleFavorite,
+      isFavorite: savedQuestions.isFavorite,
+    },
+    wrong: {
+      get: savedQuestions.getWrongEntries,
+      remove: savedQuestions.removeWrong,
+      toggleMastery: savedQuestions.toggleWrongMastery,
+    },
     review: {
       questionBody: renderQuestionBodyV83,
       options: renderReviewOptions,
@@ -820,8 +829,6 @@
       syncMode: syncPracticeStartModeFieldsV58916,
     },
     actions: {
-      transaction: runMutation,
-      save: saveSilent,
       renderAll,
       canStartPractice: () => applicationReady && !mutationBusy,
 
@@ -988,9 +995,9 @@
       groupType: PRACTICE_SCOPE_GROUP_V8916,
       filteredItems: filteredPracticeItemsV8916,
       reviewItems: trainingSessionItems,
-      attachReview: attachTrainingReview,
-      addWrong,
-      markRight,
+      reviewData: ShirohaTraining.buildReviewData,
+      addWrong: savedQuestions.addWrong,
+      markRight: savedQuestions.markRight,
       activeBank,
     },
     view: {
@@ -1077,12 +1084,12 @@
       feedback: feedbackAnswerHtmlV58914,
       score: scoreOf,
       detail: makeAnswerDetail,
-      addWrong,
-      markRight,
+      addWrong: savedQuestions.addWrong,
+      markRight: savedQuestions.markRight,
     },
     review: {
       items: trainingSessionItems,
-      attach: attachTrainingReview,
+      data: ShirohaTraining.buildReviewData,
       completion: trainingCompletion,
       open: openTrainingReview,
       page: nativePage,
@@ -1090,7 +1097,7 @@
 
       updatePanels: (...args) => updateReviewAnalysisPanels(...args),
     },
-    favorites: { isFavorite: isFavoriteV27, toggle: toggleFavoriteV27 },
+    favorites: { isFavorite: savedQuestions.isFavorite, toggle: savedQuestions.toggleFavorite },
     ai: { reset: resetAiSinglePracticeV613, render: (...args) => renderPracticeAiPanelV613(...args) },
     shell: {
       collapse: autoCollapseSidebarForFocusV47,
@@ -1829,22 +1836,8 @@
 
   // 让错题、收藏和学习记录从各自入口触发复习、刷新或经确认清理。
   function bindLearningRecordActions() {
-    $('#clear-wrong-btn').onclick = /* 此入口只清空当前题库的错题。 */ async () => runMutation(/* 确认期间锁定变更入口，避免同时写入。 */ async () => {
-      if (await ShirohaDialogs.confirm('确定清空当前题库错题本？')) {
-        state.wrongBook[activeBank().id] = [];
-        await saveSilent();
-        renderAll();
-      }
-    });
-
-    $('#clear-records-btn').onclick = /* 此入口清空全部练习和考试记录。 */ async () => runMutation(/* 确认、清理和保存属于同一次数据变更。 */ async () => {
-      if (await ShirohaDialogs.confirm('确定清空全部练习与考试记录？')) {
-        state.records = [];
-        await saveSilent();
-        renderAll();
-      }
-    });
-
+    $('#clear-wrong-btn').onclick = savedQuestions.clearCurrentWrong;
+    $('#clear-records-btn').onclick = trainingReviewPage.clearRecords;
     $('#export-records-btn').onclick = backupExport.exportRecords;
     $('#record-mode-filter').onchange = renderRecords;
     const recordDetailFilterV385 = $('#record-detail-filter-v385');
@@ -1871,7 +1864,7 @@
 
     const clearFavBtnV596 = $('#clear-favorites-btn-v596');
     if (clearFavBtnV596) {
-      clearFavBtnV596.onclick = clearCurrentFavoritesV596;
+      clearFavBtnV596.onclick = savedQuestions.clearCurrentFavorites;
     }
   }
 
@@ -2445,7 +2438,8 @@
     const current = new Date();
     const scopeBanks = practiceScopeBanksV8916();
     const totalQuestions = scopeBanks.reduce((n, b) => n + (b.questions || []).length, 0);
-    const activeWrongEntries = scopeBanks.flatMap((b) => getWrongEntries(b.id).filter((e) => e.status !== '已掌握'));
+    const activeWrongEntries = scopeBanks.flatMap((b) => savedQuestions.getWrongEntries(b.id)
+      .filter((e) => e.status !== '已掌握'));
     $('#stat-total').textContent = totalQuestions;
     $('#stat-wrong').textContent = activeWrongEntries.length;
     $('#stat-records').textContent = state.records.length;
@@ -2993,88 +2987,13 @@ D. 高速通过积水路段`;
     return !answer.answered && !answer.revealed;
   }
 
-  // 为错题页和复习流程统一记录结构，兼容早期只保存题目 ID 的数据。
-  function getWrongEntries(bid = activeBank().id) {
-    const v = state.wrongBook[bid] || [];
-    if (!Array.isArray(v)) {
-      return [];
-    }
-
-    return v.map((x) => (typeof x === 'string' ? { id: x, wrongCount: 1, rightCount: 0, reviewRightCount: 0, streakCorrectCount: 0, lastWrongAt: '', lastCorrectAt: '', lastReviewedAt: '', nextReviewAt: '', reviewLevel: 0, lastAnswer: [], source: 'web', timestamp: 0, status: '未掌握' } : { ...x, id: x.id, wrongCount: Number(x.wrongCount || 0), rightCount: Number(x.rightCount || 0), reviewRightCount: Number(x.reviewRightCount || 0), streakCorrectCount: Number(x.streakCorrectCount || 0), lastWrongAt: x.lastWrongAt || '', lastCorrectAt: x.lastCorrectAt || '', lastReviewedAt: x.lastReviewedAt || '', nextReviewAt: x.nextReviewAt || '', reviewLevel: Number(x.reviewLevel || 0), lastAnswer: Array.isArray(x.lastAnswer) ? x.lastAnswer : [], source: x.source || 'web', timestamp: Number(x.timestamp || 0), status: x.status || '未掌握' })).filter((x) => x.id);
-  }
-
-  function setWrongEntries(entries, bid = activeBank().id) {
-    state.wrongBook[bid] = entries;
-  }
-
-  function nextWrongReviewIsoV24(level, base = Date.now()) {
-    const days = [1, 1, 3, 7, 14, 30, 60][Math.max(0, Math.min(6, Number(level || 0)))] || 1;
-    return new Date(base + (days * 86400000)).toISOString();
-  }
-
-  // 再次答错时从初始复习级别排期，清零此前的连续答对次数。
-  function addWrong(id, bid = activeBank().id, chosen = []) {
-    const arr = getWrongEntries(bid);
-    let e = arr.find((x) => x.id === id);
-    if (!e) {
-      e = { id, wrongCount: 0, rightCount: 0, reviewRightCount: 0, streakCorrectCount: 0, lastWrongAt: '', lastCorrectAt: '', lastReviewedAt: '', nextReviewAt: '', reviewLevel: 0, lastAnswer: [], source: 'web', timestamp: 0, status: '未掌握' };
-      arr.push(e);
-    }
-
-    const ts = Date.now();
-    e.lastAnswer = [...chosen];
-    e.wrongCount += 1;
-    e.rightCount = 0;
-    e.reviewRightCount = 0;
-    e.streakCorrectCount = 0;
-    e.reviewLevel = 0;
-    e.lastWrongAt = new Date(ts).toISOString();
-    e.lastReviewedAt = e.lastWrongAt;
-    e.nextReviewAt = nextWrongReviewIsoV24(0, ts);
-    e.timestamp = ts;
-    e.source = 'web';
-    e.status = '未掌握';
-    setWrongEntries(arr, bid);
-  }
-
-  // 答对只推进已有错题的复习进度，连续答对两次才标为已掌握。
-  function markRight(id, bid = activeBank().id) {
-    const arr = getWrongEntries(bid);
-    const e = arr.find((x) => x.id === id);
-    if (!e) {
-      return;
-    }
-
-    const ts = Date.now();
-    e.rightCount += 1;
-    e.reviewRightCount = Number(e.reviewRightCount || 0) + 1;
-    e.streakCorrectCount = Number(e.streakCorrectCount || 0) + 1;
-    const mastered = e.streakCorrectCount >= 2;
-    e.reviewLevel = mastered ? Math.max(2, Number(e.reviewLevel || 0) + 1) : Math.max(1, Number(e.reviewLevel || 0));
-    e.lastCorrectAt = new Date(ts).toISOString();
-    e.lastReviewedAt = e.lastCorrectAt;
-    e.nextReviewAt = nextWrongReviewIsoV24(e.reviewLevel, ts);
-    e.timestamp = ts;
-    e.status = mastered ? '已掌握' : '复习中';
-    setWrongEntries(arr, bid);
-  }
-
-  function removeWrong(id) {
-    const bid = activeBank().id;
-    setWrongEntries(getWrongEntries(bid).filter((x) => x.id !== id), bid);
-  }
-
-  // 为成绩记录保存答题快照，供跨库复盘和多空题逐空核对。
-  function makeAnswerDetail(item, chosen, ok, score, _totalScore) {
-    const q = practiceQuestionV8916(item);
-    const values = Array.isArray(chosen) ? [...chosen] : [];
-    const detail = { questionId: q.id, question: short(q.question, 120), type: q.type, category: q.category || '', chosen: values, userAnswer: [...values], answer: [...q.answer], correct: !!ok, score: ok ? score : 0, fullScore: score, time: now(), sourceBankId: practiceItemBankIdV8916(item), sourceBankName: practiceItemBankNameV8916(item), nativeQuestion: JSON.parse(JSON.stringify(q)) };
-    if (isMultiBlankQuestionV58914(q)) {
-      detail.blankAnswers = cloneBlankAnswersV58914(q.blankAnswers);
-      detail.userBlankAnswers = [...values];
-    }
-
-    return detail;
+  // 记录逻辑共用题目来源、题干摘要和多空答案规则，判分与时间由提交方提供。
+  function makeAnswerDetail(item, answer) {
+    return ShirohaTraining.answerDetail({
+      ...answer,
+      bankId: practiceItemBankIdV8916(item),
+      bankName: practiceItemBankNameV8916(item),
+    }, { short, isMultiBlank: isMultiBlankQuestionV58914, cloneBlankAnswers: cloneBlankAnswersV58914 });
   }
 
   // 使用显式的题目分数，旧题未配置时由当前题型计分规则提供默认值。
@@ -3293,7 +3212,7 @@ D. 高速通过积水路段`;
     bindEvents();
     bindMultiBlankEditorV58914();
     bindV25ToV28Events();
-    ensureV25ToV28Panels();
+    ensureBuiltInPanelV252();
     setupSidebarCollapse();
     setupEnhancedDataToolsV23();
     renderAll();
@@ -3319,13 +3238,9 @@ D. 高速通过积水路段`;
     state.schemaVersion = CURRENT_SCHEMA_VERSION;
     state.banks = Array.isArray(state.banks) ? state.banks : [];
     state.records = Array.isArray(state.records) ? state.records : [];
-    state.wrongBook = state.wrongBook && typeof state.wrongBook === 'object' ? state.wrongBook : {};
     state.settings = state.settings && typeof state.settings === 'object' ? state.settings : {};
     state.settings.aiImportV99 = normalizeAiConfigV99(state.settings.aiImportV99);
     state.settings.practiceProgressV58916 = state.settings.practiceProgressV58916 && typeof state.settings.practiceProgressV58916 === 'object' && !Array.isArray(state.settings.practiceProgressV58916) ? state.settings.practiceProgressV58916 : {};
-    state.favorites = state.favorites && typeof state.favorites === 'object' ? state.favorites : {};
-    state.crossPlatformMeta = state.crossPlatformMeta && typeof state.crossPlatformMeta === 'object' ? state.crossPlatformMeta : { favoriteQuestions: {} };
-    state.crossPlatformMeta.favoriteQuestions = state.crossPlatformMeta.favoriteQuestions && typeof state.crossPlatformMeta.favoriteQuestions === 'object' ? state.crossPlatformMeta.favoriteQuestions : {};
     for (const b of state.banks) {
       b.groupName = pickBankGroupNameFromJsonV58(b);
       b.questions = (b.questions || []).map((q, i) => (ShirohaPlatform.storage?.isQuestionLoaded && !ShirohaPlatform.storage.isQuestionLoaded(b.id, q.id) ? q : ({ ...q, ...normalizeQuestion(q, i), id: q.id || makeId('q', i), number: q.number || i + 1 })));
@@ -3333,19 +3248,7 @@ D. 高速通过积水路段`;
       b.updatedAt = b.updatedAt || b.createdAt || now();
     }
 
-    for (const bid of Object.keys(state.wrongBook)) {
-      const val = state.wrongBook[bid];
-      if (Array.isArray(val)) {
-        state.wrongBook[bid] = val.map((x) => (typeof x === 'string' ? { id: x, wrongCount: 1, rightCount: 0, reviewRightCount: 0, streakCorrectCount: 0, lastWrongAt: '', lastCorrectAt: '', lastReviewedAt: '', nextReviewAt: '', reviewLevel: 0, lastAnswer: [], source: 'web', timestamp: 0, status: '未掌握' } : { ...x, id: x.id, wrongCount: Number(x.wrongCount || 1), rightCount: Number(x.rightCount || 0), reviewRightCount: Number(x.reviewRightCount || 0), streakCorrectCount: Number(x.streakCorrectCount || 0), lastWrongAt: x.lastWrongAt || '', lastCorrectAt: x.lastCorrectAt || '', lastReviewedAt: x.lastReviewedAt || '', nextReviewAt: x.nextReviewAt || '', reviewLevel: Number(x.reviewLevel || 0), lastAnswer: Array.isArray(x.lastAnswer) ? x.lastAnswer : [], source: x.source || 'web', timestamp: Number(x.timestamp || 0), status: x.status || '未掌握' })).filter((x) => x.id);
-      } else {
-        state.wrongBook[bid] = [];
-      }
-    }
-
-    for (const bid of Object.keys(state.favorites)) {
-      state.favorites[bid] = Array.isArray(state.favorites[bid]) ? [...new Set(state.favorites[bid].filter(Boolean))] : [];
-    }
-
+    savedQuestions.upgrade();
     practiceScopeV8916();
   }
 
@@ -3389,11 +3292,6 @@ D. 高速通过积水路段`;
         btn.onclick = () => loadBuiltInBankV252();
       }
     });
-  }
-
-  function ensureV25ToV28Panels() {
-    ensureBuiltInPanelV252();
-    ensureFavoritePanelV27();
   }
 
   // 为旧版设置页按需补上内置题库导入面板，复用已有面板实例。
@@ -3647,75 +3545,6 @@ D. 高速通过积水路段`;
     const bankId = item.bankId || '';
     const bank = state.banks.find((value) => value.id === bankId) || null;
     return { q, bankId, bank, index: bank ? (bank.questions || []).findIndex((value) => value.id === q.id) : -1 };
-  }
-
-  function getFavoriteIdsV27(bid = activeBank().id) {
-    state.favorites = state.favorites || {};
-    return Array.isArray(state.favorites[bid]) ? state.favorites[bid] : [];
-  }
-
-  // 使当前题库的收藏 ID 和跨端收藏元数据保持同步。
-  function setFavoriteIdsV27(ids, bid = activeBank().id) {
-    state.favorites = state.favorites || {};
-    state.crossPlatformMeta = state.crossPlatformMeta && typeof state.crossPlatformMeta === 'object' ? state.crossPlatformMeta : { favoriteQuestions: {} };
-    state.crossPlatformMeta.favoriteQuestions = state.crossPlatformMeta.favoriteQuestions && typeof state.crossPlatformMeta.favoriteQuestions === 'object' ? state.crossPlatformMeta.favoriteQuestions : {};
-    const next = [...new Set((ids || []).filter(Boolean))];
-    state.favorites[bid] = next;
-    const meta = state.crossPlatformMeta.favoriteQuestions[bid] && typeof state.crossPlatformMeta.favoriteQuestions[bid] === 'object' ? state.crossPlatformMeta.favoriteQuestions[bid] : {};
-    Object.keys(meta).forEach((qid) => {
-      if (!next.includes(qid)) {
-        delete meta[qid];
-      }
-    });
-
-    next.forEach((qid) => {
-      if (!meta[qid]) {
-        meta[qid] = { favoritedAt: Date.now() };
-      }
-    });
-
-    state.crossPlatformMeta.favoriteQuestions[bid] = meta;
-  }
-
-  function isFavoriteV27(id, bid = activeBank().id) {
-    return getFavoriteIdsV27(bid).includes(id);
-  }
-
-  // 跨库练习按题目来源切换收藏，默认以活动题库为准。
-  async function toggleFavoriteV27(id, bid = activeBank().id) {
-    return runMutation(/* 保存结果与提示使用同一次读取的收藏状态。 */ async () => {
-      const ids = getFavoriteIdsV27(bid);
-      if (ids.includes(id)) {
-        setFavoriteIdsV27(ids.filter((x) => x !== id), bid);
-      } else {
-        setFavoriteIdsV27([...ids, id], bid);
-      }
-
-      await saveSilent();
-      toast(ids.includes(id) ? '已取消收藏。' : '已收藏题目。', 'ok');
-    });
-  }
-
-  function ensureFavoritePanelV27() {
-    return;
-  }
-
-  // 批量清空收藏前显示受影响的题目数量并征求确认。
-  async function clearCurrentFavoritesV596() {
-    return runMutation(/* 确认期间锁定变更入口，避免其间切换活动题库。 */ async () => {
-      const count = getFavoriteIdsV27().length;
-      if (!count) {
-        toast('当前题库暂无收藏题。', 'warn');
-        return;
-      }
-
-      if (await ShirohaDialogs.confirm(`确定清空当前题库的 ${count} 道收藏题？`)) {
-        setFavoriteIdsV27([]);
-        await saveSilent();
-        renderAll();
-        toast('已清空当前题库收藏。', 'ok');
-      }
-    });
   }
 
   /* SHIROHA_WEB_V24_CROSS_PLATFORM_NATIVE_INTEROP */

@@ -75,7 +75,7 @@
     } = question;
     const {
       items: trainingSessionItems,
-      attach: attachTrainingReview,
+      data: buildTrainingReview,
       completion: trainingCompletion,
       open: openTrainingReview,
       page: nativePage,
@@ -423,7 +423,11 @@
           details: practiceSession.current.details || [],
         };
         rec.duration = Math.round(ShirohaTraining.elapsedClock(practiceSession.current.clock, globalThis.performance.now()) / 1000);
-        attachTrainingReview(rec, practiceReviewItems(), { completion: total < practiceSession.current.items.length ? 'ended_early' : 'completed', submitMode: practiceSession.current.submitMode || 'single', timing: 'active' });
+        Object.assign(rec, buildTrainingReview(practiceReviewItems(), rec.details, {
+          completion: total < practiceSession.current.items.length ? 'ended_early' : 'completed',
+          submitMode: practiceSession.current.submitMode || 'single',
+          timing: 'active',
+        }));
         state.records.unshift(rec);
         updatePracticeProgressV58916();
         await saveSilent();
@@ -1119,7 +1123,9 @@
       }
 
       setPracticeAnswerStateV26(key, { chosen: [...chosen], answered: true, revealed: false, correct: !!ok, answeredAt: now() });
-      practiceSession.current.details.push(makeAnswerDetail(item, chosen, ok, scoreOf(q), scoreOf(q)));
+      practiceSession.current.details.push(makeAnswerDetail(item, {
+        question: q, chosen, correct: ok, score: scoreOf(q), time: now(),
+      }));
     }
 
     // 从题库详情带当前源题库进入练习设置，并关闭旧题目详情。

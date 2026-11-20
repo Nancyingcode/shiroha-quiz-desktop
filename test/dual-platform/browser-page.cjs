@@ -3184,6 +3184,11 @@ test('file URL 支持 ZIP 与文本导入且不依赖可选 PDF/OCR', async (t) 
   const metadataIndex = scripts.indexOf('./banks/metadata.js');
   assert(metadataIndex >= 0 && metadataIndex < scripts.indexOf(scopeScript) && scripts.indexOf(scopeScript) < appIndex);
   assert.equal(await page.evaluate(() => typeof globalThis.ShirohaStudyScope.create), 'function');
+  const savedQuestionsScript = './study/saved-questions.js';
+  const savedQuestionsIndex = scripts.indexOf(savedQuestionsScript);
+  assert.equal(scripts.filter((script) => script === savedQuestionsScript).length, 1);
+  assert(savedQuestionsIndex >= 0 && savedQuestionsIndex < scripts.indexOf('./saved-questions-page.js'));
+  assert.equal(await page.evaluate(() => typeof globalThis.ShirohaSavedQuestions.create), 'function');
   assert.equal(await page.locator('#home-practice-scope-v8916 b').count(), 1);
   for (const name of ['./quiz-core.js', './text-answers.js', './text-parser.js', './backup-core.js', './zip.js', './backup-archive.js', './backup-data.js', './webdav-panel.js', './docx-import.js', './pdf-import.js', './ocr-import.js', './table-import.js', './import-preview.js', './ai-results.js', './ai-import-sessions.js', './ai-question-sessions.js', './ai-settings.js', './ai-transport.js', './ai-prompts.js', './question-view.js', './bank-page.js', './saved-questions-page.js', './training-review-page.js', './bank-editor.js', './study-sessions.js', './exam-page.js', './practice-selection.js', './practice-page.js', './ai-import-panel.js', './ai-question-panels.js', './question-editor.js']) {
     assert(scripts.indexOf(name) >= 0 && scripts.indexOf(name) < appIndex);
@@ -5556,4 +5561,247 @@ test('第四批导入：跨入口题库名称与双文件识别不被旧读取�
   await page.evaluate(() => globalThis.__batch4Reads['双文件识别前.csv'].resolve('题干,选项A,选项B,答案\n旧表格题,甲,乙,A'));
   await page.waitForTimeout(80);
   assert.equal(await page.locator('#import-preview tbody').innerHTML(), before);
+});
+
+test('第十一批学习数据：旧错题连续答对两次再答错，按来源库更新计数与排期', async (t) => {
+  const initial = webState();
+  initial.banks[0].questions = [initial.banks[0].questions[0]];
+  initial.records = [];
+  initial.wrongBook = {
+    'bank-a': ['same-id'],
+    'bank-b': [{ id: 'same-id', wrongCount: '4', lastAnswer: ['A'], extension: { keep: true } }],
+  };
+  const page = await pageFor(t, JSON.stringify(initial));
+  const ready = page.locator('body[data-storage-state="ready"]');
+  await ready.waitFor();
+  await page.locator('.nav[data-view="wrongbook"]').click();
+  await page.locator('#wrongbook-list').getByText(/错误 1 次/).waitFor();
+  await page.locator('.nav[data-view="practice"]').click();
+  await page.locator('#start-practice-btn').click();
+
+  const day = 24 * 60 * 60 * 1000;
+  const start = Date.parse('2026-05-21T10:00:00Z');
+  const base = [start, start + day, start + (2 * day)];
+  const expected = [
+    [1, 1, 1, 1, 1, '复习中', 1],
+    [1, 2, 2, 2, 2, '已掌握', 3],
+    [2, 0, 0, 0, 0, '未掌握', 1],
+  ];
+  const entries = [];
+  for (const [index, answer] of ['A', 'A', 'B'].entries()) {
+    const at = base[index];
+    await page.clock.setFixedTime(new Date(at));
+    await page.locator('.toast-item button').evaluateAll((buttons) => buttons.forEach((button) => button.click()));
+    await page.locator(`#practice-card .option[data-key="${answer}"]`).click();
+    await page.locator('#p-submit').click();
+    await ready.waitFor();
+    const { wrongBook } = JSON.parse(await saved(page));
+    const [entry] = wrongBook['bank-a'];
+    entries.push(entry);
+    assert.deepEqual([
+      entry.wrongCount, entry.rightCount, entry.reviewRightCount, entry.streakCorrectCount,
+      entry.reviewLevel, entry.status, (Date.parse(entry.nextReviewAt) - at) / day,
+    ], expected[index]);
+    assert.equal(entry.lastReviewedAt, new Date(at).toISOString());
+    assert.equal(entry.timestamp, at);
+    assert.equal(wrongBook['bank-b'][0].wrongCount, 4);
+    assert.deepEqual(wrongBook['bank-b'][0].extension, { keep: true });
+    assert.deepEqual(wrongBook['bank-b'][0].lastAnswer, ['A']);
+    await page.locator('#p-next').click();
+    await page.locator('#again-practice').waitFor();
+    if (index < expected.length - 1) {
+      await page.locator('#again-practice').click();
+    }
+  }
+
+  const [, lastCorrect, lastWrong] = entries;
+  assert.equal(lastWrong.lastCorrectAt, lastCorrect.lastCorrectAt);
+  assert.equal(lastWrong.lastWrongAt, new Date(base[2]).toISOString());
+  assert.deepEqual(lastWrong.lastAnswer, ['B']);
+  await page.reload();
+  await ready.waitFor();
+  await page.locator('.nav[data-view="wrongbook"]').click();
+  await page.locator('#wrongbook-list').getByText(/状态：未掌握｜错误 2 次｜做对 0 次/).waitFor();
+  assert.deepEqual(JSON.parse(await saved(page)).wrongBook['bank-a'], [lastWrong]);
+});
+
+async function respondToLearningClear(page, selector, message, response) {
+  await page.locator(selector).click();
+  const dialog = page.locator('#app-dialog[open]').filter({ hasText: message });
+  await dialog.locator(`[data-dialog-${response}]`).click();
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+}
+
+test('第十一批学习数据：收藏扩展字段与同 ID 旁库在清空失败和重载后保全', async (t) => {
+  const initial = webState();
+  initial.favorites = { 'bank-a': ['same-id'], 'bank-b': ['same-id'] };
+  initial.wrongBook = { 'bank-a': ['same-id', 'multiple'], 'bank-b': ['same-id'] };
+  initial.crossPlatformMeta.favoriteQuestions = {
+    'bank-a': { 'same-id': { favoritedAt: 11, question: initial.banks[0].questions[0], extension: { keep: ['甲'] } } },
+    'bank-b': { 'same-id': { favoritedAt: 22, question: initial.banks[1].questions[0], extension: { keep: ['乙'] } } },
+  };
+  const page = await pageFor(t, JSON.stringify(initial));
+  const ready = page.locator('body[data-storage-state="ready"]');
+  await ready.waitFor();
+  const now = new Date('2026-05-21T10:00:00Z');
+  await page.clock.setFixedTime(now);
+  await page.locator('.nav[data-view="wrongbook"]').click();
+  await page.locator('[data-fav-wrong="multiple"]').click();
+  await ready.waitFor();
+  const afterAdd = JSON.parse(await saved(page));
+  assert.deepEqual(afterAdd.favorites, { 'bank-a': ['same-id', 'multiple'], 'bank-b': ['same-id'] });
+  assert.deepEqual(afterAdd.crossPlatformMeta.favoriteQuestions, {
+    ...initial.crossPlatformMeta.favoriteQuestions,
+    'bank-a': { ...initial.crossPlatformMeta.favoriteQuestions['bank-a'], multiple: { favoritedAt: now.getTime() } },
+  });
+
+  await page.locator('.nav[data-view="favorites"]').click();
+  page.removeAllListeners('app-dialog');
+  const prompt = '确定清空当前题库的 2 道收藏题？';
+  await respondToLearningClear(page, '#clear-favorites-btn-v596', prompt, 'cancel');
+  assert.deepEqual(JSON.parse(await saved(page)), afterAdd);
+  await page.evaluate(() => {
+    const { storage } = globalThis.ShirohaPlatform;
+    const { write } = storage;
+    storage.write = async () => {
+      storage.write = write;
+      throw new Error('模拟清空收藏写入失败');
+    };
+  });
+  await respondToLearningClear(page, '#clear-favorites-btn-v596', prompt, 'accept');
+  await page.locator('#platform-status.failed').getByText('模拟清空收藏写入失败').waitFor();
+  assert.deepEqual(JSON.parse(await saved(page)), afterAdd);
+  assert.equal(await page.locator('#favorites-count-v596').textContent(), '2 道');
+  await respondToLearningClear(page, '#platform-status.failed button', prompt, 'accept');
+  await page.reload();
+  await ready.waitFor();
+  await page.locator('.nav[data-view="favorites"]').click();
+  await page.locator('#favorites-list-v596').getByText(/当前题库暂无收藏题/).waitFor();
+  const result = JSON.parse(await saved(page));
+  assert.deepEqual(result.favorites, { 'bank-a': [], 'bank-b': ['same-id'] });
+  assert.deepEqual(result.crossPlatformMeta.favoriteQuestions, {
+    'bank-a': {}, 'bank-b': initial.crossPlatformMeta.favoriteQuestions['bank-b'],
+  });
+  assert.deepEqual(result.wrongBook, afterAdd.wrongBook);
+  assert.deepEqual(result.records, afterAdd.records);
+});
+
+test('第十一批学习数据：错题和记录从各自入口确认清空并保留其他数据', async (t) => {
+  const initial = webState();
+  initial.wrongBook = { 'bank-a': ['same-id'], 'bank-b': ['same-id'] };
+  const page = await pageFor(t, JSON.stringify(initial));
+  const ready = page.locator('body[data-storage-state="ready"]');
+  await ready.waitFor();
+  await page.locator('#save-all-btn').click();
+  await ready.waitFor();
+  const before = JSON.parse(await saved(page));
+  page.removeAllListeners('app-dialog');
+
+  await page.locator('.nav[data-view="wrongbook"]').click();
+  const wrongPrompt = '确定清空当前题库错题本？';
+  await respondToLearningClear(page, '#clear-wrong-btn', wrongPrompt, 'cancel');
+  assert.deepEqual(JSON.parse(await saved(page)), before);
+  await respondToLearningClear(page, '#clear-wrong-btn', wrongPrompt, 'accept');
+  const afterWrong = JSON.parse(await saved(page));
+  assert.deepEqual(afterWrong.wrongBook, { 'bank-a': [], 'bank-b': before.wrongBook['bank-b'] });
+  assert.deepEqual(afterWrong.records, before.records);
+
+  await page.locator('.nav[data-view="records"]').click();
+  const recordsPrompt = '确定清空全部练习与考试记录？';
+  await respondToLearningClear(page, '#clear-records-btn', recordsPrompt, 'cancel');
+  assert.deepEqual(JSON.parse(await saved(page)), afterWrong);
+  await respondToLearningClear(page, '#clear-records-btn', recordsPrompt, 'accept');
+  await page.reload();
+  await ready.waitFor();
+  await page.locator('.nav[data-view="records"]').click();
+  assert.equal(await page.locator('[data-training-review]').count(), 0);
+  assert.deepEqual(JSON.parse(await saved(page)), { ...afterWrong, records: [] });
+});
+
+test('第十一批学习数据：编辑同 ID 原题后重载练习与考试复盘仍显示当时题干和分数', async (t) => {
+  const initial = webState();
+  const [first, second] = initial.banks;
+  const firstQuestion = { ...first.questions[0], question: '甲库作答时的题干', score: 7 };
+  const secondQuestion = { ...second.questions[0], question: '乙库同 ID 的题干', score: 4 };
+  const judge = first.questions.find((question) => question.type === 'judge');
+  first.questions = [firstQuestion];
+  second.questions = [judge, secondQuestion];
+  initial.settings.practiceScope = { type: 'group', value: '自建样本' };
+  initial.records = [];
+  const page = await pageFor(t, JSON.stringify(initial));
+  const ready = page.locator('body[data-storage-state="ready"]');
+  await ready.waitFor();
+
+  for (const mode of ['practice', 'exam']) {
+    const exam = mode === 'exam';
+    await page.locator(`.nav[data-view="${mode}"]`).click();
+    await page.locator(`#${mode}-type`).selectOption('single');
+    if (exam) {
+      await page.locator('#exam-order').selectOption('sequence');
+      await page.locator('#exam-minutes').fill('0');
+    } else {
+      await page.locator('#practice-submit-mode').selectOption('total');
+      await page.locator('#practice-limit').selectOption('all');
+    }
+
+    await page.locator(`#start-${mode}-btn`).click();
+    const questions = page.locator(exam ? '#exam-card .exam-q' : '#practice-card');
+    await questions.nth(0).locator('.option[data-key="A"]').click();
+    if (!exam) {
+      await page.locator('#p-next').click();
+    }
+
+    await questions.nth(Number(exam)).locator('.option[data-key="A"]').click();
+    await page.locator(exam ? '#exam-submit-focus-bottom' : '#p-submit-all').click();
+    const back = page.locator(exam ? '#exam-back-setup' : '#back-practice-setup');
+    await back.click();
+  }
+
+  const beforeEdit = JSON.parse(await saved(page));
+  assert.deepEqual(beforeEdit.records.map(({ mode, score }) => [mode, score]), [['考试', 7], ['练习', null]]);
+  await page.locator('.nav[data-view="banks"]').click();
+  const editBank = page.locator('[data-editbank-v45="bank-a"]');
+  await page.locator('.bank-item').filter({ has: editBank }).locator('summary').click();
+  await editBank.click();
+  await page.locator('[data-edit-import="0"]').click();
+  await page.locator('#edit-question').fill('甲库修改后的题干');
+  await page.locator('#edit-score').fill('19');
+  await page.locator('#edit-answer').fill('B');
+  await page.locator('#edit-save-btn').click();
+  await page.locator('#edit-status').getByText(/已保存/).waitFor();
+  await page.locator('#edit-close-btn').click();
+  await page.locator('#bank-edit-save-v45').click();
+  await page.locator('#banks.active').waitFor();
+  await ready.waitFor();
+  await page.reload();
+  await ready.waitFor();
+  const afterEdit = JSON.parse(await saved(page));
+  const [newQuestion] = afterEdit.banks[0].questions;
+  assert.deepEqual([newQuestion.id, newQuestion.question, newQuestion.score, newQuestion.answer], [
+    firstQuestion.id, '甲库修改后的题干', 19, ['B'],
+  ]);
+  assert.deepEqual(afterEdit.banks[1], beforeEdit.banks[1]);
+  assert.deepEqual(afterEdit.records, beforeEdit.records);
+
+  await page.locator('.nav[data-view="records"]').click();
+  for (const record of afterEdit.records) {
+    assert.deepEqual(record.details.map((detail) => [
+      detail.sourceBankId, detail.questionId, detail.nativeQuestion.question, detail.answer, detail.fullScore, detail.score,
+    ]), [
+      [first.id, firstQuestion.id, firstQuestion.question, ['A'], 7, 7],
+      [second.id, secondQuestion.id, secondQuestion.question, ['B'], 4, 0],
+    ]);
+    await page.locator(`#records [data-training-review="${record.id}"]`).click();
+    const question = page.locator('#training-question');
+    assert.equal(await question.locator('.question-title').innerText(), firstQuestion.question);
+    assert.match(await question.locator('.qmeta').innerText(), /题库第 1 题/);
+    assert.match(await question.locator('.qmeta').innerText(), new RegExp(first.name));
+    assert.equal(await question.locator('.option.correct').getAttribute('data-key'), 'A');
+    await page.locator('[data-training-question="1"]').click();
+    assert.equal(await question.locator('.question-title').innerText(), secondQuestion.question);
+    assert.match(await question.locator('.qmeta').innerText(), /题库第 2 题/);
+    assert.match(await question.locator('.qmeta').innerText(), new RegExp(second.name));
+    assert.equal(await question.locator('.option.correct').getAttribute('data-key'), 'B');
+    await page.locator('#training-review-back').click();
+  }
 });

@@ -132,8 +132,12 @@ test('旧单空支持等价参考答案；简答文本比较保持换行内容�
   assert.equal(api.sameAnswerForQuestion(blank, ['南京'], blank.answer), false);
   const question = questions()[4];
   assert.deepEqual(plain(api.normalizeQuestion(question).answer), ['先保存\n再退出']);
-  const correct = api.makeAnswerDetail({ bankId: 'bank-a', bankName: '阶段A全题型', question }, ['人工核对后的作答'], true, 5, 5);
-  const wrong = api.makeAnswerDetail({ bankId: 'bank-a', bankName: '阶段A全题型', question }, ['人工核对后的作答'], false, 5, 5);
+  const item = { bankId: 'bank-a', bankName: '阶段A全题型', question };
+  const result = {
+    question, chosen: ['人工核对后的作答'], score: 5, time: '2026-11-19T01:00:00.000Z',
+  };
+  const correct = api.makeAnswerDetail(item, { ...result, correct: true });
+  const wrong = api.makeAnswerDetail(item, { ...result, correct: false });
   assert.equal(correct.score, 5);
   assert.equal(wrong.score, 0);
 });
@@ -166,20 +170,25 @@ test('题目自定分覆盖界面默认分；答题明细保留多空内容、�
   assert.equal(api.scoreOf({ type: 'unknown' }), 2);
   assert.equal(api.scoreOf({ type: 'single', score: '0' }), '0');
   const question = questions()[3];
-  const detail = plain(api.makeAnswerDetail(
+  const time = '2026-11-19T01:00:00.000Z';
+  const chosen = ['北京市', '京'];
+  const detail = api.makeAnswerDetail(
     { bankId: 'bank-a', bankName: '阶段A全题型', question },
-    ['北京市', '京'],
-    true,
-    4,
-    4,
-  ));
-  assert.deepEqual(detail.blankAnswers, [['北京', '北京市'], ['京']]);
-  assert.deepEqual(detail.userBlankAnswers, ['北京市', '京']);
+    { question, chosen, correct: true, score: 4, time },
+  );
+  assert.deepEqual(plain(detail.blankAnswers), [['北京', '北京市'], ['京']]);
+  assert.deepEqual(plain(detail.userBlankAnswers), ['北京市', '京']);
   assert.equal(detail.score, 4);
   assert.equal(detail.fullScore, 4);
   assert.equal(detail.sourceBankId, 'bank-a');
-  assert.deepEqual(detail.nativeQuestion, question);
+  assert.equal(detail.time, time);
+  assert.deepEqual(plain(detail.nativeQuestion), question);
   assert.notEqual(detail.nativeQuestion, question);
+  question.blankAnswers[0][0] = '后来修改';
+  chosen[0] = '后来作答';
+  assert.equal(detail.nativeQuestion.blankAnswers[0][0], '北京');
+  assert.equal(detail.blankAnswers[0][0], '北京');
+  assert.equal(detail.userBlankAnswers[0], '北京市');
 });
 
 test('双文件按题型与重复题号对应，不能将单选答案套到多选或判断题', () => {
@@ -347,6 +356,23 @@ test('历史错题的文本计数先转为数字再递增，正确复习不改�
   [entry] = api.getWrongEntries('bank-a');
   assert.equal(entry.wrongCount, 3);
   assert.equal(entry.rightCount, 1);
+});
+
+test('旧错题字符串和对象在直接读取及状态升级时保留各自的计数默认值', () => {
+  const initial = webState();
+  initial.wrongBook = {
+    'bank-a': ['same-id', { id: 'multiple', rightCount: '2', extension: { keep: true } }],
+    'bank-b': [{ id: 'same-id', wrongCount: '0' }],
+  };
+  const { api } = loadWeb({ state: initial });
+  const readCounts = (bankId) => api.getWrongEntries(bankId).map(({ wrongCount }) => wrongCount);
+
+  assert.deepEqual(plain(readCounts('bank-a')), [1, 0]);
+  api.upgradeState();
+  assert.deepEqual(plain(readCounts('bank-a')), [1, 1]);
+  assert.equal(api.snapshot().wrongBook['bank-a'][1].rightCount, 2);
+  assert.deepEqual(plain(api.snapshot().wrongBook['bank-a'][1].extension), { keep: true });
+  assert.deepEqual(plain(readCounts('bank-b')), [0]);
 });
 
 test('练习轮次计数接受文本与 BigInt 时保留原有自增转换', () => {

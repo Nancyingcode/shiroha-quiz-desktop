@@ -126,6 +126,17 @@
       return [trainingTitle(record), record.bankName, fmt(record.date)].filter(Boolean).join(' · ');
     }
 
+    // 此入口清空全部练习和考试记录。
+    function clearRecords() {
+      return runMutation(/* 确认、清理和保存属于同一次数据变更。 */ async () => {
+        if (await globalThis.ShirohaDialogs.confirm('确定清空全部练习与考试记录？')) {
+          state.records = [];
+          await saveSilent();
+          renderAll();
+        }
+      });
+    }
+
     // 删除操作等待用户确认，确认期间其他操作更改记录后需要再核对。
     async function deleteTrainingRecord(id) {
       if (recordDeletionPending) {
@@ -558,7 +569,17 @@
       scheduleMathJaxTypesetV56(box);
     }
 
-    return { renderRecords, trainingCompletion, trainingTitle, renderRecentTraining, openTrainingReview, renderTrainingQuestion, leaveTrainingReview, bindTrainingReviewEvents };
+    return {
+      renderRecords,
+      clearRecords,
+      trainingCompletion,
+      trainingTitle,
+      renderRecentTraining,
+      openTrainingReview,
+      renderTrainingQuestion,
+      leaveTrainingReview,
+      bindTrainingReviewEvents,
+    };
   }
 
   globalThis.ShirohaTrainingReviewPage = { create };

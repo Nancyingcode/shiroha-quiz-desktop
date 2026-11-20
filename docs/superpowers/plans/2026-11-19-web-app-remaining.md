@@ -134,3 +134,24 @@
 首轮桌面烟测在新增用例的练习提交确认处停下，前 48 项通过。补齐点击实际确认按钮的步骤后，最新类型检查和烟测文件定向 ESLint 通过，同一隔离构建的桌面套件复跑通过。保留 `test-desktop.log` 和 `test-desktop-final.log`。[桌面用例](../../../apps/desktop/scripts/bank-operations-smoke.mjs)
 
 应用入口生成训练快照和答题明细，来源库、原题号和题目引用通过范围模块查询。第十一批可继续复用这些查询。第十二批首页统计可继续通过同一范围读到题库集合。
+
+### 第十一批 · 学习数据
+
+- 负责人为 `batch11_learning`（GPT-6.2-Sol Max）。在第七至十批已验收的工作树上继续。分支为 `codex/web-app-remaining`，工作树为 `C:/Users/30728/.codex/worktrees/31f4/shiroha-quiz-desktop`，`HEAD` 为 `ac4f4c64adc773040eb2b06bf5831003c2803ab0`。`app.js` 由 4,599 行、142 个入口闭包内直接声明的具名函数减至 4,428 行、128 个。
+- [学习数据模块](../../../apps/web/study/saved-questions.js)负责按库读写错题、复习排期、手动掌握、收藏 ID 和元信息，以及两个列表的当前库清空动作。错题读写使用当前状态映射，练习和考试在原事务内同步累计。清空、移出和收藏切换继续通过应用提供的确认、保存、重试和刷新回调执行。错题和收藏页继续展示、筛选和分页，收藏界面由现有静态控件进入。[记录页](../../../apps/web/training-review-page.js)承接全部学习记录的清空，应用入口保留事件绑定。
+- [训练模块](../../../apps/web/training.js)接收已补读的题目、范围模块解析的来源、已判分值和时间，生成开轮快照、逐空作答明细、复盘条目和摘要。练习和考试共用读取界面分值的回调，逐空规则在调用时注入，训练模块可以按现有顺序先于题型规则脚本加载。两种提交继续沿用各自的计时和记录形状。复盘用来源库 ID 和题 ID 对应历史明细。
+- 测试区分旧字符串默认一次错误、旧对象直接读取缺省为零和状态升级缺省为一，保留文本零值及扩展字段。固定时钟下答对两次，核对第一次排期一天、第二次三天并掌握。再次答错清零连对并重新排期一天，同时保留上次答对日期。用实际按钮确认收藏新增只写新时间，原收藏时间、题目快照和扩展字段保留。取消清空、写失败及全局重试分别核对保存内容，重载后目标库清空而同 ID 旁库保留。
+- 通过真实提交保存两轮分组记录，再从二次编辑修改甲库同 ID 题目的正文、答案和分值。浏览器重载保留两份旧记录的满分 7、4 和实际得分 7、0，复盘仍显示两库各自原题、答案和题库第 1、2 题。首轮用例的定位同时命中考试结果和记录页按钮，限定为记录页后原实现的新增用例全绿。迁移后用相同用例复验，无需改动产品规则。[浏览器用例](../../../test/dual-platform/browser-page.cjs)
+
+本批在 Windows 10（19045）、Node 24.22.2、pnpm 12.16.1 和 Rust 1.99.1 上验证。沿用本工作树依赖与编译缓存。生成、生产构建和测试版构建串行执行，两次构建使用 `CARGO_NET_OFFLINE=true`。生产构建通过进程级 `CARGO_TARGET_DIR` 复用本工作树缓存。日志位于 `apps/desktop/.reports/batch11/`。
+
+| 验证项 | 实际命令与结果 |
+| --- | --- |
+| 定向基线 | 根目录运行 `node --test test/dual-platform/business.test.cjs test/dual-platform/training.test.cjs test/dual-platform/training-characterization.test.cjs test/dual-platform/due-review.test.cjs test/dual-platform/review-options.test.cjs test/dual-platform/format.test.cjs`，71 项通过。用 `node --test --test-name-pattern='旧错题字符串' test/dual-platform/business.test.cjs` 单独验证旧计数，再用 `node --test --test-name-pattern='第十一批学习数据' test/dual-platform/browser-page.cjs` 验证新增的 4 个真实入口，两条均通过。 |
+| 迁移后定向 | 同一共享命令追加 `test/dual-platform/source-loading.test.cjs`，86 项通过。运行 `node --test --test-name-pattern='第十一批学习数据\|第十批范围：.*成绩重载\|今日错题复习：掌握状态\|训练复盘：提前结束\|file URL 支持' test/dual-platform/browser-page.cjs`，9 项通过，含 HTTP、本地 HTML、无 DOM 工厂装配和单次脚本加载验证。 |
+| 类型与 lint | 在 `apps/desktop` 运行 `pnpm run typecheck` 与 `pnpm run lint`，均通过。完整检查覆盖 182 个手写 JavaScript 文件。规则夹具 93 项通过，1 项按规则在大小写不敏感的临时目录跳过。 |
+| 完整 Node 与浏览器 | `pnpm test` 桌面 287 项通过、1 项环境跳过，共享 515 项通过。`pnpm run test:web-platform` 的 258 项全部通过。 |
+| 桌面资源与构建 | `pnpm run prepare:web`、`pnpm run build`、`pnpm run build:test` 依次通过。7 个改动的业务脚本的桌面生成文件和 Web 源码 SHA-256 一致，见 `resource-sha256.log`。 |
+| WebView2 与 SQLite | `pnpm run test:desktop` 的 61 项全部通过。实际提交同一组 5 道跨库题并重载后，练习和考试各答对 3 道，考试为 6 分，练习沿用原生顶层空分值。核对复盘原题号、来源和原错选，并通过单条记录删除重载、旧数据恢复和分页正文读取等回归。 |
+
+Web 和桌面验收使用隔离配置、自建题库、假凭据和本地模拟服务。改题后的历史快照及收藏清空写失败由浏览器实测，桌面覆盖真实 SQLite 重载、原生按需正文和复盘。正式安装升级仍属于发行验收，第九批记录的有效且尚未 checkpoint 的 WAL 修复专项仍待验证。
