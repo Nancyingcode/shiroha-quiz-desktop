@@ -2058,6 +2058,64 @@ async function main() {
       assert.deepEqual(restartedEmpty.errors, []);
       return { preservedEmptyAfterRestart: true };
     });
+    await check('内置题库通过面板读取本地 JSON，保存后重载 SQLite', async () => {
+      assert(runtime);
+      const { page } = runtime;
+      const before = await readNativeSnapshot(page);
+      const ready = page.locator('body[data-storage-state="ready"]');
+      assert.deepEqual(before.banks, []);
+      assert.equal(before.settings.suppressDefaultBank, true);
+      await page.locator('.nav[data-view="banks"]').click();
+      await page.locator('#builtin-bank-status-v252').getByText('当前未加入 C1 题库。').waitFor();
+      // 当前 WebView2 的 CDP 未上报这类本地响应，先观察平台读取真实 JSON 的结果。
+      // CDP 能稳定上报本地响应后，可改回直接等待响应并移除此包装。
+      const reading = await page.evaluateHandle(() => {
+        const platform = /** @type {import('../../web/platform/runtime.d.ts').BrowserGlobals['ShirohaPlatform']} */ (
+          Reflect.get(window, 'ShirohaPlatform')
+        );
+        const { resourceJson } = platform;
+        const calls = /** @type {{url: string, questionCount: number}[]} */ ([]);
+        platform.resourceJson = async (url) => {
+          const data = await resourceJson.call(platform, url);
+          const questions = (/** @type {{questions?: unknown} | null} */ (data))?.questions;
+          calls.push({ url, questionCount: Array.isArray(questions) ? questions.length : 0 });
+          return data;
+        };
+        return {
+          calls,
+          restore() {
+            platform.resourceJson = resourceJson;
+          },
+        };
+      });
+      try {
+        await page.locator('#load-built-in-bank-btn-panel').click();
+        await ready.waitFor();
+        await page.locator('#app-toast').getByText(/已加载内置题库：.*共 393 题/).waitFor();
+        assert.deepEqual(await reading.evaluate(({ calls }) => calls), [{ url: 'data/c1-full.json', questionCount: 393 }]);
+      } finally {
+        await reading.evaluate(({ restore }) => restore());
+        await reading.dispose();
+      }
+
+      await page.reload();
+      await ready.waitFor();
+      const after = await readNativeSnapshot(page);
+      assert.equal(after.banks.length, 1);
+      const [bank] = after.banks;
+      assert.equal(bank.id, 'default-c1');
+      assert.equal(bank.questions.length, 393);
+      assert.equal(bank.questions[0].id, 'C1-single-0001');
+      assert.equal(bank.questions.at(-1)?.id, 'C1-multiple-0393');
+      assert.equal(after.activeBankId, bank.id);
+      assert.equal(after.settings.suppressDefaultBank, false);
+      assert.deepEqual(after.settings.practiceScope, { type: 'bank', value: bank.id });
+      assert.deepEqual(after.records, before.records);
+      assert.equal(await page.locator('#active-bank-select').inputValue(), bank.id);
+      assert.equal(await page.locator('#stat-total').textContent(), '393');
+      assert.equal(await page.locator('#builtin-bank-panel-v252').getAttribute('hidden'), '');
+      return { resource: 'data/c1-full.json', activeBankId: bank.id, questionCount: bank.questions.length };
+    });
   } catch (error) {
     if (!(error instanceof SmokeCheckAborted)) { checks.push({ name: '启动或运行', ok: false, error: errorText(error) }); }
   } finally {

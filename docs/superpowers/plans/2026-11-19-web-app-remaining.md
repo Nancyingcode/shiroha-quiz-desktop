@@ -177,3 +177,25 @@ Web 和桌面验收使用隔离配置、自建题库、假凭据和本地模拟�
 保留首次失败日志。共享定向初轮的两个 Harness 启动夹具缺少新增工厂，改为加载实际首页模块后仍执行原有启动断言。定向 lint 初轮报新测试的对象属性换行，调整格式后通过。完整浏览器首轮通过 258 项，唯一失败将预期的首页可见性监听解绑与重绑计为重复绑定，现精确断言一次解绑和一次重绑使用同一个回调，同时保留 WebDAV 单面板、单对话框和其他监听未重绑的断言。
 
 Web 和桌面均使用隔离配置、自建题库、假凭据和本地模拟服务。午夜期限和后台恢复可见的时机由受控时钟和浏览器事件验证。桌面覆盖真实 WebView2 和 SQLite 恢复，系统挂起后恢复属于实机专项。
+
+### 第十三批 · 内置题库
+
+- 负责人为 `batch13_builtin`（GPT-6.2-Sol Max）。从第十二批冻结的工作树继续，分支为 `codex/web-app-remaining`，工作树为 `C:/Users/30728/.codex/worktrees/31f4/shiroha-quiz-desktop`，`HEAD` 为 `ac4f4c64adc773040eb2b06bf5831003c2803ab0`。`app.js` 由 4,345 行、123 个入口闭包内直接声明的具名函数减至 4,260 行、117 个。
+- [内置题库模块](../../../apps/web/banks/built-in.js)负责构造默认库或空占位库、查找手动加载使用的资源、替换题库、绑定按钮以及更新面板状态。当前面板和两个可选旧按钮共用同一回调，恢复重入复用面板，按固定 ID 和历史名称辨认已加载的库。模块装配阶段不访问页面或资源。
+- 应用入口由 `ensureDefaultBank` 决定启动和恢复时是否补库。HTTP 和直接打开 HTML 时，冷启动从现有 `question-bank.js` 同步构造 393 题。手动加载先读取内置索引或本地 `data/banks-index.json` 首项，经平台接口读取对应的 JSON。JSON 不可读时可从内置脚本取数据。通过校验后原位替换待加载库或加入新库，在原保存事务内设置为活动库和单库练习范围，同时清除补库抑制。[应用入口](../../../apps/web/app.js)
+- 浏览器通过真实按钮覆盖删空后冷启动、HTTP 和直接打开 HTML 手动重加、资源缺失后重试。占位库测试用旧 ID 和待加载标记，单次保存失败后核对原库、活动库和旁库数据，从全局重试入口保存。重载后确认占位库在原位置被替换，旁库、错题、收藏与历史记录保留，活动库和练习范围均指向新增的 393 题。[浏览器用例](../../../test/dual-platform/browser-page.cjs)
+
+本批在 Windows 10（19045）、Node 24.22.2、pnpm 12.16.1 和 Rust 1.99.1 上验证。沿用本工作树依赖和编译缓存。生成、生产构建、隔离测试版构建及 WebView2 验收串行执行。两次构建使用进程级 `CARGO_NET_OFFLINE=true`，生产构建通过进程级 `CARGO_TARGET_DIR` 复用本工作树缓存。日志位于 `apps/desktop/.reports/batch13/`。
+
+| 验证项 | 实际命令与结果 |
+| --- | --- |
+| 定向基线 | 根目录运行 `node --test --test-name-pattern='第十三批内置题库\|明确空库重启\|file URL 支持' test/dual-platform/browser-page.cjs`，6 项通过，含旧实现上的 4 个新增真实入口场景。 |
+| 迁移后定向 | 根目录用 `node --test` 执行 `source-loading.test.cjs`、`preview-performance.test.cjs`、`browser-storage.test.cjs`、`backup-entry-performance.test.cjs` 和 `format.test.cjs`，69 项通过。浏览器基线命令追加 `重复初始化`，7 项通过。 |
+| 类型与 lint | 在 `apps/desktop` 运行 `pnpm run typecheck`、`pnpm run lint`，均通过。完整 lint 覆盖 185 个手写 JavaScript 文件，规则夹具 95 项通过，1 项因临时目录不区分大小写跳过。烟测观察方式调整后，复跑类型检查及 `pnpm exec eslint scripts/smoke.mjs` 通过。 |
+| 完整 Node 与浏览器 | `pnpm test` 桌面 289 项通过、1 项环境跳过，共享 519 项通过。`pnpm run test:web-platform` 263 项全部通过。 |
+| 桌面资源与构建 | `pnpm run prepare:web`、`pnpm run build`、`pnpm run build:test` 依次通过。两端 HTML 各加载一次 `question-bank.js` 和 `banks/built-in.js`，两者均先于 `app.js`。这三个脚本及两个内置 JSON 的源码和桌面生成文件 SHA-256 一致。 |
+| WebView2 与 SQLite | `pnpm run test:desktop` 最终 62 项通过。实际删空并冷启动后从面板调用真实平台资源读取，验证唯一请求路径 `data/c1-full.json` 和 393 题返回。重载后经 SQLite 核对活动库、练习范围、首末题 ID 和已有训练记录。[桌面用例](../../../apps/desktop/scripts/smoke.mjs) |
+
+保留首轮日志。HTTP 基线首轮因共享测试服务默认屏蔽内置脚本而读到 0 题，为该场景单独提供原文件后 6 项通过。lint 首轮报两个资源回调间缺少空行，调整格式后全量通过。桌面首轮原有 61 项通过，新增用例在等待 CDP 响应事件时超时。隔离探针记录到本地资源的计时状态为 HTTP 200，平台返回 393 题，SQLite 已保存，且 CDP 未报告该请求或响应。调整烟测，在实际按钮路径中观察平台原函数返回并在结束时恢复，使用同一隔离构建复跑通过。
+
+Web 的资源失败和保存失败使用隔离浏览器夹具注入。Windows 验收使用打包资源与隔离 WebView2 配置，检查了实际 SQLite 保存和重载。正式安装和升级另随发行验收。

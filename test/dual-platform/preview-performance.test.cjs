@@ -347,7 +347,7 @@ test('主动修改范围清除旧提示，普通刷新保留提示', () => {
 
 test('全局渲染只通过导入同步入口刷新一次预览面板', () => {
   const counts = { import: 0, preview: 0 };
-  const names = ['ensureBankGroupUiV58', 'practiceScopeV8916', 'updateAiConnectionPillV99', 'renderStats', 'renderBankSelect', 'renderMergeSelect', 'renderBankList', 'renderBankPreview', 'renderWrongBook', 'renderFavoritesPageV596', 'renderRecords', 'renderRecentTraining', 'renderBankInputs', 'renderBuiltInPanelV252', 'renderPracticeScopeUiV8916', 'renderExportBankSelectorV23', 'renderImportTargetBankOptionsV59', 'syncImportAppendUiV59', 'syncHomeVersionPromptV586', 'syncPracticeStartUiV58916'];
+  const names = ['ensureBankGroupUiV58', 'practiceScopeV8916', 'updateAiConnectionPillV99', 'renderStats', 'renderBankSelect', 'renderMergeSelect', 'renderBankList', 'renderBankPreview', 'renderWrongBook', 'renderFavoritesPageV596', 'renderRecords', 'renderRecentTraining', 'renderBankInputs', 'renderPracticeScopeUiV8916', 'renderExportBankSelectorV23', 'renderImportTargetBankOptionsV59', 'syncImportAppendUiV59', 'syncHomeVersionPromptV586', 'syncPracticeStartUiV58916'];
   const context = vm.createContext({
     ...Object.fromEntries(names.map((name) => [name, () => {}])),
     syncAiImportActionV99() {
@@ -357,6 +357,8 @@ test('全局渲染只通过导入同步入口刷新一次预览面板', () => {
       counts.preview += 1;
     },
   });
+  runWebScripts(context, ['banks/built-in.js']);
+  context.builtInBank = context.ShirohaBuiltInBank.create({ select: () => null });
   vm.runInContext(`${loadWebSource().functionSource('renderAll')}\nrenderAll();`, context);
   assert.deepEqual(counts, { import: 1, preview: 1 });
 });

@@ -64,7 +64,7 @@
   // 初始化时补齐缺失题库，保留用户清空题库后的空状态。
   function ensureDefaultBank() {
     if (!state.banks.length && !state.settings?.suppressDefaultBank) {
-      state.banks.push(defaultBank());
+      state.banks.push(builtInBank.defaultBank());
     }
 
     if (!state.activeBankId) {
@@ -422,6 +422,24 @@
     renderAll,
     toast,
     makeId,
+    now,
+  });
+  const builtInBank = globalThis.ShirohaBuiltInBank.create({
+    state,
+    select: $,
+    resources: {
+      bank: () => window.questionBank,
+
+      index: () => window.questionBankIndex,
+
+      json: (url) => ShirohaPlatform.resourceJson(url),
+    },
+    normalizeQuestion,
+    setBankScope: setPracticeBankScopeV8916,
+    storage: { transaction: runMutation, save: saveSilent },
+    renderAll,
+    toast,
+    warnDev,
     now,
   });
   const {
@@ -3126,8 +3144,7 @@ D. 高速通过积水路段`;
     bindNav();
     bindEvents();
     bindMultiBlankEditorV58914();
-    bindV25ToV28Events();
-    ensureBuiltInPanelV252();
+    builtInBank.bind();
     setupSidebarCollapse();
     setupEnhancedDataToolsV23();
     renderAll();
@@ -3135,12 +3152,6 @@ D. 高速通过积水路段`;
     syncHomeVersionPromptV586();
     setTimeout(syncHomeVersionPromptV586, 80);
     setTimeout(syncHomeVersionPromptV586, 300);
-  }
-
-  function defaultBank() {
-    const qb = window.questionBank || { meta: { title: '内置题库（按需加载）' }, questions: [] };
-    const qs = Array.isArray(qb.questions) ? qb.questions : [];
-    return { id: 'default-c1', name: qs.length ? (qb.meta?.title || '默认题库') : '内置题库（待加载）', groupName: '', createdAt: now(), updatedAt: now(), questions: qs.map(normalizeQuestion), builtInLazy: !qs.length };
   }
 
   // 迁移已读状态的字段与题库分组，防止归一化改写尚未加载的原生题目。
@@ -3187,7 +3198,7 @@ D. 高速通过积水路段`;
     renderRecords();
     renderRecentTraining();
     renderBankInputs();
-    renderBuiltInPanelV252();
+    builtInBank.render();
     renderPracticeScopeUiV8916();
     if (typeof renderExportBankSelectorV23 === 'function') {
       renderExportBankSelectorV23();
@@ -3197,102 +3208,6 @@ D. 高速通过积水路段`;
     syncImportAppendUiV59();
     syncHomeVersionPromptV586();
     syncPracticeStartUiV58916(true);
-  }
-
-  // 两处可选入口复用同一内置题库加载流程。
-  function bindV25ToV28Events() {
-    ['#load-built-in-bank-btn', '#load-built-in-bank-btn-banks'].forEach((sel) => {
-      const btn = $(sel);
-      if (btn) {
-        btn.onclick = () => loadBuiltInBankV252();
-      }
-    });
-  }
-
-  // 为旧版设置页按需补上内置题库导入面板，复用已有面板实例。
-  function ensureBuiltInPanelV252() {
-    if ($('#builtin-bank-panel-v252')) {
-      return;
-    }
-
-    const bankList = $('#bank-list');
-    if (!bankList) {
-      return;
-    }
-
-    bankList.insertAdjacentHTML('beforebegin', '<div id="builtin-bank-panel-v252" class="builtin-bank-card-v252 compact-built-in-v33"><div class="section-head compact-head-v23"><div><h3>内置 C1 题库</h3><p class="muted">本地没有 C1 题库时，可重新加入。</p></div><button id="load-built-in-bank-btn-panel" class="primary" type="button">加载内置 C1 题库</button></div><div id="builtin-bank-status-v252" class="muted"></div></div>');
-    $('#load-built-in-bank-btn-panel').onclick = () => loadBuiltInBankV252();
-  }
-
-  // 根据已经存在的内置题库和来源可用性更新界面状态。
-  function renderBuiltInPanelV252() {
-    const panel = $('#builtin-bank-panel-v252');
-    const el = $('#builtin-bank-status-v252');
-    if (!el) {
-      return;
-    }
-
-    const has = state.banks.some((b) => b.id === 'default-c1' && (b.questions || []).length > 0) || state.banks.some((b) => /* 兼容按显示名称保存的旧内置题库，即使历史版本未使用固定 ID。 */ /C1驾照科目一/.test(b.name || ''));
-    if (panel) {
-      panel.hidden = !!has;
-    }
-
-    el.textContent = has ? '已加载，可直接使用。' : '当前未加入 C1 题库。';
-  }
-
-  async function fetchJsonLocalV252(url) {
-    return ShirohaPlatform.resourceJson(url);
-  }
-
-  // 在保存事务中装入内置题库，失败时原题库不会被半写入替换。
-  async function loadBuiltInBankV252() {
-    return runMutation(/* 选择可用的内置数据来源并在通过格式检查后替换或新增题库。 */ async () => {
-      try {
-        let data = null;
-        let item = null;
-        try {
-          const index = window.questionBankIndex || await fetchJsonLocalV252('data/banks-index.json');
-          item = (index || [])[0];
-          if (item) {
-            data = await fetchJsonLocalV252(item.file || 'data/c1-full.json');
-          }
-        } catch (fetchErr) {
-          warnDev('按需读取内置题库 JSON 失败，转用 question-bank.js 内置兜底数据。', fetchErr);
-        }
-
-        if (!data && window.questionBank && Array.isArray(window.questionBank.questions)) {
-          data = window.questionBank;
-          item = (window.questionBankIndex || [])[0] || { name: data.meta?.title || 'C1 驾照科目一模拟练习题库' };
-        }
-
-        if (!data) {
-          throw new Error('未找到内置题库数据');
-        }
-
-        const questions = (data.questions || []).map((q, i) => normalizeQuestion(q, i)).filter((q) => q.question);
-        if (!questions.length) {
-          throw new Error('内置题库为空');
-        }
-
-        const bank = { id: 'default-c1', name: data.meta?.title || item?.name || '默认题库', groupName: '', createdAt: now(), updatedAt: now(), questions, builtInLazy: false };
-        const old = state.banks.findIndex((b) => b.id === 'default-c1' || b.builtInLazy);
-        if (old >= 0) {
-          state.banks[old] = bank;
-        } else {
-          state.banks.push(bank);
-        }
-
-        state.settings = { ...(state.settings || {}), suppressDefaultBank: false };
-        setPracticeBankScopeV8916(bank.id, true);
-        await saveSilent();
-        renderAll();
-        toast(`已加载内置题库：${bank.name}，共 ${bank.questions.length} 题。`, 'ok');
-      } catch (e) {
-        warnDev('加载内置题库失败', e);
-        // eslint-disable-next-line prefer-template -- 异常信息可能是对象，保留 + 的默认转换；统一异常类型后移除此例外。
-        toast('加载内置题库失败：' + e.message, 'danger');
-      }
-    });
   }
 
   /* SHIROHA_WEB_PRACTICE_AI_SINGLE_QUESTION_V613_START

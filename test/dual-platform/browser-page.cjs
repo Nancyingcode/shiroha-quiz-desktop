@@ -2839,6 +2839,177 @@ test('明确空库重启保持为空；全量重置重新初始化默认题库',
   await page.locator('#save-all-btn').click();
   assert.equal(JSON.parse(await saved(page)).banks.length, 1);
 });
+
+async function clearLastBuiltInBank(page) {
+  page.removeAllListeners('app-dialog');
+  await page.locator('.nav[data-view="banks"]').click();
+  await page.locator('#bank-list [data-delbank="default-c1"]').click();
+  await page.locator('#app-dialog [data-dialog-accept]').click();
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  const snapshot = JSON.parse(await saved(page));
+  assert.deepEqual(snapshot.banks, []);
+  assert.equal(snapshot.activeBankId, '');
+  assert.equal(snapshot.settings.suppressDefaultBank, true);
+}
+
+async function assertLoadedBuiltInBank(page) {
+  const snapshot = JSON.parse(await saved(page));
+  const banks = snapshot.banks.filter((bank) => bank.id === 'default-c1');
+  assert.equal(banks.length, 1);
+  const [bank] = banks;
+  assert.equal(bank.builtInLazy, false);
+  assert.equal(bank.questions.length, 393);
+  assert.equal(bank.questions[0].id, 'C1-single-0001');
+  assert.equal(bank.questions.at(-1).id, 'C1-multiple-0393');
+  assert.equal(snapshot.activeBankId, 'default-c1');
+  assert.equal(snapshot.settings.suppressDefaultBank, false);
+  assert.deepEqual(snapshot.settings.practiceScope, { type: 'bank', value: 'default-c1' });
+  assert.equal(await page.locator('#active-bank-select').inputValue(), 'default-c1');
+  assert.equal(await page.locator('#stat-total').textContent(), '393');
+  assert.equal(await page.locator('#builtin-bank-panel-v252').getAttribute('hidden'), '');
+  return snapshot;
+}
+
+test('第十三批内置题库：HTTP 主动清空后冷启动仍空，手动从本地 JSON 重加后可重载', async (t) => {
+  // 共享测试服务默认屏蔽内置脚本，此场景按正常网页加载真实脚本。
+  const packagedBank = require('node:fs').readFileSync(path.join(WEB_ROOT, 'question-bank.js'), 'utf8');
+  const page = await pageFor(t, null, '', null, { '/question-bank.js': () => packagedBank });
+  const ready = page.locator('body[data-storage-state="ready"]');
+  const button = page.locator('#load-built-in-bank-btn-panel');
+  await ready.waitFor();
+  assert.equal(await page.locator('#active-bank-select').inputValue(), 'default-c1');
+  assert.equal(await page.locator('#stat-total').textContent(), '393');
+  const resources = await page.evaluate(() => globalThis.performance.getEntriesByType('resource')
+    .map((entry) => new URL(entry.name).pathname));
+  assert(resources.includes('/question-bank.js'));
+  assert(!resources.some((file) => file.startsWith('/data/')));
+  await clearLastBuiltInBank(page);
+  const empty = await saved(page);
+
+  await page.reload();
+  await ready.waitFor();
+  assert.equal(await page.locator('#active-bank-select option').count(), 0);
+  assert.equal(await page.locator('#stat-total').textContent(), '0');
+  assert.equal(await saved(page), empty);
+  await page.locator('.nav[data-view="banks"]').click();
+  assert.equal(await page.locator('#builtin-bank-status-v252').textContent(), '当前未加入 C1 题库。');
+  const [response] = await Promise.all([
+    page.waitForResponse((result) => result.ok() && new URL(result.url()).pathname === '/data/c1-full.json'),
+    button.click(),
+  ]);
+  assert.equal((await response.json()).questions.length, 393);
+  await ready.waitFor();
+  await page.locator('#app-toast').getByText(/已加载内置题库：.*共 393 题/).waitFor();
+  await page.reload();
+  await ready.waitFor();
+  await assertLoadedBuiltInBank(page);
+});
+
+test('第十三批内置题库：直接打开 HTML 时从题库脚本初始化及手动重加', async (t) => {
+  const context = await browser.newContext();
+  t.after(() => context.close());
+  const page = await context.newPage();
+  const ready = page.locator('body[data-storage-state="ready"]');
+  await page.goto(pathToFileURL(path.join(WEB_ROOT, 'index.html')).href);
+  await ready.waitFor();
+  assert.equal(await page.locator('#active-bank-select').inputValue(), 'default-c1');
+  assert.equal(await page.locator('#stat-total').textContent(), '393');
+  await clearLastBuiltInBank(page);
+  await page.evaluate(() => {
+    globalThis.ShirohaPlatform.resourceJson = async () => {
+      throw new Error('模拟本地文件环境无法读取 JSON');
+    };
+  });
+
+  await page.locator('#load-built-in-bank-btn-panel').click();
+  await ready.waitFor();
+  await page.locator('#app-toast').getByText(/已加载内置题库：.*共 393 题/).waitFor();
+  await page.reload();
+  await ready.waitFor();
+  await assertLoadedBuiltInBank(page);
+});
+
+test('第十三批内置题库：JSON 和脚本数据均缺失时保留占位库，资源恢复后可重试', async (t) => {
+  const page = await pageFor(t, null, '', null, { '/question-bank.js': () => '' });
+  const ready = page.locator('body[data-storage-state="ready"]');
+  const button = page.locator('#load-built-in-bank-btn-panel');
+  await ready.waitFor();
+  await page.locator('#save-all-btn').click();
+  await ready.waitFor();
+  const before = await saved(page);
+  assert.deepEqual(JSON.parse(before).banks.map(({ id, builtInLazy, questions }) => ({
+    id, builtInLazy, count: questions.length,
+  })), [{ id: 'default-c1', builtInLazy: true, count: 0 }]);
+  await page.locator('.nav[data-view="banks"]').click();
+  const jsonRoute = '**/data/c1-full.json';
+  await page.route(jsonRoute, (route) => route.fulfill({ status: 404 }));
+  const [index] = await Promise.all([
+    page.waitForResponse((result) => result.ok() && new URL(result.url()).pathname === '/data/banks-index.json'),
+    button.click(),
+  ]);
+  assert.equal((await index.json())[0].file, 'data/c1-full.json');
+  await page.locator('#app-toast').getByText('加载内置题库失败：未找到内置题库数据').waitFor();
+  await ready.waitFor();
+  assert.equal(await saved(page), before);
+  assert.equal(await page.locator('#stat-total').textContent(), '0');
+  assert(await button.isVisible());
+
+  await page.unroute(jsonRoute);
+  await button.click();
+  await ready.waitFor();
+  await page.locator('#app-toast').getByText(/已加载内置题库：.*共 393 题/).waitFor();
+  await page.reload();
+  await ready.waitFor();
+  await assertLoadedBuiltInBank(page);
+});
+
+test('第十三批内置题库：保存失败保留旧 ID 占位库与旁库，全局重试原位替换', async (t) => {
+  const initial = webState();
+  initial.banks.splice(1, 0, {
+    id: 'legacy-placeholder',
+    name: '历史占位题库',
+    questions: [],
+    builtInLazy: true,
+  });
+  const page = await pageFor(t, JSON.stringify(initial));
+  const ready = page.locator('body[data-storage-state="ready"]');
+  const button = page.locator('#load-built-in-bank-btn-panel');
+  await ready.waitFor();
+  await page.locator('#save-all-btn').click();
+  await ready.waitFor();
+  const before = JSON.parse(await saved(page));
+  await page.locator('.nav[data-view="banks"]').click();
+  await page.evaluate(() => {
+    const { storage } = globalThis.ShirohaPlatform;
+    const { write } = storage;
+    storage.write = async () => {
+      storage.write = write;
+      throw new Error('模拟内置题库保存失败');
+    };
+  });
+
+  await button.click();
+  const failed = page.locator('#platform-status.failed').filter({ hasText: '模拟内置题库保存失败' });
+  await failed.waitFor();
+  await ready.waitFor();
+  assert.deepEqual(JSON.parse(await saved(page)), before);
+  assert.equal(await page.locator('#active-bank-select').inputValue(), initial.activeBankId);
+  assert.equal(await page.locator('#bank-list [data-delbank="legacy-placeholder"]').count(), 1);
+  assert(await button.isVisible());
+  assert.equal(await page.locator('#app-toast').getByText(/已加载内置题库/).count(), 0);
+  await failed.getByRole('button', { name: '重试', exact: true }).click();
+  await ready.waitFor();
+  await page.locator('#app-toast').getByText(/已加载内置题库：.*共 393 题/).waitFor();
+  await page.reload();
+  await ready.waitFor();
+  const after = await assertLoadedBuiltInBank(page);
+  assert.deepEqual(after.banks.map((bank) => bank.id), ['bank-a', 'default-c1', 'bank-b']);
+  assert.deepEqual([after.banks[0], after.banks[2]], [before.banks[0], before.banks[2]]);
+  for (const field of ['wrongBook', 'favorites', 'records', 'crossPlatformMeta']) {
+    assert.deepEqual(after[field], before[field], field);
+  }
+});
+
 test('延迟保存只显示待保存状态；其他标签变化拒绝覆盖', async (t) => {
   const initial = JSON.stringify(webState());
   const page = await pageFor(t, initial, 'const write=globalThis.ShirohaPlatform.storage.write;globalThis.ShirohaPlatform.storage.write=async(...args)=>{await new Promise(r=>setTimeout(r,350));return write(...args)};');
@@ -3291,6 +3462,12 @@ test('file URL 支持 ZIP 与文本导入且不依赖可选 PDF/OCR', async (t) 
   const bankDeletionScript = './banks/deletion.js';
   assert.equal(scripts.filter((script) => script === bankDeletionScript).length, 1);
   assert(scripts.indexOf(bankDeletionScript) < appIndex);
+  const builtInBank = './banks/built-in.js';
+  const packagedBankIndex = scripts.indexOf('./question-bank.js');
+  assert.equal(scripts.filter((script) => script === builtInBank).length, 1);
+  assert(packagedBankIndex >= 0 && packagedBankIndex < scripts.indexOf(builtInBank));
+  assert(scripts.indexOf(builtInBank) < appIndex);
+  assert.equal(await page.evaluate(() => typeof globalThis.ShirohaBuiltInBank.create), 'function');
   const scopeScript = './study/scope.js';
   assert.equal(scripts.filter((script) => script === scopeScript).length, 1);
   const metadataIndex = scripts.indexOf('./banks/metadata.js');
