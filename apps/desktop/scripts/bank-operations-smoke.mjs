@@ -8,9 +8,14 @@ import { randomUUID } from 'node:crypto';
 /** @typedef {{invoke(command: string, args?: Record<string, unknown>): Promise<unknown>}} NativeHost */
 /** @typedef {typeof globalThis & {ShirohaDesktopHost?: NativeHost}} TestGlobal */
 /** @typedef {{kind: 'details' | 'read-failure', bankId: string, ids: string[]} | {kind: 'write'}} Call */
+/** @typedef {{kind: string, collection?: string, bank_id?: string, ids?: string[]}} ExportQuery */
+/** @typedef {{name: string, bytes: number[], finished: boolean}} ExportFile */
+/** @typedef {{kind: string, name?: string, token?: string, bytes?: number[], offset?: number, size?: number}} ExportRequest */
 
 const PAGE_SIZE = 10;
 const DUPLICATE_INDEX = 11;
+const EXPORT_PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=';
+const EXPORT_IMAGE = `data:image/png;base64,${EXPORT_PNG}`;
 
 /** @param {string} id @param {string} name @param {number} size */
 function fixtureBank(id, name, size) {
@@ -81,6 +86,151 @@ async function setupFixture(page, readSnapshot) {
   const snapshot = await readAfterReload(page, readSnapshot);
   await openBanks(page, snapshot.banks[0]);
   return snapshot;
+}
+
+/** @param {Page} page @param {ReadSnapshot} readSnapshot */
+async function setupExportFixture(page, readSnapshot) {
+  const banks = [
+    fixtureBank('export-a', '导出甲库', 13),
+    fixtureBank('export-b', '导出乙库', 14),
+    fixtureBank('export-c', '导出未选库', 12),
+  ];
+  for (const bank of banks) {
+    // 图片落在末页，确保导出实际经过 SQLite 的媒体水合。
+    Object.assign(bank.questions[0], { images: [] });
+    Object.assign(bank.questions.at(-1) || {}, {
+      images: [{ id: 'pixel', dataUrl: EXPORT_IMAGE, sourceName: 'pixel.png' }],
+    });
+  }
+
+  await replaceFixture(page, {
+    schemaVersion: 1,
+    banks,
+    activeBankId: banks[0].id,
+    settings: { suppressDefaultBank: false, aiImportV99: { provider: 'custom', rememberKey: false } },
+    favorites: {},
+    wrongBook: {},
+    records: [{
+      id: 'export-record',
+      mode: '练习',
+      name: '导出历史成绩',
+      bankName: '删除后保留的题库名称',
+      date: banks[0].createdAt,
+      total: 1,
+      correct: 1,
+      details: [{ question: '记录中仍可读取的历史题干', type: 'single', answer: ['A'], chosen: ['A'], correct: true }],
+    }],
+    crossPlatformMeta: {},
+  });
+  return readAfterReload(page, readSnapshot);
+}
+
+/** @param {Page} page */
+async function captureExportFiles(page) {
+  await page.evaluate(() => {
+    const { ShirohaDesktopHost: host } = /** @type {TestGlobal} */ (globalThis);
+    if (!host) { throw new Error('本地桥接缺失'); }
+
+    const callNative = host.invoke;
+    const files = /** @type {ExportFile[]} */ ([]);
+    const queries = /** @type {ExportQuery[]} */ ([]);
+    const grants = new Map();
+    Reflect.set(globalThis, '__nativeExportTrace', { files, queries });
+    // 测试宿主替代交互式保存授权，接收真实桌面适配器输出的文件名与分块字节。
+    host.invoke = (command, args) => {
+      const query = /** @type {ExportQuery | undefined} */ (args?.query);
+      if (command === 'local_query' && query && ['details', 'hydrate'].includes(query.kind)) {
+        const {
+          kind,
+          collection,
+          bank_id: bankId,
+          ids,
+        } = query;
+        queries.push({ kind, collection, bank_id: bankId, ids });
+      }
+
+      if (command !== 'local_file') {
+        return callNative(command, args);
+      }
+
+      const request = /** @type {ExportRequest} */ (args?.request);
+      if (request.kind === 'choose_export') {
+        const token = `export-fixture-${files.length}`;
+        const file = { name: request.name || '', bytes: [], finished: false };
+        files.push(file);
+        grants.set(token, { file, finalized: false });
+        return Promise.resolve({ token });
+      }
+
+      const grant = grants.get(request.token);
+      if (!grant) {
+        return callNative(command, args);
+      }
+
+      const { file } = grant;
+      if (request.kind === 'append') {
+        if (file.bytes.length !== request.offset) { throw new Error('文件分块位置不连续'); }
+        file.bytes = file.bytes.concat(request.bytes);
+      } else if (request.kind === 'finish') {
+        if (file.bytes.length !== request.size) { throw new Error('实际导出长度与声明不同'); }
+        grant.finalized = true;
+      } else if (request.kind === 'release') {
+        file.finished = grant.finalized;
+        grants.delete(request.token);
+      }
+
+      return Promise.resolve(null);
+    };
+  });
+}
+
+/** @param {Page} page */
+function exportCapture(page) {
+  return /** @type {Promise<{files: ExportFile[], queries: ExportQuery[]}>} */ (page.evaluate(
+    () => Reflect.get(globalThis, '__nativeExportTrace'),
+  ));
+}
+
+/** @param {Page} page @param {import('playwright-core').Locator} button */
+async function exportFile(page, button) {
+  await button.click();
+  await page.waitForFunction(() => Reflect.get(globalThis, '__nativeExportTrace').files[0]?.finished);
+  const { files, queries } = await exportCapture(page);
+  assert.equal(files.length, 1);
+  const [{ name, bytes }] = files;
+  await page.evaluate(() => {
+    const { files: capturedFiles, queries: capturedQueries } = Reflect.get(globalThis, '__nativeExportTrace');
+    capturedFiles.length = 0;
+    capturedQueries.length = 0;
+  });
+  return { name, bytes, queries };
+}
+
+/** @param {Bank} bank @param {number} [start] */
+function exportBankQuery(bank, start = 0) {
+  return { kind: 'details', collection: 'questions', bank_id: bank.id, ids: questionIds(bank, start) };
+}
+
+/** @param {Snapshot} snapshot */
+function exportRecordQuery(snapshot) {
+  return { kind: 'details', collection: 'records', bank_id: '', ids: snapshot.records.map((record) => record.id) };
+}
+
+/** @param {Bank} exported @param {Bank} bank */
+function assertExportedBank(exported, bank) {
+  assert.equal(exported.id, bank.id);
+  assert.equal(exported.name, bank.name);
+  assert.deepEqual(questionIds(exported), questionIds(bank));
+  assert.deepEqual(exported.questions.map(questionContent), bank.questions.map((question) => ({
+    ...questionContent(question), type: 'SINGLE',
+  })));
+  assert.deepEqual(exported.questions[0].images, []);
+  assert.equal(Object.hasOwn(exported.questions[1], 'images'), false);
+}
+
+/** @param {Bank} bank */
+function firstExportedImage(bank) {
+  return /** @type {{dataUrl?: string, localPath?: string}[] | undefined} */ (bank.questions.at(-1)?.images)?.[0];
 }
 
 /** @param {Page} page @param {{holdBank?: string, failWrite?: boolean, failReadBank?: string}} [options] */
@@ -284,6 +434,217 @@ export async function dedupeRetrySmoke(page, readSnapshot) {
   assert.deepEqual(reloaded.banks[0].questions, expected);
   assert.deepEqual(reloaded.banks.slice(1), before.banks.slice(1));
   return { preservedAfterReload: expected.length };
+}
+
+/** @param {Page} page @param {ReadSnapshot} readSnapshot */
+export async function bankExportScopeSmoke(page, readSnapshot) {
+  const before = await setupExportFixture(page, readSnapshot);
+  const [active, other] = before.banks;
+  const revision = await localRevision(page);
+  await openBanks(page, active);
+  await captureExportFiles(page);
+
+  const card = page.locator(`[data-exportbank="${other.id}"]`);
+  await page.locator('.bank-item').filter({ has: card }).locator('summary').click();
+  const cardFile = await exportFile(page, card);
+  assert.equal(cardFile.name, `${other.name}.json`);
+  assert.deepEqual(cardFile.queries, [exportBankQuery(other)]);
+  const cardBank = JSON.parse(Buffer.from(cardFile.bytes).toString('utf8'));
+  assertExportedBank(cardBank, other);
+  assert.equal(firstExportedImage(cardBank)?.dataUrl, EXPORT_IMAGE);
+
+  const activeFile = await exportFile(page, page.locator('#export-json-btn'));
+  assert.equal(activeFile.name, `${active.name}.json`);
+  assert.deepEqual(activeFile.queries, [exportBankQuery(active, PAGE_SIZE)]);
+  const activeBank = JSON.parse(Buffer.from(activeFile.bytes).toString('utf8'));
+  assertExportedBank(activeBank, active);
+  assert.equal(firstExportedImage(activeBank)?.dataUrl, EXPORT_IMAGE);
+
+  await readAfterReload(page, readSnapshot);
+  await openBanks(page, active);
+  await page.locator('#export-bank-current-v23').click();
+  await page.locator(`[data-bank-bulk-v23="${other.id}"]`).check();
+  await captureExportFiles(page);
+  const bulk = await exportFile(page, page.locator('#export-selected-banks-v23'));
+  assert.match(bulk.name, /^shiroha-quiz-question-banks-\d{4}-\d{2}-\d{2}\.json$/);
+  assert.deepEqual(bulk.queries, [exportBankQuery(active, PAGE_SIZE), exportBankQuery(other)]);
+  const selection = JSON.parse(Buffer.from(bulk.bytes).toString('utf8'));
+  assert.equal(selection.exportType, 'question_banks');
+  assert.equal(selection.banks.length, 2);
+  assertExportedBank(selection.banks[0], active);
+  assertExportedBank(selection.banks[1], other);
+  assert.equal(firstExportedImage(selection.banks[1])?.dataUrl, EXPORT_IMAGE);
+  assert.equal(Object.hasOwn(selection, 'records'), false);
+  assert.equal(Object.hasOwn(selection, 'settings'), false);
+
+  await page.locator('.nav[data-view="records"]').click();
+  const records = await exportFile(page, page.locator('#export-records-btn'));
+  assert.equal(records.name, '学习记录.json');
+  assert.deepEqual(records.queries, [exportRecordQuery(before)]);
+  assert.deepEqual(JSON.parse(Buffer.from(records.bytes).toString('utf8')), before.records);
+  assert.equal(await localRevision(page), revision);
+  assert.deepEqual(await readAfterReload(page, readSnapshot), before);
+  return { selectedBanks: 2, scopedReads: true, records: before.records.length, originalPreserved: true };
+}
+
+/** @param {Page} page */
+async function setExportPreviewSentinel(page) {
+  await page.locator('#export-output').evaluate((element) => {
+    /** @type {HTMLTextAreaElement} */ (element).value = '上一次导出';
+  });
+}
+
+/** @param {Page} page */
+async function assertNoExport(page) {
+  assert.equal((await exportCapture(page)).files.length, 0);
+  assert.equal(await page.locator('#export-output').inputValue(), '上一次导出');
+}
+
+/** @param {Page} page @param {ReadSnapshot} readSnapshot */
+export async function bankExportChangesSmoke(page, readSnapshot) {
+  const before = await setupExportFixture(page, readSnapshot);
+  const [active, other] = before.banks;
+  const revision = await localRevision(page);
+  await openBanks(page, active);
+  await traceOperations(page, { holdBank: active.id, failReadBank: other.id });
+  await captureExportFiles(page);
+  await setExportPreviewSentinel(page);
+
+  const card = page.locator(`[data-exportbank="${other.id}"]`);
+  await page.locator('.bank-item').filter({ has: card }).locator('summary').click();
+  await card.click();
+  await page.locator('#platform-status.failed').filter({
+    hasText: '本地操作未完成，原数据已保留。请检查权限、空间或重新启动。',
+  }).waitFor();
+  await assertNoExport(page);
+  assert.deepEqual(await operationCalls(page), [{ kind: 'read-failure', bankId: other.id, ids: questionIds(other) }]);
+
+  await page.locator('#export-bank-current-v23').click();
+  await page.locator('#export-selected-banks-v23').click();
+  await page.waitForFunction(() => typeof Reflect.get(globalThis, '__bankOperationTrace')?.release === 'function');
+  await page.locator(`[data-bank-bulk-v23="${other.id}"]`).check();
+  await page.locator(`[data-bank-bulk-v23="${active.id}"]`).uncheck();
+  assert.match(await page.locator('#export-bank-summary-v23').innerText(), /已选择 1 个题库/);
+  await page.evaluate(() => Reflect.get(globalThis, '__bankOperationTrace').release());
+  const changed = page.locator('#app-toast').getByText('导出目标已变化，请重新导出。', { exact: true });
+  await changed.waitFor();
+  await assertNoExport(page);
+  assert.deepEqual((await operationCalls(page)).slice(1), [
+    { kind: 'details', bankId: active.id, ids: questionIds(active, PAGE_SIZE) },
+  ]);
+  assert.equal(await localRevision(page), revision);
+
+  await readAfterReload(page, readSnapshot);
+  await openBanks(page, active);
+  await traceOperations(page, { holdBank: active.id });
+  await captureExportFiles(page);
+  await setExportPreviewSentinel(page);
+  await page.locator('#export-json-btn').click();
+  await page.waitForFunction(() => typeof Reflect.get(globalThis, '__bankOperationTrace')?.release === 'function');
+  await page.locator('#bank-current-select-v28').selectOption(other.id);
+  await page.locator('body[data-storage-state="pending"]').waitFor();
+  await page.evaluate(() => Reflect.get(globalThis, '__bankOperationTrace').release());
+  await changed.waitFor();
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await assertNoExport(page);
+  assert.equal((await operationCalls(page)).filter((call) => call.kind === 'write').length, 1);
+  assert.equal(await localRevision(page), revision + 1);
+  const after = await readAfterReload(page, readSnapshot);
+  assert.equal(after.activeBankId, other.id);
+  assert.deepEqual(after.banks, before.banks);
+  assert.deepEqual(after.records, before.records);
+  return { failedReads: 1, cancelledAfterChange: 2, exports: 0, switchWrites: 1 };
+}
+
+/** @param {ExportQuery[]} queries @param {Snapshot} snapshot */
+function assertFullBackupReads(queries, snapshot) {
+  assert.deepEqual(queries.filter((query) => query.kind === 'details'), [
+    ...snapshot.banks.map((bank) => exportBankQuery(bank)), exportRecordQuery(snapshot),
+  ]);
+  assert.equal(queries.filter((query) => query.kind === 'hydrate').length, 2);
+}
+
+/** @param {Page} page @param {number[]} bytes */
+function readExportedZip(page, bytes) {
+  return page.evaluate(async (content) => {
+    const zip = Reflect.get(globalThis, 'ShirohaZip');
+    const { buffer } = Uint8Array.from(content);
+    const entries = /** @type {{name: string}[]} */ (zip.parseZipEntries(buffer));
+    const manifest = entries.find((entry) => entry.name === 'backup.json');
+    const asset = entries.find((entry) => entry.name.startsWith('assets/'));
+    if (!manifest || !asset) { throw new Error('ZIP 缺少清单或媒体'); }
+    return {
+      payload: JSON.parse(await zip.unzipEntry(buffer, manifest)),
+      asset: asset.name,
+      media: Array.from(/** @type {Uint8Array} */ (await zip.unzipEntryBytes(buffer, asset))),
+      assetCount: entries.filter((entry) => entry.name.startsWith('assets/')).length,
+    };
+  }, bytes);
+}
+
+/** @param {Page} page @param {ReadSnapshot} readSnapshot */
+export async function fullBackupExportSmoke(page, readSnapshot) {
+  const before = await setupExportFixture(page, readSnapshot);
+  const revision = await localRevision(page);
+  const settings = page.locator('.nav[data-view="settings"]');
+  await settings.click();
+  await captureExportFiles(page);
+  const json = await exportFile(page, page.locator('#export-all-btn'));
+  assert.match(json.name, /^shiroha-quiz-all-data-\d{4}-\d{2}-\d{2}\.json$/);
+  assertFullBackupReads(json.queries, before);
+  const full = JSON.parse(Buffer.from(json.bytes).toString('utf8'));
+  assert.equal(full.exportType, 'all_data');
+  assert.equal(full.banks.length, before.banks.length);
+  before.banks.forEach((bank, index) => assertExportedBank(full.banks[index], bank));
+  assert.equal(firstExportedImage(full.banks[0])?.dataUrl, EXPORT_IMAGE);
+  assert.deepEqual(full.records, before.records);
+  assert.equal(full.settings.suppressDefaultBank, false);
+  assert.equal(full.settings.aiImportV99.rememberKey, false);
+
+  await readAfterReload(page, readSnapshot);
+  await settings.click();
+  await captureExportFiles(page);
+  const zip = await exportFile(page, page.locator('#settings-export-native-backup-v611'));
+  assert.match(zip.name, /^shiroha-quiz-native-backup-\d{4}-\d{2}-\d{2}\.zip$/);
+  assertFullBackupReads(zip.queries, before);
+  const archive = await readExportedZip(page, zip.bytes);
+  assert.equal(archive.payload.kind, 'shiroha_quiz_web_native_backup');
+  assert.equal(archive.payload.version, 3);
+  assert.equal(archive.payload.banks.length, before.banks.length);
+  before.banks.forEach((bank, index) => assertExportedBank(archive.payload.banks[index], bank));
+  assert.equal(firstExportedImage(archive.payload.banks[0])?.localPath, archive.asset);
+  assert.deepEqual(Buffer.from(archive.media), Buffer.from(EXPORT_PNG, 'base64'));
+  assert.equal(archive.assetCount, 1);
+  assert.equal(archive.payload.crossPlatform.studyRecords[0].id, before.records[0].id);
+  assert.equal(
+    archive.payload.crossPlatform.studyRecords[0].questionResults[0].question.question,
+    '记录中仍可读取的历史题干',
+  );
+
+  await readAfterReload(page, readSnapshot);
+  await settings.click();
+  await captureExportFiles(page);
+  await page.evaluate(() => Object.defineProperty(globalThis.navigator, 'clipboard', {
+    configurable: true,
+    value: {
+      writeText: (/** @type {string} */ text) => {
+        Reflect.set(globalThis, '__fullBackupClipboard', text);
+        return Promise.resolve();
+      },
+    },
+  }));
+  await page.locator('#settings-copy-all-backup-v23').click();
+  await page.locator('#app-toast').getByText('已复制全部数据备份文本。', { exact: true }).waitFor();
+  const copied = await page.evaluate(() => JSON.parse(Reflect.get(globalThis, '__fullBackupClipboard')));
+  assert.deepEqual(copied.banks, full.banks);
+  assert.deepEqual(copied.records, full.records);
+  assert.deepEqual(copied.settings, full.settings);
+  const { queries, files } = await exportCapture(page);
+  assertFullBackupReads(queries, before);
+  assert.equal(files.length, 0);
+  assert.equal(await localRevision(page), revision);
+  assert.deepEqual(await readAfterReload(page, readSnapshot), before);
+  return { fullJson: true, zipAssets: archive.assetCount, copied: true, originalPreserved: true };
 }
 
 /** @param {Page} page @param {ReadSnapshot} readSnapshot @param {Bank[]} [extraBanks] */

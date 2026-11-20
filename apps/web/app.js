@@ -14,9 +14,7 @@
     questionTextContainsDataUriV83,
     injectQuestionImagesForWebV83,
     buildRichContentFieldV57,
-    buildQuestionRichContentV57,
     buildRichContentCapabilitiesV57,
-    exportQuestionImagesForCrossExportV83,
   } = globalThis.ShirohaRichContent;
   const BANK_DEFAULT_GROUP_V58 = '未分组';
   const CURRENT_SCHEMA_VERSION = 1;
@@ -185,6 +183,14 @@
 
   async function loadNativeBanks(ids, shouldReport) {
     return loadNativeItems(practiceSessionItemsForBanksV8916(state.banks.filter((bank) => ids.includes(bank.id))), shouldReport);
+  }
+
+  async function loadNativeRecords(ids) {
+    if (!ShirohaPlatform.storage.ensureRecords) {
+      return true;
+    }
+
+    return readNative(() => ShirohaPlatform.storage.ensureRecords(state, ids));
   }
 
   async function loadNativeAll() {
@@ -400,7 +406,7 @@
     makeId,
     now,
   });
-  // 保存失败可能替换选中集合，题库页和删除操作每次使用同一个当前集合。
+  // 保存失败可能替换选中集合，题库页、导出和删除每次使用同一个当前集合。
   const bankSelection = {
     get: () => exportBankSelectedV23,
 
@@ -450,7 +456,7 @@
     renderMergeSelect,
     renderBankInputs,
     renderBankList,
-    renderBankToolbarV28,
+    setupBankManagement,
     renderBankPreview,
     bankQuestionCopyText,
     openBankQuestionDetail,
@@ -487,7 +493,7 @@
       loadItems: loadNativeItems,
       itemsForBanks: practiceSessionItemsForBanksV8916,
     },
-    rendering: { all: renderAll, exportSummary: renderExportBankSummaryV23, toast },
+    rendering: { all: renderAll, toast },
     selection: bankSelection,
     actions: {
       activeBank,
@@ -496,7 +502,12 @@
       edit: (...args) => editBankByIdV45(...args),
 
       duplicate: duplicateBankById,
-      exportBank: exportBankById,
+      exportBank: (id) => backupExport.exportBankById(id),
+
+      exportCurrent: () => backupExport.exportCurrentBank(),
+
+      exportSelected: () => backupExport.exportSelectedBanks(),
+
       deleteBanks: deleteBanksV32,
       deleteQuestions: deleteBankQuestions,
       isBusy: () => mutationBusy,
@@ -1969,7 +1980,7 @@
       }
     });
 
-    $('#export-records-btn').onclick = exportRecords;
+    $('#export-records-btn').onclick = backupExport.exportRecords;
     $('#record-mode-filter').onchange = renderRecords;
     const recordDetailFilterV385 = $('#record-detail-filter-v385');
     if (recordDetailFilterV385) {
@@ -2051,14 +2062,9 @@
 
     bindLearningRecordActions();
 
-    const exportJsonBtn = $('#export-json-btn');
-    if (exportJsonBtn) {
-      exportJsonBtn.onclick = exportCurrentBank;
-    }
-
     const exportAllBtn = $('#export-all-btn');
     if (exportAllBtn) {
-      exportAllBtn.onclick = exportAll;
+      exportAllBtn.onclick = backupExport.exportAllBackup;
     }
 
     const importBackupQuickBtnV598 = $('#import-backup-quick-btn-v598');
@@ -2693,59 +2699,6 @@
   }
   /* SHIROHA_WEB_V58_9_14_MULTI_BLANK_SYNC_END */
 
-  // 将 Web 题型对应到跨端备份使用的原生题型枚举，保留主观题回退。
-  function toNativeQuestionType(type) {
-    const value = normalizeWebQuestionType(type);
-    if (value === 'multiple') {
-      return 'MULTIPLE';
-    }
-
-    if (value === 'judge') {
-      return 'JUDGE';
-    }
-
-    if (value === 'blank') {
-      return 'BLANK';
-    }
-
-    if (value === 'short') {
-      return 'SHORT';
-    }
-
-    return 'SINGLE';
-  }
-
-  // 构造跨端题目副本，将图片与题干、富文本的导出形式统一。
-  function serializeQuestionForCrossExportV53(q) {
-    const out = JSON.parse(JSON.stringify(q || {}));
-    const media = exportQuestionImagesForCrossExportV83(out);
-    out.type = toNativeQuestionType(out.type || out.questionType || out.kind);
-    out.question = media.question;
-    // 显式空数组属于原有跨端数据；缺失字段和无效媒体继续按原规则处理。
-    if (media.images.length) {
-      out.images = media.images;
-    } else if (!Array.isArray(out.images) || out.images.length) {
-      delete out.images;
-    }
-
-    const rich = buildQuestionRichContentV57(out);
-    if (rich) {
-      out.richContent = rich;
-    } else {
-      delete out.richContent;
-    }
-
-    return out;
-  }
-
-  // 序列化题库副本和组名，让跨端导出无需修改当前工作题库。
-  function serializeBankForCrossExportV53(bank) {
-    const out = JSON.parse(JSON.stringify(bank || {}));
-    out.groupName = normalizeBankGroupNameV58(out.groupName);
-    out.questions = Array.isArray(out.questions) ? out.questions.map(serializeQuestionForCrossExportV53) : [];
-    return out;
-  }
-
   function stripQuestionImages(s) {
     return String(s || '').replace(/* 用可读占位代替内嵌 Markdown 图片，避免预览摘要包含二进制内容。 */ /!\[[^\]]*\]\(data:image\/[^)]+\)/g, '[图片]');
   }
@@ -3166,33 +3119,6 @@ D. 高速通过积水路段`;
     return name === 'RangeError' || /* 从运行时错误文案识别序列化字符串超限，补足仅有错误名称的判断。 */ /Invalid string length|string length|too large/i.test(msg);
   }
 
-  // 导出指定题库前加载原生按需数据，确保导出包含完整题目。
-  async function exportBankById(id) {
-    try {
-      if (!await loadNativeBanks([id])) {
-        return;
-      }
-
-      const b = state.banks.find((x) => x.id === id);
-      if (!b) {
-        return;
-      }
-
-      const text = JSON.stringify(serializeBankForCrossExportV53(b), null, 2);
-      const output = $('#export-output');
-      if (output) {
-        output.value = text;
-      }
-
-      // eslint-disable-next-line prefer-template -- 历史数据字段可能是对象，保留 + 的默认转换；字段类型受约束后移除此例外。
-      await download((b.name || '题库') + '.json', text);
-    } catch (error) {
-      // eslint-disable-next-line prefer-template -- 异常信息可能是对象，保留 + 的默认转换；统一异常类型后移除此例外。
-      platformStatus('导出失败：' + error.message, true);
-      return false;
-    }
-  }
-
   // 洗牌时复制输入，避免打乱原有题库顺序。
   function shuffle(a) {
     const shuffled = [...a];
@@ -3326,51 +3252,8 @@ D. 高速通过积水路段`;
     return Number($(selector).value) || 0;
   }
 
-  // 导出前补齐原生分页记录详情，避免把只读摘要当成完整学习记录。
-  async function exportRecords() {
-    try {
-      if (ShirohaPlatform.storage.ensureRecords && !await readNative(() => ShirohaPlatform.storage.ensureRecords(state, state.records.map((r) => r.id)))) {
-        return;
-      }
-
-      const text = JSON.stringify(state.records || [], null, 2);
-      const output = $('#export-output');
-      if (output) {
-        output.value = text;
-      }
-
-      await download('学习记录.json', text);
-    } catch (error) {
-      // eslint-disable-next-line prefer-template -- 异常信息可能是对象，保留 + 的默认转换；统一异常类型后移除此例外。
-      platformStatus('导出失败：' + error.message, true);
-      return false;
-    }
-  }
-
   function fmt(s) {
     return new Date(s).toLocaleString('zh-CN', { hour12: false });
-  }
-
-  // 导出当前题库前确保其试题正文已经全部加载。
-  async function exportCurrentBank() {
-    try {
-      if (!await loadNativeBanks([activeBank().id])) {
-        return;
-      }
-
-      const text = JSON.stringify(serializeBankForCrossExportV53(activeBank()), null, 2);
-      $('#export-output').value = text;
-      // eslint-disable-next-line prefer-template -- 历史数据字段可能是对象，保留 + 的默认转换；字段类型受约束后移除此例外。
-      await download(activeBank().name + '.json', text);
-    } catch (error) {
-      // eslint-disable-next-line prefer-template -- 异常信息可能是对象，保留 + 的默认转换；统一异常类型后移除此例外。
-      platformStatus('导出失败：' + error.message, true);
-      return false;
-    }
-  }
-
-  function exportAll() {
-    exportAllBackupV23();
   }
 
   /* SHIROHA_V23_DATA_TOOLS_PATCH_START
@@ -3379,16 +3262,8 @@ D. 高速通过积水路段`;
   function setupEnhancedDataToolsV23() {
     injectDataToolsStyleV23();
     ensureBackupFileInputV23();
-    ensureBankManageExportPanelV23();
+    setupBankManagement();
     ensureSettingsBackupPanelV23();
-    const validIds = new Set(state.banks.map((bank) => bank.id));
-    exportBankSelectedV23 = new Set([...exportBankSelectedV23].filter((id) => validIds.has(id)));
-
-    if (!exportBankSelectedV23.size) {
-      exportBankSelectedV23 = new Set(validIds);
-    }
-
-    renderExportBankSummaryV23();
   }
 
   // 按需装配备份文件输入，用独立控件承接恢复文件选择。
@@ -3404,72 +3279,6 @@ D. 高速通过积水路段`;
     input.style.display = 'none';
     input.onchange = importBackupJsonFileV23;
     document.body.appendChild(input);
-  }
-
-  // 在题库管理页装配选择性批量导出控件，重复渲染时复用已绑定入口。
-  function ensureBankManageExportPanelV23() {
-    if ($('#bank-bulk-export-panel-v23')) {
-      return;
-    }
-
-    const bankList = $('#bank-list');
-    if (!bankList) {
-      return;
-    }
-
-    bankList.insertAdjacentHTML('beforebegin', `<div id="bank-bulk-export-panel-v23" class="data-tool-card-v23 bank-bulk-panel-v23 bank-manage-toolbar-v28">
-    <div class="section-head compact-head-v23"><div><h3>当前题库与批量管理</h3><p class="muted">在这里切换当前题库；勾选下方题库后，可以批量导出题库 JSON 或删除。</p></div></div>
-    <div class="bank-current-bar-v28">
-      <label>当前题库<select id="bank-current-select-v28"></select></label>
-      <span class="muted">切换后会同步预览、练习、考试和错题范围。</span>
-    </div>
-    <div class="actions wrap-v23 bank-toolbar-actions-v28">
-      <label class="check-line-v23"><input id="export-bank-all-v23" type="checkbox">全选</label>
-      <button class="ghost" id="export-bank-invert-v23" type="button">反选</button>
-      <button class="ghost" id="export-bank-current-v23" type="button">仅选当前题库</button>
-      <button class="primary" id="export-selected-banks-v23" type="button">导出选中题库 JSON</button>
-      <button class="ghost danger" id="delete-selected-banks-v32" type="button">删除选中题库</button>
-    </div>
-    <div id="export-bank-summary-v23" class="notice warn">请选择需要管理的题库。</div>
-  </div>`);
-    $('#bank-current-select-v28').onchange = /* 题库管理页的选择器切换活动题库。 */ async (e) => runMutation(/* 空选项不触发数据写入。 */ async () => {
-      if (e.target.value) {
-        state.activeBankId = e.target.value;
-        await saveSilent();
-        renderAll();
-      }
-    });
-
-    $('#export-bank-all-v23').onchange = (e) => {
-      exportBankSelectedV23 = e.target.checked ? new Set(state.banks.map((b) => b.id)) : new Set();
-
-      renderBankList();
-    };
-
-    $('#export-bank-invert-v23').onclick = /* 以当前题库列表为准反选，确保导出的题库仍存在。 */ () => {
-      const next = new Set();
-      state.banks.forEach((b) => {
-        if (!exportBankSelectedV23.has(b.id)) {
-          next.add(b.id);
-        }
-      });
-
-      exportBankSelectedV23 = next;
-      renderBankList();
-    };
-
-    $('#export-bank-current-v23').onclick = () => {
-      exportBankSelectedV23 = new Set([activeBank().id]);
-      renderBankList();
-    };
-
-    $('#export-selected-banks-v23').onclick = exportSelectedBanksV23;
-    const deleteSelectedBtnV32 = $('#delete-selected-banks-v32');
-    if (deleteSelectedBtnV32) {
-      deleteSelectedBtnV32.onclick = deleteSelectedBanksV32;
-    }
-
-    renderBankToolbarV28();
   }
 
   /* v28.4.4: 导入配置 / 备份 JSON 入口已移动到设置/导出页，不再插入导入题库页。 */
@@ -3561,17 +3370,12 @@ D. 高速通过积水路段`;
     <p class="muted">提示：顶部“导出 Web 完整备份”用于 Web 端完整恢复；“含图片备份 ZIP”保存题库、图片及现有可交换学习数据，兼容旧版备份格式，不包含所有平台专属设置；复制文本只作为浏览器下载失败时的兜底。覆盖恢复会替换本机数据；合并导入遇到同名题库会自动追加“_导入”。</p>
     <details class="asset-reference-details"><summary>角色基准素材预览</summary><img src="./media/mascot_character_sheet.webp" alt="角色基准素材" /></details>
   </div>`);
-    $('#settings-export-native-backup-v611').onclick = exportNativeCompatibleBackupZipV611;
-    $('#settings-copy-all-backup-v23').onclick = copyAllBackupJsonV23;
+    $('#settings-export-native-backup-v611').onclick = backupExport.exportNativeCompatibleBackupZip;
+    $('#settings-copy-all-backup-v23').onclick = backupExport.copyAllBackupJson;
     $('#settings-import-backup-v23').onclick = () => {
       backupImportModeV23 = $('#settings-backup-mode-v23')?.value || 'overwrite';
       $('#backup-json-file-v23').click();
     };
-
-    const oldAll = $('#export-all-btn');
-    if (oldAll) {
-      oldAll.onclick = exportAllBackupV23;
-    }
 
     webdavPanel.mount(settingsCard);
   }
@@ -3598,138 +3402,6 @@ D. 高速通过积水路段`;
     @media(max-width:720px){.webdav-head-v378,.webdav-list-head-v378{display:block}.webdav-head-v378 .webdav-chip-v378{margin-top:8px}.webdav-row-v378{grid-template-columns:1fr auto}.webdav-row-v378 .webdav-row-meta-v378{grid-column:1/-1}.webdav-actions-v378 button{flex:1 1 calc(50% - 8px)}.webdav-diagnostics-v378 dl{grid-template-columns:1fr}.webdav-diagnostics-v378 dd{margin-bottom:4px}}
   `;
     document.head.appendChild(style);
-  }
-
-  // 汇总本次选择的题库和题目数，同步更新导出与清除选择的可用状态。
-  function renderExportBankSummaryV23() {
-    const summary = $('#export-bank-summary-v23');
-    const selected = selectedBanksV23();
-    const qCount = selected.reduce((n, b) => n + (b.questions || []).length, 0);
-    const all = $('#export-bank-all-v23');
-    if (all) {
-      all.checked = state.banks.length > 0 && selected.length === state.banks.length;
-      all.indeterminate = selected.length > 0 && selected.length < state.banks.length;
-    }
-
-    if (summary) {
-      summary.textContent = selected.length ? `已选择 ${selected.length} 个题库，共 ${qCount} 道题。` : '请至少选择一个题库。';
-      summary.className = `notice ${selected.length ? 'ok' : 'warn'}`;
-    }
-
-    const btn = $('#export-selected-banks-v23');
-    if (btn) {
-      btn.disabled = !selected.length;
-    }
-
-    const del = $('#delete-selected-banks-v32');
-    if (del) {
-      del.disabled = !selected.length;
-    }
-  }
-
-  function selectedBanksV23() {
-    return state.banks.filter((b) => exportBankSelectedV23.has(b.id));
-  }
-
-  function deleteSelectedBanksV32() {
-    deleteBanksV32([...exportBankSelectedV23]);
-  }
-
-  function cleanFileNameV23(s) {
-    return String(s || '').replace(/* 将宿主不接受的文件名分隔符和通配字符替换为下划线。 */ /[\\/:*?"<>|]/g, '_').replace(/* 将连续空白折叠成单个下划线，使导出文件名便于使用。 */ /\s+/g, '_').slice(0, 80) || 'bank';
-  }
-
-  function todayV23() {
-    return new Date().toISOString().slice(0, 10);
-  }
-
-  // 单库与多库分别使用既有导出格式，保留旧导入入口的兼容性。
-  function buildQuestionBanksExportPayloadV598(banks) {
-    const exported = (banks || []).map(serializeBankForCrossExportV53);
-    if (exported.length === 1) {
-      return exported[0];
-    }
-
-    return { app: 'Shiroha Quiz', appVersion: APP_VERSION, schemaVersion: CURRENT_SCHEMA_VERSION, richContentVersion: RICH_CONTENT_VERSION_V57, richContentCapabilities: buildRichContentCapabilitiesV57(exported), exportType: 'question_banks', exportedAt: now(), banks: exported, activeBankId: exported.some((b) => b.id === state.activeBankId) ? state.activeBankId : (exported[0]?.id || '') };
-  }
-
-  // 加载所选题库后导出快照，避免导出仍在分页占位状态的数据。
-  async function exportSelectedBanksV23() {
-    try {
-      if (!await loadNativeBanks(selectedBanksV23().map((b) => b.id))) {
-        return;
-      }
-
-      const banks = selectedBanksV23();
-      if (!banks.length) {
-        toast('请至少选择一个题库。', 'warn');
-        return;
-      }
-
-      const payload = buildQuestionBanksExportPayloadV598(banks);
-      const text = JSON.stringify(payload, null, 2);
-      setBackupPreviewV23(text);
-      const name = banks.length === 1 ? `shiroha-quiz-bank-${cleanFileNameV23(banks[0].name)}-${todayV23()}.json` : `shiroha-quiz-question-banks-${todayV23()}.json`;
-      await download(name, text);
-      toast(`已导出 ${banks.length} 个题库 JSON。题库管理页导出的 JSON 只包含题库内容，不包含错题、收藏、记录和设置。`, 'ok');
-    } catch (error) {
-      // eslint-disable-next-line prefer-template -- 异常信息可能是对象，保留 + 的默认转换；统一异常类型后移除此例外。
-      platformStatus('导出失败：' + error.message, true);
-      return false;
-    }
-  }
-
-  // 完整读取题库及学习数据后导出 Web 备份，失败时保留数据与设置。
-  async function exportAllBackupV23() {
-    try {
-      if (!await loadNativeAll()) {
-        return;
-      }
-
-      const payload = buildBackupPayloadV23(state.banks || [], 'all_data', true);
-      const text = JSON.stringify(payload, null, 2);
-      setBackupPreviewV23(text);
-      await download(`shiroha-quiz-all-data-${todayV23()}.json`, text);
-      toast('已生成全部数据备份。手机端若未弹出下载，可复制文本框内容。', 'ok');
-    } catch (error) {
-      // eslint-disable-next-line prefer-template -- 异常信息可能是对象，保留 + 的默认转换；统一异常类型后移除此例外。
-      platformStatus('导出失败：' + error.message, true);
-      return false;
-    }
-  }
-
-  // 完整加载后生成原生兼容 ZIP，确保备份含试题、学习记录和相关资源。
-  async function exportNativeCompatibleBackupZipV611() {
-    try {
-      if (!await loadNativeAll()) {
-        return;
-      }
-
-      try {
-        const result = buildNativeCompatibleBackupZipV611();
-        setBackupPreviewV23(JSON.stringify(result.payload, null, 2));
-        await downloadBlob(`shiroha-quiz-native-backup-${todayV23()}.zip`, result.blob);
-        toast(`已生成含图片备份 ZIP。${result.assetCount ? `已外置 ${result.assetCount} 张图片。` : '当前没有需要外置的图片。'}`, 'ok');
-      } catch (err) {
-        warnDev('导出含图片备份 ZIP 失败', err);
-        toast('导出含图片备份 ZIP 失败，请先使用完整 JSON 备份。', 'danger');
-      }
-    } catch (error) {
-      // eslint-disable-next-line prefer-template -- 异常信息可能是对象，保留 + 的默认转换；统一异常类型后移除此例外。
-      platformStatus('导出失败：' + error.message, true);
-      return false;
-    }
-  }
-
-  // 复制完整备份前载入题库正文，避免导出的桌面备份只有摘要。
-  async function copyAllBackupJsonV23() {
-    if (!await loadNativeAll()) {
-      return;
-    }
-
-    const text = JSON.stringify(buildBackupPayloadV23(state.banks || [], 'all_data', true), null, 2);
-    setBackupPreviewV23(text);
-    await copyTextV23(text, '已复制全部数据备份文本。');
   }
 
   // 剪贴板权限失败时给出手动复制说明，供各复制入口复用。
@@ -4224,28 +3896,16 @@ D. 高速通过积水路段`;
     });
   }
 
-  // 只导出兼容设置字段，AI 配置的认证信息继续由凭据层持有。
-  function exportSettingsV1(settings) {
-    const result = {};
-    for (const key of ['suppressDefaultBank', 'practiceScope', 'practiceProgressV58916', 'lastMigratedFromSchema', 'lastMigratedAt', 'migratedFromStorageKey']) {
-      if (settings?.[key] !== undefined) {
-        result[key] = structuredClone(settings[key]);
-      }
-    }
-
-    if (settings?.aiImportV99) {
-      result.aiImportV99 = {};
-      for (const key of ['provider', 'endpoint', 'model', 'timeoutSeconds', 'rememberKey']) {
-        if (settings.aiImportV99[key] !== undefined) {
-          result.aiImportV99[key] = settings.aiImportV99[key];
-        }
-      }
-    }
-
-    return result;
-  }
-
   /* SHIROHA_WEB_V24_CROSS_PLATFORM_NATIVE_INTEROP */
+  const {
+    cleanFileNameV23,
+    exportSettingsV1,
+    toNativeQuestionType,
+    serializeQuestionForCrossExportV53,
+    serializeBankForCrossExportV53: serializeBackupBank,
+  } = globalThis.ShirohaBackupExport;
+  const serializeBankForCrossExportV53 = (bank) => serializeBackupBank(bank, normalizeBankGroupNameV58);
+
   const backupRecordConverters = globalThis.ShirohaBackupCore.createRecordConverters({
     makeId, now, serializeQuestion: serializeQuestionForCrossExportV53, toNativeQuestionType,
   });
@@ -4281,20 +3941,28 @@ D. 高速通过积水路段`;
   });
   const buildBackupPayloadV23 = (banks, exportType, includeAll) => backupData.buildBackupPayloadV23(state, banks, exportType, includeAll);
 
-  const buildNativeCompatibleBackupZipV611 = () => backupData.buildNativeCompatibleBackupZipV611(state);
-
   const { normalizeBackupPayloadV23 } = backupData;
   const mergeBackupBanksV23 = (normalized) => backupData.mergeBackupBanksV23(state, normalized);
 
-  // 导出时同时填充文本区，便于用户手动复制生成的内容。
-  function download(name, text) {
-    const out = $('#export-output');
-    if (out) {
-      out.value = text;
-    }
-
-    return ShirohaPlatform.download(name, new Blob([text], { type: 'application/json;charset=utf-8' }));
-  }
+  const backupExport = globalThis.ShirohaBackupExport.create({
+    state,
+    activeBank,
+    selection: bankSelection,
+    serializeBank: serializeBankForCrossExportV53,
+    backupData,
+    reads: { banks: loadNativeBanks, records: loadNativeRecords, all: loadNativeAll },
+    output: {
+      download: downloadBlob,
+      setPreview: setBackupPreviewV23,
+      copy: copyTextV23,
+      toast,
+      platformStatus,
+      warnDev,
+    },
+    appVersion: APP_VERSION,
+    schemaVersion: CURRENT_SCHEMA_VERSION,
+    now,
+  });
 
   function downloadBlob(name, blob) {
     return ShirohaPlatform.download(name || 'download.bin', blob);

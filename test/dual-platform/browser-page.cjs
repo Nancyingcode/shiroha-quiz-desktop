@@ -4226,6 +4226,169 @@ test('第三批题库：跨页选择导出内容及取消、确认删除保留�
   assert.deepEqual(after.banks, before.banks.filter((bank) => ![firstId, secondId].includes(bank.id)));
 });
 
+for (const entry of ['当前题库', '勾选题库']) {
+  test(`第八批导出：原生补读期间切换${entry}，取消旧下载`, async (t) => {
+    const initial = webState();
+    const page = await pageFor(t, JSON.stringify(initial));
+    page.setDefaultTimeout(5000);
+    await page.locator('body[data-storage-state="ready"]').waitFor();
+    await page.locator('.nav[data-view="banks"]').click();
+    await page.locator('#export-bank-current-v23').click();
+    const downloads = [];
+    page.on('download', (file) => downloads.push(file));
+    await page.evaluate(() => {
+      globalThis.document.querySelector('#export-output').value = '上一次导出';
+      const { storage, download } = globalThis.ShirohaPlatform;
+      // 保留真实浏览器下载，若旧实现与保存同拍输出则等页面解锁后再交给浏览器。
+      globalThis.ShirohaPlatform.download = async (name, blob) => {
+        await new Promise((resolve) => {
+          const whenReady = () => {
+            if (globalThis.document.body.dataset.storageState === 'ready') {
+              resolve();
+            } else {
+              globalThis.requestAnimationFrame(whenReady);
+            }
+          };
+          whenReady();
+        });
+        return download(name, blob);
+      };
+      storage.ensureQuestions = (_state, refs) => {
+        const bankIds = [...new Set(refs.map((ref) => ref.bankId))];
+        return new Promise((resolve) => {
+          globalThis.__bankExportGate = { bankIds, release: resolve };
+        });
+      };
+    });
+
+    const button = entry === '当前题库' ? '#export-json-btn' : '#export-selected-banks-v23';
+    await page.locator(button).click();
+    await page.waitForFunction(() => globalThis.__bankExportGate?.bankIds.length > 0);
+    assert.deepEqual(await page.evaluate(() => globalThis.__bankExportGate.bankIds), ['bank-a']);
+    if (entry === '当前题库') {
+      await page.locator('#bank-current-select-v28').selectOption('bank-b');
+      await page.locator('body[data-storage-state="pending"]').waitFor();
+    } else {
+      await page.locator('[data-bank-bulk-v23="bank-b"]').check();
+      await page.locator('[data-bank-bulk-v23="bank-a"]').uncheck();
+    }
+
+    const outcome = Promise.race([
+      page.locator('#app-toast').getByText('导出目标已变化，请重新导出。', { exact: true }).waitFor()
+        .then(() => '已提示重新导出'),
+      page.waitForEvent('download').then(async (file) => {
+        const payload = JSON.parse(require('node:fs').readFileSync(await file.path(), 'utf8'));
+        return `下载了 ${file.suggestedFilename()}，库 ID 为 ${payload.id}`;
+      }),
+    ]);
+    await page.evaluate(() => {
+      delete globalThis.ShirohaPlatform.storage.ensureQuestions;
+      globalThis.__bankExportGate.release();
+    });
+    let result;
+    try {
+      result = await outcome;
+    } catch (error) {
+      const preview = await page.locator('#export-output').inputValue();
+      const status = await page.locator('#platform-status').textContent();
+      const current = await page.locator('#bank-current-select-v28').inputValue();
+      throw new Error(`导出结果未到达，当前 ${current}，预览 ${preview.slice(0, 120)}，状态 ${status}`, { cause: error });
+    }
+
+    assert.equal(result, '已提示重新导出');
+    await page.locator('body[data-storage-state="ready"]').waitFor();
+    assert.equal(downloads.length, 0);
+    assert.equal(await page.locator('#export-output').inputValue(), '上一次导出');
+    assert.equal(await page.locator('#bank-current-select-v28').inputValue(), entry === '当前题库' ? 'bank-b' : 'bank-a');
+  });
+}
+
+async function downloadExportJson(page, button) {
+  const pending = page.waitForEvent('download');
+  await button.click();
+  const file = await pending;
+  return {
+    name: file.suggestedFilename(),
+    payload: JSON.parse(require('node:fs').readFileSync(await file.path(), 'utf8')),
+  };
+}
+
+test('第八批导出：HTTP 实际下载与剪贴板保留题库、记录及媒体', async (t) => {
+  const initial = webState();
+  const [active, other] = initial.banks;
+  const page = await pageFor(t, JSON.stringify(initial));
+  page.setDefaultTimeout(7000);
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write'], { origin: new URL(server.url).origin });
+  const before = await saved(page);
+  await page.locator('.nav[data-view="banks"]').click();
+
+  const card = page.locator(`[data-exportbank="${other.id}"]`);
+  await page.locator('.bank-item').filter({ has: card }).locator('summary').click();
+  const cardFile = await downloadExportJson(page, card);
+  assert.equal(cardFile.name, `${other.name}.json`);
+  assert.equal(cardFile.payload.id, other.id);
+  assert.equal(cardFile.payload.questions[0].question, other.questions[0].question);
+
+  const currentFile = await downloadExportJson(page, page.locator('#export-json-btn'));
+  assert.equal(currentFile.name, `${active.name}.json`);
+  assert.equal(currentFile.payload.id, active.id);
+  assert.equal(currentFile.payload.questions.find((question) => question.id === 'rich').images[0].dataUrl, IMAGE);
+
+  const all = page.locator('#export-bank-all-v23');
+  assert.equal(await all.isChecked(), true);
+  await page.locator('#export-bank-invert-v23').click();
+  assert.equal(await all.isChecked(), false);
+  assert.equal(await all.evaluate((node) => node.indeterminate), false);
+  assert.equal(await page.locator('#export-selected-banks-v23').isDisabled(), true);
+  assert.equal(await page.locator('#delete-selected-banks-v32').isDisabled(), true);
+  await page.locator('#export-bank-current-v23').click();
+  assert.equal(await all.evaluate((node) => node.indeterminate), true);
+  await page.evaluate(() => {
+    globalThis.ShirohaPlatform.storage.ensureQuestions = () => new Promise((resolve) => {
+      globalThis.__releaseSelectedExport = resolve;
+    });
+  });
+  const selected = downloadExportJson(page, page.locator('#export-selected-banks-v23'));
+  await page.waitForFunction(() => typeof globalThis.__releaseSelectedExport === 'function');
+  await page.locator('#bank-sort-mode').selectOption('name');
+  await page.evaluate(() => globalThis.__releaseSelectedExport());
+  const selectedFile = await selected;
+  assert.match(selectedFile.name, /^shiroha-quiz-bank-.*-\d{4}-\d{2}-\d{2}\.json$/);
+  assert.deepEqual(selectedFile.payload, currentFile.payload);
+
+  await page.locator('.nav[data-view="settings"]').click();
+  const full = await downloadExportJson(page, page.locator('#export-all-btn'));
+  assert.match(full.name, /^shiroha-quiz-all-data-\d{4}-\d{2}-\d{2}\.json$/);
+  await page.locator('#settings-copy-all-backup-v23').click();
+  await page.locator('#app-toast').getByText('已复制全部数据备份文本。', { exact: true }).waitFor();
+  const clipboard = await page.evaluate(async () => JSON.parse(await globalThis.navigator.clipboard.readText()));
+  assert.equal(clipboard.exportType, 'all_data');
+  assert.deepEqual(clipboard.banks, full.payload.banks);
+  assert.deepEqual(clipboard.records, full.payload.records);
+  assert.deepEqual(clipboard.records[0].details, initial.records[0].details);
+  assert.deepEqual(clipboard.settings, full.payload.settings);
+  assert.equal(await saved(page), before);
+});
+
+test('第八批导出：本地 HTML 使用真实按钮下载当前题库', async (t) => {
+  const context = await browser.newContext();
+  t.after(() => context.close());
+  const state = webState();
+  await context.addInitScript(({ key, raw }) => {
+    globalThis.localStorage.setItem(key, raw);
+  }, { key: KEY, raw: JSON.stringify(state) });
+  const page = await context.newPage();
+  page.setDefaultTimeout(7000);
+  await page.goto(pathToFileURL(path.join(WEB_ROOT, 'index.html')).href);
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.locator('.nav[data-view="banks"]').click();
+  const { name, payload } = await downloadExportJson(page, page.locator('#export-json-btn'));
+  assert.equal(name, `${state.banks[0].name}.json`);
+  assert.equal(payload.id, state.activeBankId);
+  assert.equal(payload.questions.find((question) => question.id === 'rich').images[0].dataUrl, IMAGE);
+});
+
 for (const mode of ['single', 'total']) {
   test(`第三批练习：${mode} 切题后旧文本输入不能覆盖原草稿`, async (t) => {
     const initial = webState();

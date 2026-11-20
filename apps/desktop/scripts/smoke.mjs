@@ -6,8 +6,11 @@ import { documentSmoke } from './document-smoke.mjs';
 import {
   bankContentOperationsSmoke,
   bankDeletionSmoke,
+  bankExportChangesSmoke,
+  bankExportScopeSmoke,
   changedMergeSourceSmoke,
   dedupeRetrySmoke,
+  fullBackupExportSmoke,
   questionDeletionRetrySmoke,
 } from './bank-operations-smoke.mjs';
 import { harnessSmoke, harnessSwitchingSmoke } from './harness-smoke.mjs';
@@ -1991,6 +1994,9 @@ async function main() {
     await check('题库双入口复制和合并按需读取并保存重载', () => bankContentOperationsSmoke(importedRecovery.page, readNativeSnapshot));
     await check('合并预读期间改变来源须重新确认', () => changedMergeSourceSmoke(importedRecovery.page, readNativeSnapshot));
     await check('题库去重写入失败后重试重新加载正文并保存重载', () => dedupeRetrySmoke(importedRecovery.page, readNativeSnapshot));
+    await check('题库和学习记录各入口仅补读对应范围并导出', () => bankExportScopeSmoke(importedRecovery.page, readNativeSnapshot));
+    await check('预读失败或切换目标时不导出，原学习数据保留', () => bankExportChangesSmoke(importedRecovery.page, readNativeSnapshot));
+    await check('完整 JSON、ZIP 和复制补齐正文、记录和媒体', () => fullBackupExportSmoke(importedRecovery.page, readNativeSnapshot));
     await check('删题校验零写入、离页后全局重试补读并保存重载', () => questionDeletionRetrySmoke(importedRecovery.page, readNativeSnapshot));
     await check('整库删除回滚选库、分组范围回退和历史成绩保全', () => bankDeletionSmoke(importedRecovery.page, readNativeSnapshot));
     await check('删空题库后冷启动保留空状态和历史成绩', async () => {

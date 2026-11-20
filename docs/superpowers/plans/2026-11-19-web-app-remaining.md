@@ -2,6 +2,8 @@
 
 2026-11-19 编制计划时，基线为本地 `main` 的 `ac4f4c6`，第七至十七批均待实施。编制分支为 `codex/docs-web-app-remaining`，工作树为 `C:/Users/30728/.codex/worktrees/bb31/shiroha-quiz-desktop`。每次开始一批时，从届时的 `main` 核对以下函数与测试。各批基线、分支和验收结果见[实际执行记录](#实际执行记录)。[职责边界与依赖](../specs/2026-11-19-web-app-remaining.md)
 
+第七、八批已实施并完成验收。第九至十七批按下述顺序推进。
+
 ## 第七批 · 题库删除
 
 1. **先跑基线。** 从题库卡片、跨页勾选工具栏和二次编辑进入。已有浏览器回归覆盖取消、失效 ID、重复点击、跨页删题、进行中的练习／考试阻止删题，以及编辑器保存空库。已有 WebView2 用例跨页删除 16 题并在重载后检查本库余下 49 题、旁库 65 题及历史成绩，保留这些断言。[浏览器用例](../../../test/dual-platform/browser-page.cjs) · [原生用例](../../../apps/desktop/scripts/smoke.mjs)
@@ -64,3 +66,23 @@
 | 真实 WebView2 与 SQLite | `pnpm run test:desktop` 的 53 项全部通过。零写入、离页后全局重试及两库内容保全通过。整库写失败后重绘确认活动库、分组范围及共享勾选恢复，卡片与批量删除均保留未选库及历史成绩。分组末库删除后范围回退，删空后退出并重新启动仍为空，完整 SQLite 快照与重启前一致。 |
 
 本批使用自建题库、隔离 profile、假凭据和本地 mock。正式安装升级及真实用户存档的验收未纳入本批。第八批可以沿用 `bankSelection.get/set` 和现有 `runMutation` 回滚边界，批量删除入口仍使用同一个选择集合。
+
+### 第八批 · 只读导出与题库勾选
+
+- 负责人为 `batch08_export`（GPT-6.2-Sol Max）。在第七批已验收的工作树上继续，分支为 `codex/web-app-remaining`，工作树为 `C:/Users/30728/.codex/worktrees/31f4/shiroha-quiz-desktop`，`HEAD` 为 `ac4f4c64adc773040eb2b06bf5831003c2803ab0`。
+- 原页面只有 `#export-json-btn` 的可选事件绑定。按计划在题库工具栏补齐当前库按钮，并把卡片、当前库、已选库、学习记录、完整 JSON/ZIP 和复制备份的读取及输出迁至 [`backup/export.js`](../../../apps/web/backup/export.js)。设置筛选、题目序列化、记录转换与 ZIP 图片装配沿用原有契约。题库页负责批量控件和三态反馈，继续通过 `bankSelection.get/set` 和删除共享选择。应用保留原生读取及事务协调、本地恢复和 WebDAV 入口。`app.js` 由 5,268 行、190 个入口闭包内直接声明的具名函数减至 4,936 行、171 个。
+- 基线的跨页批量导出、兼容 ZIP 下载及下载失败反馈 3 项通过。补齐当前库按钮后，延迟 `bank-a` 的正文读取，再用真实下拉框或复选框切换到 `bank-b`。旧当前库按钮写出了 `跨题库同ID.json`，旧批量按钮写出了 `shiroha-quiz-bank-跨题库同ID-2026-11-19.json`，两份实际文件的库 ID 都是 `bank-b`。当前库红测在测试宿主中将浏览器下载交到页面解锁后执行，复现窗口仍使用真实切库事务。修复后两条用例都提示重新导出，下载为零，上一次的预览仍在。选中 ID 相同、排序重绘替换了集合的情况下，导出仍成功。[浏览器交互和实际下载](../../../test/dual-platform/browser-page.cjs)
+
+本批在 Windows 10（19045）、Node 24.22.2、pnpm 12.16.1 和 Rust 1.99.1 上验证。沿用本工作树依赖和构建缓存。首轮 `pnpm test` 在默认沙箱内遇到 esbuild 临时目录父路径与 `icacls` 完整性标签的权限拒绝。经自动审查放行后用原命令独占复跑，桌面及共享测试通过。默认沙箱首轮和复跑日志均保存在 `apps/desktop/.reports/batch08/`。
+
+| 验证项 | 实际命令与结果 |
+| --- | --- |
+| 浏览器定向 | 根目录运行 `node --test --test-name-pattern='第八批导出' test/dual-platform/browser-page.cjs`，4 项通过。HTTP 实读卡片、当前和勾选下载及完整备份剪贴板。本地 HTML 实读当前库 JSON，核对了媒体。 |
+| 格式定向 | 根目录运行 `node --test test/dual-platform/format.test.cjs test/dual-platform/backup-serialization-empty.test.cjs test/dual-platform/contracts.test.cjs test/dual-platform/training.test.cjs test/dual-platform/backup-entry-performance.test.cjs`，70 项通过。覆盖旧 Android JSON/ZIP 往返、显式空图片与缺失字段、设置筛选、记录及旧恢复入口。 |
+| 类型和 lint | 在 `apps/desktop` 运行 `pnpm run typecheck` 与 `pnpm run lint`，均通过。完整 JavaScript 检查覆盖 177 个文件，规则夹具 90 项通过，1 项因临时目录大小写不敏感跳过。 |
+| 桌面和共享测试 | `pnpm test` 桌面 284 项通过、1 项环境跳过，共享 510 项通过。共享源码加载测试验证导出脚本注册顺序、工厂装配无 DOM 访问及唯一启动入口。 |
+| 完整浏览器 | `pnpm run test:web-platform` 的 243 项全部通过。 |
+| 资源与构建 | `pnpm run prepare:web`、`pnpm run build`、`pnpm run build:test` 依次通过。`dist/backup/export.js` 与源文件 SHA-256 一致。生产构建通过进程级 `CARGO_TARGET_DIR` 使用本工作树的缓存，用 `build:test` 重新生成隔离测试版。两次构建均使用 `CARGO_NET_OFFLINE=true`。 |
+| WebView2 与 SQLite | `pnpm run test:desktop` 最终 56 项全部通过。旧 C8 用例直接调用 `ensureAll`。新增三项从真实按钮验证导出文件名、适配器交付字节及剪贴板写入，覆盖三库 13、14、12 道题的首末页、跨库同 ID、空图片字段、去重 ZIP 媒体、记录详情及 SQLite 重载。失败预读和两种目标变化均零文件输出并保留预览。只在显式切库时有一次预期 SQLite 写入。 |
+
+桌面首轮读取失败用例等待注入异常的原始文案，实际桌面适配器显示已有的通用本地操作提示。按实际提示修正测试断言后，重新通过类型、完整 lint 和 WebView2 检查。保留 `test-desktop.log` 和 `test-desktop-final.log` 两份日志。桌面的文件授权与剪贴板由隔离测试宿主捕获。浏览器另从实际下载及系统剪贴板接口读取了导出结果。系统保存对话框和安装升级未纳入本批验收。[桌面导出用例](../../../apps/desktop/scripts/bank-operations-smoke.mjs)
