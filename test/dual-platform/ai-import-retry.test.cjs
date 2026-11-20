@@ -1,16 +1,16 @@
 'use strict';
 const { installAiSettings } = require('./ai-settings-helper.cjs');
 const { installAiTransport } = require('./ai-transport-helper.cjs');
-const { loadWebSource, runWebScripts } = require('./source-tools.cjs');
+const { runWebScripts } = require('./source-tools.cjs');
 
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
 const test = require('node:test');
 
-function installSessions(context) {
-  runWebScripts(context, ['ai-import-sessions.js']);
+function installSessions(context, identity = context.ShirohaAiImportSessions.createIdentity(context.importDraft)) {
   const sessions = context.ShirohaAiImportSessions.create({
     draft: context.importDraft,
+    identity,
     configuration: {
       isEditing: () => !!context.bankEditSessionV45,
       current: context.aiExecutionConfigV99,
@@ -21,7 +21,7 @@ function installSessions(context) {
     },
     organizer: {
       range: context.aiImportRangeV992,
-      context: context.aiRefactorContextV384,
+      snapshotQuestion: context.aiRefactorQuestionSnapshotV384 || ((question) => question),
       messages: context.buildAiMessagesV99,
       parse: context.parseAiRefactorPayloadV384,
       parseText: context.parseTextQuestions,
@@ -30,8 +30,6 @@ function installSessions(context) {
     preview: {
       mode: () => context.aiPreviewPanelModeV991,
       collectTargets: context.collectAiPreviewTargetDetailsV992,
-      key: context.aiQuestionKeyV991,
-      fingerprint: context.aiQuestionFingerprintV991,
       payload: context.aiQuestionPayloadV991,
       issueStatus: context.importIssueStatus,
       label: context.aiPreviewModeLabelV991,
@@ -40,7 +38,6 @@ function installSessions(context) {
       resultArray: context.aiResultArrayV991,
       normalizeReview: context.normalizeAiReviewResultV991,
       normalizeAnalysis: context.normalizeAiAnalysisResultV991,
-      findIndex: context.findImportIndexByAiKeyV991,
     },
     view: {
       select: context.$,
@@ -74,7 +71,6 @@ function setup(respond) {
     ensureAiImportStateV99: () => ({ endpoint: 'https://example.invalid', model: 'fixture', timeoutSeconds: 10 }),
     readStoredAiKeyV99: () => '',
     aiImportRangeV992: () => ({ text: '待整理题目', label: '全文' }),
-    aiRefactorContextV384: () => ({}),
     syncAiImportActionV99() {},
     setAiImportStatusV99() {},
     showNotice() {},
@@ -88,7 +84,7 @@ function setup(respond) {
       throw new Error('模型业务 JSON 无效');
     },
   });
-  runWebScripts(context, ['import-preview.js']);
+  runWebScripts(context, ['import-preview.js', 'ai-import-sessions.js']);
   context.importDraft = context.ShirohaImportPreview.create({ readers: {}, ocr: {} });
   context.importDraft.questions = original;
   context.importDraft.filter = '';
@@ -152,7 +148,6 @@ function cancellationFixture(overrides = {}) {
     readStoredAiKeyV99: () => '',
     aiProviderLabelV99: () => 'fixture',
     aiImportRangeV992: () => ({ text: '待整理题目', label: '全文' }),
-    aiRefactorContextV384: () => ({ currentQuestions: [], warnings: [] }),
     syncAiImportActionV99() {},
     refreshAiImportPanelV99() {},
     refreshAiPreviewPanelV991() {},
@@ -194,19 +189,19 @@ function cancellationFixture(overrides = {}) {
     $: (selector) => (selector === '#ai-preview-batch-v991' ? { value: '10' } : null),
     ...overrides,
   });
-  runWebScripts(context, ['import-preview.js']);
+  runWebScripts(context, ['import-preview.js', 'ai-import-sessions.js']);
   context.importDraft = context.ShirohaImportPreview.create({ readers: {}, ocr: {} });
   context.importDraft.questions = [{ id: 'original', question: '原草稿' }];
-  if (context.useRealIdentity) {
-    const source = loadWebSource();
-    const names = ['aiQuestionKeyV991', 'aiQuestionFingerprintV991', 'findImportIndexByAiKeyV991'];
-    vm.runInContext(`const aiImportAnonymousKeysV991 = new WeakMap(); let aiImportAnonymousSequenceV991 = 0;\n${names.map((name) => source.functionSource(name)).join('\n')}\nObject.assign(globalThis, { ${names.join(', ')} });`, context);
-  }
+  const identity = context.useRealIdentity ? context.ShirohaAiImportSessions.createIdentity(context.importDraft) : {
+    key: context.aiQuestionKeyV991,
+    fingerprint: context.aiQuestionFingerprintV991,
+    findIndex: context.findImportIndexByAiKeyV991,
+  };
   if (context.useRealResults) {
     runWebScripts(context, ['ai-prompts.js', 'ai-results.js']);
     const prompts = context.ShirohaAiPrompts.create({
       question: () => null,
-      importKey: context.aiQuestionKeyV991,
+      importKey: identity.key,
       validate: () => ({}),
       maxChars: 50000,
     });
@@ -218,6 +213,7 @@ function cancellationFixture(overrides = {}) {
       splitAnswer: (value) => String(value || '').split(','),
     });
     Object.assign(context, results, {
+      aiRefactorQuestionSnapshotV384: prompts.aiRefactorQuestionSnapshotV384,
       aiQuestionPayloadV991: prompts.aiQuestionPayloadV991,
       buildAiAnalysisMessagesV991: (items) => items,
       buildAiReviewMessagesV991: (items) => items,
@@ -231,7 +227,7 @@ function cancellationFixture(overrides = {}) {
   } else if (context.useRealNetworkTransport) {
     installAiTransport(context);
   }
-  installSessions(context);
+  installSessions(context, identity);
   return { context, pending, status, notices };
 }
 

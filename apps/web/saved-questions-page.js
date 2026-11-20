@@ -9,7 +9,6 @@
     label,
     short,
     formatDate: fmt,
-    now,
     toast,
     paging,
     bank,
@@ -34,7 +33,7 @@
       openDetail: openBankQuestionDetail,
     } = bank;
     const { ids: getFavoriteIdsV27, toggle: toggleFavoriteV27, isFavorite: isFavoriteV27 } = favorites;
-    const { get: getWrongEntries, set: setWrongEntries, remove: removeWrong } = wrong;
+    const { get: getWrongEntries, remove: removeWrong, toggleMastery: toggleWrongMastery } = wrong;
     const {
       questionBody: renderQuestionBodyV83,
       options: renderReviewOptions,
@@ -53,8 +52,6 @@
       syncMode: syncPracticeStartModeFieldsV58916,
     } = practice;
     const {
-      transaction: runMutation,
-      save: saveSilent,
       renderAll,
       canStartPractice,
       preparePracticeNavigation,
@@ -245,40 +242,11 @@
       return { entries, filter, sort };
     }
 
-    // 只有在确认后才从错题本移出试题，然后持久化和更新页面。
-    async function removeWrongEntry(b) {
-      if (await globalThis.ShirohaDialogs.confirm('确定将这道题移出错题本？')) {
-        removeWrong(b.dataset.removeWrong);
-        await saveSilent();
-        renderAll();
-      }
-    }
-
-    // 掌握状态与连续做对次数一起调整，使筛选和复习条件保持一致。
-    async function toggleWrongMastery(b) {
-      const arr = getWrongEntries();
-      const e = arr.find((x) => x.id === b.dataset.toggleMasterWrong);
-      if (e) {
-        if (e.status === '已掌握') {
-          e.status = '复习中';
-          e.rightCount = Math.min(e.rightCount || 0, 1);
-        } else {
-          e.status = '已掌握';
-          e.lastCorrectAt = now();
-          e.rightCount = Math.max(e.rightCount || 0, 2);
-        }
-
-        setWrongEntries(arr);
-        await saveSilent();
-        renderAll();
-      }
-    }
-
     // 将每个可见错题的操作安排在现有事务内，并刷新单题解析面板。
     function bindWrongActions() {
-      $$('[data-remove-wrong]').forEach((b) => b.onclick = async () => runMutation(() => removeWrongEntry(b)));
+      $$('[data-remove-wrong]').forEach((b) => b.onclick = () => removeWrong(b.dataset.removeWrong));
 
-      $$('[data-toggle-master-wrong]').forEach((b) => b.onclick = async () => runMutation(() => toggleWrongMastery(b)));
+      $$('[data-toggle-master-wrong]').forEach((b) => b.onclick = () => toggleWrongMastery(b.dataset.toggleMasterWrong));
 
       $$('[data-fav-wrong]').forEach((b) => b.onclick = async () => {
         if (await toggleFavoriteV27(b.dataset.favWrong)) {

@@ -7,14 +7,18 @@ import { html as htmlStandard, parse } from 'parse5';
 const desktopRoot = fileURLToPath(new URL('..', import.meta.url));
 const businessScripts = [
   'app.js', 'training.js', 'quiz-core.js', 'text-answers.js', 'text-parser.js',
-  'backup-core.js', 'zip.js', 'backup-archive.js', 'backup-data.js', 'webdav-panel.js',
+  'ui/pagination.js', 'ui/shell.js',
+  'backup-core.js', 'zip.js', 'backup-archive.js', 'backup-data.js', 'backup/export.js', 'backup/restore.js', 'webdav-panel.js',
   'docx-import.js', 'pdf-import.js', 'ocr-import.js', 'table-import.js', 'import-preview.js',
   'ai-results.js', 'ai-import-sessions.js', 'ai-question-sessions.js', 'ai-settings.js', 'ai-transport.js',
+  'ai/settings-actions.js', 'ai/analysis-save.js',
   'ai-prompts.js', 'question-view.js', 'bank-page.js', 'saved-questions-page.js', 'training-review-page.js',
-  'bank-editor.js', 'study-sessions.js', 'exam-page.js', 'practice-selection.js', 'practice-page.js',
+  'bank-editor.js', 'study/scope.js', 'study-sessions.js', 'exam-page.js', 'practice-selection.js',
+  'study/dashboard.js', 'practice-page.js',
   'ai-import-panel.js', 'ai-question-panels.js', 'question-editor.js', 'import/find-replace.js',
-  'questions/rich-content.js', 'import/dual-answers.js', 'import/commit.js',
-  'banks/metadata.js', 'banks/question-operations.js',
+  'questions/rich-content.js', 'import/dual-answers.js', 'import/commit.js', 'import/ocr-output.js', 'import/page.js',
+  'banks/metadata.js', 'banks/question-operations.js', 'banks/deletion.js', 'banks/built-in.js',
+  'study/saved-questions.js',
 ];
 const sharedStyles = [
   'styles.css',

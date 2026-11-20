@@ -18,8 +18,7 @@
     const {
       current: practiceScopeV8916,
       groupType: PRACTICE_SCOPE_GROUP_V8916,
-      ensure: ensurePracticeScopeV8916,
-      groupName: bankGroupNameV58,
+      bankType: PRACTICE_SCOPE_BANK_V8916,
       normalizeGroup: normalizeBankGroupNameV58,
       readGroup: readImportBankGroupV58,
       ensureGroupUi: ensureBankGroupUiV58,
@@ -179,26 +178,32 @@
       toast('已进入题库二次编辑。', 'ok');
     }
 
+    function saveBankEditSessionV45() {
+      return saveBankEditSession(bankEditSessionV45);
+    }
+
     // 读取当前题库后再进入保存事务，避免用过期题库写入。
-    async function saveBankEditSessionV45() {
-      if (bankEditSessionV45 && !await loadNativeBanks([bankEditSessionV45.bankId])) {
+    async function saveBankEditSession(session) {
+      const isCurrentSession = () => session && bankEditSessionV45 === session;
+
+      if (isCurrentSession() && !await loadNativeBanks([session.bankId])) {
         return;
       }
 
       return runMutation(
         // 对比原始快照并确认删除，在同一事务内保存题库及其关联引用。
         async () => {
-          if (!bankEditSessionV45) {
+          if (!isCurrentSession()) {
             return;
           }
 
-          const bank = state.banks.find((b) => b.id === bankEditSessionV45.bankId);
+          const bank = state.banks.find((b) => b.id === session.bankId);
           if (!bank) {
             toast('原题库不存在，无法保存。', 'danger');
             return;
           }
 
-          if (bankEditQuestionSnapshot(bank.questions) !== bankEditSessionV45.sourceQuestions) {
+          if (bankEditQuestionSnapshot(bank.questions) !== session.sourceQuestions) {
             toast('题库已变化，请退出编辑后重新打开，避免覆盖其他修改。', 'warn');
             return;
           }
@@ -213,19 +218,16 @@
           const warnings = collectImportWarnings(importDraft.questions);
           const name = ($('#import-bank-name')?.value || bank.name || '题库').trim() || bank.name || '题库';
           const groupName = readImportBankGroupV58();
-          const oldGroupName = bankGroupNameV58(bank);
+          // 读取范围会校准已失效的分组，必须在修改题库前取得原范围。
+          const scopeBefore = practiceScopeV8916();
           bank.name = name;
           bank.groupName = groupName;
           bank.updatedAt = now();
-          bank.questions = importDraft.questions.map((q, i) => (bankEditSessionV45.previewQuestions.get(q.id) === JSON.stringify(q) ? originals.get(q.id) : cleanImportedQuestion({ ...q, id: q.id || makeId('q', i) })));
+          bank.questions = importDraft.questions.map((q, i) => (session.previewQuestions.get(q.id) === JSON.stringify(q) ? originals.get(q.id) : cleanImportedQuestion({ ...q, id: q.id || makeId('q', i) })));
 
           removeBankQuestionReferences(bank.id, deletedIds);
-          const scopeBefore = practiceScopeV8916();
-          if (scopeBefore.type === PRACTICE_SCOPE_GROUP_V8916 && scopeBefore.value === oldGroupName && state.banks.every((x) => x.id === bank.id || bankGroupNameV58(x) !== oldGroupName)) {
-            ensurePracticeScopeV8916();
-            toast('原练习分组已无题库，已切换为当前题库。', 'warn');
-          }
-
+          const scopeAfter = practiceScopeV8916();
+          const scopeFellBack = scopeBefore.type === PRACTICE_SCOPE_GROUP_V8916 && scopeAfter.type === PRACTICE_SCOPE_BANK_V8916;
           await saveSilent();
           bankEditSessionV45 = null;
           resetBankQuestionSelection();
@@ -235,8 +237,14 @@
           updateBankEditUiV45(0);
           renderAll();
           await switchViewV45('banks');
+          if (scopeFellBack) {
+            toast('原练习分组已无题库，已切换为当前题库。', 'warn');
+          }
+
           toast(`已保存题库“${name}”：${bank.questions.length} 道题${warnings.length ? `，仍有 ${warnings.length} 条提示可后续再核对` : ''}。`, warnings.length ? 'warn' : 'ok');
         },
+        // 离开编辑页可释放题目正文，重试仍需为原编辑会话重新预读。
+        () => saveBankEditSession(session),
       );
     }
 

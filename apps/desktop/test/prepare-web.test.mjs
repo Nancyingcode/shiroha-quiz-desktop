@@ -192,8 +192,16 @@ test('stages offline resources and licenses, excludes tooling, and leaves Web so
 test('copies only scripts listed for nested business directories', async (t) => {
   const f = await fixture(t);
   const scripts = [
-    'import/find-replace.js', 'import/dual-answers.js', 'import/commit.js',
-    'questions/rich-content.js', 'banks/metadata.js', 'banks/question-operations.js',
+    'ai/settings-actions.js', 'ai/analysis-save.js',
+    'ui/pagination.js', 'ui/shell.js',
+    'import/find-replace.js', 'import/dual-answers.js', 'import/commit.js', 'import/ocr-output.js', 'import/page.js',
+    'questions/rich-content.js', 'banks/metadata.js', 'banks/question-operations.js', 'banks/deletion.js',
+    'banks/built-in.js',
+    'backup/export.js',
+    'backup/restore.js',
+    'study/scope.js',
+    'study/saved-questions.js',
+    'study/dashboard.js',
   ];
   for (const script of scripts) {
     const directory = path.dirname(script);

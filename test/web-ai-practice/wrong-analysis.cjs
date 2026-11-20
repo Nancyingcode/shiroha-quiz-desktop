@@ -72,6 +72,48 @@ const cases = [
     },
   },
   {
+    name: 'wrong-analysis-save-leaves-diverged-snapshots-and-other-banks-intact',
+    options,
+    async run(h) {
+      await h.page.evaluate((key) => {
+        const state = JSON.parse(localStorage.getItem(key));
+        const bank = state.banks[0];
+        const question = bank.questions[0];
+        const older = { ...question, question: 'OLDER_WRONG_SNAPSHOT', analysis: 'Older wrong analysis' };
+        const favorite = { ...question, question: 'OLDER_FAVORITE_SNAPSHOT', analysis: 'Older favorite analysis' };
+        const other = { ...structuredClone(bank), id: 'parallel-bank', name: 'Parallel bank' };
+        state.banks.push(other);
+        state.wrongBook[bank.id][0].nativeQuestion = older;
+        state.wrongBook[other.id] = [{ ...state.wrongBook[bank.id][0], nativeQuestion: question }];
+        state.favorites = { [bank.id]: [question.id], [other.id]: [question.id] };
+        state.crossPlatformMeta.favoriteQuestions = {
+          [bank.id]: { [question.id]: { favoritedAt: 7, question: favorite } },
+          [other.id]: { [question.id]: { favoritedAt: 11, question } },
+        };
+        localStorage.setItem(key, JSON.stringify(state));
+      }, h.keys.state);
+      await h.page.reload();
+      await h.page.locator('body[data-storage-state="ready"]').waitFor();
+      await h.page.locator('#save-all-btn').click();
+      await h.page.waitForFunction(
+        (key) => JSON.parse(localStorage.getItem(key)).banks[0].questions[0].normalized,
+        h.keys.state,
+      );
+      const panel = await wrongBook(h);
+      const before = await stored(h);
+      await generate(h, panel, 'CURRENT_QUESTION_ANALYSIS');
+      await save(h, panel);
+      await h.page.reload();
+      await h.page.locator('body[data-storage-state="ready"]').waitFor();
+      const after = await stored(h);
+      assert.equal(after.banks[0].questions[0].analysis, 'CURRENT_QUESTION_ANALYSIS');
+      assert.deepEqual(after.banks[1], before.banks[1]);
+      assert.deepEqual(after.wrongBook, before.wrongBook, 'A changed stem must keep the matching historical analysis.');
+      assert.deepEqual(after.crossPlatformMeta.favoriteQuestions, before.crossPlatformMeta.favoriteQuestions);
+      assert.deepEqual(after.records, before.records);
+    },
+  },
+  {
     name: 'wrong-analysis-feedback-preserves-draft-on-regeneration-error-and-discard',
     options,
     async run(h) {
@@ -176,6 +218,24 @@ const cases = [
       const saved = await stored(h);
       assert.equal(saved.banks[0].questions[0].analysis, '');
       assert.equal(saved.banks[0].questions[1].analysis, 'SECOND_QUESTION_DRAFT');
+    },
+  },
+  {
+    name: 'wrong-analysis-leave-discards-late-regeneration-and-keeps-draft',
+    options: { ...options, ignoreAbort: true },
+    async run(h) {
+      const panel = await wrongBook(h);
+      await generate(h, panel, 'WRONG_BOOK_COMPLETED_DRAFT');
+      const pending = h.mock.enqueue('analysis', analysis('WRONG_BOOK_LATE_REGENERATION'), { hold: true });
+      await button(panel, 'generate').click();
+      await h.waitCall(pending);
+      await h.page.locator('.nav[data-view="records"]').click();
+      await h.page.locator('#records.active').waitFor();
+      await h.deliver(pending);
+      const reopened = await wrongBook(h);
+      const visible = await reopened.innerText();
+      assert.match(visible, /WRONG_BOOK_COMPLETED_DRAFT/);
+      assert.doesNotMatch(visible, /WRONG_BOOK_LATE_REGENERATION/);
     },
   },
   {

@@ -25,7 +25,8 @@
       begin: beginNativeRender,
       page: nativePage,
       versions: nativeRenderVersions,
-      pages: nativePages,
+      goToItem,
+      restoreFocus: restorePageFocus,
       openRecords: nativeOpenRecords,
       loadItems: loadNativeItems,
       read: readNative,
@@ -124,6 +125,17 @@
 
     function recordDeletionContext(record) {
       return [trainingTitle(record), record.bankName, fmt(record.date)].filter(Boolean).join(' · ');
+    }
+
+    // 此入口清空全部练习和考试记录。
+    function clearRecords() {
+      return runMutation(/* 确认、清理和保存属于同一次数据变更。 */ async () => {
+        if (await globalThis.ShirohaDialogs.confirm('确定清空全部练习与考试记录？')) {
+          state.records = [];
+          await saveSilent();
+          renderAll();
+        }
+      });
     }
 
     // 删除操作等待用户确认，确认期间其他操作更改记录后需要再核对。
@@ -421,11 +433,7 @@
         }
 
         view.index = row.index;
-        const page = nativePages.get(card.id);
-        if (page) {
-          page.page = Math.floor((position + offset) / page.size);
-        }
-
+        goToItem(card.id, position + offset);
         await renderTrainingReview();
         if (trainingReview === view && view.index === row.index) {
           $(offset > 0 ? '#training-next' : '#training-prev')?.focus({ preventScroll: true });
@@ -550,15 +558,21 @@
         box.querySelector(`[data-training-question="${focusedQuestion}"]`)?.focus({ preventScroll: true });
       }
 
-      if (focusedPage) {
-        const controls = [...box.querySelectorAll('[data-page-control]')].filter((node) => node.getClientRects().length && !node.disabled);
-        (controls.find((node) => node.dataset.pageControl === focusedPage) || controls.find((node) => node.getAttribute('aria-current') === 'page'))?.focus({ preventScroll: true });
-      }
-
+      restorePageFocus(box, focusedPage);
       scheduleMathJaxTypesetV56(box);
     }
 
-    return { renderRecords, trainingCompletion, trainingTitle, renderRecentTraining, openTrainingReview, renderTrainingQuestion, leaveTrainingReview, bindTrainingReviewEvents };
+    return {
+      renderRecords,
+      clearRecords,
+      trainingCompletion,
+      trainingTitle,
+      renderRecentTraining,
+      openTrainingReview,
+      renderTrainingQuestion,
+      leaveTrainingReview,
+      bindTrainingReviewEvents,
+    };
   }
 
   globalThis.ShirohaTrainingReviewPage = { create };

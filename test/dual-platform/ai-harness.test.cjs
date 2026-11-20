@@ -1,7 +1,7 @@
 'use strict';
 const { installAiTransport } = require('./ai-transport-helper.cjs');
-const { installAiSettings } = require('./ai-settings-helper.cjs');
-const { loadWebSource } = require('./source-tools.cjs');
+const { installAiSettings, installAiSettingsActions } = require('./ai-settings-helper.cjs');
+const { loadWebSource, runWebScripts } = require('./source-tools.cjs');
 
 const assert = require('node:assert/strict');
 const { readFileSync } = require('node:fs');
@@ -202,6 +202,12 @@ test('等待检查期间选择未接入的提供方后停止等待轮询', async
   assert.equal(clock.timers.size, 0);
 });
 
+function installApplicationStartup(context) {
+  runWebScripts(context, ['study/dashboard.js']);
+  context.studyDashboard = context.ShirohaStudyDashboard.create({ data: {} });
+  vm.runInContext(loadWebSource().functionSource('startApplication'), context);
+}
+
 test('AI 设置读取缓慢时题库先可用，核验完成后再启动后台检查', async () => {
   const pending = deferred(); let unlocked = false; let checks = 0;
   const context = vm.createContext({
@@ -228,7 +234,7 @@ test('AI 设置读取缓慢时题库先可用，核验完成后再启动后台�
     init() {},
     warnDev() {},
   });
-  vm.runInContext(loadWebSource().functionSource('startApplication'), context);
+  installApplicationStartup(context);
   const starting = context.startApplication();
   try {
     await settleUi();
@@ -265,7 +271,7 @@ test('恢复发生在旧启动读取期间时，不启动旧生命周期的自�
     platformStatus() {},
     init() {},
   });
-  vm.runInContext(loadWebSource().functionSource('startApplication'), context);
+  installApplicationStartup(context);
   await context.startApplication(); await context.startApplication();
   first.resolve(); restored.resolve(); await settleUi();
   assert.equal(checks, 0);
@@ -995,45 +1001,83 @@ test('共享业务冻结真实提供方标签并拒绝未开放提供方，隐�
 });
 
 test('共享清除入口在非Codex提供方不确认或清理Codex授权', async () => {
-  const source = loadWebSource();
   for (const adapter of ['codebuddy', 'deepseek']) {
     const calls = [];
     const context = vm.createContext({
       ShirohaPlatform: { harness: { formMode: () => 'harness', formAdapter: () => adapter, snapshot: () => ({ ...status, adapter }), cancelAll: async () => calls.push('cancel'), clear: async () => calls.push('clear') } },
-      ShirohaDialogs: {
-        confirm: async () => {
-          calls.push('confirm');return true;
-        },
-      },
-      setAiSettingsStatusV99() {},
-      updateAiConnectionPillV99() {},
-      syncAiImportActionV99() {},
     });
-    installAiSettings(context);
-    vm.runInContext(source.functionSource('clearAiSettingsV99'), context);
-    await context.clearAiSettingsV99();assert.deepEqual(calls, []);
+    const actions = installAiSettingsActions(context, {
+      confirm: async () => {
+        calls.push('confirm');
+        return true;
+      },
+    });
+    await actions.clearAiSettingsV99();
+    assert.deepEqual(calls, []);
   }
 });
 
+test('共享 Codex 清除入口确认后先停止任务，原直接 API 配置与凭据仍保留', async () => {
+  const calls = [];
+  const message = {};
+  let accepted = false;
+  const context = vm.createContext({
+    $: (selector) => (selector === '#ai-settings-status-v99' ? message : null),
+    ShirohaPlatform: {
+      harness: {
+        formMode: () => 'harness',
+        snapshot: () => status,
+        cancelAll: async () => calls.push('cancel'),
+        clear: async () => calls.push('clear'),
+      },
+      credentials: {
+        set() {
+          throw new Error('Harness 清除不得操作 API 凭据');
+        },
+      },
+    },
+  });
+  const actions = installAiSettingsActions(context, {
+    isBusy: () => true,
+    confirm: async () => {
+      calls.push('confirm');
+      return accepted;
+    },
+    storage: {
+      transaction() {
+        throw new Error('Harness 清除不得写题库设置');
+      },
+    },
+  });
+  await actions.clearAiSettingsV99();
+  assert.deepEqual(calls, ['confirm']);
+  accepted = true;
+  await actions.clearAiSettingsV99();
+  assert.deepEqual(calls, ['confirm', 'confirm', 'cancel', 'clear']);
+  assert.match(message.textContent, /Codex 配置已清除/);
+});
+
 test('共享测试与统一请求入口拒绝缺少账户修订的CodeBuddy和未开放提供方', async () => {
-  const source = loadWebSource();
   for (const adapter of ['codebuddy', 'deepseek']) {
-    const calls = [];const messages = [];const button = { disabled: false, textContent: '测试连接' };
+    const calls = [];
+    const button = { disabled: false, textContent: '测试连接' };
+    const message = {};
+    const elements = { '#ai-test-connection-v99': button, '#ai-settings-status-v99': message };
     const context = vm.createContext({
       ShirohaPlatform: { harness: { formMode: () => 'harness', formAdapter: () => adapter, snapshot: () => ({ ...status, adapter }), test: async () => calls.push('test'), execute: async () => calls.push('execute') }, network: { ai: async () => calls.push('network') } },
-      $: () => button,
-      setAiSettingsStatusV99: (message) => messages.push(message),
-      updateAiConnectionPillV99() {},
+      $: (selector) => elements[selector],
     });
-    installAiSettings(context);
-    vm.runInContext(source.between('testAiConnectionV99', 'aiQuestionKeyV991'), context);
-    installAiTransport(context);
-    await context.testAiConnectionV99();
+    const settings = installAiSettings(context);
+    const transport = installAiTransport(context);
+    const actions = installAiSettingsActions(context, { settings, transport });
+    await actions.testAiConnectionV99();
     for (const task of ['connection_test', 'import_organize', 'batch_review', 'batch_analysis', 'question_analysis', 'question_followup']) {
       const missingAccount = adapter === 'codebuddy' && ['connection_test', 'question_analysis', 'question_followup'].includes(task);
       await assert.rejects(context.requestAiChatV99({ execution: { ...status, adapter } }, [], { task }), missingAccount ? /所选 Harness 尚未就绪/ : /尚未开放/);
     }
-    assert.deepEqual(calls, []);assert.equal(button.disabled, false);assert.match(messages[0], adapter === 'codebuddy' ? /尚未就绪/ : /尚未开放/);
+    assert.deepEqual(calls, []);
+    assert.equal(button.disabled, false);
+    assert.match(message.textContent, adapter === 'codebuddy' ? /尚未就绪/ : /尚未开放/);
   }
 });
 
@@ -1091,13 +1135,11 @@ for (const task of ['connection_test', 'import_organize', 'batch_review', 'batch
 }
 
 test('保存 Harness 绕过 API 表单与题库设置写入，原 API 配置原样保留', async () => {
-  const source = loadWebSource();
   const original = { provider: 'ollama', endpoint: 'http://127.0.0.1:11434/v1/chat/completions', model: '旧模型', rememberKey: true, timeoutSeconds: 60 };
   const state = { settings: { aiImportV99: { ...original } } };
   const modes = [];
   const context = vm.createContext({
     state,
-    aiTasksBusyV99: () => false,
     ShirohaPlatform: {
       harness: {
         formMode: () => 'harness',
@@ -1106,18 +1148,20 @@ test('保存 Harness 绕过 API 表单与题库设置写入，原 API 配置原�
         },
       },
     },
-    readAiFormV99() {
-      throw new Error('不得读取 API 表单');
+    $() {
+      throw new Error('不得访问 API 表单');
     },
-    runMutation() {
-      throw new Error('不得写入题库配置');
-    },
-    setAiSettingsStatusV99() {},
-    syncAiImportActionV99() {},
-    updateAiConnectionPillV99() {},
   });
-  vm.runInContext(source.between('saveAiSettingsV99', 'clearAiSettingsV99'), context);
-  await context.saveAiSettingsV99();
+  const settings = installAiSettings(context);
+  const actions = installAiSettingsActions(context, {
+    settings: { ...settings, setAiSettingsStatusV99() {}, updateAiConnectionPillV99() {} },
+    storage: {
+      transaction() {
+        throw new Error('不得写入题库配置');
+      },
+    },
+  });
+  await actions.saveAiSettingsV99();
   assert.deepEqual(modes, ['harness']);
   assert.deepEqual(state.settings.aiImportV99, original);
 });

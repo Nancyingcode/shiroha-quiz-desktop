@@ -21,8 +21,8 @@
   }) {
     const {
       ensureGroupUi: ensureBankGroupUiV58,
-      ensure: ensurePracticeScopeV8916,
       current: practiceScopeV8916,
+      banks: practiceScopeBanksV8916,
       groupName: bankGroupNameV58,
       pathLabel: bankPathLabelV58,
       normalizeGroup: normalizeBankGroupNameV58,
@@ -40,7 +40,7 @@
       loadItems: loadNativeItems,
       itemsForBanks: practiceSessionItemsForBanksV8916,
     } = paging;
-    const { all: renderAll, exportSummary: renderExportBankSummaryV23, toast } = rendering;
+    const { all: renderAll, toast } = rendering;
     const { get: getExportSelection, set: setExportSelection } = selection;
     const {
       activeBank,
@@ -49,6 +49,8 @@
       edit: editBankByIdV45,
       duplicate: duplicateBankById,
       exportBank: exportBankById,
+      exportCurrent,
+      exportSelected,
       deleteBanks: deleteBanksV32,
       deleteQuestions: deleteBankQuestions,
       canSelectExportBanks,
@@ -137,10 +139,111 @@
       renderBankGroupDatalistV58();
     }
 
+    // 旧备份恢复与首次启动都从有效选择恢复；没有任何选择时沿用默认全选。
+    function setupBankManagement() {
+      mountBankManagementToolbar();
+      const validIds = new Set(state.banks.map((bank) => bank.id));
+      const selected = new Set([...getExportSelection()].filter((id) => validIds.has(id)));
+      setExportSelection(selected.size ? selected : validIds);
+      renderBulkSelection();
+    }
+
+    // 在题库管理页装配选择性批量导出控件，重复渲染时复用已绑定入口。
+    function mountBankManagementToolbar() {
+      if ($('#bank-bulk-export-panel-v23')) {
+        return;
+      }
+
+      const bankList = $('#bank-list');
+      if (!bankList) {
+        return;
+      }
+
+      bankList.insertAdjacentHTML('beforebegin', `<div id="bank-bulk-export-panel-v23" class="data-tool-card-v23 bank-bulk-panel-v23 bank-manage-toolbar-v28">
+    <div class="section-head compact-head-v23"><div><h3>当前题库与批量管理</h3><p class="muted">在这里切换当前题库；勾选下方题库后，可以批量导出题库 JSON 或删除。</p></div></div>
+    <div class="bank-current-bar-v28">
+      <label>当前题库<select id="bank-current-select-v28"></select></label>
+      <button class="ghost" id="export-json-btn" type="button">导出当前题库 JSON</button>
+      <span class="muted">切换后更新题库预览和错题本。练习与考试沿用已选范围。</span>
+    </div>
+    <div class="actions wrap-v23 bank-toolbar-actions-v28">
+      <label class="check-line-v23"><input id="export-bank-all-v23" type="checkbox">全选</label>
+      <button class="ghost" id="export-bank-invert-v23" type="button">反选</button>
+      <button class="ghost" id="export-bank-current-v23" type="button">仅选当前题库</button>
+      <button class="primary" id="export-selected-banks-v23" type="button">导出选中题库 JSON</button>
+      <button class="ghost danger" id="delete-selected-banks-v32" type="button">删除选中题库</button>
+    </div>
+    <div id="export-bank-summary-v23" class="notice warn">请选择需要管理的题库。</div>
+  </div>`);
+      bindBankManagementToolbar();
+      renderBankToolbarV28();
+    }
+
+    // 题库卡片和批量工具栏共享当前选择，删除和导出只在触发时取值。
+    function bindBankManagementToolbar() {
+      $('#bank-current-select-v28').onchange = /* 题库管理页的选择器切换活动题库。 */ async (e) => runMutation(/* 空选项不触发数据写入。 */ async () => {
+        if (e.target.value) {
+          state.activeBankId = e.target.value;
+          await saveSilent();
+          renderAll();
+        }
+      });
+
+      $('#export-bank-all-v23').onchange = (e) => {
+        setExportSelection(e.target.checked ? new Set(state.banks.map((bank) => bank.id)) : new Set());
+
+        renderBankList();
+      };
+
+      $('#export-bank-invert-v23').onclick = /* 以当前题库列表为准反选，确保导出的题库仍存在。 */ () => {
+        const selected = getExportSelection();
+        const next = new Set(state.banks.map((bank) => bank.id).filter((id) => !selected.has(id)));
+        setExportSelection(next);
+        renderBankList();
+      };
+
+      $('#export-bank-current-v23').onclick = () => {
+        setExportSelection(new Set([activeBank().id]));
+        renderBankList();
+      };
+
+      $('#export-json-btn').onclick = exportCurrent;
+      $('#export-selected-banks-v23').onclick = exportSelected;
+      $('#delete-selected-banks-v32').onclick = () => deleteBanksV32([...getExportSelection()]);
+    }
+
+    // 汇总本次选择的题库和题目数，同步更新导出与删除的可用状态。
+    function renderBulkSelection() {
+      const selection = getExportSelection();
+      const selected = state.banks.filter((bank) => selection.has(bank.id));
+      const qCount = selected.reduce((n, bank) => n + (bank.questions || []).length, 0);
+      const all = $('#export-bank-all-v23');
+      if (all) {
+        all.checked = state.banks.length > 0 && selected.length === state.banks.length;
+        all.indeterminate = selected.length > 0 && selected.length < state.banks.length;
+      }
+
+      const summary = $('#export-bank-summary-v23');
+      if (summary) {
+        summary.textContent = selected.length ? `已选择 ${selected.length} 个题库，共 ${qCount} 道题。` : '请至少选择一个题库。';
+        summary.className = `notice ${selected.length ? 'ok' : 'warn'}`;
+      }
+
+      const exportSelectedButton = $('#export-selected-banks-v23');
+      if (exportSelectedButton) {
+        exportSelectedButton.disabled = !selected.length;
+      }
+
+      const deleteSelectedButton = $('#delete-selected-banks-v32');
+      if (deleteSelectedButton) {
+        deleteSelectedButton.disabled = !selected.length;
+      }
+    }
+
     // 按分组及排序方式显示题库，重绘前后保留当前可用的批量选择。
     function renderBankList() {
       ensureBankGroupUiV58();
-      ensurePracticeScopeV8916();
+      const scope = practiceScopeV8916();
       const box = $('#bank-list');
       let banks = [...state.banks];
       const sort = $('#bank-sort-mode')?.value || 'created';
@@ -159,11 +262,10 @@
       if (!banks.length) {
         box.innerHTML = '<p class="muted">暂无题库。</p>';
         renderBankToolbarV28();
-        renderExportBankSummaryV23();
+        renderBulkSelection();
         return;
       }
 
-      const scope = practiceScopeV8916();
       const groups = new Map();
       banks.forEach(/* 按当前展示顺序把题库放入分组，保留组内已有顺序。 */ (b) => {
         const g = bankGroupNameV58(b);
@@ -175,7 +277,7 @@
       });
 
       box.innerHTML = [...groups.entries()].map(/* 按组汇总题量和选择状态，并为每个题库生成其操作入口。 */ ([groupName, items]) => {
-        const groupBanks = state.banks.filter((b) => bankGroupNameV58(b) === groupName);
+        const groupBanks = practiceScopeBanksV8916({ type: PRACTICE_SCOPE_GROUP_V8916, value: groupName });
         const total = groupBanks.reduce((n, b) => n + (b.questions?.length || 0), 0);
         const groupActive = scope.type === PRACTICE_SCOPE_GROUP_V8916 && scope.value === groupName;
         const body = items.map(/* 以当前题库身份标识状态，显示题型数和适用于该库的操作。 */ (b) => {
@@ -206,7 +308,7 @@
         }
 
         x.closest('.bank-item')?.classList.toggle('selected-bank-v28', x.checked);
-        renderExportBankSummaryV23();
+        renderBulkSelection();
       });
 
       $$('[data-openbank]').forEach(/* 给每条题库绑定切换入口，使用该行携带的库标识。 */ (x) => x.onclick = /* 将活动库和练习范围同步写入同一保存操作，再刷新其他视图。 */ async () => runMutation(async () => {
@@ -232,7 +334,7 @@
       $$('[data-delbank]').forEach((x) => x.onclick = () => deleteBanksV32([x.dataset.delbank]));
 
       renderBankToolbarV28();
-      renderExportBankSummaryV23();
+      renderBulkSelection();
     }
 
     // 重建题库管理工具栏的活动库提示，保持当前操作目标可见。
@@ -246,6 +348,7 @@
       sel.innerHTML = state.banks.map((b) => `<option value="${esc(b.id)}">${esc(bankPathLabelV58(b))}（${b.questions.length}题）</option>`).join('') || '<option value="">暂无题库</option>';
 
       sel.value = old || state.activeBankId || '';
+      $('#export-json-btn').disabled = state.banks.length === 0;
     }
 
     // 按当前题库及搜索条件显示分页预览，阻止迟到读取覆盖已切换的页面。
@@ -593,7 +696,7 @@
       };
     }
 
-    return { closeBankQuestionDetail, renderBankSelect, renderMergeSelect, renderBankInputs, renderBankList, renderBankToolbarV28, renderBankPreview, bankQuestionCopyText, openBankQuestionDetail, resetBankQuestionSelection, cancelPendingBankPreview };
+    return { closeBankQuestionDetail, renderBankSelect, renderMergeSelect, renderBankInputs, renderBankList, setupBankManagement, renderBankPreview, bankQuestionCopyText, openBankQuestionDetail, resetBankQuestionSelection, cancelPendingBankPreview };
   }
 
   globalThis.ShirohaBankPage = { create };

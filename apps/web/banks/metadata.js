@@ -2,14 +2,48 @@
 (() => {
   'use strict';
 
+  const DEFAULT_BANK_GROUP = '未分组';
+  const BANK_GROUP_MAX_LENGTH = 60;
   const EMPTY_BANK_NAME = '新建空题库';
+
+  function normalizeGroupName(value) {
+    return String(value ?? '').replace(/* 将空白折叠成单个空格，使导入标签保持单行。 */ /\s+/g, ' ')
+      .trim().slice(0, BANK_GROUP_MAX_LENGTH);
+  }
+
+  function bankGroupName(bank) {
+    return normalizeGroupName(bank && bank.groupName) || DEFAULT_BANK_GROUP;
+  }
+
+  // 旧备份可以使用分组别名，显式空的 groupName 保留未分组语义。
+  function pickGroupNameFromJson(bank) {
+    if (!bank || typeof bank !== 'object') {
+      return '';
+    }
+
+    return normalizeGroupName(bank.groupName ?? bank.bankGroup ?? bank.parentName ?? bank.groupTitle ?? '');
+  }
+
+  function bankNameKey(groupName, name) {
+    const group = normalizeGroupName(groupName).toLocaleLowerCase('zh-CN');
+    const title = String(name || '题库').trim().toLocaleLowerCase('zh-CN');
+    return `${group}::${title}`;
+  }
+
+  function bankPathLabel(bank) {
+    return `${bankGroupName(bank)} / ${bank?.name || '题库'}`;
+  }
+
+  function groupSuggestions(banks) {
+    const names = (banks || []).map((bank) => normalizeGroupName(bank.groupName)).filter(Boolean);
+    return [...new Set(names)].sort((a, b) => a.localeCompare(b, 'zh-CN'));
+  }
 
   // 题库页完成控件装配后才读取输入，保存使用应用提供的事务。
   function create({
     state,
     select: $,
     activeBank,
-    normalizeGroup,
     scope,
     dialogs,
     storage,
@@ -32,7 +66,7 @@
         // 读取当前范围会校准失效分组，因此先记录修改分组前的范围。
         const before = scope.current();
         bank.name = name;
-        bank.groupName = normalizeGroup(groupInput?.value || bank.groupName);
+        bank.groupName = normalizeGroupName(groupInput?.value || bank.groupName);
         bank.updatedAt = now();
         const after = scope.current();
         const scopeFellBack = before.type === scope.groupType && after.type === scope.bankType;
@@ -57,7 +91,7 @@
           return;
         }
 
-        const groupName = normalizeGroup(await dialogs.prompt('请输入一级分组名称，可留空：', '') || '');
+        const groupName = normalizeGroupName(await dialogs.prompt('请输入一级分组名称，可留空：', '') || '');
         const bank = {
           id: makeId('bank'),
           name: name.trim() || EMPTY_BANK_NAME,
@@ -77,5 +111,14 @@
     return { renameActiveBank, newEmptyBank };
   }
 
-  globalThis.ShirohaBankMetadata = Object.freeze({ create });
+  globalThis.ShirohaBankMetadata = Object.freeze({
+    create,
+    defaultGroup: DEFAULT_BANK_GROUP,
+    normalizeGroupName,
+    pickGroupNameFromJson,
+    bankGroupName,
+    bankNameKey,
+    bankPathLabel,
+    groupSuggestions,
+  });
 })();

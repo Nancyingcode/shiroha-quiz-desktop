@@ -22,4 +22,18 @@ function installAiSettings(context) {
   return settings;
 }
 
-module.exports = { installAiSettings };
+function installAiSettingsActions(context, { settings = installAiSettings(context), ...overrides } = {}) {
+  runWebScripts(context, ['ai/settings-actions.js']);
+  return context.ShirohaAiSettingsActions.create({
+    platform: context.ShirohaPlatform,
+    settings,
+    transport: {},
+    storage: {},
+    isBusy: () => false,
+    syncImportAction() {},
+    showNotice() {},
+    ...overrides,
+  });
+}
+
+module.exports = { installAiSettings, installAiSettingsActions };

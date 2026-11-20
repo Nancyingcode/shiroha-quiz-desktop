@@ -1,9 +1,30 @@
 import assert from 'node:assert/strict';
 import { markNativeIsolation } from './native-isolation.mjs';
 import { cleanupAfterShutdown, createSmokeControl, deadline, reportSmoke, SmokeCheckAborted, SmokeStopFailedError, SmokeUnsettledError, spawnOwned } from './smoke-control.mjs';
-import { createNativeMock, nativeServiceSmoke, NativeMockStartupCleanupError } from './network-smoke.mjs';
+import { aiSettingsCredentialSmoke, createNativeMock, nativeServiceSmoke, NativeMockStartupCleanupError } from './network-smoke.mjs';
 import { documentSmoke } from './document-smoke.mjs';
-import { bankContentOperationsSmoke, changedMergeSourceSmoke, dedupeRetrySmoke } from './bank-operations-smoke.mjs';
+import {
+  bankContentOperationsSmoke,
+  bankDeletionSmoke,
+  bankExportChangesSmoke,
+  bankExportScopeSmoke,
+  changedMergeSourceSmoke,
+  dedupeRetrySmoke,
+  fullBackupExportSmoke,
+  localRevision,
+  operationCalls,
+  practiceScopeScoresSmoke,
+  questionDeletionRetrySmoke,
+  replaceFixture,
+  traceOperations,
+} from './bank-operations-smoke.mjs';
+import {
+  backupRestoreFailuresSmoke,
+  backupRestorePathsSmoke,
+  nativeDavConfigurationSmoke,
+  normalRecoveryPointSmoke,
+  trackRecoveryStartup,
+} from './backup-restore-smoke.mjs';
 import { harnessSmoke, harnessSwitchingSmoke } from './harness-smoke.mjs';
 import { codebuddyCliSmoke, codebuddyCliAfterRestart, codebuddyCliPersistenceSmoke } from './codebuddy-cli-smoke.mjs';
 import { requiredAssets } from './prepare-web.mjs';
@@ -33,6 +54,7 @@ const VISUAL_WINDOW_SIZES = [
 const execute = promisify(execFile);
 
 /** @typedef {import('playwright-core').Page} Page */
+/** @typedef {import('../../web/platform/contracts.d.ts').JsonObject} StoredObject */
 /** @typedef {{name: string, ok: boolean, detail?: unknown, error?: string}} Check */
 /** @typedef {{child: import('node:child_process').ChildProcess, browser: import('playwright-core').Browser, page: Page, errors: string[], blocked: string[], requests: string[], nativeHandle?: number}} Runtime */
 /** @typedef {{startup?: {promise?: Promise<void>}, typesetPromise: (nodes: Element[]) => Promise<void>}} MathApi */
@@ -708,6 +730,18 @@ async function focusVisualSmoke(runtime, mode) {
     await page.locator(`body.${mode}-focus.side-collapsed`).waitFor({ state: 'attached' });
     for (const size of VISUAL_WINDOW_SIZES) {
       await resizeTestWindow(runtime, size);
+      await page.waitForFunction((focusMode) => {
+        const card = document.getElementById(`${focusMode}-card`);
+        const rail = card?.querySelector(`:scope > .${focusMode}-side-v31`);
+        if (!card || !(rail instanceof window.HTMLElement)) { return false; }
+        const top = rail.style.getPropertyValue('top');
+        const height = rail.style.getPropertyValue('max-height');
+        if (window.innerWidth < 1280) { return !top && !height; }
+        const offset = Math.max(12, Math.round(card.getBoundingClientRect().top));
+        // CSSOM 可以重排 calc 项，按窗口高度和下边距比较实际计算值。
+        const { maxHeight } = window.getComputedStyle(rail);
+        return top === `${offset}px` && height !== '' && maxHeight === `${window.innerHeight - offset - 18}px`;
+      }, mode);
       const question = page.locator(`#${mode}-card .question-title`).first();
       await question.scrollIntoViewIfNeeded();
       assert.match(await question.innerText(), /TAURI PROTOTYPE 1\+1 = \?/);
@@ -756,6 +790,7 @@ async function practiceAndExamFocusSmoke(runtime) {
   await page.locator('#app-dialog [data-dialog-accept]').click();
   // 手动切换会取代自动收起状态；考试不切换导航，另行覆盖退出后的自动恢复。
   await page.waitForFunction(() => !document.body.classList.contains('practice-focus') && document.body.classList.contains('side-collapsed'));
+  assert.equal(await page.evaluate(() => localStorage.getItem('shiroha-sidebar-collapsed')), '1');
   await page.locator('#sidebar-toggle').click();
   await page.locator('.nav[data-view="exam"]').click();
   await page.locator('#exam-count').fill('1');
@@ -771,8 +806,66 @@ async function practiceAndExamFocusSmoke(runtime) {
   await page.locator('#exam-exit-focus').click();
   await page.locator('#app-dialog [data-dialog-accept]').click();
   await page.waitForFunction(() => !document.body.classList.contains('exam-focus') && !document.body.classList.contains('side-collapsed'));
+  assert.equal(await page.evaluate(() => localStorage.getItem('shiroha-sidebar-collapsed')), '0');
   await page.locator('#exam-setup').waitFor({ state: 'visible' });
   return { practice, exam, manualNavigationRetained: true, automaticNavigationRestored: true };
+}
+
+/** 从真实页面启动两轮训练，检查切页只保留两轮需要的题目正文。 @param {Page} page */
+async function retainStudyBodiesSmoke(page) {
+  await page.reload();
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.locator('#active-bank-select').selectOption('lazy-a');
+  await page.locator('.nav[data-view="practice"]').click();
+  await page.locator('#practice-submit-mode').selectOption('single');
+  await page.locator('#practice-start-mode-v58916').selectOption('custom');
+  await page.locator('#practice-number-range-v58916').fill('11-12');
+  await page.locator('#start-practice-btn').click();
+  await page.locator('#practice-card .question-title').getByText('lazy-a 正文 10', { exact: true }).waitFor();
+  await page.locator('#sidebar-toggle').click();
+  await page.locator('.nav[data-view="exam"]').click();
+  await page.locator('#exam-count').fill('1');
+  await page.locator('#exam-minutes').fill('0');
+  await page.locator('#exam-order').selectOption('sequence');
+  await page.locator('#start-exam-btn').click();
+  await page.locator('#exam-card .question-title').getByText('1. lazy-a 正文 0', { exact: true }).waitFor();
+  await page.locator('#sidebar-toggle').click();
+  await page.locator('.nav[data-view="banks"]').click();
+  await page.locator('#bank-preview').getByText('lazy-a 正文 9', { exact: true }).waitFor();
+
+  await page.evaluate(() => {
+    const { storage } = /** @type {{storage: import('../../web/platform/runtime.d.ts').BrowserStorage}} */ (
+      Reflect.get(window, 'ShirohaPlatform')
+    );
+    const { releaseView } = storage;
+    if (!releaseView) { throw new Error('本地正文释放入口缺失'); }
+    const loaded = () => Object.fromEntries(['q0', 'q9', 'q10', 'q11'].map((id) => (
+      [id, storage.isQuestionLoaded?.('lazy-a', id)]
+    )));
+
+    // 读取真实适配器释放前后的缓存状态，避免 DOM 仍显示旧文字掩盖正文误释放。
+    storage.releaseView = (snapshot, keep) => {
+      const before = loaded();
+      releaseView.call(storage, snapshot, keep);
+      Reflect.set(window, '__studyBodies', { before, after: loaded(), keep });
+    };
+  });
+  await page.locator('.nav[data-view="dashboard"]').click();
+  const released = await page.evaluate(() => Reflect.get(window, '__studyBodies'));
+  assert.deepEqual(released, {
+    before: { q0: true, q9: true, q10: true, q11: true },
+    after: { q0: true, q9: false, q10: true, q11: true },
+    keep: ['q10', 'q11', 'q0'].map((questionId) => ({ bankId: 'lazy-a', questionId })),
+  });
+  await page.locator('.nav[data-view="practice"]').click();
+  await page.locator('#practice-card .question-title').getByText('lazy-a 正文 10', { exact: true }).waitFor();
+  await page.locator('#practice-resume').click();
+  await page.locator('#p-next').click();
+  await page.locator('#practice-card .question-title').getByText('lazy-a 正文 11', { exact: true }).waitFor();
+  await page.locator('#sidebar-toggle').click();
+  await page.locator('.nav[data-view="banks"]').click();
+  await page.locator('#bank-preview').getByText('lazy-a 正文 9', { exact: true }).waitFor();
+  return { practiceBodies: 2, examBodies: 1, otherBodyReleasedAndReread: true };
 }
 
 function textPdf() {
@@ -960,6 +1053,21 @@ function readNativeSnapshot(page) {
   });
 }
 
+/** 比较恢复入口仍可见的日志，SQLite 启动检查可能已经移除了无效 WAL。
+ * @param {string} file
+ */
+async function readRecoveryWal(file) {
+  try {
+    return await readFile(file);
+  } catch (error) {
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+      return null;
+    }
+
+    throw error;
+  }
+}
+
 /** @param {Page} page */
 async function appendImportSmoke(page) {
   // 上一个用例补读过全部正文，重载后从应用和存储一致的摘要视图开始。
@@ -1126,9 +1234,8 @@ async function dualFileImportSmoke(page) {
   return { previewAnswers, savedAfterReload: true };
 }
 
-/** @param {Runtime} runtime @param {string} bankName @param {string} origin */
-async function totalPracticeSmoke(runtime, bankName, origin) {
-  const { page } = runtime;
+/** @param {Page} page @param {string} origin */
+async function configurePracticeMock(page, origin) {
   await page.locator('.nav[data-view="ai-settings"]').click();
   await page.locator('#ai-provider-v99').selectOption('custom');
   await page.locator('#ai-endpoint-v99').fill(`${origin}/practice-analysis`);
@@ -1137,6 +1244,12 @@ async function totalPracticeSmoke(runtime, bankName, origin) {
   await page.locator('#ai-remember-key-v99').uncheck();
   await page.locator('#ai-save-settings-v99').click();
   await page.waitForFunction(() => document.querySelector('#ai-settings-status-v99')?.textContent?.includes('设置已保存'));
+}
+
+/** @param {Runtime} runtime @param {string} bankName @param {string} origin */
+async function totalPracticeSmoke(runtime, bankName, origin) {
+  const { page } = runtime;
+  await configurePracticeMock(page, origin);
   await page.locator('.nav[data-view="practice"]').click();
   await page.locator('#practice-submit-mode').selectOption('total');
   await practiceImportedBank(page, bankName);
@@ -1240,28 +1353,104 @@ async function wrongAnalysisSmoke(page) {
   return { emptyState: true, nativeAi: true, confirmedSave: true, persistedAfterReload: true, sourceAnalysisInReview: true, savedPracticePanel: true };
 }
 
-/** @param {Page} page */
-async function trainingReviewAnalysisSmoke(page) {
+/** @param {Page} page @param {string} bankName */
+async function seedAnalysisCopies(page, bankName) {
+  const snapshot = await readNativeSnapshot(page);
+  const bank = snapshot.banks.find((item) => item.name === bankName);
+  assert(bank);
+  const [question] = bank.questions;
+  const peerQuestion = { ...question, analysis: '旁库原解析' };
+  const peer = { ...bank, id: randomUUID(), name: '复盘同题 ID 旁库', questions: [peerQuestion] };
+  const [entry] = /** @type {readonly StoredObject[]} */ (snapshot.wrongBook[bank.id]);
+  assert.equal(entry.id, question.id);
+  const wrong = { ...question, score: 17, extension: { fixture: '原错题快照' } };
+  const favorite = { ...question, score: 29, extension: { fixture: '原收藏快照' } };
+  const favorites = /** @type {StoredObject | undefined} */ (snapshot.crossPlatformMeta.favoriteQuestions);
+  await replaceFixture(page, {
+    ...snapshot,
+    activeBankId: peer.id,
+    banks: [...snapshot.banks, peer],
+    wrongBook: {
+      ...snapshot.wrongBook,
+      [bank.id]: [{ ...entry, nativeQuestion: wrong }],
+      [peer.id]: [{ ...entry, nativeQuestion: peerQuestion }],
+    },
+    favorites: { ...snapshot.favorites, [bank.id]: [question.id], [peer.id]: [question.id] },
+    crossPlatformMeta: {
+      ...snapshot.crossPlatformMeta,
+      favoriteQuestions: {
+        ...favorites,
+        [bank.id]: { [question.id]: { favoritedAt: 17, question: favorite } },
+        [peer.id]: { [question.id]: { favoritedAt: 29, question: peerQuestion } },
+      },
+    },
+  });
+  await page.reload();
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  return { bank, peer, question, wrong, favorite };
+}
+
+/** @param {Page} page @param {string} origin */
+async function trainingReviewAnalysisSmoke(page, origin) {
   const bankName = `复盘解析验证-${randomUUID().slice(0, 8)}`;
   await importAndPractice(page, bankName, '');
   await page.locator('#practice-card .option[data-key="B"]').click();
   await page.locator('#p-submit').click();
   await page.locator('#p-next').click();
   await page.locator('#practice-review-result').click();
+  await page.locator('#training-review.active').waitFor();
+  const copies = await seedAnalysisCopies(page, bankName);
+  // 覆盖夹具会撤销原生凭据。通过实际设置入口重建本地 mock 的临时绑定。
+  await configurePracticeMock(page, origin);
+  const before = await readNativeSnapshot(page);
+  const revision = await localRevision(page);
+  await page.locator('.nav[data-view="records"]').click();
+  await page.locator('#records .record-item').filter({ hasText: bankName }).first().locator('[data-training-review]').click();
   const panel = page.locator('#training-question [data-review-analysis]');
   await panel.locator('[data-review-ai="generate"]').click();
   await panel.locator('.q-multiline-text').filter({ hasText: 'NATIVE_PRACTICE_AI' }).waitFor();
   assert.match(await panel.innerText(), /草稿 · 未保存/);
+  await traceOperations(page, { failWrite: true });
   await panel.locator('[data-review-ai="save"]').click();
+  const retry = page.locator('#platform-status.failed').getByRole('button', { name: '重试' });
+  await retry.waitFor();
+  await panel.getByRole('alert').filter({ hasText: 'AI 草稿仍保留' }).waitFor();
+  assert.equal(await localRevision(page), revision);
+  assert.deepEqual(await readNativeSnapshot(page), before);
+  await retry.click();
   await panel.locator('.review-analysis-saved').waitFor();
+  assert.equal((await operationCalls(page)).filter((call) => call.kind === 'write').length, 2);
   await page.reload();
   await page.locator('body[data-storage-state="ready"]').waitFor();
+  const after = await readNativeSnapshot(page);
+  const analysis = 'NATIVE_PRACTICE_AI: 1 + 1 = 2';
+  assert.equal(await localRevision(page), revision + 1);
+  assert.equal(after.activeBankId, copies.peer.id);
+  assert.deepEqual(after.records, before.records);
+  assert.deepEqual(
+    after.banks.filter((bank) => bank.id !== copies.bank.id),
+    before.banks.filter((bank) => bank.id !== copies.bank.id),
+  );
+  assert.deepEqual(
+    after.banks.find((bank) => bank.id === copies.bank.id)?.questions,
+    [{ ...copies.question, analysis }],
+  );
+  const wrong = /** @type {readonly StoredObject[]} */ (before.wrongBook[copies.bank.id]);
+  assert.deepEqual(after.wrongBook, {
+    ...before.wrongBook,
+    [copies.bank.id]: [{ ...wrong[0], nativeQuestion: { ...copies.wrong, analysis } }],
+  });
+  const favorites = /** @type {StoredObject} */ (before.crossPlatformMeta.favoriteQuestions);
+  assert.deepEqual(after.crossPlatformMeta.favoriteQuestions, {
+    ...favorites,
+    [copies.bank.id]: { [copies.question.id]: { favoritedAt: 17, question: { ...copies.favorite, analysis } } },
+  });
   await page.locator('.nav[data-view="records"]').click();
   await page.locator('#records .record-item').filter({ hasText: bankName }).first().locator('[data-training-review]').click();
   await panel.locator('.q-multiline-text').filter({ hasText: 'NATIVE_PRACTICE_AI' }).waitFor();
   assert.equal(await panel.locator('[data-review-ai="generate"]').count(), 0);
   assert.equal(await page.locator('#training-question .option.wrong').getAttribute('data-key'), 'B');
-  return { nativeAi: true, confirmedSave: true, persistedAfterReload: true, originalAnswer: true };
+  return { nativeAi: true, confirmedSave: true, persistedAfterReload: true, originalAnswer: true, fixedRetryCopies: true };
 }
 
 async function main() {
@@ -1357,6 +1546,12 @@ async function main() {
       assert.equal(networkMock.requests.filter((request) => request.method === 'PUT' && request.url?.includes('shiroha-web-backup-')).length, 1, '重试重复写入历史文件');
       return result;
     });
+    await check('AI 设置凭据随配置提交及撤销，确认失败按回执恢复', () => (
+      aiSettingsCredentialSmoke(page, readNativeSnapshot, networkMock.origin)
+    ));
+    await check('原生 WebDAV 配置保存和清除失败可重试，上传元数据不暂存密码', () => (
+      nativeDavConfigurationSmoke(page, readNativeSnapshot, networkMock.origin)
+    ));
     await check('原生 IPC 白名单与非法输入保全', async () => page.evaluate(async () => {
       const host = (/** @type {NativeTestWindow} */ (window)).ShirohaDesktopHost;
       if (!host) { throw new Error('本地桥接缺失'); }
@@ -1449,7 +1644,7 @@ async function main() {
       return result;
     });
     await check('空解析错题主动 AI 生成、确认保存与原生重载', () => wrongAnalysisSmoke(page));
-    await check('训练复盘主动 AI 生成、确认保存与原生重载', () => trainingReviewAnalysisSmoke(page));
+    await check('训练复盘主动 AI 生成、确认保存与原生重载', () => trainingReviewAnalysisSmoke(page, networkMock.origin));
     await check('订阅 Harness 登录、既有 AI 任务与取消草稿保全', () => harnessSmoke(page, () => practiceImportedBank(page, bankName)));
     await check('Harness 下载中切换与组件缓存复用', () => harnessSwitchingSmoke(page, profile));
     await check('CodeBuddy CLI 登录引导、单题解析、追问与配置保全', () => codebuddyCliSmoke(page, profile, () => practiceImportedBank(page, bankName)));
@@ -1764,6 +1959,7 @@ async function main() {
       });
       return { questions: 130, defaultPageSize: 10, pageSizes: [20, 50], directLastPage: 5, lastPage: 15, initialBodies: 0, crossBankIdentity: true };
     });
+    await check('切页释放正文时保留当前练习和考试的题目', () => retainStudyBodiesSmoke(migratedRestart.page));
     await check('自选题号同时设置题量，仅加载范围内指定数量', async () => {
       const { page } = migratedRestart;
       await page.reload();await page.locator('body[data-storage-state="ready"]').waitFor();
@@ -1941,14 +2137,19 @@ async function main() {
     const repaired = runtime;
     await check('损坏数据库界面恢复且保留原文件', async () => {
       const status = repaired.page.locator('#platform-status');
+      const assertStarted = await trackRecoveryStartup(repaired.page);
+      const wal = path.join(migrationProfile, 'library.sqlite3-wal');
+      const originalWal = await readRecoveryWal(wal);
       await status.getByRole('button', { name: '查找本机恢复点', exact: true }).click();
       await status.getByLabel('修复使用的恢复点').selectOption(repairCheckpoint.snapshotId);
       await status.getByRole('button', { name: '从恢复点修复数据', exact: true }).click();
       await repaired.page.locator('#app-dialog [data-dialog-accept]').click();
       await repaired.page.locator('#active-bank-select option[value="lazy-a"]').waitFor({ state: 'attached' });
+      await assertStarted('recover');
       assert.deepEqual(await readFile(path.join(migrationProfile, 'library.sqlite3')), broken);
+      assert.deepEqual(await readRecoveryWal(wal), originalWal);
       assert.match(await readFile(path.join(migrationProfile, 'active.json'), 'utf8'), /[a-f0-9-]{36}/);
-      return { recovered: true, originalPreserved: true };
+      return { recovered: true, originalPreserved: true, walAvailableAtRepair: Boolean(originalWal) };
     });
     await stop(runtime);runtime = undefined;
     runtime = await launchOwned(executable, migrationProfile, proxyPort);
@@ -1970,21 +2171,112 @@ async function main() {
     runtime = await launchOwned(executable, migrationProfile, proxyPort);
     const importedRecovery = runtime;
     await check('损坏数据库从兼容备份修复', async () => {
+      const assertStarted = await trackRecoveryStartup(importedRecovery.page);
+      const wal = path.join(damaged, 'library.sqlite3-wal');
+      const originalWal = await readRecoveryWal(wal);
       const input = importedRecovery.page.locator('#platform-status').getByLabel('选择兼容备份修复数据');
       await input.waitFor();
       await input.setInputFiles({ name: 'synthetic-recovery.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(repairBackup)) });
       await importedRecovery.page.locator('#app-dialog [data-dialog-accept]').click();
       await importedRecovery.page.locator('#active-bank-select option[value="lazy-a"]').waitFor({ state: 'attached' });
+      await assertStarted('recover_import');
       assert.deepEqual(await readFile(path.join(damaged, 'library.sqlite3')), broken);
-      return { imported: true, originalPreserved: true };
+      assert.deepEqual(await readRecoveryWal(wal), originalWal);
+      return { imported: true, originalPreserved: true, walAvailableAtRepair: Boolean(originalWal) };
     });
     // 导入和整理会改变活动题库，放在依赖既有题库的用例之后。
     await check('双文件导入自动匹配与保存重载', () => dualFileImportSmoke(importedRecovery.page));
     await check('追加目标变化后重新确认并保存到 SQLite', () => appendImportSmoke(importedRecovery.page));
     await check('题库改名、分组范围回退和新建空库保存重载', () => bankMetadataSmoke(importedRecovery.page));
+    await check('跨库同 ID 与历史后缀的练习和考试成绩保存重载', () => practiceScopeScoresSmoke(importedRecovery.page, readNativeSnapshot));
     await check('题库双入口复制和合并按需读取并保存重载', () => bankContentOperationsSmoke(importedRecovery.page, readNativeSnapshot));
     await check('合并预读期间改变来源须重新确认', () => changedMergeSourceSmoke(importedRecovery.page, readNativeSnapshot));
     await check('题库去重写入失败后重试重新加载正文并保存重载', () => dedupeRetrySmoke(importedRecovery.page, readNativeSnapshot));
+    await check('题库和学习记录各入口仅补读对应范围并导出', () => bankExportScopeSmoke(importedRecovery.page, readNativeSnapshot));
+    await check('预读失败或切换目标时不导出，原学习数据保留', () => bankExportChangesSmoke(importedRecovery.page, readNativeSnapshot));
+    await check('完整 JSON、ZIP 和复制补齐正文、记录和媒体', () => fullBackupExportSmoke(importedRecovery.page, readNativeSnapshot));
+    await check('本地文件、导入页和 WebDAV 恢复真实导出数据并重载', () => (
+      backupRestorePathsSmoke(importedRecovery.page, readNativeSnapshot)
+    ));
+    await check('恢复缺图和原生读取、检查点、写入故障保全，重试保存到 SQLite', () => (
+      backupRestoreFailuresSmoke(importedRecovery.page, readNativeSnapshot)
+    ));
+    await check('设置页正常恢复点等待保存队列再切换并重载', () => (
+      normalRecoveryPointSmoke(importedRecovery.page, readNativeSnapshot)
+    ));
+    await check('删题校验零写入、离页后全局重试补读并保存重载', () => questionDeletionRetrySmoke(importedRecovery.page, readNativeSnapshot));
+    await check('整库删除回滚选库、分组范围回退和历史成绩保全', () => bankDeletionSmoke(importedRecovery.page, readNativeSnapshot));
+    await check('删空题库后冷启动保留空状态和历史成绩', async () => {
+      const saved = await readNativeSnapshot(importedRecovery.page);
+      await stop(importedRecovery);
+      runtime = undefined;
+      const restartedEmpty = await launchOwned(executable, migrationProfile, proxyPort);
+      runtime = restartedEmpty;
+      await restartedEmpty.page.locator('body[data-storage-state="ready"]').waitFor();
+      assert.equal(await restartedEmpty.page.locator('#active-bank-select option').count(), 0);
+      assert.equal(await restartedEmpty.page.locator('#bank-current-select-v28 option').innerText(), '暂无题库');
+      assert.deepEqual(await readNativeSnapshot(restartedEmpty.page), saved);
+      assert.deepEqual(restartedEmpty.errors, []);
+      return { preservedEmptyAfterRestart: true };
+    });
+    await check('内置题库通过面板读取本地 JSON，保存后重载 SQLite', async () => {
+      assert(runtime);
+      const { page } = runtime;
+      const before = await readNativeSnapshot(page);
+      const ready = page.locator('body[data-storage-state="ready"]');
+      assert.deepEqual(before.banks, []);
+      assert.equal(before.settings.suppressDefaultBank, true);
+      await page.locator('.nav[data-view="banks"]').click();
+      await page.locator('#builtin-bank-status-v252').getByText('当前未加入 C1 题库。').waitFor();
+      // 当前 WebView2 的 CDP 未上报这类本地响应，先观察平台读取真实 JSON 的结果。
+      // CDP 能稳定上报本地响应后，可改回直接等待响应并移除此包装。
+      const reading = await page.evaluateHandle(() => {
+        const platform = /** @type {import('../../web/platform/runtime.d.ts').BrowserGlobals['ShirohaPlatform']} */ (
+          Reflect.get(window, 'ShirohaPlatform')
+        );
+        const { resourceJson } = platform;
+        const calls = /** @type {{url: string, questionCount: number}[]} */ ([]);
+        platform.resourceJson = async (url) => {
+          const data = await resourceJson.call(platform, url);
+          const questions = (/** @type {{questions?: unknown} | null} */ (data))?.questions;
+          calls.push({ url, questionCount: Array.isArray(questions) ? questions.length : 0 });
+          return data;
+        };
+        return {
+          calls,
+          restore() {
+            platform.resourceJson = resourceJson;
+          },
+        };
+      });
+      try {
+        await page.locator('#load-built-in-bank-btn-panel').click();
+        await ready.waitFor();
+        await page.locator('#app-toast').getByText(/已加载内置题库：.*共 393 题/).waitFor();
+        assert.deepEqual(await reading.evaluate(({ calls }) => calls), [{ url: 'data/c1-full.json', questionCount: 393 }]);
+      } finally {
+        await reading.evaluate(({ restore }) => restore());
+        await reading.dispose();
+      }
+
+      await page.reload();
+      await ready.waitFor();
+      const after = await readNativeSnapshot(page);
+      assert.equal(after.banks.length, 1);
+      const [bank] = after.banks;
+      assert.equal(bank.id, 'default-c1');
+      assert.equal(bank.questions.length, 393);
+      assert.equal(bank.questions[0].id, 'C1-single-0001');
+      assert.equal(bank.questions.at(-1)?.id, 'C1-multiple-0393');
+      assert.equal(after.activeBankId, bank.id);
+      assert.equal(after.settings.suppressDefaultBank, false);
+      assert.deepEqual(after.settings.practiceScope, { type: 'bank', value: bank.id });
+      assert.deepEqual(after.records, before.records);
+      assert.equal(await page.locator('#active-bank-select').inputValue(), bank.id);
+      assert.equal(await page.locator('#stat-total').textContent(), '393');
+      assert.equal(await page.locator('#builtin-bank-panel-v252').getAttribute('hidden'), '');
+      return { resource: 'data/c1-full.json', activeBankId: bank.id, questionCount: bank.questions.length };
+    });
   } catch (error) {
     if (!(error instanceof SmokeCheckAborted)) { checks.push({ name: '启动或运行', ok: false, error: errorText(error) }); }
   } finally {

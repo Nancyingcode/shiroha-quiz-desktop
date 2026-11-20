@@ -184,7 +184,10 @@
         setWebdavDiagnosticV378(action, error);const message = `${action}失败：${classifyWebdavErrorV378(error).summary}`;setWebdavStatusV378(message, 'danger');const details = $('#webdav-diagnostics-details-v378');if (details) { details.open = true; }
 
         toast(message, 'danger');
-      } finally { setWebdavBusyV378(''); }
+      } finally {
+        setWebdavBusyV378('');
+        restoreWebdavFocus();
+      }
     }
 
     // 共用上传、诊断和恢复面板结构，密码存放说明取当前平台。
@@ -233,18 +236,40 @@
     }
 
     function onWebdavListClickV378(e) {
-      const button = e.target.closest('[data-webdav-restore-v378]');if (button) { runWebdavActionV378('下载备份', () => prepareWebdavRestoreV378(button.dataset.webdavRestoreV378)); }
+      const button = e.target.closest('[data-webdav-restore-v378]');
+      if (button) {
+        runWebdavActionV378('下载备份', () => prepareWebdavRestoreV378(button.dataset.webdavRestoreV378, button));
+      }
     }
 
     // 配置写入成功后才提示用户，凭据按表单选择交给独立存储。
     async function saveWebdavForm() {
-      try { const config = webdavConfigFromFormV378();await storeWebdavConfigV378(config, webdavPasswordFromFormV378());setWebdavStatusV378('配置已保存。密码按当前“记住密码”选项单独存放。', 'ok');toast('WebDAV 配置已保存。', 'ok'); } catch (error) { setWebdavStatusV378(error.message, 'danger'); }
+      try {
+        const config = webdavConfigFromFormV378();
+        const stored = await storeWebdavConfigV378(config, webdavPasswordFromFormV378());
+        if (stored === false) {
+          return;
+        }
+
+        setWebdavStatusV378('配置已保存。密码按当前“记住密码”选项单独存放。', 'ok');
+        toast('WebDAV 配置已保存。', 'ok');
+      } catch (error) {
+        setWebdavStatusV378(error.message, 'danger');
+      }
     }
 
     // 清除存储成功后释放本地面板状态，失败时保留已载入的值供重试。
     async function clearWebdavForm() {
-      // eslint-disable-next-line prefer-template -- 异常信息可能是对象，保留 + 的默认转换；统一异常类型后移除此例外。
-      try { await clearWebdavStorageV378(); } catch (error) { setWebdavStatusV378('清除失败：' + error.message, 'warn');return; }
+      try {
+        const cleared = await clearWebdavStorageV378();
+        if (cleared === false) {
+          return;
+        }
+      } catch (error) {
+        // eslint-disable-next-line prefer-template -- 异常信息可能是对象，保留 + 的默认转换；统一异常类型后移除此例外。
+        setWebdavStatusV378('清除失败：' + error.message, 'warn');
+        return;
+      }
 
       webdavRuntimeV378 = { busy: false, action: '', backups: [], latestFile: '', status: '配置和密码已清除。', statusKind: 'ok', diagnostic: null, pendingRestore: null, formLoaded: false };fillWebdavFormV378();renderWebdavPanelV378();toast('WebDAV 配置已清除。', 'ok');
     }
@@ -375,7 +400,13 @@
       const questionCount = (getState().banks || []).reduce((n, b) => n + (b.questions || []).length, 0); const manifest = { kind: 'shiroha_quiz_webdav_latest', version: 1, app: 'Shiroha Quiz', appVersion: APP_VERSION, updatedAt: now(), fileName, sha256: sha, sizeBytes: bytes.byteLength, bankCount: (getState().banks || []).length, questionCount };
       let manifestWarning = '';try { await webdavRequestV378(config, password, `${remoteDir}/latest.json`, { method: 'PUT', headers: { 'Content-Type': 'application/json; charset=utf-8' }, body: JSON.stringify(manifest), acceptStatuses: [200, 201, 204] }); } catch (error) { manifestWarning = '；备份文件已上传，但 latest.json 更新失败';setWebdavDiagnosticV378('更新 latest.json', error); }
 
-      const saved = { ...config, lastUploadAt: manifest.updatedAt, lastUploadFile: fileName, lastUploadSize: bytes.byteLength, lastUploadSha: sha };await storeWebdavConfigV378(saved, password, false);
+      const saved = { ...config, lastUploadAt: manifest.updatedAt, lastUploadFile: fileName, lastUploadSize: bytes.byteLength, lastUploadSha: sha };
+      const stored = await storeWebdavConfigV378(saved, password, false);
+      if (stored === false) {
+        setWebdavStatusV378(`备份已上传：${fileName}。当前正在保存其他更改，最近上传信息未写入。`, 'warn');
+        return;
+      }
+
       try { await loadWebdavBackupListV378(config, password); } catch (error) { manifestWarning += '；远程列表刷新失败';setWebdavDiagnosticV378('刷新列表', error); }
 
       if (!manifestWarning) { setWebdavDiagnosticV378('上传备份', null, { method: 'PUT', url: webdavUrlV378(config, `${remoteDir}/${fileName}`), status: fileResponse.status, summary: '完整备份及 latest.json 已上传。' }); }
@@ -480,7 +511,7 @@
     }
 
     // 下载后核对备份名和索引哈希，通过完整备份校验再等待用户确认。
-    async function prepareWebdavRestoreV378(fileName) {
+    async function prepareWebdavRestoreV378(fileName, returnFocus) {
       if (!WEBDAV_BACKUP_FILE_RE_V378.test(String(fileName || ''))) { throw webdavErrorV378('远程文件名不符合 Shiroha Quiz 备份规则。', { code: 'invalid_file' }); }
 
       const config = webdavConfigFromFormV378(); const password = webdavPasswordFromFormV378(); const remoteDir = normalizeWebdavRemoteDirV378(config.remoteDir); const response = await webdavRequestV378(config, password, `${remoteDir}/${fileName}`, { method: 'GET', timeoutMs: 120000, acceptStatuses: [200] });
@@ -496,7 +527,7 @@
 
       webdavRuntimeV378.pendingRestore = { fileName, bytes: bytes.byteLength, sha, data, normalized, exportedAt: data.exportedAt || '', questionCount: normalized.banks.reduce((n, b) => n + (b.questions || []).length, 0) };
 
-      openWebdavRestoreModalV378();setWebdavDiagnosticV378('下载备份', null, { method: 'GET', url: webdavUrlV378(config, `${remoteDir}/${fileName}`), status: response.status, summary: '下载和 SHA-256 校验通过，等待用户确认恢复。' });setWebdavStatusV378('备份下载并校验完成，请在确认框选择恢复方式。', 'ok');
+      openWebdavRestoreModalV378(returnFocus);setWebdavDiagnosticV378('下载备份', null, { method: 'GET', url: webdavUrlV378(config, `${remoteDir}/${fileName}`), status: response.status, summary: '下载和 SHA-256 校验通过，等待用户确认恢复。' });setWebdavStatusV378('备份下载并校验完成，请在确认框选择恢复方式。', 'ok');
     }
 
     // 恢复框只遍历自己的可用控件，禁止写入过程中用 Escape 关闭。
@@ -511,12 +542,12 @@
     }
 
     // 展示待恢复备份摘要并把焦点移入确认框。
-    function openWebdavRestoreModalV378() {
+    function openWebdavRestoreModalV378(returnFocus) {
       const pending = webdavRuntimeV378.pendingRestore; const modal = $('#webdav-restore-modal-v378'); const meta = $('#webdav-restore-meta-v378');if (!pending || !modal) { return; }
 
       if (meta) { meta.textContent = `文件：${pending.fileName}｜导出时间：${pending.exportedAt ? fmt(pending.exportedAt) : '未知'}｜${pending.normalized.banks.length} 个题库｜${pending.questionCount} 道题｜${formatBytesV376(pending.bytes)}｜SHA-256 ${pending.sha.slice(0, 12)}…`; }
 
-      modal.returnFocus = document.activeElement;
+      modal.returnFocus = returnFocus;
       const mode = $('#webdav-restore-mode-v378');if (mode) { mode.value = 'merge'; }
 
       syncWebdavRestoreWarningV378();modal.hidden = false;
@@ -528,18 +559,53 @@
       const overwrite = $('#webdav-restore-mode-v378')?.value === 'overwrite'; const warning = $('#webdav-restore-warning-v378');if (warning) { warning.textContent = overwrite ? '覆盖恢复会替换当前全部题库、错题、收藏、记录和设置；写入失败会自动回滚。' : '合并恢复会保留当前数据，并追加备份题库；同名题库会自动改名。';warning.className = overwrite ? 'notice warn' : 'muted'; }
     }
 
+    // 下载与恢复都会暂时禁用列表按钮，操作结束后才能把焦点还给原入口。
+    function restoreWebdavFocus() {
+      const modal = $('#webdav-restore-modal-v378');
+      if (modal?.hidden && !webdavRuntimeV378.busy) {
+        modal.returnFocus?.focus();
+        modal.returnFocus = null;
+      }
+    }
+
+    // 关闭时释放已确认的数据，避免已处理的备份被全局重试再次写入。
     function closeWebdavRestoreModalV378() {
-      const modal = $('#webdav-restore-modal-v378');if (modal) { modal.hidden = true;modal.returnFocus?.focus();modal.returnFocus = null; }
+      const modal = $('#webdav-restore-modal-v378');
+      if (modal) {
+        modal.hidden = true;
+      }
 
       webdavRuntimeV378.pendingRestore = null;
+      restoreWebdavFocus();
+    }
+
+    function restoreMode() {
+      return $('#webdav-restore-mode-v378')?.value === 'overwrite' ? 'overwrite' : 'merge';
     }
 
     // 只对已下载校验的备份执行用户选择的恢复方式，成功后刷新所有数据入口。
     async function confirmWebdavRestoreV378() {
       const pending = webdavRuntimeV378.pendingRestore;if (!pending) { throw new Error('没有等待恢复的远程备份。'); }
 
-      const mode = $('#webdav-restore-mode-v378')?.value === 'overwrite' ? 'overwrite' : 'merge';
-      if (!await applyNormalizedBackupV378(pending.normalized, mode)) { return; }
+      await restoreWebdavBackup(pending, restoreMode());
+    }
+
+    // 全局重试继续执行同一已确认备份，保存成功后仍由面板完成收尾。
+    async function restoreWebdavBackup(pending, mode) {
+      // 切页、取消或更改模式都要重新确认恢复。
+      const retry = () => {
+        const sameSelection = webdavRuntimeV378.pendingRestore === pending && restoreMode() === mode;
+        if (!sameSelection || !$('#settings')?.classList.contains('active')) {
+          toast('远程备份或恢复方式已变化，请重新确认。', 'warn');
+          return false;
+        }
+
+        return runWebdavActionV378('恢复备份', () => restoreWebdavBackup(pending, mode));
+      };
+
+      if (!await applyNormalizedBackupV378(pending.normalized, mode, retry)) {
+        return;
+      }
 
       const bankCount = pending.normalized.banks.length; const { questionCount } = pending; const { fileName } = pending;closeWebdavRestoreModalV378();renderAll();setupEnhancedDataToolsV23();renderWebdavPanelV378();setWebdavStatusV378(`恢复完成：${fileName}，${bankCount} 个题库、${questionCount} 道题（${mode === 'overwrite' ? '覆盖' : '合并'}）。`, 'ok');toast('WebDAV 备份恢复完成。', 'ok');
     }

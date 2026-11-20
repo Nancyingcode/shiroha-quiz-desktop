@@ -166,6 +166,43 @@ const cases = [
     },
   },
   {
+    name: 'training-review-ai-save-preload-cannot-write-after-leave',
+    options: { emptyAnalysis: true },
+    async run(h) {
+      await seedReview(h);
+      const panel = await openReview(h);
+      await generate(h, panel, 'DELAYED_REVIEW_SAVE');
+      const before = await stored(h);
+      await h.page.evaluate(() => {
+        const { storage } = globalThis.ShirohaPlatform;
+        const { write } = storage;
+        storage.fixtureWriteAttempts = 0;
+        storage.write = (...args) => {
+          storage.fixtureWriteAttempts += 1;
+          return write(...args);
+        };
+
+        // 仅挂起保存触发的补读，让离开及重开复盘仍可通过真实入口完成。
+        storage.ensureQuestions = () => new Promise((resolve) => {
+          delete storage.ensureQuestions;
+          storage.finishFixtureRead = resolve;
+        });
+      });
+      await button(panel, 'save').click();
+      await h.page.waitForFunction(() => typeof globalThis.ShirohaPlatform.storage.finishFixtureRead === 'function');
+      await h.page.locator('#training-review-back').click();
+      await h.page.locator('#records.active').waitFor();
+      await h.page.locator('#records [data-training-review]').first().click();
+      await button(panel, 'generate').waitFor();
+      await h.page.evaluate(() => globalThis.ShirohaPlatform.storage.finishFixtureRead());
+      await h.quiet();
+      await h.page.locator('body[data-storage-state="ready"]').waitFor();
+      assert.equal(await h.page.evaluate(() => globalThis.ShirohaPlatform.storage.fixtureWriteAttempts), 0);
+      assert.deepEqual(await stored(h), before);
+      await button(panel, 'generate').waitFor();
+    },
+  },
+  {
     name: 'training-review-ai-missing-or-changed-source-keeps-draft',
     options: { emptyAnalysis: true },
     async run(h) {

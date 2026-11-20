@@ -243,9 +243,9 @@
       return (pages || []).map((p) => `【OCR第${p.page}页${p.confidence ? `｜置信度 ${Math.round(p.confidence)}%` : ''}】\n${p.text || ''}`.trim()).join('\n\n').trim();
     }
 
+    // 结果框可以被用户清空，只有控件未挂载时才使用识别缓存。
     function currentOcrText() {
-      const fromBox = $('#ocr-result')?.value || '';
-      return String(fromBox || ocrImportState.text || '').trim();
+      return String($('#ocr-result')?.value ?? ocrImportState.text).trim();
     }
 
     return {

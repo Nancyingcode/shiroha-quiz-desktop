@@ -10,9 +10,59 @@
     return raw && Number.isInteger(size) && size >= 1 && size <= 30 ? size : null;
   }
 
+  // 预览、提示词和请求共用同一份身份，换草稿后按对象释放匿名键。
+  function createIdentity(importDraft) {
+    // 无 ID 题目的临时身份仅属于当前页面；弱引用随草稿释放，不写入题库或备份。
+    const aiImportAnonymousKeysV991 = new WeakMap();
+    let aiImportAnonymousSequenceV991 = 0;
+    // 保留已有题号标识，缺少 ID 时为同一草稿对象分配稳定的临时键。
+    function aiQuestionKeyV991(q) {
+      if (!q || typeof q !== 'object') {
+        return '';
+      }
+
+      const id = String(q.id ?? '');
+      if (id) {
+        return id;
+      }
+
+      let key = aiImportAnonymousKeysV991.get(q);
+      if (!key) {
+        aiImportAnonymousSequenceV991 += 1;
+        key = `import-anonymous-${aiImportAnonymousSequenceV991}`;
+        aiImportAnonymousKeysV991.set(q, key);
+      }
+
+      return key;
+    }
+
+    function aiQuestionFingerprintV991(q) {
+      return JSON.stringify(q);
+    }
+
+    // 只有唯一键的导入题才可被 AI 建议定位，避免重复题误写。
+    function findImportIndexByAiKeyV991(key) {
+      if (!key) {
+        return -1;
+      }
+
+      const matches = importDraft.questions.reduce((indexes, question, index) => {
+        if (aiQuestionKeyV991(question) === key) {
+          indexes.push(index);
+        }
+
+        return indexes;
+      }, []);
+      return matches.length === 1 ? matches[0] : -1;
+    }
+
+    return { key: aiQuestionKeyV991, fingerprint: aiQuestionFingerprintV991, findIndex: findImportIndexByAiKeyV991 };
+  }
+
   // 将请求、草稿与界面依赖绑定到导入页的同一个会话。
   function create({
     draft: importDraft,
+    identity,
     configuration,
     organizer,
     preview,
@@ -30,7 +80,7 @@
     } = configuration;
     const {
       range: aiImportRangeV992,
-      context: aiRefactorContextV384,
+      snapshotQuestion: aiRefactorQuestionSnapshotV384,
       messages: buildAiMessagesV99,
       parse: parseAiRefactorPayloadV384,
       parseText: parseTextQuestions,
@@ -39,8 +89,6 @@
     const {
       mode: getPreviewMode,
       collectTargets: collectAiPreviewTargetDetailsV992,
-      key: aiQuestionKeyV991,
-      fingerprint: aiQuestionFingerprintV991,
       payload: aiQuestionPayloadV991,
       issueStatus: importIssueStatus,
       label: aiPreviewModeLabelV991,
@@ -49,8 +97,8 @@
       resultArray,
       normalizeReview,
       normalizeAnalysis,
-      findIndex,
     } = preview;
+    const { key: aiQuestionKeyV991, fingerprint: aiQuestionFingerprintV991, findIndex } = identity;
     const {
       select: $,
       sync: syncAiImportActionV99,
@@ -67,6 +115,22 @@
     let aiPreviewRequestV991 = { running: false, mode: '', cancelled: false, controller: null };
     const reviewSuggestions = new Map();
     const analysisSuggestions = new Map();
+
+    /* SHIROHA_WEB_V38_4_AI_REFACTOR_STRUCTURED_FIRST_START
+     对齐原生端 AI 重构：结构化 questions 优先，严格校验不可用时再退回 clean_text；所有结果仍只进入人工确认预览。 */
+
+    // 从当前导入范围组织 AI 清洗上下文，局部选区不附带无关题库诊断。
+    function aiRefactorContextV384(range) {
+      if (range?.scope === 'selection') {
+        return { currentQuestions: [], warnings: [] };
+      }
+
+      const current = (importDraft.questions || []).slice(0, AI_PREVIEW_MAX_ITEMS_V991).map(aiRefactorQuestionSnapshotV384);
+      const warnings = (importDraft.warnings || []).slice(0, 40).map((x) => String(x || '').trim()).filter(Boolean);
+      return { currentQuestions: current, warnings };
+    }
+
+    /* SHIROHA_WEB_V38_4_AI_REFACTOR_STRUCTURED_FIRST_END */
 
     function resetAiSuggestionsV991() {
       reviewSuggestions.clear();
@@ -653,5 +717,5 @@
     };
   }
 
-  globalThis.ShirohaAiImportSessions = Object.freeze({ create, previewBatchSize, previewBatchError: PREVIEW_BATCH_ERROR });
+  globalThis.ShirohaAiImportSessions = Object.freeze({ create, createIdentity, previewBatchSize, previewBatchError: PREVIEW_BATCH_ERROR });
 })();

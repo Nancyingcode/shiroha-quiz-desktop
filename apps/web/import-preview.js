@@ -210,7 +210,18 @@
       draft.selected = previous.selected;
     }
 
-    return Object.assign(draft, { readImportFile, readDualFile, invalidateRead, invalidatePreview, invalidateBankName, clearSingle, clearDual, snapshot, restore });
+    return Object.assign(draft, {
+      readImportFile,
+      readDualFile,
+      invalidateRead,
+      isCurrentRead,
+      invalidatePreview,
+      invalidateBankName,
+      clearSingle,
+      clearDual,
+      snapshot,
+      restore,
+    });
   }
 
   const DATABASE_NAME = 'shiroha-import-draft';

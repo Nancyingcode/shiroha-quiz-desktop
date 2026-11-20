@@ -1,0 +1,310 @@
+# app.js 剩余拆分实施计划与验收
+
+2026-11-19 编制计划时，基线为本地 `main` 的 `ac4f4c6`，第七至十七批均待实施。编制分支为 `codex/docs-web-app-remaining`，工作树为 `C:/Users/30728/.codex/worktrees/bb31/shiroha-quiz-desktop`。每次开始一批时，从届时的 `main` 核对以下函数与测试。各批基线、分支和验收结果见[实际执行记录](#实际执行记录)。[职责边界与依赖](../specs/2026-11-19-web-app-remaining.md)
+
+第七至十七批已在 `codex/web-app-remaining` 工作树实施并完成下述验收，编制基线与逐批执行结果保留在本计划中。
+
+## 第七批 · 题库删除
+
+1. **先跑基线。** 从题库卡片、跨页勾选工具栏和二次编辑进入。已有浏览器回归覆盖取消、失效 ID、重复点击、跨页删题、进行中的练习／考试阻止删题，以及编辑器保存空库。已有 WebView2 用例跨页删除 16 题并在重载后检查本库余下 49 题、旁库 65 题及历史成绩，保留这些断言。[浏览器用例](../../../test/dual-platform/browser-page.cjs) · [原生用例](../../../apps/desktop/scripts/smoke.mjs)
+2. **补齐失败路径。** 用两个含同 ID 题的多页测试库，注入一次写入失败，再离开题库页释放正文，返回后点击全局重试。从 SQLite 重载，核对只删除最初选中的题，本库未删题与旁库的题干、答案、解析和扩展字段逐项保留。另测整库删除写失败时活动库、练习范围和库勾选恢复。成功删掉分组最后一库时范围回退，删除全部库后重启仍为空。确认框取消、原生预读失败均应零写入。若复现错误，保留失败测试后修复，再迁文件。[可复用的延迟读取与重试夹具](../../../apps/desktop/scripts/bank-operations-smoke.mjs)
+3. **接入同一删除模块。** 迁出 `bankQuestionDeletionBlocked`、`confirmBankQuestionDeletion`、`removeBankQuestionReferences`、`deleteBankQuestions` 与 `deleteBanksV32`。列表传入点击时的库和题 ID，编辑器传入相对原快照实际移除的 ID。删题预读指定库后在事务内重取有效 ID，需重试时重新从预读开始。整库删除按选中库 ID 清理，保留保存、选择重置及成功提示的时机。[题库页接线](../../../apps/web/bank-page.js) · [编辑器保存](../../../apps/web/bank-editor.js)
+4. **核对最终数据。** 从卡片删库和批量删库分别验证未选库、历史成绩保留。删题成功与二次编辑移除原题使用相同的会话保护及关联清理。重试最终生效一次，界面、重新打开后的数据和原生写入结果一致。
+
+## 第八批 · 导出与题库勾选
+
+1. 固定三个入口的输出。卡片导出指定库，工具栏导出当前库，批量按钮导出选中库。单库输出题库对象，多库输出 `question_banks`。按“选 A → 延迟读 A → 切换为 B”测试当前库和勾选两条路径。核对文件名、文件内库 ID、第二页题目正文和媒体。读失败或目标变动触发中止时，下载次数应为零。
+2. 把选择范围、预读、序列化和下载移到导出模块。导出记录只补记录详情，导出所选库只补这些库，完整 JSON、兼容 ZIP 与复制完整备份走 `loadNativeAll`。保留 `exportSettingsV1` 对导出配置的筛选，归档与图片装配复用现有模块。批量工具栏保持全选、反选、仅选当前和三态反馈，与第七批共用选择集合。
+3. 用第六批的多页夹具比较导出前后源数据，核对首题和末页题、空图片字段、带图片 ZIP、学习记录详情与旧 Android 往返。完整备份可以交给下一批按原格式恢复。测试从实际下载或剪贴板读取结果。[格式往返](../../../test/dual-platform/format.test.cjs) · [图片字段兼容](../../../test/dual-platform/backup-serialization-empty.test.cjs) · [桌面分页与完整导出](../../../apps/desktop/scripts/smoke.mjs)
+
+## 第九批 · 本地与 WebDAV 恢复
+
+1. 分别走设置页选文件、导入页识别备份、WebDAV 列表恢复。用同一脱敏夹具覆盖合并与覆盖两种模式，导入页走现有的合并路径。比较成功重载后的题库、分组、错题、收藏、学习记录和设置，记录每条路径原有的确认次数、成功提示与预览清理时机。[文件入口回归](../../../test/dual-platform/backup-entry-performance.test.cjs) · [WebDAV 请求回归](../../../test/web-webdav/request.test.cjs)
+2. 在 `applyBackupImportV23` 和 `applyNormalizedBackupV378` 之间提取相同的字段应用与保存步骤。本地 ZIP 先回填图片，桌面遇到缺图在改动数据前拒绝，Web 保留原有缺图数量提示。WebDAV 保留面板确认和传输错误反馈。导入页沿用已进入的事务，云端保留自己的事务入口，避免重复确认和异步嵌套写入。
+3. 在原生完整读取、检查点、保存三个位置分别注入故障。读取或检查点失败时不得开始替换，保存失败时核对修订、界面和重载内容。模拟 WebDAV 密码保存及清除，核对 `operationId`、撤销和成功后的 `finalize` 顺序，检查导出中无凭据。WebDAV 仅用本地 mock。[平台回归](../../../apps/desktop/test/native-adapter.test.mjs) · [浏览器凭据](../../../test/dual-platform/browser-credentials.test.cjs)
+4. 保留正常恢复点、损坏 SQLite 从恢复点修复、损坏 SQLite 从兼容文件修复三条实际入口。前者等待保存队列后重载，后两者可以在加载失败状态运行，修复成功后重走启动。用隔离 profile 检查原数据副本、新数据和恢复后页面事件只触发一次。[原生恢复场景](../../../apps/desktop/scripts/smoke.mjs)
+
+## 第十至十七批 · 按现有调用方逐批迁移
+
+| 批次 | 实施动作 | 完成该批时核对什么 |
+| --- | --- | --- |
+| 10 · 范围与来源 | 从 `normalizePracticeScopeV8916` 至范围 UI 分步迁移。先接组名、库查询和范围设置，再接本轮条目、来源标识与显示。用回调触发原有分页重置。 | 分组成员变化、分组消失、旧设置指向不存在的库、零题库时均得到可保存的范围。切分组保留活动库。两个库有同 ID 题、历史 ID 含 `#` 或重复后缀时，顺序、来源、答案键正确，练习和考试均能重载成绩。[分组和跨库答题回归](../../../test/dual-platform/browser-page.cjs) |
+| 11 · 学习数据 | 先迁按库读写错题、复习排期、收藏元信息和清空操作。再把练习与考试共用的题目快照、来源题号、逐空答案及复盘摘要生成接入训练模块，显式传入已取到的题目、分值和时间。 | 连续答对、再次答错后计数与到期日符合原规则。旧字符串／对象错题与旧计数可读。收藏保留原有时间与扩展字段。改原题后历史记录保留当时的正文和分数，复盘不会定位到同 ID 的旁库题。[训练记录](../../../test/dual-platform/training.test.cjs) · [历史数据与多空题](../../../test/dual-platform/business.test.cjs) |
+| 12 · 首页 | 迁出统计、到期按钮及 `dueReviewTimer` 与可见性监听，首页复用第十批范围和原有 `dueReviewItems`。 | 测本地零点、夏令时、后台恢复可见，以及恢复重入后只剩一个下一次刷新。验证放弃未完成练习的确认、取消保持原轮、同意后按范围开始复习并定位首题。[日期边界](../../../test/dual-platform/due-review.test.cjs) · [首页交互](../../../test/dual-platform/browser-page.cjs) |
+| 13 · 内置库 | 将内置库数据来源、两个手动入口、加载状态与占位库替换接到同一工厂，保留启动时的默认库策略。 | HTTP 下读取本地资源，直接打开 HTML 时可使用 `window.questionBank`。测试主动清空后冷启动、手动重新加载、占位库替换、资源缺失或保存失败后的重试。从重载后的活动库和题量判定结果。[内置数据](../../../apps/web/question-bank.js) · [浏览器页面](../../../test/dual-platform/browser-page.cjs) |
+| 14 · 导入与 OCR | 先接单／双文件识别、示例、目标选择、自动命名和拖放，再接 OCR 回填、复制和 DOCX 下载。导入 AI 的匿名键、选区上下文和唯一定位与现有导入会话一起装配。 | `questions` 只进草稿，`banks` 经确认合并。原有诊断、双文件兜底顺序、第四批目标校验有效。恢复草稿或更换文件后旧读取、AI 建议不能覆盖新输入。重复 ID 拒绝误写。OCR 回填后由用户发起解析，空文本保留原文。用下载按钮生成含中文、换行和 XML 特殊字符的 DOCX，再读回核对。[草稿覆盖与归属](../../../test/dual-platform/import-ownership.test.cjs) · [草稿恢复](../../../test/dual-platform/import-draft-page.test.cjs) · [OCR 导出格式](../../../test/dual-platform/zip-safety.test.cjs) · [桌面文档导入](../../../apps/desktop/scripts/document-smoke.mjs) |
+| 15 · AI 设置 | 迁出保存、清除与连接测试，保留 API 和 Harness 两条路径及任务进行中的操作限制。跨会话忙碌判断仍供退出守卫使用。 | 假凭据验证写入、保存失败撤销、成功确认。复验 API 配置已保存而切换执行方式失败的反馈，Harness 模式保留直接 API 配置。连接取消、错误与成功均恢复按钮状态。[连接](../../../test/dual-platform/ai-connection.test.cjs) · [Harness](../../../test/dual-platform/ai-harness.test.cjs) |
+| 16 · 单题解析 | 将练习与复盘的保存入口接同一实现。按来源库、题 ID 和指纹确认原题，更新普通／富文本解析和相应练习、考试、错题及收藏副本。 | 换题或离页后丢弃迟到响应。原题变更、删除或取消覆盖时，草稿保留且题库无写入。保存失败时还原相关副本。同意覆盖后重载只更新来源题及对应副本。核对总提交、自评与已有历史记录，使用假 AI 响应。[单题端到端验证](../../../test/web-ai-practice/README.md) · [复盘来源回归](../../../test/dual-platform/review-options.test.cjs) |
+| 17 · 分页与界面 | 先抽两端共用的页码控件和按列表保存的状态。按需再单独抽侧栏与专注栏的折叠、尺寸监听。入口继续协调原生读取、释放、离页取消及全局视图切换。 | 空列表、末页删除、四档每页条数、快速翻页迟到结果、窄屏键盘焦点均有对照。升级／恢复重置分页键及页码，保留条数。切页时在练或在考正文仍可用，专注模式退出只还原自动收起的侧栏。[分页规则](../../../test/dual-platform/pagination.test.cjs) · [浏览器与键盘](../../../test/dual-platform/browser-page.cjs) · [退出协调](../../../test/dual-platform/exit.test.cjs) |
+
+## 每批接线与交付
+
+1. **先固定当前行为。** 对已覆盖场景先跑原测试。待复验窗口先用可控的延迟、失败或重入从真实按钮触发，记录输入、预期和实际结果。出现偏差时让新增回归先失败，再修复、迁移并重跑。数据库、浏览器存储和凭据使用隔离夹具。
+2. **每个新脚本在两端加载一次。** 更新 HTML 的经典脚本顺序、桌面 `businessScripts` 精确路径、测试加载器、ESLint 适用规则及对应测试。把按入口源码片段取函数的测试改接真实模块，特别核对备份修复、AI 连接与导入重试。测试保留唯一的末尾启动点和原业务断言。[HTML](../../../apps/web/index.html) · [桌面生成器](../../../apps/desktop/scripts/prepare-web.mjs) · [测试桥接](../../../test/dual-platform/web-source.cjs) · [加载验证](../../../test/dual-platform/source-loading.test.cjs) · [制品字节校验](../../../apps/desktop/test/prepare-web-actual.test.mjs)
+3. **按改动运行验证。** 在根目录跑该批的定向用例。共享业务变更在 `apps/desktop` 跑 `pnpm run typecheck`、`pnpm run lint`、`pnpm test` 和 `pnpm run test:web-platform`。新增资源依次跑 `pnpm run prepare:web`、`pnpm run build`、`pnpm run build:test`、`pnpm run test:desktop`，分别从 HTTP、本地 HTML 和隔离 WebView2 验证实际加载。第九批追加根目录 `node --test test/web-webdav/request.test.cjs`，第十四批追加桌面工程 `pnpm run test:documents`，第十六批追加根目录 `node test/web-ai-practice/runner.cjs`。[项目脚本](../../../apps/desktop/package.json)
+4. **记录结果与剩余职责。** 记录基线、已迁入口、仍借用的跨域操作、实际命令与重载结果。保留每批独立变更边界，测试发现的行为修复注明复现条件。第十七批结束时复查入口剩余实现，将启动、事务、恢复和关闭顺序与设计逐项对照。
+
+## 实际执行记录
+
+### 第七批 · 题库删除
+
+- 负责人为 `batch07_deletion`（GPT-6.2-Sol Max），基线为 `ac4f4c64adc773040eb2b06bf5831003c2803ab0`。分支为 `codex/web-app-remaining`，工作树为 `C:/Users/30728/.codex/worktrees/31f4/shiroha-quiz-desktop`。
+- 将会话占用判断、删除确认、错题与收藏引用清理、删题及整库删除迁至 [`banks/deletion.js`](../../../apps/web/banks/deletion.js)。列表和编辑器复用确认与引用清理。应用继续负责事务、原生读取、练习范围和回滚，`bankSelection.get/set` 访问题库页与删除操作使用的当前选择。`app.js` 由 5,349 行、195 个入口闭包内直接声明的具名函数减至 5,268 行、190 个。
+- 修改业务代码前，题库删除与跨页选择的 7 条既有浏览器回归通过。隔离 WebView2 基线的前 50 项通过，原有跨页删 16 题用例继续核对本库余 49 题、旁库 65 题及历史成绩。新增用例先拒绝原生预读、再取消确认，SQLite 修订均未推进。注入一次写失败并离页后，旧全局重试在提交前漏读目标库的 `q11` 至 `q23`。该次重载的未删字段仍完整，失败断言定位到预读顺序。
+- 在旧入口修复后，定向隔离 WebView2 回归通过。两库共享题目 ID，目标库重载后余 21 题，旁库保留 22 题。逐项比较了题干、选项、答案、解析、扩展字段和历史成绩；写失败回滚后的全局重试补读，并且 SQLite 修订只推进一次。
+- 二次编辑的受控正文缓存回归中，旧重试在离开编辑页后读取 0 次、写入尝试 1 次，草稿未保存。修复固定原编辑会话及其目标题库，重试重新预读后通过。两次写入尝试中第一次按夹具设置失败，第二次生效。原快照校验仍用于阻止过期编辑覆盖。
+
+在 Windows 10（19045）、Node 24.22.2、pnpm 12.16.1 和 Rust 1.99.1 上验证。桌面依赖通过 `pnpm install --frozen-lockfile --offline` 从本地缓存安装，锁文件无变更。构建用 `CARGO_NET_OFFLINE=true`，生产构建通过进程级 `CARGO_TARGET_DIR` 复用本工作树的 Cargo 缓存，后续按原脚本重新构建带 `native-test` 的隔离版。日志保存在本工作树的 `apps/desktop/.reports/batch07/`。
+
+| 验证项 | 实际命令与结果 |
+| --- | --- |
+| 定向浏览器与接线 | 仓库根目录运行 `node --test --test-name-pattern='题库删除\|跨页选择导出内容\|file URL 支持 ZIP' test/dual-platform/browser-page.cjs`，9 项通过。运行 `node --test test/dual-platform/source-loading.test.cjs`，14 项通过。HTTP 和本地 HTML 均加载新模块。 |
+| 类型和 lint | 在 `apps/desktop` 运行 `pnpm run typecheck` 和 `pnpm run lint`。类型检查通过，完整 JavaScript 检查覆盖 176 个文件；规则夹具 89 项通过，1 项按测试规则在大小写不敏感的临时目录跳过。 |
+| 桌面与共享测试 | `pnpm test` 首轮与构建、浏览器测试同时执行，共享阶段的 `spaced-quotes` 子进程达到现有 60 秒限时。等构建与浏览器流程退出后独占复跑 `pnpm test` 通过，含桌面 283 项通过及 1 项环境跳过、共享 510 项通过。该用例复跑用时约 14 秒。 |
+| 完整浏览器测试 | `pnpm run test:web-platform` 的 239 项全部通过。 |
+| 资源与构建 | `pnpm run prepare:web`、`pnpm run build`、`pnpm run build:test` 依次通过，生成的 `dist/banks/deletion.js` 与 Web 源码 SHA-256 一致。 |
+| 真实 WebView2 与 SQLite | `pnpm run test:desktop` 的 53 项全部通过。零写入、离页后全局重试及两库内容保全通过。整库写失败后重绘确认活动库、分组范围及共享勾选恢复，卡片与批量删除均保留未选库及历史成绩。分组末库删除后范围回退，删空后退出并重新启动仍为空，完整 SQLite 快照与重启前一致。 |
+
+本批使用自建题库、隔离 profile、假凭据和本地 mock。正式安装升级及真实用户存档的验收未纳入本批。第八批可以沿用 `bankSelection.get/set` 和现有 `runMutation` 回滚边界，批量删除入口仍使用同一个选择集合。
+
+### 第八批 · 只读导出与题库勾选
+
+- 负责人为 `batch08_export`（GPT-6.2-Sol Max）。在第七批已验收的工作树上继续，分支为 `codex/web-app-remaining`，工作树为 `C:/Users/30728/.codex/worktrees/31f4/shiroha-quiz-desktop`，`HEAD` 为 `ac4f4c64adc773040eb2b06bf5831003c2803ab0`。
+- 原页面只有 `#export-json-btn` 的可选事件绑定。按计划在题库工具栏补齐当前库按钮，并把卡片、当前库、已选库、学习记录、完整 JSON/ZIP 和复制备份的读取及输出迁至 [`backup/export.js`](../../../apps/web/backup/export.js)。设置筛选、题目序列化、记录转换与 ZIP 图片装配沿用原有契约。题库页负责批量控件和三态反馈，继续通过 `bankSelection.get/set` 和删除共享选择。应用保留原生读取及事务协调、本地恢复和 WebDAV 入口。`app.js` 由 5,268 行、190 个入口闭包内直接声明的具名函数减至 4,936 行、171 个。
+- 基线的跨页批量导出、兼容 ZIP 下载及下载失败反馈 3 项通过。补齐当前库按钮后，延迟 `bank-a` 的正文读取，再用真实下拉框或复选框切换到 `bank-b`。旧当前库按钮写出了 `跨题库同ID.json`，旧批量按钮写出了 `shiroha-quiz-bank-跨题库同ID-2026-11-19.json`，两份实际文件的库 ID 都是 `bank-b`。当前库红测在测试宿主中将浏览器下载交到页面解锁后执行，复现窗口仍使用真实切库事务。修复后两条用例都提示重新导出，下载为零，上一次的预览仍在。选中 ID 相同、排序重绘替换了集合的情况下，导出仍成功。[浏览器交互和实际下载](../../../test/dual-platform/browser-page.cjs)
+
+本批在 Windows 10（19045）、Node 24.22.2、pnpm 12.16.1 和 Rust 1.99.1 上验证。沿用本工作树依赖和构建缓存。首轮 `pnpm test` 在默认沙箱内遇到 esbuild 临时目录父路径与 `icacls` 完整性标签的权限拒绝。经自动审查放行后用原命令独占复跑，桌面及共享测试通过。默认沙箱首轮和复跑日志均保存在 `apps/desktop/.reports/batch08/`。
+
+| 验证项 | 实际命令与结果 |
+| --- | --- |
+| 浏览器定向 | 根目录运行 `node --test --test-name-pattern='第八批导出' test/dual-platform/browser-page.cjs`，4 项通过。HTTP 实读卡片、当前和勾选下载及完整备份剪贴板。本地 HTML 实读当前库 JSON，核对了媒体。 |
+| 格式定向 | 根目录运行 `node --test test/dual-platform/format.test.cjs test/dual-platform/backup-serialization-empty.test.cjs test/dual-platform/contracts.test.cjs test/dual-platform/training.test.cjs test/dual-platform/backup-entry-performance.test.cjs`，70 项通过。覆盖旧 Android JSON/ZIP 往返、显式空图片与缺失字段、设置筛选、记录及旧恢复入口。 |
+| 类型和 lint | 在 `apps/desktop` 运行 `pnpm run typecheck` 与 `pnpm run lint`，均通过。完整 JavaScript 检查覆盖 177 个文件，规则夹具 90 项通过，1 项因临时目录大小写不敏感跳过。 |
+| 桌面和共享测试 | `pnpm test` 桌面 284 项通过、1 项环境跳过，共享 510 项通过。共享源码加载测试验证导出脚本注册顺序、工厂装配无 DOM 访问及唯一启动入口。 |
+| 完整浏览器 | `pnpm run test:web-platform` 的 243 项全部通过。 |
+| 资源与构建 | `pnpm run prepare:web`、`pnpm run build`、`pnpm run build:test` 依次通过。`dist/backup/export.js` 与源文件 SHA-256 一致。生产构建通过进程级 `CARGO_TARGET_DIR` 使用本工作树的缓存，用 `build:test` 重新生成隔离测试版。两次构建均使用 `CARGO_NET_OFFLINE=true`。 |
+| WebView2 与 SQLite | `pnpm run test:desktop` 最终 56 项全部通过。旧 C8 用例直接调用 `ensureAll`。新增三项从真实按钮验证导出文件名、适配器交付字节及剪贴板写入，覆盖三库 13、14、12 道题的首末页、跨库同 ID、空图片字段、去重 ZIP 媒体、记录详情及 SQLite 重载。失败预读和两种目标变化均零文件输出并保留预览。只在显式切库时有一次预期 SQLite 写入。 |
+
+桌面首轮读取失败用例等待注入异常的原始文案，实际桌面适配器显示已有的通用本地操作提示。按实际提示修正测试断言后，重新通过类型、完整 lint 和 WebView2 检查。保留 `test-desktop.log` 和 `test-desktop-final.log` 两份日志。桌面的文件授权与剪贴板由隔离测试宿主捕获。浏览器另从实际下载及系统剪贴板接口读取了导出结果。系统保存对话框和安装升级未纳入本批验收。[桌面导出用例](../../../apps/desktop/scripts/bank-operations-smoke.mjs)
+
+### 第九批 · 本地与 WebDAV 恢复
+
+- 负责人为 `batch09_restore`（GPT-6.2-Sol Max）。沿用第七、八批已验收的工作树。分支为 `codex/web-app-remaining`，工作树为 `C:/Users/30728/.codex/worktrees/31f4/shiroha-quiz-desktop`，`HEAD` 为 `ac4f4c64adc773040eb2b06bf5831003c2803ab0`。
+- [`backup/restore.js`](../../../apps/web/backup/restore.js) 持有设置页备份面板、文件选择、附件回填、共享的备份字段应用及原生 WebDAV 配置事务。设置页合并直接应用，覆盖时单次确认。导入页保留一次合并确认和保存后的预览清理。WebDAV 面板保留文件哈希校验、模式确认、传输诊断与完成反馈。三条入口共用应用事务及保存队列，正常恢复点与损坏数据库修复仍由应用入口协调重入。`app.js` 由 4,936 行、171 个入口闭包内直接声明的具名函数减至 4,763 行、164 个。
+- 在旧实现的实际浏览器按钮注入一次写失败。WebDAV 全局重试写入后待恢复弹窗仍保留，面板未报告完成。浏览器模拟原生凭据接口，使用真实保存队列复现保存和清除各自暂存、写失败、撤销待处理 ID 后，再点按钮仍不恢复写入。接线后原生配置由表单按钮重新发起事务并暂存。全局备份重试固定输入、模式和来源。WebDAV 成功后关窗并把焦点还给发起按钮，模式变更时旧重试不写入。[浏览器用例](../../../test/dual-platform/browser-page.cjs)
+- 首次迁移后的定向浏览器测试发现导入页的读取代次检查只在草稿工厂内部可用。公开同一检查方法后，原文本和预览继续保留到保存成功，导入页全局重试也可成功。历史 ZIP 先回填附件，桌面缺图在修改数据前拒绝，Web 继续提示缺图数量。覆盖对原生凭据的撤销由宿主管理，其结果独立于 SQLite 修订与界面回滚。[文件与修复入口](../../../test/dual-platform/backup-entry-performance.test.cjs)
+
+在 Windows 10（19045）、Node 24.22.2、pnpm 12.16.1 和 Rust 1.99.1 上验证。使用本工作树原有依赖及构建缓存。完整测试、生成和桌面验收按现有 Windows 夹具需要经自动审查运行，在隔离目录使用合成数据、假凭据和本地模拟服务。两个桌面构建使用 `CARGO_NET_OFFLINE=true`，生产构建通过进程级 `CARGO_TARGET_DIR` 复用本工作树缓存。第九批日志位于 `apps/desktop/.reports/batch09/`。
+
+| 验证项 | 实际命令与结果 |
+| --- | --- |
+| 原始回归和接线 | 根目录运行 `node --test test/dual-platform/backup-entry-performance.test.cjs test/dual-platform/json-import.test.cjs test/dual-platform/format.test.cjs test/dual-platform/source-loading.test.cjs test/web-webdav/request.test.cjs`，61 项通过。单独运行 `node --test test/web-webdav/request.test.cjs`，10 项通过。 |
+| 类型和 lint | 在 `apps/desktop` 运行 `pnpm run typecheck`、`pnpm run lint`。完整 JavaScript 门禁覆盖 179 个文件。规则夹具 91 项通过，1 项按规则在大小写不敏感的临时目录跳过。 |
+| 桌面和共享 Node 测试 | `pnpm test` 桌面 285 项通过、1 项环境跳过，共享 510 项通过。 |
+| 完整浏览器 | `pnpm run test:web-platform` 的 246 项全部通过，覆盖 HTTP、本地 HTML、恢复失败重试、确认与预览。 |
+| 资源与构建 | `pnpm run prepare:web`、`pnpm run build`、`pnpm run build:test` 依次通过。`dist/backup/restore.js` 与源文件 SHA-256 一致。 |
+| WebView2 和 SQLite | `pnpm run test:desktop` 最终 60 项全部通过。用同一份实际导出产物验证设置页合并 JSON 和覆盖 ZIP、导入页合并 JSON、模拟 WebDAV 合并和覆盖 JSON。逐题核对 13、14、12 道题，另检查同 ID 旁库、分组、末页图片、错题、按库和题目 ID 定位的收藏时间及扩展字段、历史记录和设置。历史 ZIP 不含 Web 设置时沿用原值。 |
+
+- 三库逐题使用独立预期。既有导入规范会为样本客观题解析补答案前缀，并在有图题干中补内联图片 Markdown。重载核对了这两种明确的格式变化，题干正文、选项、答案、解析正文、题目扩展字段及图片内容仍按对应题目比较。[恢复桌面用例](../../../apps/desktop/scripts/backup-restore-smoke.mjs)
+- 桌面缺图、完整读取失败和检查点失败均未替换题库。读取和检查点故障均未撤销凭据。写入失败后内存活动库、SQLite 修订和 SQLite 数据保持原值，正确重试后修订只推进一次。原生 WebDAV 实测保存与清除的暂存 ID 对应写入 `operationId`，失败后撤销，成功后确认。另模拟确认失败，重载根据实际写入回执完成凭据核对。上传元数据只写一次设置，实际上传请求正文无测试密码。正常恢复点操作等待保存队列完成后才切换和重载。
+- 两条损坏库修复都在未就绪页触发一次原生修复，启动后输入事件各调用一次原文来源与 AI 选区监听器，并保留原主库字节和旧活动代。首次全量桌面运行把这两个既有监听器误计为一个，第二次在人工构造的无效 WAL 断言处停止。复验在用户点击前记录旧路径上的 WAL，两条路径在进入恢复界面时该无效侧车文件均已不在原路径。有效且尚未 checkpoint 的 WAL 在损坏数据库修复中的保全未由此场景验收。保留两次原始日志及 `test-desktop-final.log`。[启动修复用例](../../../apps/desktop/scripts/smoke.mjs)
+
+文件授权由现有桌面测试协议接收实际备份字节，未人工验收系统文件对话框。WebDAV 使用本地或页内模拟，未连接真实服务。交付边界截至第九批，下一批迁移题库组名时可继续通过现有归一化回调连接备份转换和恢复。
+
+### 第十批 · 练习范围与题目来源
+
+- 负责人为 `batch10_scope`（GPT-6.2-Sol Max）。在第七至九批已验收的工作树上继续。分支为 `codex/web-app-remaining`，工作树为 `C:/Users/30728/.codex/worktrees/31f4/shiroha-quiz-desktop`，`HEAD` 为 `ac4f4c64adc773040eb2b06bf5831003c2803ab0`。
+- [范围模块](../../../apps/web/study/scope.js)提供当前库查询、练习范围校准和设置、四处范围摘要及本轮题目的标识和来源。应用通过 `resetPages` 在主动切换到不同当前库时归零页码，通过来源库和题 ID 请求及保留原生正文。原生读取、释放和保存事务由应用入口协调。选题及续练进度仍由 [practice-selection.js](../../../apps/web/practice-selection.js) 持有。`app.js` 由 4,763 行、164 个入口闭包内直接声明的具名函数减至 4,599 行、142 个。
+- [题库元数据](../../../apps/web/banks/metadata.js)提供组名归一化、显示默认值、历史 JSON 别名、同名比较键和分组建议。导入、状态升级及备份沿用同一规则，显式空组名保留未分组含义。工具栏选择器切换当前库，组范围保留。卡片设为当前库时同步设置单库练习范围。修订了工具栏提示，并实测从另一个库所在的分组选取范围时保留当前库。
+- 用启动后实际保存的快照逐字段对照原题和旁库。迁移前从二次编辑保存按钮复现两处提示偏差，只改名时多提示一次，移出组内最后一库时缺少提示。修正为修改前后读取已校准的范围，且在成功保存后显示。题库改名已有用例继续覆盖组内仍有成员及保存失败回滚。补测失效题库、失效分组及显式空库，保存后重载检查范围与计数。[浏览器回归](../../../test/dual-platform/browser-page.cjs)
+- 练习与考试各有 5 道题，两库共享一个 ID，一组旧 ID 同时造成跨库键冲突并占用 `#1`。原算法按题库和题目原序分配 `#2`，在迁移前后均正确。经实际提交、重载记录页和打开复盘，核对原题号、来源库、题干、各题答案和分数。库内 ID 唯一的存储校验继续生效，历史库内重复 ID 的本轮键分配由[模块测试](../../../test/dual-platform/study-scope.test.cjs)覆盖。
+
+本批在 Windows 10（19045）、Node 24.22.2、pnpm 12.16.1 和 Rust 1.99.1 上验证。沿用本工作树依赖和构建缓存。生产构建通过进程级 `CARGO_TARGET_DIR` 复用缓存，两次构建使用 `CARGO_NET_OFFLINE=true`。浏览器和桌面使用隔离测试配置、自建题库及模拟服务。日志位于 `apps/desktop/.reports/batch10/`。
+
+| 验证项 | 实际命令与结果 |
+| --- | --- |
+| 浏览器定向 | 根目录运行 `node --test --test-name-pattern='第十批范围\|题库分组：\|特殊字符与跨题库键碰撞\|清空选项：.*跨库同 ID\|训练复盘：提前结束\|file URL 支持' test/dual-platform/browser-page.cjs`，16 项通过。HTTP 与本地 HTML 验证了范围脚本的加载，兼容场景继续使用真实保存与复盘入口。 |
+| 共享定向 | 根目录运行 `node --test test/dual-platform/study-scope.test.cjs test/dual-platform/due-review.test.cjs test/dual-platform/practice-selection-performance.test.cjs test/dual-platform/training.test.cjs test/dual-platform/json-import.test.cjs test/dual-platform/preview-performance.test.cjs test/dual-platform/format.test.cjs test/dual-platform/source-loading.test.cjs test/dual-platform/backup-entry-performance.test.cjs`，78 项通过。验证旧备份与旧键、无 DOM 工厂装配、加载次序及唯一末尾启动点。 |
+| 类型和 lint | 在 `apps/desktop` 运行 `pnpm run typecheck` 和 `pnpm run lint`，均通过。完整 JavaScript 门禁检查 181 个文件，规则夹具 92 项通过，1 项按规则在大小写不敏感的临时目录跳过。加强切组浏览器夹具后，该文件通过定向 ESLint。 |
+| 桌面与共享测试 | `pnpm test` 桌面 286 项通过、1 项环境跳过，共享 514 项通过。 |
+| 完整浏览器 | `pnpm run test:web-platform` 的 254 项全部通过。 |
+| 资源与构建 | `pnpm run prepare:web`、`pnpm run build`、`pnpm run build:test` 依次通过。生成的 `dist/study/scope.js` 与 Web 源码 SHA-256 一致。 |
+| WebView2 与 SQLite | `pnpm run test:desktop` 最终 61 项全部通过。从实际按钮提交两库 5 题的练习与考试，两轮均答对 3 题，考试为 6 分。重载后读 SQLite 记录并从记录页打开复盘，按原顺序验证答案、不同库的同 ID、原题号和来源正文。另通过既有的换组、原生按需读取和零库冷启动场景。 |
+
+首轮桌面烟测在新增用例的练习提交确认处停下，前 48 项通过。补齐点击实际确认按钮的步骤后，最新类型检查和烟测文件定向 ESLint 通过，同一隔离构建的桌面套件复跑通过。保留 `test-desktop.log` 和 `test-desktop-final.log`。[桌面用例](../../../apps/desktop/scripts/bank-operations-smoke.mjs)
+
+应用入口生成训练快照和答题明细，来源库、原题号和题目引用通过范围模块查询。第十一批可继续复用这些查询。第十二批首页统计可继续通过同一范围读到题库集合。
+
+### 第十一批 · 学习数据
+
+- 负责人为 `batch11_learning`（GPT-6.2-Sol Max）。在第七至十批已验收的工作树上继续。分支为 `codex/web-app-remaining`，工作树为 `C:/Users/30728/.codex/worktrees/31f4/shiroha-quiz-desktop`，`HEAD` 为 `ac4f4c64adc773040eb2b06bf5831003c2803ab0`。`app.js` 由 4,599 行、142 个入口闭包内直接声明的具名函数减至 4,428 行、128 个。
+- [学习数据模块](../../../apps/web/study/saved-questions.js)负责按库读写错题、复习排期、手动掌握、收藏 ID 和元信息，以及两个列表的当前库清空动作。错题读写使用当前状态映射，练习和考试在原事务内同步累计。清空、移出和收藏切换继续通过应用提供的确认、保存、重试和刷新回调执行。错题和收藏页继续展示、筛选和分页，收藏界面由现有静态控件进入。[记录页](../../../apps/web/training-review-page.js)承接全部学习记录的清空，应用入口保留事件绑定。
+- [训练模块](../../../apps/web/training.js)接收已补读的题目、范围模块解析的来源、已判分值和时间，生成开轮快照、逐空作答明细、复盘条目和摘要。练习和考试共用读取界面分值的回调，逐空规则在调用时注入，训练模块可以按现有顺序先于题型规则脚本加载。两种提交继续沿用各自的计时和记录形状。复盘用来源库 ID 和题 ID 对应历史明细。
+- 测试区分旧字符串默认一次错误、旧对象直接读取缺省为零和状态升级缺省为一，保留文本零值及扩展字段。固定时钟下答对两次，核对第一次排期一天、第二次三天并掌握。再次答错清零连对并重新排期一天，同时保留上次答对日期。用实际按钮确认收藏新增只写新时间，原收藏时间、题目快照和扩展字段保留。取消清空、写失败及全局重试分别核对保存内容，重载后目标库清空而同 ID 旁库保留。
+- 通过真实提交保存两轮分组记录，再从二次编辑修改甲库同 ID 题目的正文、答案和分值。浏览器重载保留两份旧记录的满分 7、4 和实际得分 7、0，复盘仍显示两库各自原题、答案和题库第 1、2 题。首轮用例的定位同时命中考试结果和记录页按钮，限定为记录页后原实现的新增用例全绿。迁移后用相同用例复验，无需改动产品规则。[浏览器用例](../../../test/dual-platform/browser-page.cjs)
+
+本批在 Windows 10（19045）、Node 24.22.2、pnpm 12.16.1 和 Rust 1.99.1 上验证。沿用本工作树依赖与编译缓存。生成、生产构建和测试版构建串行执行，两次构建使用 `CARGO_NET_OFFLINE=true`。生产构建通过进程级 `CARGO_TARGET_DIR` 复用本工作树缓存。日志位于 `apps/desktop/.reports/batch11/`。
+
+| 验证项 | 实际命令与结果 |
+| --- | --- |
+| 定向基线 | 根目录运行 `node --test test/dual-platform/business.test.cjs test/dual-platform/training.test.cjs test/dual-platform/training-characterization.test.cjs test/dual-platform/due-review.test.cjs test/dual-platform/review-options.test.cjs test/dual-platform/format.test.cjs`，71 项通过。用 `node --test --test-name-pattern='旧错题字符串' test/dual-platform/business.test.cjs` 单独验证旧计数，再用 `node --test --test-name-pattern='第十一批学习数据' test/dual-platform/browser-page.cjs` 验证新增的 4 个真实入口，两条均通过。 |
+| 迁移后定向 | 同一共享命令追加 `test/dual-platform/source-loading.test.cjs`，86 项通过。运行 `node --test --test-name-pattern='第十一批学习数据\|第十批范围：.*成绩重载\|今日错题复习：掌握状态\|训练复盘：提前结束\|file URL 支持' test/dual-platform/browser-page.cjs`，9 项通过，含 HTTP、本地 HTML、无 DOM 工厂装配和单次脚本加载验证。 |
+| 类型与 lint | 在 `apps/desktop` 运行 `pnpm run typecheck` 与 `pnpm run lint`，均通过。完整检查覆盖 182 个手写 JavaScript 文件。规则夹具 93 项通过，1 项按规则在大小写不敏感的临时目录跳过。 |
+| 完整 Node 与浏览器 | `pnpm test` 桌面 287 项通过、1 项环境跳过，共享 515 项通过。`pnpm run test:web-platform` 的 258 项全部通过。 |
+| 桌面资源与构建 | `pnpm run prepare:web`、`pnpm run build`、`pnpm run build:test` 依次通过。7 个改动的业务脚本的桌面生成文件和 Web 源码 SHA-256 一致，见 `resource-sha256.log`。 |
+| WebView2 与 SQLite | `pnpm run test:desktop` 的 61 项全部通过。实际提交同一组 5 道跨库题并重载后，练习和考试各答对 3 道，考试为 6 分，练习沿用原生顶层空分值。核对复盘原题号、来源和原错选，并通过单条记录删除重载、旧数据恢复和分页正文读取等回归。 |
+
+Web 和桌面验收使用隔离配置、自建题库、假凭据和本地模拟服务。改题后的历史快照及收藏清空写失败由浏览器实测，桌面覆盖真实 SQLite 重载、原生按需正文和复盘。正式安装升级仍属于发行验收，第九批记录的有效且尚未 checkpoint 的 WAL 修复专项仍待验证。
+
+### 第十二批 · 首页统计与到期复习
+
+- 负责人为 `batch12_dashboard`（GPT-6.2-Sol Max）。从第十一批冻结的工作树继续，分支为 `codex/web-app-remaining`，工作树为 `C:/Users/30728/.codex/worktrees/31f4/shiroha-quiz-desktop`，`HEAD` 为 `ac4f4c64adc773040eb2b06bf5831003c2803ab0`。`app.js` 由 4,428 行、128 个入口闭包内直接声明的具名函数减至 4,345 行、123 个。
+- 首页工厂按当前练习范围读取题库与未掌握错题，使用现有到期队列，重绘时读取当前学习记录。保留本地日期归档、旧缺省日期按当天统计、非空无效日期排除、数字字符串统计、正确率取整和到期按钮文案。练习页、题目编辑器和全局重绘共用同一个统计回调。[首页模块](../../../apps/web/study/dashboard.js)
+- 同文档修复后再次启动失败时，原代码仍留有一个上次运行安排的午夜任务。应用重新启动前和失败处理时停用首页实例，清除定时器、可见性监听和复习按钮绑定。初始化重新绑定并重绘后，首页只保留一个下一次本地午夜刷新任务和一个可见性监听。正常恢复点切换继续等待保存队列后重载页面。启动、保存事务、跨页与关闭顺序仍由应用协调，已有练习入口继续负责按需补读原生题目。[应用入口](../../../apps/web/app.js)
+- 用可控时钟核对纽约实际夏令时切换日距离下一次本地零点为 23 或 25 小时，以及零点前后队列变化。真实首页按钮验证取消后留在首页、返回保留原轮和答题反馈、再次确认后按当前分组从第一道到期题继续且聚焦作答控件。取消后续大题量确认时，继续按钮接管焦点，继续后焦点回到计时暂停按钮，保留原轮进度。[计时与统计测试](../../../test/dual-platform/dashboard.test.cjs) · [浏览器用例](../../../test/dual-platform/browser-page.cjs)
+
+本批在 Windows 10（19045）、Node 24.22.2、pnpm 12.16.1 和 Rust 1.99.1 上验证。沿用本工作树依赖与编译缓存。生成、生产构建、隔离测试版构建与 WebView2 验收串行执行。两次构建使用进程级 `CARGO_NET_OFFLINE=true`，生产构建通过进程级 `CARGO_TARGET_DIR` 复用缓存。日志位于 `apps/desktop/.reports/batch12/`。
+
+| 验证项 | 实际命令与结果 |
+| --- | --- |
+| 定向基线 | 根目录用 `node --test` 执行 `due-review.test.cjs`、`source-loading.test.cjs`，17 项通过。用 `--test-name-pattern='今日错题复习'` 运行 `browser-page.cjs`，6 项通过。新增同文档修复用例先失败，启动失败后待执行午夜任务实际为 1，期望为 0。 |
+| 迁移后定向 | `node --test` 执行 `dashboard.test.cjs`、`due-review.test.cjs`、`ai-harness.test.cjs`、`source-loading.test.cjs`，124 项通过。首页和本地 HTML 浏览器定向 8 项通过，重复初始化定向另有 1 项通过。 |
+| 类型与 lint | 在 `apps/desktop` 运行 `pnpm run typecheck` 和 `pnpm run lint`，通过。完整 lint 覆盖 184 个手写 JavaScript 文件，规则夹具 94 项通过，1 项因临时目录大小写不敏感跳过。 |
+| 完整 Node 与浏览器 | `pnpm test` 桌面 288 项通过、1 项环境跳过，共享 518 项通过。`pnpm run test:web-platform` 最终 259 项通过。 |
+| 桌面资源与构建 | `pnpm run prepare:web`、`pnpm run build`、`pnpm run build:test` 依次通过。`app.js` 和 `study/dashboard.js` 的桌面生成文件与 Web 源码 SHA-256 一致，见 `resource-sha256.log`。 |
+| WebView2 与 SQLite | `pnpm run test:desktop` 的 61 项通过，覆盖共享首页资源实际加载、保存队列等待后正常恢复点重载、从恢复点和兼容备份修复损坏库。 |
+
+保留首次失败日志。共享定向初轮的两个 Harness 启动夹具缺少新增工厂，改为加载实际首页模块后仍执行原有启动断言。定向 lint 初轮报新测试的对象属性换行，调整格式后通过。完整浏览器首轮通过 258 项，唯一失败将预期的首页可见性监听解绑与重绑计为重复绑定，现精确断言一次解绑和一次重绑使用同一个回调，同时保留 WebDAV 单面板、单对话框和其他监听未重绑的断言。
+
+Web 和桌面均使用隔离配置、自建题库、假凭据和本地模拟服务。午夜期限和后台恢复可见的时机由受控时钟和浏览器事件验证。桌面覆盖真实 WebView2 和 SQLite 恢复，系统挂起后恢复属于实机专项。
+
+### 第十三批 · 内置题库
+
+- 负责人为 `batch13_builtin`（GPT-6.2-Sol Max）。从第十二批冻结的工作树继续，分支为 `codex/web-app-remaining`，工作树为 `C:/Users/30728/.codex/worktrees/31f4/shiroha-quiz-desktop`，`HEAD` 为 `ac4f4c64adc773040eb2b06bf5831003c2803ab0`。`app.js` 由 4,345 行、123 个入口闭包内直接声明的具名函数减至 4,260 行、117 个。
+- [内置题库模块](../../../apps/web/banks/built-in.js)负责构造默认库或空占位库、查找手动加载使用的资源、替换题库、绑定按钮以及更新面板状态。当前面板和两个可选旧按钮共用同一回调，恢复重入复用面板，按固定 ID 和历史名称辨认已加载的库。模块装配阶段不访问页面或资源。
+- 应用入口由 `ensureDefaultBank` 决定启动和恢复时是否补库。HTTP 和直接打开 HTML 时，冷启动从现有 `question-bank.js` 同步构造 393 题。手动加载先读取内置索引或本地 `data/banks-index.json` 首项，经平台接口读取对应的 JSON。JSON 不可读时可从内置脚本取数据。通过校验后原位替换待加载库或加入新库，在原保存事务内设置为活动库和单库练习范围，同时清除补库抑制。[应用入口](../../../apps/web/app.js)
+- 浏览器通过真实按钮覆盖删空后冷启动、HTTP 和直接打开 HTML 手动重加、资源缺失后重试。占位库测试用旧 ID 和待加载标记，单次保存失败后核对原库、活动库和旁库数据，从全局重试入口保存。重载后确认占位库在原位置被替换，旁库、错题、收藏与历史记录保留，活动库和练习范围均指向新增的 393 题。[浏览器用例](../../../test/dual-platform/browser-page.cjs)
+
+本批在 Windows 10（19045）、Node 24.22.2、pnpm 12.16.1 和 Rust 1.99.1 上验证。沿用本工作树依赖和编译缓存。生成、生产构建、隔离测试版构建及 WebView2 验收串行执行。两次构建使用进程级 `CARGO_NET_OFFLINE=true`，生产构建通过进程级 `CARGO_TARGET_DIR` 复用本工作树缓存。日志位于 `apps/desktop/.reports/batch13/`。
+
+| 验证项 | 实际命令与结果 |
+| --- | --- |
+| 定向基线 | 根目录运行 `node --test --test-name-pattern='第十三批内置题库\|明确空库重启\|file URL 支持' test/dual-platform/browser-page.cjs`，6 项通过，含旧实现上的 4 个新增真实入口场景。 |
+| 迁移后定向 | 根目录用 `node --test` 执行 `source-loading.test.cjs`、`preview-performance.test.cjs`、`browser-storage.test.cjs`、`backup-entry-performance.test.cjs` 和 `format.test.cjs`，69 项通过。浏览器基线命令追加 `重复初始化`，7 项通过。 |
+| 类型与 lint | 在 `apps/desktop` 运行 `pnpm run typecheck`、`pnpm run lint`，均通过。完整 lint 覆盖 185 个手写 JavaScript 文件，规则夹具 95 项通过，1 项因临时目录不区分大小写跳过。烟测观察方式调整后，复跑类型检查及 `pnpm exec eslint scripts/smoke.mjs` 通过。 |
+| 完整 Node 与浏览器 | `pnpm test` 桌面 289 项通过、1 项环境跳过，共享 519 项通过。`pnpm run test:web-platform` 263 项全部通过。 |
+| 桌面资源与构建 | `pnpm run prepare:web`、`pnpm run build`、`pnpm run build:test` 依次通过。两端 HTML 各加载一次 `question-bank.js` 和 `banks/built-in.js`，两者均先于 `app.js`。这三个脚本及两个内置 JSON 的源码和桌面生成文件 SHA-256 一致。 |
+| WebView2 与 SQLite | `pnpm run test:desktop` 最终 62 项通过。实际删空并冷启动后从面板调用真实平台资源读取，验证唯一请求路径 `data/c1-full.json` 和 393 题返回。重载后经 SQLite 核对活动库、练习范围、首末题 ID 和已有训练记录。[桌面用例](../../../apps/desktop/scripts/smoke.mjs) |
+
+保留首轮日志。HTTP 基线首轮因共享测试服务默认屏蔽内置脚本而读到 0 题，为该场景单独提供原文件后 6 项通过。lint 首轮报两个资源回调间缺少空行，调整格式后全量通过。桌面首轮原有 61 项通过，新增用例在等待 CDP 响应事件时超时。隔离探针记录到本地资源的计时状态为 HTTP 200，平台返回 393 题，SQLite 已保存，且 CDP 未报告该请求或响应。调整烟测，在实际按钮路径中观察平台原函数返回并在结束时恢复，使用同一隔离构建复跑通过。
+
+Web 的资源失败和保存失败使用隔离浏览器夹具注入。Windows 验收使用打包资源与隔离 WebView2 配置，检查了实际 SQLite 保存和重载。正式安装和升级另随发行验收。
+
+### 第十四批 · 导入识别与 OCR 输出
+
+- 负责人为 `batch14_import`（GPT-6.2-Sol Max）。从第十三批冻结的工作树继续，分支为 `codex/web-app-remaining`，工作树为 `C:/Users/30728/.codex/worktrees/31f4/shiroha-quiz-desktop`，`HEAD` 为 `ac4f4c64adc773040eb2b06bf5831003c2803ab0`。`app.js` 从 4,260 行、117 个入口闭包内直接声明的具名函数减至 3,445 行、82 个。
+- [导入页面](../../../apps/web/import/page.js)负责单／双文件识别、示例、自动命名、文件名回显、拖放、表格预览、分组和追加目标控件。题库页、二次编辑器和导入确认通过延迟回调共享控件，组名沿用题库元数据规则。恢复时废弃三个读槽与预览、命名代次，清理原文件选择和 OCR，再由原草稿持久化模块恢复内容。输入框与文件名监听继续按节点挂载一次。
+- 普通文本、题目数组和 `questions` 对象进入原有预览草稿。`banks` 经用户确认后调用第九批合并接口，进入共享事务时核对原文、模式和读取代次。确认等待、原生待读阶段或失败重试期间换源均使旧确认失效。保存完成后只清理仍属于原来源的预览，失败保留原报告、警告、勾选和诊断。双文件继续依次准备标准答案、带解析答案和完整题库兜底，匹配、确认保存仍由既有模块负责。[备份合并回归](../../../test/dual-platform/json-import.test.cjs)
+- [导入 AI 会话](../../../apps/web/ai-import-sessions.js)提供一次创建的匿名键、指纹和唯一定位，提示词、会话、面板共享这套身份。全文整理保留既有题目摘要和诊断上限，局部选区不附带其他题目与警告。真实 DOM 选区仍由面板保存。草稿恢复和换源继续使用原来的请求归属和代次检查。[导入 AI 回归](../../../test/dual-platform/ai-import-retry.test.cjs)
+- [OCR 输出](../../../apps/web/import/ocr-output.js)复用原识别会话，负责回填、复制和 DOCX 下载。浏览器红测确认两项问题。CSV 识别后点击“填入示例”仍会使用旧表格解析，改为通过原文 `input` 事件废弃旧表格来源。真实中文扫描 PDF 识别后清空结果框，基线回填了旧 OCR 缓存，现以结果框当前值为准。非空 OCR 回填只更新原文，等用户手动开始识别。用真实下载按钮生成 DOCX，从下载文件解包并检查中文、两行段落和 `&<>"'` 的转义与回读。[浏览器用例](../../../test/dual-platform/browser-page.cjs) · [文档验证](../../../test/dual-platform/document-page.cjs)
+- 备份在真实模块入口的红测还复现了首次确认期间换源后仍执行合并、保存失败清空原诊断。修复后补查事务等待原生读取期间的代次变化，以及失败后换源再点全局重试。事务和保存故障使用隔离夹具。保留原有取消、仅预览、旧格式和 SQLite 重载用例，源码片段测试改由实际模块接线。[备份模块回归](../../../test/dual-platform/json-import.test.cjs) · [启动及经典脚本验证](../../../test/dual-platform/source-loading.test.cjs)
+
+本批在 Windows 10（19045）、Node 24.22.2、pnpm 12.16.1 和 Rust 1.99.1 上验证。日志位于 `apps/desktop/.reports/batch14/`，包含修复前失败和修复后通过的输出。
+
+| 验证项 | 实际命令与结果 |
+| --- | --- |
+| 红绿验证 | 根目录用 `node --test --test-name-pattern='第十四批导入\|恢复后重复初始化' test/dual-platform/browser-page.cjs` 复现 CSV 问题，修复后 2 项通过。在 `apps/desktop` 用 `pnpm run test:documents` 复现 OCR 问题，局部修复后通过。备份用 `node --test test/dual-platform/json-import.test.cjs` 先复现 2 项失败，最终复跑 10 项通过。 |
+| 迁移后定向 | 根目录执行 `node --test` 对导入生命周期、草稿归属、JSON、AI 导入与连接、预览、共享业务、表格、ZIP、启动和备份入口共 11 份测试文件检查，293 项通过。浏览器按导入、备份、AI 选区、文件拖放、双文件匹配、恢复重入及 `file:` 入口筛选，28 项通过。 |
+| 类型与 lint | 在 `apps/desktop` 运行 `pnpm run typecheck`、`pnpm run lint`，均通过。完整 lint 检查 187 个手写 JavaScript 文件，规则夹具 97 项通过，1 项因临时目录不区分大小写跳过。 |
+| 完整 Node 与 Web | `pnpm test` 桌面 291 项通过、1 项环境跳过，共享 523 项通过。`pnpm run test:web-platform` 264 项全部通过。 |
+| 离线文档 | `pnpm run test:documents` 通过。限制为本地 HTTP 来源，确认 CSV、XLSX、DOCX、altChunk DOCX、文本 PDF 和中文扫描 PDF 分别可保存并重载，检查 OCR 实际识别、识别期间取消、空结果回填与 DOCX 下载读回。 |
+| 桌面资源与构建 | `pnpm run prepare:web`、`pnpm run build`、`pnpm run build:test` 依次通过。两次构建使用进程级 `CARGO_NET_OFFLINE=true`，生产构建用进程级 `CARGO_TARGET_DIR` 复用本工作树缓存。`page.js`、`ocr-output.js`、`ai-import-sessions.js`、`ocr-import.js` 和 `app.js` 的生成文件与源码 SHA-256 一致，Web 与桌面 HTML 均按依赖顺序各加载一次。 |
+| WebView2 与 SQLite | `pnpm run test:desktop` 62 项通过。隔离测试版运行本地中文 OCR、识别期间取消及六种文档文件的入库重载，保留包含富文本媒体的 DOCX 断言。双文件合并重载得到 `B`、`A`、`ABC`，追加目标重确认和导入页备份合并通过 SQLite 重载核对。[桌面文档用例](../../../apps/desktop/scripts/document-smoke.mjs) |
+| 文档与差异 | `pnpm run lint:docs`、本计划的 UTF-8、围栏与本地链接检查、`git diff --check` 通过。 |
+
+完整 `pnpm test` 首轮有 23 项因 Windows 沙箱权限失败。esbuild 无法读取隔离临时目录的父路径，完整性测试夹具的 `icacls` 被拒绝。保留 `test.log`，以原命令和原隔离夹具复跑通过，结果见 `test-final.log`。定向 lint 首轮发现新迁入代码的空行和对象排版问题，调整后定向与全量检查通过。
+
+中文扫描件和题库均为自建夹具。OCR 原始结果保留用于核对，模拟人工校正后才确认保存。通过 Web 的实际下载验证 DOCX 文件，WebView2 覆盖识别与保存入库。桌面 DOCX 系统保存对话框和真实远端 AI 服务不在本批验收路径内。
+
+### 第十五批 · AI 设置与连接
+
+- 负责人为 `batch15_ai_settings`（GPT-6.2-Sol Max）。从第十四批冻结的工作树继续，分支为 `codex/web-app-remaining`，工作树为 `C:/Users/30728/.codex/worktrees/31f4/shiroha-quiz-desktop`，`HEAD` 为 `ac4f4c64adc773040eb2b06bf5831003c2803ab0`。`app.js` 从 3,445 行、82 个入口闭包内直接声明的具名函数减至 3,255 行、79 个，末尾启动点唯一。
+- [设置动作](../../../apps/web/ai/settings-actions.js)编排保存、清除和连接测试，需要持久化时调用应用事务。保存 Harness 模式只操作 Harness 配置。Codex 清除经确认后先停止任务，再清理配置和授权。API 配置继续使用原凭据与写入接口。应用将导入、预览、练习、复盘、Harness 和连接测试的在途状态合成一个判断，供动作限制、Harness 面板和退出守卫共用。[Harness 回归](../../../test/dual-platform/ai-harness.test.cjs) · [退出回归](../../../test/dual-platform/exit.test.cjs)
+- 浏览器先从实际按钮复现两个方向的错误。直连测试等待期间切换到未就绪的 Harness，成功、失败、取消三种结果均错误启用了按钮。Harness 测试后期失去就绪状态时，切回直连仍会被旧状态禁用。四条回归先红后绿。测试仍按触发时的模式执行，完成后由设置面板根据当前表单和 Harness 就绪状态恢复按钮，保留等待期间切换的执行方式与表单输入。连接测试的 `aria-busy` 按在途标记处理，禁用但未就绪的按钮允许退出。[设置面板](../../../apps/web/ai-settings.js) · [实际按钮回归](../../../test/dual-platform/browser-page.cjs)
+- 直连设置已写入、凭据已确认后才尝试切换执行方式。浏览器复验切换失败时的提示、原 Harness 仍然生效、重载后 API 端点和模型仍在，且完整备份排除了假密钥。桌面凭据以 SQLite 操作回执区分写入失败和事后确认失败，后一种情况保留已写入的配置，重载时由原生完成凭据绑定。[桌面凭据用例](../../../apps/desktop/scripts/network-smoke.mjs)
+
+本批在 Windows 10（19045）、Node 24.22.2、pnpm 12.16.1 和 Rust 1.99.1 上验证。日志位于 `apps/desktop/.reports/batch15/`，保留了红测、夹具修正和完整门禁输出。
+
+| 验证项 | 实际命令与结果 |
+| --- | --- |
+| 定向基线与迁移结果 | `node --test` 先跑连接、Harness、CodeBuddy、退出、按钮绑线、浏览器凭据和桌面原生服务，178 项通过。迁移后加上源码加载回归，196 项通过。 |
+| 实际按钮和本地页面 | `node --test --test-name-pattern='第十五批连接按钮' ../../test/dual-platform/browser-page.cjs` 在原实现上 4 项失败。修复后追加执行方式切换失败和 `file:` 入口，6 项通过。 |
+| 类型与 lint | 在 `apps/desktop` 运行 `pnpm run typecheck`、`pnpm run lint`，均通过。检查 188 个手写 JavaScript 文件，规则夹具 98 项通过，1 项因临时目录不区分大小写跳过。 |
+| 完整 Node 与 Web | `pnpm test` 桌面 292 项通过、1 项环境跳过，共享 526 项通过。因 Windows 沙箱限制临时夹具父目录读取和权限标签查询，经授权运行原命令。`pnpm run test:web-platform` 269 项全部通过。 |
+| 桌面资源与构建 | `pnpm run prepare:web`、`pnpm run build`、`pnpm run build:test` 依次通过。首轮资源生成在沙箱内被拒绝读取工作树父目录，经授权运行原命令后通过。两次构建使用进程级 `CARGO_NET_OFFLINE=true`，生产构建借用本工作树目标缓存。`ai-settings.js`、`ai/settings-actions.js` 和 `app.js` 的生成文件与源码 SHA-256 一致，Web 和桌面 HTML 均按依赖顺序各加载一次。[加载验证](../../../test/dual-platform/source-loading.test.cjs) |
+| WebView2 与 SQLite | `pnpm run test:desktop` 63 项通过。界面保存和清除分别注入本地写入失败，核对同一暂存 ID 对应的 SQLite 写入与撤销、原修订和数据保全、重试写入后确认凭据。注入凭据确认失败时，SQLite 修订已推进，新端点与模型重载后仍在，原生凭据完成新端点绑定。取消清除保持原配置和凭据。既有 Codex 与 CodeBuddy 假运行时用例通过，并核对 Harness 操作后直接 API 配置保留。 |
+| 文档与差异 | `pnpm run lint:docs`、本计划的 UTF-8、围栏与本地链接检查、`git diff --check` 通过。 |
+
+首次定向运行的退出夹具缺少假凭据的脱敏回调，补齐后原断言通过。首次全量 lint 发现新回调缺少用途说明及测试箭头函数的排版问题，修正后通过。AI 验证使用隔离浏览器和 WebView2 配置、假凭据、本地模拟服务和假 CLI。
+
+### 第十六批 · AI 单题解析写回
+
+- 负责人为 `batch16_analysis_save`（GPT-6.2-Sol Max）。从第十五批冻结的工作树继续，分支为 `codex/web-app-remaining`，工作树为 `C:/Users/30728/.codex/worktrees/31f4/shiroha-quiz-desktop`，`HEAD` 为 `ac4f4c64adc773040eb2b06bf5831003c2803ab0`。`app.js` 从 3,255 行、79 个入口闭包内直接声明的具名函数减至 3,126 行、76 个，末尾启动点唯一。
+- [解析写回](../../../apps/web/ai/analysis-save.js)为练习与复盘共用。保存固定点击时的来源库、题目 ID、指纹、草稿文本与会话版本，重试重新补读同一来源。确认覆盖后重新定位原题并核对解析版本。应用负责原生读取、事务与按修订回滚，会话继续拥有生成、追问、取消和忙碌状态。[问题会话](../../../apps/web/ai-question-sessions.js) · [应用入口](../../../apps/web/app.js)
+- 新解析及富文本特征按来源和指纹同步到相应的练习、考试、错题与收藏副本。各副本保留自身的分值、题干、选项和扩展。历史训练记录保留原快照与成绩。总提交及简答自评仍由原答题入口完成。补读或确认期间来源变化、删除及取消覆盖均零写入，保留可处理的草稿。若故障发生时存储修订已推进，界面报告已保存及刷新失败，重载可读取新解析。[快照与确认回归](../../../test/dual-platform/analysis-save.test.cjs) · [复盘来源回归](../../../test/dual-platform/review-options.test.cjs)
+- 六条真实按钮回归先红后绿。原实现对第一题保存失败后的全局重试曾写入第二题草稿，练习切题返回会接到迟到解析，同题来回切换期间的迟到重生成会覆盖已完成草稿。复盘离开再打开后，旧补读还能发起保存，错题本离开后仍接到迟到重生成，正文已变的错题和收藏快照也处在同 ID 的写回范围。修复后，旧保存入口失效时零写入，回到原题可明确保存。换题与离页使在途回包失效，已完成的解析与追问由会话保留。[练习按钮回归](../../../test/web-ai-practice/cases.cjs) · [复盘按钮回归](../../../test/web-ai-practice/training-review-analysis.cjs) · [错题按钮回归](../../../test/web-ai-practice/wrong-analysis.cjs)
+
+本批在 Windows 10（19045）、Node 24.22.2、pnpm 12.16.1 和 Rust 1.99.1 上验证。日志位于 `apps/desktop/.reports/batch16/`，包含原实现红测、首次 lint 诊断及各门禁结果。首次 lint 的解构、空行和函数说明修正后通过。原生覆盖夹具会撤销凭据，烟测通过实际 AI 设置按钮重新配置本机模拟服务的假凭据，相关脚本再通过类型检查和 ESLint。
+
+| 验证项 | 实际命令与结果 |
+| --- | --- |
+| 定向回归 | `node --test` 运行写回、复盘、训练记录、退出、加载与 AI 相关回归，211 项通过。HTTP 复盘和本地 HTML 定向浏览器回归 3 项通过。 |
+| 类型与 lint | 在 `apps/desktop` 运行 `pnpm run typecheck` 和 `pnpm run lint`，均通过。检查 190 个手写 JavaScript 文件，规则夹具 99 项通过，1 项因临时目录不区分大小写跳过。 |
+| 完整 Node 与 Web | `pnpm test` 桌面 293 项通过、1 项环境跳过，共享 531 项通过。`pnpm run test:web-platform` 269 项全部通过，含直接打开本地 HTML 的脚本顺序与加载检查。 |
+| 单题 AI 端到端 | 从仓库根目录运行 `node test/web-ai-practice/runner.cjs`，以已有 Playwright 和显式 `--executable-path` 指向本机 Edge，58 项通过。覆盖练习和复盘的主动生成、迟到响应、覆盖确认、富文本、写入故障及已提交后的异常反馈。 |
+| 桌面资源与构建 | `pnpm run prepare:web`、`pnpm run build`、`pnpm run build:test` 依次通过。使用进程级 `CARGO_NET_OFFLINE=true`，生产构建借用本工作树目标缓存。五份改动的 Web 脚本与桌面生成文件 SHA-256 一致，Web 与桌面 HTML 各加载一次。 |
+| WebView2 与 SQLite | `pnpm run test:desktop` 63 项通过。训练复盘用例注入一次保存失败，原修订与 SQLite 快照保持，草稿可从全局按钮重试。两次写入尝试只推进一次修订。重载后原题和对应错题、收藏副本具有新解析，各副本原分值和扩展、同 ID 旁库以及历史记录保留。 |
+| 文档与差异 | `pnpm run lint:docs`、本计划的 UTF-8、围栏、链接与第十五批前缀检查，以及 `git diff --check` 通过。 |
+
+验收使用自建题库、假凭据、隔离浏览器和 WebView2 配置，以及拦截的 AI 响应或本机模拟服务。实际远端 AI 服务和安装升级属于独立验收范围。
+
+### 第十七批 · 共享分页与界面收尾
+
+- 负责人为 `batch17_ui`（GPT-6.2-Sol Max）。从第十六批冻结的工作树继续，分支为 `codex/web-app-remaining`，工作树为 `C:/Users/30728/.codex/worktrees/31f4/shiroha-quiz-desktop`，`HEAD` 为 `ac4f4c64adc773040eb2b06bf5831003c2803ab0`。`app.js` 从 3,126 行、76 个入口闭包内直接声明的具名函数减至 2,810 行、64 个。
+- 分页组件复用既有范围与页码计算，独立保存每个列表的页码、筛选键和条数。题库、错题、收藏、记录、复盘与练习结果复用控件。复盘上一题和下一题通过分页实例定位该题所在页，并共用宽窄布局的焦点恢复。切换当前库归零页码。当前文档内的数据升级或覆盖恢复另清筛选键，保留各列表的条数。本机恢复点完成后重载文档，新文档按默认条数建立列表。[分页源码](../../../apps/web/ui/pagination.js)
+- 快速切换第 2 页、第 3 页、再回到第 2 页后才完成首次读取，旧实现多执行一次滚动。浏览器用延迟夹具先复现该问题。修复为每次交互分配唯一标记，离页、切换筛选键或重置状态后旧滚动失效。原页面继续负责检查正文请求版本与重试。复跑时只有两次有效滚动，当前页行节点与键盘焦点仍属于最后一次翻页。[浏览器回归](../../../test/dual-platform/browser-page.cjs)
+- 外壳组件负责侧栏偏好、定位专注答题栏、导航外壳和滚动复位。练习与考试仍由其页面进入和退出专注。浏览器在练习中重复初始化后再切题，核对侧栏按钮及原处理器保持单一实例，窗口 `resize` 与 `scroll` 继续共用同一回调，各绑定一次。恢复期间 WebDAV 单面板及处理器断言仍通过，监测范围内只有首页可见性回调按原逻辑卸载并重新挂载一次。[外壳源码](../../../apps/web/ui/shell.js)
+
+本批在 Windows 10（19045）、Node 24.22.2、pnpm 12.16.1 与 Rust 1.99.1 上验证。日志位于 `apps/desktop/.reports/batch17/`。
+
+| 验证项 | 实际命令与结果 |
+| --- | --- |
+| 基线与定向 | 原有分页和退出 Node 用例 10 项、浏览器用例 7 项通过。迁移后以 `node --test` 运行分页、关闭、源码加载及预览回归，36 项通过。定向 HTTP 与本地 HTML 浏览器验证 9 项通过。覆盖空列表、删末页、四档条数、快速翻页与重试、窄屏焦点、复盘跨页跳题，以及同题库同题量覆盖恢复后的页码和条数。 |
+| 类型与 lint | `pnpm run typecheck` 和 `pnpm run lint` 通过。完整 lint 覆盖 192 个手写 JavaScript 文件，规则夹具 101 项通过、1 项因临时目录不区分大小写跳过。样式指南的规则范围以实际配置文件为准。 |
+| 完整 Node 与 Web | `pnpm test` 桌面 295 项通过、1 项环境跳过，共享 531 项通过。`pnpm run test:web-platform` 271 项通过。 |
+| 单题 AI 实际入口 | `node test/web-ai-practice/runner.cjs` 显式指定本机 Edge，假凭据与模拟响应下的 58 项全部通过。首轮进程缺少可解析的 Playwright 路径，重跑进程使用已有依赖的 `NODE_PATH`。 |
+| 桌面资源与构建 | `pnpm run prepare:web`、`pnpm run build` 和 `pnpm run build:test` 串行通过。构建使用进程级 `CARGO_NET_OFFLINE=true`，生产构建复用本工作树的 Cargo 目标缓存。60 个共用脚本与生成文件的 SHA-256 一致，两端按相同依赖顺序各加载一次。 |
+| WebView2 与 SQLite | `pnpm run test:desktop` 最终 64 项通过。三档原生窗口尺寸下检查答题栏定位，练习手动折叠的侧栏在退出后保持，考试自动折叠的侧栏在退出后恢复。隔离 SQLite 夹具验证切页后留存练习两题及考试一题的正文，旁题正文释放并在重访后补读，返回练习可继续进入第二题。 |
+| 文档与差异 | `pnpm run lint:docs`、本计划及设计的 UTF-8、围栏、本地链接与前序记录检查、`git diff --check` 通过。 |
+
+保留三份未通过的桌面烟测日志。首轮专注布局夹具比较 `calc()` 文本，隔离 Edge 探针确认 CSSOM 会重排等价表达式，随后改为比较原生窗口变化后的实际计算高度。正文释放夹具接着补齐了考试题干的题号前缀，以及返回暂停练习时实际点击“继续练习”的步骤。这三次调整只涉及烟测，脚本再次通过类型检查与定向 ESLint，最终使用同一构建通过。[桌面烟测](../../../apps/desktop/scripts/smoke.mjs)
+
+### 全轮职责收口
+
+第七至十七批依次迁出了下列职责，逐批的入口、故障夹具与验收结果见上面的执行记录。相比编制基线，`app.js` 从 5,349 行、195 个入口闭包内直接声明的具名函数降至 2,810 行、64 个。
+
+| 批次 | 迁移结果 |
+| --- | --- |
+| 7–9 | 题库删除统一引用清理和活跃会话检查，只读导出固定发起时的库范围及预读，备份恢复共享数据应用、校验和失败重试。 |
+| 10–13 | 练习与考试共享范围及来源身份，错题与收藏由学习数据模块管理，记录复用训练快照。首页管理统计与到期复习，内置库模块管理本地数据来源及重新加载。 |
+| 14–16 | 导入页管理文件、来源代次和草稿，OCR 复用识别会话输出。AI 设置动作与单题解析写回分别接入现有传输、凭据、会话和事务。 |
+| 17 | 两端使用同一分页和外壳组件，列表数据请求及跨页顺序由各页面和应用协调。 |
+
+应用入口继续承担以下职责。[应用源码](../../../apps/web/app.js)
+
+- 装配与生命周期。入口创建各模块并接线，负责 `startApplication`、`init`、状态读取与升级、默认库决策、全局重绘与恢复后重入。`setupEnhancedDataToolsV23` 组合题库工具、备份与恢复入口，并补上旧页面的数据工具基础样式。`syncHomeVersionPromptV586` 仍与启动、重绘和延迟版本同步一起维护。
+- 共享写入与原生读取。入口跟踪在途正文读取，协调切页时缓存释放和在练、在考题目的保留，管理独占写入、保存队列、修订、回滚、重试与焦点恢复。正常恢复点与损坏数据修复仍经过应用生命周期。
+- 跨页与关闭。入口处理用户与程序触发的导航、离开确认、旧请求与会话失效、专注状态切换及退出守卫。全局保存快捷键和 Web 关闭提示、桌面 `canClose` 仍由应用绑定，末尾只有一个启动调用。
+- 多方共用的小函数。`trainingSessionItems` 和 `makeAnswerDetail` 将当前题目及来源交给训练模块，`scoreOf` 对练习与考试提供同一界面分值。文件读取、格式化、复制、通知及 `setBackupPreviewV23` 等按既有调用关系由入口注入。
+
+全轮验收使用自建题库、隔离浏览器和 WebView2 配置，以及假凭据和本地模拟服务。正式安装与覆盖升级、最低 WebView2 运行时和真实 AI、WebDAV 服务仍需各自验收。

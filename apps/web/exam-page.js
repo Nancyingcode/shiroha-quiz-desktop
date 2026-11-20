@@ -42,7 +42,7 @@
       groupType: PRACTICE_SCOPE_GROUP_V8916,
       filteredItems: filteredPracticeItemsV8916,
       reviewItems: trainingSessionItems,
-      attachReview: attachTrainingReview,
+      reviewData: buildTrainingReview,
       addWrong,
       markRight,
       activeBank,
@@ -368,7 +368,9 @@
         }
 
         addWrongOnExam(item, !ok, ans);
-        details.push(makeAnswerDetail(item, ans, ok, sc, sc));
+        details.push(makeAnswerDetail(item, {
+          question: q, chosen: ans, correct: ok, score: sc, time: now(),
+        }));
         const k = q.type || 'single';
         byType[k] = byType[k] || { total: 0, correct: 0, score: 0, fullScore: 0 };
         byType[k].total += 1;
@@ -429,7 +431,10 @@
           details,
           byType,
         };
-        attachTrainingReview(rec, examSession.current.reviewItems || trainingSessionItems(examSession.current.items), { completion: 'completed', submitMode: 'exam', timing: 'wall' });
+        const reviewItems = examSession.current.reviewItems || trainingSessionItems(examSession.current.items);
+        Object.assign(rec, buildTrainingReview(reviewItems, details, {
+          completion: 'completed', submitMode: 'exam', timing: 'wall',
+        }));
         state.records.unshift(rec);
         await saveSilent();
         globalThis.clearInterval(examSession.current.timer);

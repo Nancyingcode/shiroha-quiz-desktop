@@ -9,7 +9,6 @@ const { webcrypto } = require('node:crypto');
 const sourcePath = path.resolve(__dirname, '../../apps/web/app.js');
 const source = loadWebSource();
 const exportedNames = [
-  'listPageNumbers', 'listPageRange',
   'short', 'shuffle',
   'parseSlashRegexV51: importFindReplace.parseSlashRegexV51',
   'buildFindRegExpV51: importFindReplace.buildFindRegExpV51',
@@ -18,23 +17,27 @@ const exportedNames = [
   'repairCircledCombinationQuestion',
   'displayOptionTextV589',
   'normalizeQuestion', 'normalizeBackupPayloadV23', 'serializeBankForCrossExportV53',
-  'exportQuestionImagesForCrossExportV83',
-  'buildQuestionBanksExportPayloadV598', 'buildBackupPayloadV23', 'buildNativeCompatibleBackupZipV611',
+  'exportQuestionImagesForCrossExportV83: globalThis.ShirohaRichContent.exportQuestionImagesForCrossExportV83',
+  'buildQuestionBanksExportPayloadV598: backupExport.buildQuestionBanksExportPayloadV598', 'buildBackupPayloadV23',
+  'buildNativeCompatibleBackupZipV611: () => backupData.buildNativeCompatibleBackupZipV611(state)',
   'buildNativeInteropStateV24: (banks) => backupData.buildNativeInteropStateV24(state, banks)', 'readBackupFileV24', 'applyBackupAssetsV24',
   'countUnresolvedBackupImagesV24', 'parseZipEntries: globalThis.ShirohaZip.parseZipEntries',
-  'unzipEntry: globalThis.ShirohaZip.unzipEntry', 'unzipEntryBytes: globalThis.ShirohaZip.unzipEntryBytes', 'zipStoreFiles', 'createOcrDocxBlob',
+  'unzipEntry: globalThis.ShirohaZip.unzipEntry', 'unzipEntryBytes: globalThis.ShirohaZip.unzipEntryBytes',
+  'zipStoreFiles: globalThis.ShirohaZip.zipStoreFiles', 'createOcrDocxBlob: globalThis.ShirohaOcrOutput.createOcrDocxBlob',
   'sameAnswerForQuestion', 'scoreOf', 'makeAnswerDetail', 'recordPracticeAnswer: practicePage.recordPracticeAnswer',
   'parsePracticeNumberRangeV58916', 'formatExactPracticeNumbersV58916',
   'normalizeBlankAnswersV58914', 'normalizeBlankTextV58914: globalThis.ShirohaQuizCore.normalizeBlankTextV58914', 'isMultiBlankQuestionV58914',
   'primaryBlankAnswerV58914', 'cloneBlankAnswersV58914',
   'needsPracticeSelfAssessment: practicePage.needsPracticeSelfAssessment',
-  'mergeBackupBanksV23', 'download',
-  'practiceItemKeyV8916', 'getPracticeAnswerStateV26', 'addWrong', 'markRight', 'getWrongEntries',
-  'parseTextQuestions',
+  'mergeBackupBanksV23', 'download: backupExport.downloadJson',
+  'practiceItemKeyV8916', 'getPracticeAnswerStateV26',
+  'addWrong: savedQuestions.addWrong', 'markRight: savedQuestions.markRight',
+  'getWrongEntries: savedQuestions.getWrongEntries',
+  'parseTextQuestions: importPage.parseTextQuestions',
   'parseAnswerEntries: dualAnswers.parseAnswerEntries',
   'mergeQuestionAnswers: dualAnswers.mergeQuestionAnswers',
   'sourceQuestionNumberFromLineV58910: textParser.sourceQuestionNumberFromLineV58910',
-  'resolveDualAnswerCandidates',
+  'resolveDualAnswerCandidates: importPage.resolveDualAnswerCandidates',
   'parseTextQuestionsBaseDetailed: textParser.parseTextQuestionsBaseDetailed', 'repairParsedQuestionsLocally: textParser.repairParsedQuestionsLocally',
   'repairMissingAndStuckQuestionsBySourceV58910: textParser.repairMissingAndStuckQuestionsBySourceV58910',
   'analyzeQuestionTextProfile: textParser.analyzeQuestionTextProfile', 'getSourceMetaV58910: textParser.getSourceMetaV58910',
@@ -115,7 +118,7 @@ function loadWeb({
   const context = vm.createContext(sandbox);
   runWebScripts(context, ['platform/validation.js', 'platform/browser.js', 'platform/dialogs.js']);
   context.ShirohaPlatform = { files: context.ShirohaBrowser.files, media: context.ShirohaBrowser.media };
-  runWebScripts(context, ['training.js', 'quiz-core.js', 'text-answers.js', 'questions/rich-content.js']);
+  runWebScripts(context, ['training.js', 'quiz-core.js', 'ui/pagination.js', 'ui/shell.js', 'text-answers.js', 'questions/rich-content.js']);
   if (parserSourceTransform) {
     const parserPath = path.join(path.dirname(sourcePath), 'text-parser.js');
     const parserSource = parserSourceTransform(readFileSync(parserPath, 'utf8'));
@@ -123,8 +126,9 @@ function loadWeb({
   } else {
     runWebScripts(context, ['text-parser.js']);
   }
-  runWebScripts(context, ['import/dual-answers.js', 'backup-core.js', 'zip.js', 'backup-archive.js', 'backup-data.js', 'webdav-panel.js', 'docx-import.js', 'pdf-import.js', 'ocr-import.js', 'table-import.js', 'import-preview.js', 'ai-results.js', 'ai-import-sessions.js', 'ai-question-sessions.js', 'ai-settings.js', 'ai-transport.js', 'ai-prompts.js', 'question-view.js', 'bank-page.js', 'banks/metadata.js', 'banks/question-operations.js', 'saved-questions-page.js', 'training-review-page.js', 'bank-editor.js', 'study-sessions.js', 'exam-page.js', 'practice-selection.js', 'practice-page.js', 'ai-import-panel.js', 'ai-question-panels.js', 'question-editor.js', 'import/find-replace.js', 'import/commit.js']);
+  runWebScripts(context, ['import/dual-answers.js', 'backup-core.js', 'zip.js', 'backup-archive.js', 'backup-data.js', 'backup/export.js', 'backup/restore.js', 'webdav-panel.js', 'docx-import.js', 'pdf-import.js', 'ocr-import.js', 'table-import.js', 'import-preview.js', 'ai-results.js', 'ai-import-sessions.js', 'ai-question-sessions.js', 'ai-settings.js', 'ai-transport.js', 'ai/settings-actions.js', 'ai-prompts.js', 'ai/analysis-save.js', 'question-view.js', 'bank-page.js', 'banks/metadata.js', 'banks/question-operations.js', 'banks/deletion.js', 'banks/built-in.js', 'study/saved-questions.js', 'saved-questions-page.js', 'training-review-page.js', 'bank-editor.js', 'study/scope.js', 'study-sessions.js', 'exam-page.js', 'practice-selection.js', 'study/dashboard.js', 'practice-page.js', 'ai-import-panel.js', 'ai-question-panels.js', 'question-editor.js', 'import/find-replace.js', 'import/commit.js']);
   // 在测试副本中取消页面启动；所有被测解析、评分、转换和 ZIP 代码仍来自真实业务源码。
+  runWebScripts(context, ['import/ocr-output.js', 'import/page.js']);
   const bridge = `\nObject.assign(state, migrateState(${JSON.stringify(state || null)} || blankState(), KEY));\nglobalThis.__test = {${exportedNames.join(',')}, snapshot: () => JSON.parse(JSON.stringify(state)), practiceSession, practiceSnapshot: () => JSON.parse(JSON.stringify(practiceSession.current)), importState: () => ({ report: importDraft.report, warnings: importDraft.warnings, diagnostics: importDraft.diagnostics })};\n`;
   vm.runInContext(source.replaceStartup(bridge), context, { filename: sourcePath, timeout: 5000 });
   return { api: context.__test, logs, context };

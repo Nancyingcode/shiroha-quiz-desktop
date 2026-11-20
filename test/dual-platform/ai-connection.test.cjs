@@ -1,6 +1,6 @@
 'use strict';
 const { installAiTransport } = require('./ai-transport-helper.cjs');
-const { installAiSettings } = require('./ai-settings-helper.cjs');
+const { installAiSettings, installAiSettingsActions } = require('./ai-settings-helper.cjs');
 
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
@@ -11,7 +11,7 @@ const browserAdvice = /CORS|跨域|Origin|浏览器|当前网页/;
 
 function harness(native, ai = async () => {
   throw new Error('未配置 mock 响应');
-}) {
+}, elements = {}) {
   const timers = new Set();
   const context = vm.createContext({
     URL,
@@ -19,6 +19,7 @@ function harness(native, ai = async () => {
     location: { origin: native ? 'http://tauri.localhost' : 'https://quiz.example.invalid' },
     AI_PROVIDER_PRESETS_V99: { ollama: { label: 'Ollama' }, custom: { label: '自定义接口' } },
     ShirohaPlatform: { network: { ai }, credentials: { native, redact: (_config, text) => text } },
+    $: (selector) => elements[selector],
     setTimeout(callback) {
       const timer = { callback }; timers.add(timer); return timer;
     },
@@ -26,10 +27,30 @@ function harness(native, ai = async () => {
       timers.delete(timer);
     },
   });
-  installAiSettings(context);
-  installAiTransport(context);
-  return { context, timers };
+  const settings = installAiSettings(context);
+  const transport = installAiTransport(context);
+  return { context, timers, settings, transport };
 }
+
+test('连接入口在必填模型缺失时报告错误并保持按钮可用', async () => {
+  let requests = 0;
+  const button = { disabled: true };
+  const status = {};
+  const elements = {
+    '#ai-test-connection-v99': button,
+    '#ai-settings-status-v99': status,
+    '#ai-endpoint-v99': { value: config.endpoint },
+  };
+  const { context, settings, transport } = harness(false, async () => {
+    requests += 1;
+  }, elements);
+  const actions = installAiSettingsActions(context, { settings, transport });
+  await actions.testAiConnectionV99();
+  assert.equal(requests, 0);
+  assert.equal(status.textContent, '请填写模型名称。');
+  assert.equal(button.disabled, false);
+  assert.equal(button.textContent, '测试连接');
+});
 
 for (const [code, message, summary] of [
   ['binding_required', '服务绑定已变化，请重新输入凭据。', /凭据/],

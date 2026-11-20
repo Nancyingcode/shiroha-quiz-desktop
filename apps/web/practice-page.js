@@ -75,7 +75,7 @@
     } = question;
     const {
       items: trainingSessionItems,
-      attach: attachTrainingReview,
+      data: buildTrainingReview,
       completion: trainingCompletion,
       open: openTrainingReview,
       page: nativePage,
@@ -423,7 +423,11 @@
           details: practiceSession.current.details || [],
         };
         rec.duration = Math.round(ShirohaTraining.elapsedClock(practiceSession.current.clock, globalThis.performance.now()) / 1000);
-        attachTrainingReview(rec, practiceReviewItems(), { completion: total < practiceSession.current.items.length ? 'ended_early' : 'completed', submitMode: practiceSession.current.submitMode || 'single', timing: 'active' });
+        Object.assign(rec, buildTrainingReview(practiceReviewItems(), rec.details, {
+          completion: total < practiceSession.current.items.length ? 'ended_early' : 'completed',
+          submitMode: practiceSession.current.submitMode || 'single',
+          timing: 'active',
+        }));
         state.records.unshift(rec);
         updatePracticeProgressV58916();
         await saveSilent();
@@ -1098,6 +1102,22 @@
       renderPracticeAiPanelV613();
     }
 
+    // 保存解析不代表提交答案；总提交和未进入自评的简答题继续保留答题草稿。
+    function refreshSavedPracticeAnalysis() {
+      const item = currentPracticeItemV8916();
+      const q = practiceQuestionV8916(item);
+      const st = getPracticeAnswerStateV26(practiceItemKeyV8916(item));
+      if (practiceSession.current.submitMode === 'total') {
+        renderPracticeAiPanelV613();
+      } else if (q.type === 'short' && !st.answered && $('#p-self-right')) {
+        showSubjectiveFeedback(item, st.chosen || [], !!st.revealed);
+      } else if (st.answered || st.revealed) {
+        showAnsweredStateV26(q, st);
+      } else {
+        renderPracticeAiPanelV613();
+      }
+    }
+
     // 只首次登记有效判分，并按原题来源更新本轮计数和错题记录。
     function recordPracticeAnswer(item, chosen, ok) {
       const q = practiceQuestionV8916(item); const key = practiceItemKeyV8916(item); const bid = practiceItemBankIdV8916(item);
@@ -1119,7 +1139,9 @@
       }
 
       setPracticeAnswerStateV26(key, { chosen: [...chosen], answered: true, revealed: false, correct: !!ok, answeredAt: now() });
-      practiceSession.current.details.push(makeAnswerDetail(item, chosen, ok, scoreOf(q), scoreOf(q)));
+      practiceSession.current.details.push(makeAnswerDetail(item, {
+        question: q, chosen, correct: ok, score: scoreOf(q), time: now(),
+      }));
     }
 
     // 从题库详情带当前源题库进入练习设置，并关闭旧题目详情。
@@ -1170,8 +1192,7 @@
       canLeaveTotalPractice,
       renderPracticeQuestion,
       getPracticeAnswerStateV26,
-      showAnsweredStateV26,
-      showSubjectiveFeedback,
+      refreshSavedPracticeAnalysis,
       openQuickPracticeSetup,
       switchPracticeSourceV27,
       renderPracticeWrongOverview,

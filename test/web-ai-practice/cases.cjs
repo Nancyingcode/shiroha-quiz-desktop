@@ -166,6 +166,28 @@ const cases = [
       const current = await snapshot(h.page);
       assert.equal(current.question.id, 'safe-single-2');
       assert.equal(current.question.analysis, original.bank.questions.find((question) => question.id === current.question.id).analysis);
+      await h.jump(0);
+      await h.expandExisting();
+      assert.doesNotMatch(await h.page.locator(SEL.panel).textContent(), /DELAYED_Q1_DRAFT/);
+    },
+  },
+  {
+    name: 'inflight-question-return-keeps-completed-draft-and-discards-late-regeneration',
+    options: { ignoreAbort: true },
+    async run(h) {
+      await h.start();
+      await h.reveal();
+      await h.generate(analysis('COMPLETED_Q1_DRAFT'));
+      const pending = h.mock.enqueue('analysis', analysis('LATE_Q1_REGENERATION'), { hold: true });
+      await h.requestAnalysis({ regenerate: true });
+      await h.waitCall(pending);
+      await h.jump(1);
+      await h.jump(0);
+      await h.deliver(pending);
+      await h.idle();
+      const panel = await h.page.locator(SEL.panel).textContent();
+      assert.match(panel, /COMPLETED_Q1_DRAFT/);
+      assert.doesNotMatch(panel, /LATE_Q1_REGENERATION/);
     },
   },
   {
@@ -443,6 +465,83 @@ const cases = [
       }
       await saveAndCheck(h, 'QUOTA_DRAFT_TO_RETRY');
       assert.equal(h.pageErrors.length, 0, 'Quota exception escaped the save handler.');
+    },
+  },
+  {
+    name: 'analysis-writeback-retry-does-not-save-the-next-practice-draft',
+    async run(h) {
+      await h.start();
+      await h.reveal();
+      await h.generate(analysis('WRITEBACK_FIRST_DRAFT'));
+      await h.jump(1);
+      await h.reveal();
+      await h.generate(analysis('WRITEBACK_SECOND_DRAFT'));
+      await h.jump(0);
+      const persisted = () => h.page.evaluate((key) => localStorage.getItem(key), h.keys.state);
+      const before = await persisted();
+      await h.page.evaluate(() => {
+        const { storage } = globalThis.ShirohaPlatform;
+        const { write } = storage;
+        let attempts = 0;
+        storage.write = (...args) => {
+          attempts += 1;
+          storage.fixtureWriteAttempts = attempts;
+          if (attempts === 1) {
+            throw new Error('Synthetic first write failure');
+          }
+
+          return write(...args);
+        };
+      });
+      const retry = h.page.locator('#platform-status.failed button');
+      const attempts = () => h.page.evaluate(() => globalThis.ShirohaPlatform.storage.fixtureWriteAttempts);
+      await h.page.locator(SEL.save).click();
+      await retry.waitFor();
+      await h.page.locator('body[data-storage-state="ready"]').waitFor();
+      assert.equal(await attempts(), 1);
+      assert.equal(await persisted(), before);
+
+      await h.jump(1);
+      await retry.click();
+      await h.page.locator('body[data-storage-state="ready"]').waitFor();
+      assert.equal(await attempts(), 1, 'Retrying the first question must attempt zero writes on the second.');
+      assert.equal(await persisted(), before);
+      await h.text('WRITEBACK_SECOND_DRAFT');
+
+      await h.jump(0);
+      await h.text('WRITEBACK_FIRST_DRAFT');
+      await saveAndCheck(h, 'WRITEBACK_FIRST_DRAFT');
+      assert.equal(await attempts(), 2);
+      await h.page.reload();
+      const read = JSON.parse(await persisted());
+      assert.equal(read.banks[0].questions[0].analysis, 'WRITEBACK_FIRST_DRAFT');
+      assert.deepEqual(read.banks[0].questions[1], JSON.parse(before).banks[0].questions[1]);
+    },
+  },
+  {
+    name: 'analysis-writeback-does-not-report-rollback-after-commit',
+    async run(h) {
+      await h.start();
+      await h.reveal();
+      await h.generate(analysis('ANALYSIS_ALREADY_COMMITTED'));
+      const before = await snapshot(h.page);
+      await h.page.evaluate(() => {
+        const { storage } = globalThis.ShirohaPlatform;
+        const { write } = storage;
+        storage.write = async (...args) => {
+          await write(...args);
+          throw new Error('Synthetic failure after commit');
+        };
+      });
+      await h.page.locator(SEL.save).click();
+      const status = h.page.locator('#platform-status.failed');
+      await status.getByText('数据已保存，但界面刷新失败，请重新打开页面。').waitFor();
+      assert.equal(await status.getByRole('button', { name: '重试' }).count(), 0);
+      assert.doesNotMatch(await h.page.locator(SEL.panel).textContent(), /已回滚/);
+      assertOnlyAnalysis(before, await snapshot(h.page), 'ANALYSIS_ALREADY_COMMITTED');
+      await h.page.reload();
+      const stored = await h.page.evaluate((key) => JSON.parse(localStorage.getItem(key)), h.keys.state);
+      assert.equal(stored.banks[0].questions[0].analysis, 'ANALYSIS_ALREADY_COMMITTED');
     },
   },
   {

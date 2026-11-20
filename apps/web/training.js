@@ -1,6 +1,7 @@
 // 将练习计时、题号选择和复盘的数据操作注册到页面共享接口。
 (() => {
   'use strict';
+  const ANSWER_DETAIL_SUMMARY_LENGTH = 120;
   const hasAnswer = (values) => Array.isArray(values) && values.some((value) => String(value ?? '').trim());
 
   const clone = (value) => JSON.parse(JSON.stringify(value));
@@ -97,6 +98,52 @@
     }:${String(value % 60).padStart(2, '0')}`;
   }
 
+  // 将已读题目连同原题库和题号固化，便于跨库复盘时定位。
+  function snapshotItem({
+    bankId,
+    bankName,
+    bankQuestionNumber,
+    question,
+  }) {
+    // 复制题目快照，防止题库后续编辑影响已保存的记录。
+    return { bankId, bankName, bankQuestionNumber, question: clone(question) };
+  }
+
+  // 为成绩记录保存答题快照，供跨库复盘和多空题逐空核对。
+  function answerDetail({
+    question,
+    bankId,
+    bankName,
+    chosen,
+    correct,
+    score,
+    time,
+  }, { short, isMultiBlank, cloneBlankAnswers }) {
+    const values = Array.isArray(chosen) ? [...chosen] : [];
+    const detail = {
+      questionId: question.id,
+      question: short(question.question, ANSWER_DETAIL_SUMMARY_LENGTH),
+      type: question.type,
+      category: question.category || '',
+      chosen: values,
+      userAnswer: [...values],
+      answer: [...question.answer],
+      correct: !!correct,
+      score: correct ? score : 0,
+      fullScore: score,
+      time,
+      sourceBankId: bankId,
+      sourceBankName: bankName,
+      nativeQuestion: clone(question),
+    };
+    if (isMultiBlank(question)) {
+      detail.blankAnswers = cloneBlankAnswers(question.blankAnswers);
+      detail.userBlankAnswers = [...values];
+    }
+
+    return detail;
+  }
+
   // 按本轮顺序建立复盘条目，答题明细已有正文时仅保存引用。
   function buildReview(items, details, metadata) {
     const indices = new Map(details.map((detail, index) => [key(detail.sourceBankId, detail.questionId), index]));
@@ -178,6 +225,11 @@
     };
   }
 
+  function buildReviewData(items, details, metadata) {
+    const review = buildReview(items, details, metadata);
+    return { review, reviewSummary: reviewSummary(review, details) };
+  }
+
   globalThis.ShirohaTraining = Object.freeze({
     parsePracticeNumberRangeV58916,
     formatExactPracticeNumbersV58916,
@@ -185,8 +237,11 @@
     elapsedClock,
     transitionClock,
     formatDuration,
+    snapshotItem,
+    answerDetail,
     buildReview,
     reviewRows,
     reviewSummary,
+    buildReviewData,
   });
 })();
