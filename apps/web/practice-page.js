@@ -1102,6 +1102,22 @@
       renderPracticeAiPanelV613();
     }
 
+    // 保存解析不代表提交答案；总提交和未进入自评的简答题继续保留答题草稿。
+    function refreshSavedPracticeAnalysis() {
+      const item = currentPracticeItemV8916();
+      const q = practiceQuestionV8916(item);
+      const st = getPracticeAnswerStateV26(practiceItemKeyV8916(item));
+      if (practiceSession.current.submitMode === 'total') {
+        renderPracticeAiPanelV613();
+      } else if (q.type === 'short' && !st.answered && $('#p-self-right')) {
+        showSubjectiveFeedback(item, st.chosen || [], !!st.revealed);
+      } else if (st.answered || st.revealed) {
+        showAnsweredStateV26(q, st);
+      } else {
+        renderPracticeAiPanelV613();
+      }
+    }
+
     // 只首次登记有效判分，并按原题来源更新本轮计数和错题记录。
     function recordPracticeAnswer(item, chosen, ok) {
       const q = practiceQuestionV8916(item); const key = practiceItemKeyV8916(item); const bid = practiceItemBankIdV8916(item);
@@ -1176,8 +1192,7 @@
       canLeaveTotalPractice,
       renderPracticeQuestion,
       getPracticeAnswerStateV26,
-      showAnsweredStateV26,
-      showSubjectiveFeedback,
+      refreshSavedPracticeAnalysis,
       openQuickPracticeSetup,
       switchPracticeSourceV27,
       renderPracticeWrongOverview,

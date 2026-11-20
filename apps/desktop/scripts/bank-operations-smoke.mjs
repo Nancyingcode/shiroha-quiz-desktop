@@ -56,7 +56,7 @@ async function readAfterReload(page, readSnapshot) {
 }
 
 /** @param {Page} page @param {Snapshot} snapshot */
-async function replaceFixture(page, snapshot) {
+export async function replaceFixture(page, snapshot) {
   await page.evaluate(async ({ json, operationId }) => {
     const host = (/** @type {TestGlobal} */ (globalThis)).ShirohaDesktopHost;
     if (!host) { throw new Error('本地桥接缺失'); }
@@ -265,7 +265,7 @@ function firstExportedImage(bank) {
 }
 
 /** @param {Page} page @param {{holdBank?: string, failWrite?: boolean, failReadBank?: string}} [options] */
-async function traceOperations(page, options = {}) {
+export async function traceOperations(page, options = {}) {
   await page.evaluate(({ holdBank, failWrite, failReadBank }) => {
     const host = (/** @type {TestGlobal} */ (globalThis)).ShirohaDesktopHost;
     if (!host) { throw new Error('本地桥接缺失'); }
@@ -311,7 +311,7 @@ async function traceOperations(page, options = {}) {
 }
 
 /** @param {Page} page */
-function operationCalls(page) {
+export function operationCalls(page) {
   return /** @type {Promise<Call[]>} */ (page.evaluate(() => Reflect.get(globalThis, '__bankOperationTrace').calls));
 }
 
@@ -809,7 +809,7 @@ async function resetOperationCalls(page) {
 }
 
 /** @param {Page} page */
-async function localRevision(page) {
+export async function localRevision(page) {
   return page.evaluate(async () => {
     const host = (/** @type {TestGlobal} */ (globalThis)).ShirohaDesktopHost;
     if (!host) { throw new Error('本地桥接缺失'); }

@@ -3634,6 +3634,12 @@ test('file URL 支持 ZIP 与文本导入且不依赖可选 PDF/OCR', async (t) 
   assert(aiSettingsIndex > scripts.indexOf('./ai-transport.js') && aiSettingsIndex < scripts.indexOf('./ai-import-panel.js'));
   assert.equal(await page.evaluate(() => typeof globalThis.ShirohaAiSettingsActions.create), 'function');
 
+  const analysisSaveScript = './ai/analysis-save.js';
+  const analysisSaveIndex = scripts.indexOf(analysisSaveScript);
+  assert.equal(scripts.filter((script) => script === analysisSaveScript).length, 1);
+  assert(analysisSaveIndex > scripts.indexOf('./ai-prompts.js') && analysisSaveIndex < scripts.indexOf('./app.js'));
+  assert.equal(await page.evaluate(() => typeof globalThis.ShirohaAiAnalysisSave.create), 'function');
+
   for (const name of ['./quiz-core.js', './text-answers.js', './text-parser.js', './backup-core.js', './zip.js', './backup-archive.js', './backup-data.js', './webdav-panel.js', './docx-import.js', './pdf-import.js', './ocr-import.js', './table-import.js', './import-preview.js', './ai-results.js', './ai-import-sessions.js', './ai-question-sessions.js', './ai-settings.js', './ai-transport.js', './ai-prompts.js', './question-view.js', './bank-page.js', './saved-questions-page.js', './training-review-page.js', './bank-editor.js', './study-sessions.js', './exam-page.js', './practice-selection.js', './practice-page.js', './ai-import-panel.js', './ai-question-panels.js', './question-editor.js']) {
     assert(scripts.indexOf(name) >= 0 && scripts.indexOf(name) < appIndex);
   }

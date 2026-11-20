@@ -763,6 +763,40 @@
     runAnalysis: runAiSingleAnalysisV613,
     runFollowUp: runAiSingleFollowUpV613,
   } = practiceAiSessions;
+  const { reviewAnalysisSource, savePractice, saveReview } = globalThis.ShirohaAiAnalysisSave.create({
+    state,
+    exam: examSession,
+    practice: {
+      current: () => practiceSession.current,
+
+      currentItem: currentPracticeItemV8916,
+      key: practiceItemKeyV8916,
+      allowed: (...args) => aiSingleAllowedV613(...args),
+
+      getSession: aiSingleSessionV613,
+      selectionVersion: practiceAiSessions.selectionVersion,
+    },
+    question: { fromItem: practiceQuestionV8916, bankId: practiceItemBankIdV8916, fingerprint: aiSingleFingerprintV613 },
+    rich: { buildField: buildRichContentFieldV57, schema: RICH_CONTENT_VERSION_V57 },
+    storage: {
+      transaction: runMutation,
+      load: loadNativeItems,
+      save: saveSilent,
+      revision: () => ShirohaPlatform.storage.revision(),
+    },
+    view: {
+      practice: () => renderPracticeAiPanelV613(),
+
+      practiceSaved: () => refreshSavedPracticeAnalysis(),
+
+      review: () => updateReviewAnalysisPanels(),
+
+      notice: showNotice,
+    },
+    confirm: (...args) => ShirohaDialogs.confirm(...args),
+
+    now,
+  });
   const reviewAiSessions = globalThis.ShirohaAiQuestionSessions.createReview({
     question: { source: reviewAnalysisSource, fingerprint: aiSingleFingerprintV613, hasImages: aiSingleHasImagesV613 },
     request: {
@@ -773,7 +807,7 @@
       analysisMessages: buildAiSingleAnalysisMessagesV613,
     },
     result: { analysis: parseAiSingleAnalysisV613, mergeWarning: mergeAiSingleWarningV381 },
-    storage: { load: loadNativeItems, save: saveAiSingleAnalysisV613 },
+    storage: { save: saveReview },
     view: {
       render: (...args) => updateReviewAnalysisPanels(...args),
 
@@ -966,7 +1000,6 @@
     startExam,
     startExamTicker,
     submitExam,
-    examQuestionV113,
   } = globalThis.ShirohaExamPage.create({
     session: examSession,
     state,
@@ -1170,8 +1203,7 @@
     canLeaveTotalPractice,
     renderPracticeQuestion,
     getPracticeAnswerStateV26,
-    showAnsweredStateV26,
-    showSubjectiveFeedback,
+    refreshSavedPracticeAnalysis,
     openQuickPracticeSetup,
     switchPracticeSourceV27,
     resetPractice,
@@ -1286,6 +1318,7 @@
     renderReviewAnalysis,
     updateReviewAnalysisPanels,
     bindReviewAnalysisEvents,
+    cancelPendingReviewAnalysis,
   } = globalThis.ShirohaAiQuestionPanels.create({
     session: practiceSession,
     practiceAi: practiceAiSessions,
@@ -1317,7 +1350,7 @@
       followUp: runAiSingleFollowUpV613,
       retryReadiness: () => ShirohaPlatform.harness?.retryReadiness(),
 
-      save: saveAiSingleAnalysisV613,
+      save: savePractice,
       runReview: runReviewAnalysis,
       saveReview: saveReviewAnalysis,
       exitPractice: exitPracticeFocus,
@@ -1334,7 +1367,6 @@
     closeEditModal,
     saveEditQuestion,
     deleteEditQuestion,
-    findPracticeQuestionLocationV120,
     openPracticeEditQuestionV120,
   } = globalThis.ShirohaQuestionEditor.create({
     state,
@@ -1630,6 +1662,11 @@
 
   // 页面变化后取消原视图仍在进行的读取和导航任务，阻止迟到结果回写。
   function cancelPendingViewActions(target) {
+    const from = $('.view.active');
+    if (from && from.id !== target) {
+      cancelPendingReviewAnalysis(from);
+    }
+
     cancelPendingSavedReads(target);
     if (target !== 'favorites') {
       cancelFavoritePractice();
@@ -1637,6 +1674,7 @@
 
     if (target !== 'practice') {
       practiceSession.invalidatePending();
+      practiceAiSessions.select();
     }
 
     if (target !== 'exam') {
@@ -2215,173 +2253,6 @@
     importPage.refreshAppendTarget();
     syncHomeVersionPromptV586();
     syncPracticeStartUiV58916(true);
-  }
-
-  /* SHIROHA_WEB_PRACTICE_AI_SINGLE_QUESTION_V613_START
-   沉浸练习页的单题 AI 解析与追问：只处理当前这一道题，结果先作为草稿展示，由用户决定是否写入题库解析。 */
-
-  // 构造带新解析的题目副本，并让富文本解析与普通解析保持一致。
-  function aiSingleWithAnalysisV613(question, text) {
-    const next = { ...question, analysis: text };
-    const field = buildRichContentFieldV57(text, 'analysis', []);
-    if (question.richContent?.fields || field) {
-      const fields = { ...question.richContent?.fields };
-      if (field) {
-        fields.analysis = field;
-      } else {
-        delete fields.analysis;
-      }
-
-      const features = [...new Set(Object.values(fields).flatMap((value) => (Array.isArray(value) ? value.filter(Boolean).flatMap((entry) => entry.features || []) : (value?.features || []))))];
-      next.richContent = { ...question.richContent, schema: question.richContent?.schema || RICH_CONTENT_VERSION_V57, fields, features };
-    }
-
-    return next;
-  }
-
-  // 从当前练习或复盘入口保存 AI 草稿，校验它仍对应来源题目的快照。
-  async function saveAiSingleAnalysisV613(reviewSession = null) {
-    return runMutation(/* 确认解析可保存后同步相关题目副本，并允许写入失败时回滚。 */ async () => {
-      const item = reviewSession ? reviewSession.item : currentPracticeItemV8916();
-      if (!reviewSession && !aiSingleAllowedV613(item)) {
-        return false;
-      }
-
-      const key = practiceItemKeyV8916(item);
-      const session = reviewSession || aiSingleSessionV613(key);
-      const text = String(session.analysis?.analysis || '').trim();
-      const render = reviewSession ? updateReviewAnalysisPanels : renderPracticeAiPanelV613;
-      if (!text || session.loading) {
-        return false;
-      }
-
-      const loc = reviewSession ? reviewAnalysisSource(item) : findPracticeQuestionLocationV120(item);
-      if (!loc.bank || loc.index < 0) {
-        session.error = '来源题库或题目不存在，无法保存；AI 草稿已保留。';
-        render();
-        return false;
-      }
-
-      const target = loc.bank.questions[loc.index];
-      if (aiSingleFingerprintV613(target) !== session.fingerprint) {
-        session.error = '来源题目已发生变化，请重新生成后再保存。';
-        render();
-        return false;
-      }
-
-      if (String(target.analysis || '').trim() && target.analysis !== text && !await ShirohaDialogs.confirm('这道题已有解析，是否用当前 AI 草稿替换？题干、选项和答案不会改变。')) {
-        return false;
-      }
-
-      const patches = [];
-      const seen = new WeakMap();
-      // 同一对象属性只记录第一次旧值，防止回滚时恢复到半更新状态。
-      const patch = (object, property, value) => {
-        if (!object) {
-          return;
-        }
-
-        let keys = seen.get(object);
-        if (!keys) {
-          keys = new Set();
-          seen.set(object, keys);
-        }
-
-        if (keys.has(property)) {
-          return;
-        }
-
-        keys.add(property);
-        patches.push({ object, property, had: Object.prototype.hasOwnProperty.call(object, property), old: object[property] });
-        object[property] = value;
-      };
-
-      const next = aiSingleWithAnalysisV613(target, text);
-      patch(loc.bank.questions, loc.index, next);
-      patch(loc.bank, 'updatedAt', now());
-      (practiceSession.current.items || []).forEach(/* 练习中也要更新对应题目，原会话字段留在包装对象中。 */ (value, index) => {
-        const q = practiceQuestionV8916(value);
-        if (practiceItemBankIdV8916(value) === loc.bankId && q?.id === target.id) {
-          if (value.question && typeof value.question === 'object') {
-            patch(value, 'question', aiSingleWithAnalysisV613(q, text));
-          } else {
-            patch(practiceSession.current.items, index, aiSingleWithAnalysisV613(q, text));
-          }
-        }
-      });
-
-      (examSession.current.items || []).forEach(/* 同步考试会话中的对应题目，供交卷后查看已保存的解析。 */ (value, index) => {
-        const q = examQuestionV113(value);
-        if (practiceItemBankIdV8916(value) === loc.bankId && q?.id === target.id) {
-          if (value.question && typeof value.question === 'object') {
-            patch(value, 'question', aiSingleWithAnalysisV613(q, text));
-          } else {
-            patch(examSession.current.items, index, aiSingleWithAnalysisV613(q, text));
-          }
-        }
-      });
-
-      (state.wrongBook[loc.bankId] || []).forEach((entry) => {
-        if (entry.id === target.id && entry.nativeQuestion) {
-          patch(entry, 'nativeQuestion', aiSingleWithAnalysisV613(entry.nativeQuestion, text));
-        }
-      });
-
-      const favorite = state.crossPlatformMeta?.favoriteQuestions?.[loc.bankId]?.[target.id];
-      if (favorite?.question) {
-        patch(favorite, 'question', aiSingleWithAnalysisV613(favorite.question, text));
-      }
-
-      try {
-        await saveSilent();
-      } catch {
-        for (const change of patches.reverse()) {
-          if (change.had) {
-            change.object[change.property] = change.old;
-          } else {
-            delete change.object[change.property];
-          }
-        }
-
-        session.error = '保存失败，本地题库改动已回滚，AI 草稿仍保留。请检查本地存储空间后重试。';
-        session.notice = '';
-        render();
-        return false;
-      }
-
-      session.error = '';
-      session.notice = '已写入题库解析，可在题库管理与导出中看到。';
-      if (reviewSession) {
-        session.saved = true;
-        render();
-        return true;
-      }
-
-      const q = practiceQuestionV8916(item);
-      const st = getPracticeAnswerStateV26(key);
-      // 保存解析不代表提交答案；总提交和未进入自评的简答题继续保留答题草稿。
-      if (practiceSession.current.submitMode === 'total') {
-        renderPracticeAiPanelV613();
-      } else if (q.type === 'short' && !st.answered && $('#p-self-right')) {
-        showSubjectiveFeedback(item, st.chosen || [], !!st.revealed);
-      } else if (st.answered || st.revealed) {
-        showAnsweredStateV26(q, st);
-      } else {
-        renderPracticeAiPanelV613();
-      }
-
-      showNotice('AI 单题解析', '已写入本题题库解析。', 'ok');
-      return true;
-    });
-  }
-  /* SHIROHA_WEB_PRACTICE_AI_SINGLE_QUESTION_V613_END */
-
-  // 复盘按来源定位原题，题库已删除时仍可使用历史题目。
-  function reviewAnalysisSource(item) {
-    const q = practiceQuestionV8916(item);
-    const bankId = item.bankId || '';
-    const bank = state.banks.find((value) => value.id === bankId) || null;
-    return { q, bankId, bank, index: bank ? (bank.questions || []).findIndex((value) => value.id === q.id) : -1 };
   }
 
   /* SHIROHA_WEB_V24_CROSS_PLATFORM_NATIVE_INTEROP */

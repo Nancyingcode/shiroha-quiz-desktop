@@ -246,3 +246,24 @@ Web 的资源失败和保存失败使用隔离浏览器夹具注入。Windows �
 | 文档与差异 | `pnpm run lint:docs`、本计划的 UTF-8、围栏与本地链接检查、`git diff --check` 通过。 |
 
 首次定向运行的退出夹具缺少假凭据的脱敏回调，补齐后原断言通过。首次全量 lint 发现新回调缺少用途说明及测试箭头函数的排版问题，修正后通过。AI 验证使用隔离浏览器和 WebView2 配置、假凭据、本地模拟服务和假 CLI。
+
+### 第十六批 · AI 单题解析写回
+
+- 负责人为 `batch16_analysis_save`（GPT-6.2-Sol Max）。从第十五批冻结的工作树继续，分支为 `codex/web-app-remaining`，工作树为 `C:/Users/30728/.codex/worktrees/31f4/shiroha-quiz-desktop`，`HEAD` 为 `ac4f4c64adc773040eb2b06bf5831003c2803ab0`。`app.js` 从 3,255 行、79 个入口闭包内直接声明的具名函数减至 3,126 行、76 个，末尾启动点唯一。
+- [解析写回](../../../apps/web/ai/analysis-save.js)为练习与复盘共用。保存固定点击时的来源库、题目 ID、指纹、草稿文本与会话版本，重试重新补读同一来源。确认覆盖后重新定位原题并核对解析版本。应用负责原生读取、事务与按修订回滚，会话继续拥有生成、追问、取消和忙碌状态。[问题会话](../../../apps/web/ai-question-sessions.js) · [应用入口](../../../apps/web/app.js)
+- 新解析及富文本特征按来源和指纹同步到相应的练习、考试、错题与收藏副本。各副本保留自身的分值、题干、选项和扩展。历史训练记录保留原快照与成绩。总提交及简答自评仍由原答题入口完成。补读或确认期间来源变化、删除及取消覆盖均零写入，保留可处理的草稿。若故障发生时存储修订已推进，界面报告已保存及刷新失败，重载可读取新解析。[快照与确认回归](../../../test/dual-platform/analysis-save.test.cjs) · [复盘来源回归](../../../test/dual-platform/review-options.test.cjs)
+- 六条真实按钮回归先红后绿。原实现对第一题保存失败后的全局重试曾写入第二题草稿，练习切题返回会接到迟到解析，同题来回切换期间的迟到重生成会覆盖已完成草稿。复盘离开再打开后，旧补读还能发起保存，错题本离开后仍接到迟到重生成，正文已变的错题和收藏快照也处在同 ID 的写回范围。修复后，旧保存入口失效时零写入，回到原题可明确保存。换题与离页使在途回包失效，已完成的解析与追问由会话保留。[练习按钮回归](../../../test/web-ai-practice/cases.cjs) · [复盘按钮回归](../../../test/web-ai-practice/training-review-analysis.cjs) · [错题按钮回归](../../../test/web-ai-practice/wrong-analysis.cjs)
+
+本批在 Windows 10（19045）、Node 24.22.2、pnpm 12.16.1 和 Rust 1.99.1 上验证。日志位于 `apps/desktop/.reports/batch16/`，包含原实现红测、首次 lint 诊断及各门禁结果。首次 lint 的解构、空行和函数说明修正后通过。原生覆盖夹具会撤销凭据，烟测通过实际 AI 设置按钮重新配置本机模拟服务的假凭据，相关脚本再通过类型检查和 ESLint。
+
+| 验证项 | 实际命令与结果 |
+| --- | --- |
+| 定向回归 | `node --test` 运行写回、复盘、训练记录、退出、加载与 AI 相关回归，211 项通过。HTTP 复盘和本地 HTML 定向浏览器回归 3 项通过。 |
+| 类型与 lint | 在 `apps/desktop` 运行 `pnpm run typecheck` 和 `pnpm run lint`，均通过。检查 190 个手写 JavaScript 文件，规则夹具 99 项通过，1 项因临时目录不区分大小写跳过。 |
+| 完整 Node 与 Web | `pnpm test` 桌面 293 项通过、1 项环境跳过，共享 531 项通过。`pnpm run test:web-platform` 269 项全部通过，含直接打开本地 HTML 的脚本顺序与加载检查。 |
+| 单题 AI 端到端 | 从仓库根目录运行 `node test/web-ai-practice/runner.cjs`，以已有 Playwright 和显式 `--executable-path` 指向本机 Edge，58 项通过。覆盖练习和复盘的主动生成、迟到响应、覆盖确认、富文本、写入故障及已提交后的异常反馈。 |
+| 桌面资源与构建 | `pnpm run prepare:web`、`pnpm run build`、`pnpm run build:test` 依次通过。使用进程级 `CARGO_NET_OFFLINE=true`，生产构建借用本工作树目标缓存。五份改动的 Web 脚本与桌面生成文件 SHA-256 一致，Web 与桌面 HTML 各加载一次。 |
+| WebView2 与 SQLite | `pnpm run test:desktop` 63 项通过。训练复盘用例注入一次保存失败，原修订与 SQLite 快照保持，草稿可从全局按钮重试。两次写入尝试只推进一次修订。重载后原题和对应错题、收藏副本具有新解析，各副本原分值和扩展、同 ID 旁库以及历史记录保留。 |
+| 文档与差异 | `pnpm run lint:docs`、本计划的 UTF-8、围栏、链接与第十五批前缀检查，以及 `git diff --check` 通过。 |
+
+验收使用自建题库、假凭据、隔离浏览器和 WebView2 配置，以及拦截的 AI 响应或本机模拟服务。实际远端 AI 服务和安装升级属于独立验收范围。

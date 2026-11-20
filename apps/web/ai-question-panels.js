@@ -115,12 +115,14 @@
       }
 
       const item = currentPracticeItemV8916();
+      const key = item ? practiceItemKeyV8916(item) : null;
+      practiceAiSessions.select($('#practice')?.classList.contains('active') ? key : null);
       if (!item) {
         box.innerHTML = '';
         return;
       }
 
-      const q = practiceQuestionV8916(item); const key = practiceItemKeyV8916(item); const st = getPracticeAnswerStateV26(key);
+      const q = practiceQuestionV8916(item); const st = getPracticeAnswerStateV26(key);
       if (!aiSingleAllowedV613(item)) {
         box.innerHTML = '';
         return;
@@ -369,6 +371,20 @@
       reviewAiSessions.retain(mounted);
     }
 
+    // 保留离开后可继续使用的复盘草稿，并让当前页的挂载拒收旧请求。
+    function cancelPendingReviewAnalysis(view) {
+      const panels = view.querySelectorAll('[data-review-analysis]');
+      if (!panels.length) {
+        return;
+      }
+
+      panels.forEach((panel) => {
+        reviewAiSessions.cancelPending(panel.dataset.reviewAnalysis);
+      });
+
+      updateReviewAnalysisPanels();
+    }
+
     // 只路由当前已挂载解析区的操作，写入期间保留草稿与正在保存的状态。
     async function handleReviewAnalysisClick(event) {
       const button = event.target.closest?.('[data-review-ai]'); const panel = button?.closest('[data-review-analysis]');
@@ -422,7 +438,15 @@
       document.addEventListener('click', handleReviewAnalysisClick);
     }
 
-    return { aiSingleAllowedV613, aiSingleConfigV613, renderPracticeAiPanelV613, renderReviewAnalysis, updateReviewAnalysisPanels, bindReviewAnalysisEvents };
+    return {
+      aiSingleAllowedV613,
+      aiSingleConfigV613,
+      renderPracticeAiPanelV613,
+      renderReviewAnalysis,
+      updateReviewAnalysisPanels,
+      bindReviewAnalysisEvents,
+      cancelPendingReviewAnalysis,
+    };
   }
 
   globalThis.ShirohaAiQuestionPanels = { create };

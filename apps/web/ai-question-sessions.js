@@ -20,12 +20,29 @@
     // 草稿和控制器属于当前练习轮次；重置或来源题变化后释放。
     const sessions = new Map();
     let practiceOwner = null;
+    // 同一轮可以返回旧题，选中版本仍会在切换时推进，供保存重试核对触发位置。
+    let selectedKey = null;
+    let selectionVersion = 0;
 
+    // 新轮次放弃原来的请求、草稿和选择版本。
     function reset() {
       sessions.forEach((session) => session.controller?.abort());
 
       sessions.clear();
       practiceOwner = null;
+      selectedKey = null;
+      selectionVersion += 1;
+    }
+
+    // 会话生命周期随练习轮次走，界面重绘可以继续复用同一轮的草稿。
+    function ownPractice() {
+      const owner = practice.current();
+      if (practiceOwner !== owner) {
+        reset();
+        practiceOwner = owner;
+      }
+
+      return owner;
     }
 
     // 每次来源变化都建立独立草稿，重置请求计数与控制器。
@@ -48,12 +65,7 @@
 
     // 只复用同一轮次且来源指纹相同的草稿。
     function getSession(key) {
-      const currentPractice = practice.current();
-      if (practiceOwner !== currentPractice) {
-        reset();
-        practiceOwner = currentPractice;
-      }
-
+      const currentPractice = ownPractice();
       const item = (currentPractice.items || []).find((value) => question.key(value) === key);
       const fingerprint = question.fingerprint(item);
       const previous = sessions.get(key);
@@ -70,12 +82,28 @@
     }
 
     // 撤销本次请求的所有权，保留已生成的解析和用户输入。
-    function stop(session) {
+    function cancelRequest(session) {
       // eslint-disable-next-line no-plusplus -- 会话可由调用方修改，保留字符串和 BigInt 的转换；限定请求号类型后移除此例外。
       session.requestId++;
       session.controller?.abort();
       session.controller = null;
       session.loading = '';
+    }
+
+    // 换题或离页废弃在途请求，返回本题时仍可使用已经完成的解析和追问。
+    function select(key = null) {
+      ownPractice();
+      if (selectedKey === key) { return; }
+
+      selectedKey = key;
+      selectionVersion += 1;
+      for (const [sessionKey, session] of sessions) {
+        if (sessionKey !== key && session.loading) { cancelRequest(session); }
+      }
+    }
+
+    function stop(session) {
+      cancelRequest(session);
       session.notice = '已请求停止，已有解析和草稿已保留；请等待任务结束后重试。';
       view.render();
     }
@@ -270,6 +298,9 @@
 
     return {
       reset,
+      select,
+      selectionVersion: () => selectionVersion,
+
       getSession,
       stop,
       runAnalysis,
@@ -294,10 +325,20 @@
       const session = sessions.get(key);
       if (!session) { return; }
 
+      cancelPending(session);
+      sessions.delete(key);
+    }
+
+    // 页面离开时撤销在途请求与旧的保存意图，保留已完成的草稿供返回后明确保存。
+    function cancelPending(session) {
+      if (!session) { return; }
+
       // eslint-disable-next-line no-plusplus -- 会话可由调用方修改，保留字符串和 BigInt 的转换；限定请求号类型后移除此例外。
       session.requestId++;
       session.controller?.abort();
-      sessions.delete(key);
+      session.controller = null;
+      session.loading = '';
+      session.saving = false;
     }
 
     // 将作答独立复制给复盘草稿，便于判断后来发生的作答修改。
@@ -425,33 +466,28 @@
       }
     }
 
-    // 落库前按需读取来源题，读取失败时保留当前草稿。
+    // 复盘会话负责保存期间的忙碌和所有权，共享写回会在异步读取后再次检查。
     async function save(session) {
       if (session.loading || session.saving || !session.analysis) { return; }
+
+      const { requestId } = session;
+      const ownsDraft = () => sessions.get(session.key) === session && session.requestId === requestId;
 
       session.saving = true;
       view.render();
       try {
-        const source = question.source(session.item);
-        if (source.bank && source.index >= 0 && !await storage.load([session.item])) {
-          session.error = '读取来源题目失败，草稿已保留，请重试。';
-          return;
-        }
-
-        await storage.save(session);
+        await storage.save(session, ownsDraft);
       } finally {
-        session.saving = false;
-        view.render();
+        if (ownsDraft()) {
+          session.saving = false;
+          view.render();
+        }
       }
     }
 
     // 停止复盘请求并保留用户仍可保存或放弃的草稿。
     function stop(session) {
-      // eslint-disable-next-line no-plusplus -- 会话可由调用方修改，保留字符串和 BigInt 的转换；限定请求号类型后移除此例外。
-      session.requestId++;
-      session.controller?.abort();
-      session.controller = null;
-      session.loading = '';
+      cancelPending(session);
       session.notice = '已停止生成，已有草稿已保留。';
     }
 
@@ -467,6 +503,8 @@
       getOrCreate,
       remove,
       retain,
+      cancelPending: (key) => cancelPending(sessions.get(key)),
+
       run,
       save,
       stop,
