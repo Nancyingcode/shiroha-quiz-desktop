@@ -322,10 +322,24 @@ test('今日错题复习：首页范围、键盘启动、跨库顺序和答题�
   page.removeAllListeners('app-dialog');
   await start.click();
   await page.locator('#app-dialog[open]').waitFor();
+  assert.match(await page.locator('#app-dialog').innerText(), /当前练习尚未保存为记录/);
   await page.locator('#app-dialog [data-dialog-cancel]').click();
   assert.equal(await page.locator('#dashboard.active').count(), 1);
+  assert.equal(await start.evaluate((button) => button === globalThis.document.activeElement), true);
   await page.locator('.nav[data-view="practice"]').click();
   assert.match(await page.locator('#practice-card').innerText(), /第二题库同 ID/);
+  assert.equal(await page.locator('#practice-progress').innerText(), '1 / 5');
+  await page.locator('#p-feedback').getByText(/回答正确/).waitFor();
+  await page.locator('#practice-pause-dialog[open]').waitFor();
+  await page.locator('#practice-resume').click();
+  await page.locator('#sidebar-toggle').click();
+  await page.locator('.nav[data-view="dashboard"]').click();
+  await start.click();
+  await page.locator('#app-dialog [data-dialog-accept]').click();
+  await page.locator('#practice-card .question-title').getByText('一加一等于多少？', { exact: true }).waitFor();
+  assert.equal(await page.locator('#practice-progress').innerText(), '1 / 4');
+  const firstAnswer = page.locator('#practice-card input:not([disabled]), #practice-card textarea:not([disabled]), #p-submit').first();
+  assert.equal(await firstAnswer.evaluate((control) => control === globalThis.document.activeElement), true);
 });
 
 test('今日错题复习：掌握状态变更和空队列刷新首页', async (t) => {
@@ -395,7 +409,11 @@ test('今日错题复习：取消大题量确认后保留之前未完成的练�
   await page.locator('#app-dialog').getByText(/题量很大|轻微卡顿/).waitFor();
   await page.locator('#app-dialog [data-dialog-cancel]').click();
   await page.locator('#practice-pause-dialog[open]').waitFor();
-  await page.locator('#practice-resume').click();
+  const resume = page.locator('#practice-resume');
+  assert.equal(await resume.evaluate((button) => button === globalThis.document.activeElement), true);
+  await resume.click();
+  assert.equal(await page.locator('body.practice-focus').count(), 1);
+  assert.equal(await page.locator('#p-pause').evaluate((button) => button === globalThis.document.activeElement), true);
   assert.equal(await page.locator('#practice-progress').innerText(), '1 / 1');
   assert.match(await page.locator('#practice-card .question-title').innerText(), /题目 0/);
 });
@@ -414,6 +432,79 @@ test('今日错题复习：本地午夜及页面恢复可见时更新数量', as
   await page.clock.setSystemTime(clockTime);
   await page.evaluate(() => globalThis.document.dispatchEvent(new globalThis.Event('visibilitychange')));
   assert.equal(await page.locator('#stat-review-due').innerText(), '0');
+});
+
+test('第十二批首页：同文档修复失败清除午夜任务，修复成功后只刷新一次', async (t) => {
+  const injection = `
+    {
+      const { storage } = globalThis.ShirohaPlatform;
+      const initialize = storage.initialize.bind(storage);
+      const read = storage.read.bind(storage);
+      let repairs = 0;
+      storage.snapshots = async () => [];
+      storage.recoverySnapshots = async () => ['fixture-recovery'];
+      storage.recover = async () => { repairs += 1; };
+      storage.initialize = () => (repairs === 1
+        ? { state: 'recovery_required', error: new Error('模拟再次启动失败') }
+        : initialize());
+      storage.read = async () => {
+        const state = await read();
+        if (repairs === 2) { state.wrongBook = { 'bank-a': ['same-id'] }; }
+        return state;
+      };
+      const timers = { pending: new Set(), scheduled: 0 };
+      const schedule = globalThis.setTimeout;
+      const clear = globalThis.clearTimeout;
+      globalThis.__dashboardTimers = timers;
+      globalThis.setTimeout = (callback, delay, ...args) => {
+        const id = schedule(callback, delay, ...args);
+        // 测试时钟固定在上午，其他页面操作的短计时不参与午夜任务计数。
+        if (delay >= 60 * 60 * 1000) {
+          timers.pending.add(id);
+          timers.scheduled += 1;
+        }
+        return id;
+      };
+      globalThis.clearTimeout = (id) => {
+        timers.pending.delete(id);
+        clear(id);
+      };
+    }
+  `;
+  const page = await pageFor(t, JSON.stringify(webState()), injection, null, {}, new Date(2026, 10, 17, 9));
+  const readTimers = () => page.evaluate(() => {
+    const { pending, scheduled } = globalThis.__dashboardTimers;
+    return { pending: pending.size, scheduled };
+  });
+  const repair = async (panel) => {
+    await panel.getByRole('button', { name: '查找本机恢复点', exact: true }).click();
+    await panel.getByLabel('修复使用的恢复点').selectOption('fixture-recovery');
+    await panel.getByRole('button', { name: '从恢复点修复数据', exact: true }).click();
+  };
+  const refreshVisibility = () => page.evaluate(() => {
+    globalThis.document.dispatchEvent(new globalThis.Event('visibilitychange'));
+  });
+  const ready = page.locator('body[data-storage-state="ready"]');
+  await ready.waitFor();
+  assert.equal((await readTimers()).pending, 1);
+  assert.equal(await page.locator('#stat-review-due').innerText(), '0');
+  await page.locator('.nav[data-view="settings"]').click();
+  const tools = page.locator('#native-recovery-panel details');
+  await tools.getByText('数据无法读取时修复', { exact: true }).click();
+  await repair(tools);
+  await page.locator('body[data-storage-state="recovery_required"]').waitFor();
+  const failed = await readTimers();
+  assert.equal(failed.pending, 0);
+  await refreshVisibility();
+  assert.deepEqual(await readTimers(), failed);
+  await repair(page.locator('#platform-status'));
+  await ready.waitFor();
+  await page.locator('.nav[data-view="dashboard"]').click();
+  assert.equal(await page.locator('#stat-review-due').innerText(), '1');
+  const recovered = await readTimers();
+  assert.equal(recovered.pending, 1);
+  await refreshVisibility();
+  assert.deepEqual(await readTimers(), { pending: 1, scheduled: recovered.scheduled + 1 });
 });
 
 test('今日错题复习：离开后旧正文读取失败不启动练习或显示错误', async (t) => {
@@ -1011,25 +1102,46 @@ test('恢复后重复初始化不会重复挂载 WebDAV 面板或绑定处理器
       [globalThis.document.getElementById('edit-question'), 'edit-question'],
     ]);
     const rebound = [];
+    const released = [];
     const add = globalThis.EventTarget.prototype.addEventListener;
-    globalThis.EventTarget.prototype.addEventListener = function (type, ...args) {
-      if (targets.has(this)) { rebound.push(`${targets.get(this)}:${type}`); }
-      return add.call(this, type, ...args);
+    const remove = globalThis.EventTarget.prototype.removeEventListener;
+    globalThis.EventTarget.prototype.addEventListener = function (type, listener, ...args) {
+      if (targets.has(this)) {
+        rebound.push({ event: `${targets.get(this)}:${type}`, listener });
+      }
+      return add.call(this, type, listener, ...args);
+    };
+    globalThis.EventTarget.prototype.removeEventListener = function (type, listener, ...args) {
+      if (targets.has(this)) {
+        released.push({ event: `${targets.get(this)}:${type}`, listener });
+      }
+      return remove.call(this, type, listener, ...args);
     };
     try {
       await globalThis.__repeatAppStart();
     } finally {
       globalThis.EventTarget.prototype.addEventListener = add;
+      globalThis.EventTarget.prototype.removeEventListener = remove;
     }
     return {
       panels: globalThis.document.querySelectorAll('#webdav-panel-v378').length,
       modals: globalThis.document.querySelectorAll('#webdav-restore-modal-v378').length,
       sameButton: globalThis.document.getElementById('webdav-test-v378') === button,
       sameHandler: button.onclick === previousHandler,
-      rebound,
+      rebound: rebound.map(({ event }) => event),
+      released: released.map(({ event }) => event),
+      sameVisibilityHandler: rebound[0]?.listener === released[0]?.listener,
     };
   });
-  assert.deepEqual(result, { panels: 1, modals: 1, sameButton: true, sameHandler: true, rebound: [] });
+  assert.deepEqual(result, {
+    panels: 1,
+    modals: 1,
+    sameButton: true,
+    sameHandler: true,
+    rebound: ['document:visibilitychange'],
+    released: ['document:visibilitychange'],
+    sameVisibilityHandler: true,
+  });
 });
 
 for (const mode of ['merge', 'overwrite']) {
@@ -3189,6 +3301,11 @@ test('file URL 支持 ZIP 与文本导入且不依赖可选 PDF/OCR', async (t) 
   assert.equal(scripts.filter((script) => script === savedQuestionsScript).length, 1);
   assert(savedQuestionsIndex >= 0 && savedQuestionsIndex < scripts.indexOf('./saved-questions-page.js'));
   assert.equal(await page.evaluate(() => typeof globalThis.ShirohaSavedQuestions.create), 'function');
+  const dashboardScript = './study/dashboard.js';
+  const dashboardIndex = scripts.indexOf(dashboardScript);
+  assert.equal(scripts.filter((script) => script === dashboardScript).length, 1);
+  assert(dashboardIndex > scripts.indexOf('./practice-selection.js') && dashboardIndex < appIndex);
+  assert.equal(await page.evaluate(() => typeof globalThis.ShirohaStudyDashboard.create), 'function');
   assert.equal(await page.locator('#home-practice-scope-v8916 b').count(), 1);
   for (const name of ['./quiz-core.js', './text-answers.js', './text-parser.js', './backup-core.js', './zip.js', './backup-archive.js', './backup-data.js', './webdav-panel.js', './docx-import.js', './pdf-import.js', './ocr-import.js', './table-import.js', './import-preview.js', './ai-results.js', './ai-import-sessions.js', './ai-question-sessions.js', './ai-settings.js', './ai-transport.js', './ai-prompts.js', './question-view.js', './bank-page.js', './saved-questions-page.js', './training-review-page.js', './bank-editor.js', './study-sessions.js', './exam-page.js', './practice-selection.js', './practice-page.js', './ai-import-panel.js', './ai-question-panels.js', './question-editor.js']) {
     assert(scripts.indexOf(name) >= 0 && scripts.indexOf(name) < appIndex);

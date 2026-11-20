@@ -185,10 +185,6 @@
     renderAll,
     toast,
   });
-  // 首页的午夜刷新计时器随页面存活；每次统计重绘时替换，避免累积任务。
-  let dueReviewTimer = null;
-  let dueReviewVisibilityBound = false;
-
   function beginNativeRender(view) {
     const version = (nativeRenderVersions.get(view) || 0) + 1;
     nativeRenderVersions.set(view, version);
@@ -1025,6 +1021,38 @@
       save: saveSilent,
     },
   });
+  const studyDashboard = globalThis.ShirohaStudyDashboard.create({
+    select: $,
+    data: {
+      records: () => state.records,
+
+      scopeBanks: practiceScopeBanksV8916,
+      wrongEntries: savedQuestions.getWrongEntries,
+      dueReviewItems,
+    },
+    application: {
+      isReady: () => applicationReady,
+
+      isBusy: () => mutationBusy,
+
+      switchView: switchViewV45,
+    },
+    practice: {
+      current: () => practiceSession.current,
+
+      fromStart: PRACTICE_START_FROM_V58916,
+      syncStartUi: syncPracticeStartUiV58916,
+      start: () => startPractice(),
+
+      enterFocus: () => enterPracticeFocus(),
+
+      renderQuestion: () => renderPracticeQuestion(),
+    },
+    confirm: (message) => ShirohaDialogs.confirm(message),
+
+    toast,
+  });
+  const { renderStats } = studyDashboard;
   const practicePage = globalThis.ShirohaPracticePage.create({
     state,
     session: practiceSession,
@@ -1878,17 +1906,7 @@
 
     $('#restore-import-draft-btn').onclick = importDraftPersistence.restore;
     $('#delete-import-draft-btn').onclick = importDraftPersistence.remove;
-    $('#start-due-review').onclick = startDueReview;
-    if (!dueReviewVisibilityBound) {
-      document.addEventListener('visibilitychange', () => {
-        if (!document.hidden && applicationReady) {
-          renderStats();
-        }
-      });
-
-      dueReviewVisibilityBound = true;
-    }
-
+    studyDashboard.bind();
     $('#active-bank-select').onchange = /* 一起更新练习范围和活动题库，避免两个选择分离。 */ async (e) => runMutation(async () => {
       setPracticeBankScopeV8916(e.target.value, true);
       await saveSilent();
@@ -2401,109 +2419,6 @@
     }
 
     list.innerHTML = groupSuggestions(state.banks).map((g) => `<option value="${esc(g)}"></option>`).join('');
-  }
-
-  // 日统计按本地日历日期归类，避免 UTC 跨日偏移。
-  function localDateKeyV36(value) {
-    const d = value ? new Date(value) : new Date();
-    if (Number.isNaN(d.getTime())) {
-      return '';
-    }
-
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  }
-
-  // 练习统计按本地日期归档，考试记录不计入首页的今日练习。
-  function todayPracticeStats(current) {
-    const today = localDateKeyV36(current);
-    const practiceRecords = (state.records || []).filter((r) => r && r.mode === '练习');
-    const todayPractice = practiceRecords.filter((r) => localDateKeyV36(r.date) === today);
-    const todayAnswered = todayPractice.reduce((n, r) => n + Number(r.answered || 0), 0);
-    const todayCorrect = todayPractice.reduce((n, r) => n + Number(r.correct || 0), 0);
-    return { todayAnswered, todayCorrect, practiceRecords };
-  }
-
-  // 本地零点会改变今日待复习范围，始终只保留下一次刷新任务。
-  function scheduleDueReviewRefresh(current) {
-    const nextDay = new Date(current.getFullYear(), current.getMonth(), current.getDate() + 1);
-    if (dueReviewTimer !== null) {
-      clearTimeout(dueReviewTimer);
-    }
-
-    dueReviewTimer = setTimeout(renderStats, Math.max(1, nextDay.getTime() - current.getTime()));
-  }
-
-  // 按当前练习范围和本地日期刷新首页题量、错题及训练摘要。
-  function renderStats() {
-    const current = new Date();
-    const scopeBanks = practiceScopeBanksV8916();
-    const totalQuestions = scopeBanks.reduce((n, b) => n + (b.questions || []).length, 0);
-    const activeWrongEntries = scopeBanks.flatMap((b) => savedQuestions.getWrongEntries(b.id)
-      .filter((e) => e.status !== '已掌握'));
-    $('#stat-total').textContent = totalQuestions;
-    $('#stat-wrong').textContent = activeWrongEntries.length;
-    $('#stat-records').textContent = state.records.length;
-    const { todayAnswered, todayCorrect, practiceRecords } = todayPracticeStats(current);
-    const setText = (id, val) => {
-      const el = $(id);
-      if (el) {
-        el.textContent = val;
-      }
-    };
-
-    setText('#stat-today-count', todayAnswered);
-    setText('#stat-today-rate', todayAnswered ? `${Math.round(todayCorrect / todayAnswered * 100)}%` : '—');
-    const dueCount = dueReviewItems(undefined, current).length;
-    setText('#stat-review-due', dueCount);
-    const dueButton = $('#start-due-review');
-    if (dueButton) {
-      dueButton.disabled = dueCount === 0;
-      dueButton.setAttribute('aria-label', `待复习错题 ${dueCount} 道，开始复习`);
-    }
-
-    setText('#stat-total-practice', practiceRecords.length);
-    scheduleDueReviewRefresh(current);
-  }
-
-  // 从首页进入今日错题练习，并在确认期间检测页面或轮次是否已变更。
-  async function startDueReview() {
-    if (!applicationReady || mutationBusy || !$('#dashboard')?.classList.contains('active')) {
-      return;
-    }
-
-    if (!dueReviewItems().length) {
-      renderStats();
-      toast('当前范围暂无待复习错题。', 'warn');
-      return;
-    }
-
-    const previous = practiceSession.current;
-    if (previous.items?.length && !previous.completed) {
-      const accepted = await ShirohaDialogs.confirm('当前练习尚未保存为记录，开始今日错题复习会放弃本轮进度。是否继续？');
-      if (!accepted || practiceSession.current !== previous || !$('#dashboard')?.classList.contains('active') || mutationBusy) {
-        return;
-      }
-    }
-
-    await switchViewV45('practice', false);
-    if (!applicationReady || mutationBusy || !$('#practice')?.classList.contains('active')) {
-      return;
-    }
-
-    $('#practice-source').value = 'due';
-    $('#practice-type').value = 'all';
-    $('#practice-order').value = 'sequence';
-    $('#practice-submit-mode').value = 'single';
-    $('#practice-limit').value = 'all';
-    $('#practice-start-mode-v58916').value = PRACTICE_START_FROM_V58916;
-    syncPracticeStartUiV58916(false);
-    await startPractice();
-    if (practiceSession.current !== previous && practiceSession.current.items?.length) {
-      $('#practice-card input:not([disabled]), #practice-card textarea:not([disabled]), #p-submit')?.focus();
-    } else if (practiceSession.current === previous && previous.items?.length && !previous.completed && $('#practice')?.classList.contains('active')) {
-      enterPracticeFocus();
-      renderPracticeQuestion();
-    }
   }
 
   function label(t) {
@@ -4195,6 +4110,7 @@ D. 高速通过积水路段`;
     applicationStarted = true;
     applicationGeneration += 1;
     const generation = applicationGeneration;
+    studyDashboard.stop();
     lockApplication(true);
     document.body.dataset.storageState = 'loading';
     platformStatus('正在读取本地数据…');
@@ -4241,6 +4157,7 @@ D. 高速通过积水路段`;
       }
     } catch (error) {
       applicationReady = false;
+      studyDashboard.stop();
       document.body.dataset.storageState = 'recovery_required';
       retryMutation = startApplication;
       platformStatus(error?.message || '数据加载失败，原数据已保留。', true);

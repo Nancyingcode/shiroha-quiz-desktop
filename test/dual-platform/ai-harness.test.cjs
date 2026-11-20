@@ -1,7 +1,7 @@
 'use strict';
 const { installAiTransport } = require('./ai-transport-helper.cjs');
 const { installAiSettings } = require('./ai-settings-helper.cjs');
-const { loadWebSource } = require('./source-tools.cjs');
+const { loadWebSource, runWebScripts } = require('./source-tools.cjs');
 
 const assert = require('node:assert/strict');
 const { readFileSync } = require('node:fs');
@@ -202,6 +202,12 @@ test('等待检查期间选择未接入的提供方后停止等待轮询', async
   assert.equal(clock.timers.size, 0);
 });
 
+function installApplicationStartup(context) {
+  runWebScripts(context, ['study/dashboard.js']);
+  context.studyDashboard = context.ShirohaStudyDashboard.create({ data: {} });
+  vm.runInContext(loadWebSource().functionSource('startApplication'), context);
+}
+
 test('AI 设置读取缓慢时题库先可用，核验完成后再启动后台检查', async () => {
   const pending = deferred(); let unlocked = false; let checks = 0;
   const context = vm.createContext({
@@ -228,7 +234,7 @@ test('AI 设置读取缓慢时题库先可用，核验完成后再启动后台�
     init() {},
     warnDev() {},
   });
-  vm.runInContext(loadWebSource().functionSource('startApplication'), context);
+  installApplicationStartup(context);
   const starting = context.startApplication();
   try {
     await settleUi();
@@ -265,7 +271,7 @@ test('恢复发生在旧启动读取期间时，不启动旧生命周期的自�
     platformStatus() {},
     init() {},
   });
-  vm.runInContext(loadWebSource().functionSource('startApplication'), context);
+  installApplicationStartup(context);
   await context.startApplication(); await context.startApplication();
   first.resolve(); restored.resolve(); await settleUi();
   assert.equal(checks, 0);

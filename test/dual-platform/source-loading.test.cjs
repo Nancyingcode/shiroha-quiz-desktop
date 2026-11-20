@@ -175,7 +175,7 @@ test('关闭钩子支持格式化后的条件块，拒绝缺失或重复定位',
 test('共享脚本在同一沙箱按显式次序加载，不允许越界路径', () => {
   const context = vm.createContext({});
   const loaded = [];
-  const names = ['ShirohaPlatformValidation', 'ShirohaBrowser', 'ShirohaTraining', 'ShirohaQuizCore', 'ShirohaTextAnswers', 'ShirohaRichContent', 'ShirohaTextParser', 'ShirohaDualAnswers', 'ShirohaBackupCore', 'ShirohaZip', 'ShirohaBackupArchive', 'ShirohaBackupData', 'ShirohaBackupExport', 'ShirohaBackupRestore', 'ShirohaWebdavPanel', 'ShirohaDocx', 'ShirohaPdf', 'ShirohaOcrImport', 'ShirohaTableImport', 'ShirohaImportPreview', 'ShirohaAiResults', 'ShirohaAiImportSessions', 'ShirohaAiQuestionSessions', 'ShirohaAiSettings', 'ShirohaAiTransport', 'ShirohaAiPrompts', 'ShirohaQuestionView', 'ShirohaBankPage', 'ShirohaBankMetadata', 'ShirohaBankQuestionOperations', 'ShirohaBankDeletion', 'ShirohaSavedQuestions', 'ShirohaSavedQuestionsPage', 'ShirohaTrainingReviewPage', 'ShirohaBankEditor', 'ShirohaStudyScope', 'ShirohaStudySessions', 'ShirohaExamPage', 'ShirohaPracticeSelection', 'ShirohaPracticePage', 'ShirohaAiImportPanel', 'ShirohaAiQuestionPanels', 'ShirohaQuestionEditor', 'ShirohaImportFindReplace'];
+  const names = ['ShirohaPlatformValidation', 'ShirohaBrowser', 'ShirohaTraining', 'ShirohaQuizCore', 'ShirohaTextAnswers', 'ShirohaRichContent', 'ShirohaTextParser', 'ShirohaDualAnswers', 'ShirohaBackupCore', 'ShirohaZip', 'ShirohaBackupArchive', 'ShirohaBackupData', 'ShirohaBackupExport', 'ShirohaBackupRestore', 'ShirohaWebdavPanel', 'ShirohaDocx', 'ShirohaPdf', 'ShirohaOcrImport', 'ShirohaTableImport', 'ShirohaImportPreview', 'ShirohaAiResults', 'ShirohaAiImportSessions', 'ShirohaAiQuestionSessions', 'ShirohaAiSettings', 'ShirohaAiTransport', 'ShirohaAiPrompts', 'ShirohaQuestionView', 'ShirohaBankPage', 'ShirohaBankMetadata', 'ShirohaBankQuestionOperations', 'ShirohaBankDeletion', 'ShirohaSavedQuestions', 'ShirohaSavedQuestionsPage', 'ShirohaTrainingReviewPage', 'ShirohaBankEditor', 'ShirohaStudyScope', 'ShirohaStudySessions', 'ShirohaExamPage', 'ShirohaPracticeSelection', 'ShirohaStudyDashboard', 'ShirohaPracticePage', 'ShirohaAiImportPanel', 'ShirohaAiQuestionPanels', 'ShirohaQuestionEditor', 'ShirohaImportFindReplace'];
   for (const name of names) {
     Object.defineProperty(context, name, {
       configurable: true,
@@ -185,7 +185,7 @@ test('共享脚本在同一沙箱按显式次序加载，不允许越界路径',
       },
     });
   }
-  runWebScripts(context, ['platform/validation.js', 'platform/browser.js', 'training.js', 'quiz-core.js', 'text-answers.js', 'questions/rich-content.js', 'text-parser.js', 'import/dual-answers.js', 'backup-core.js', 'zip.js', 'backup-archive.js', 'backup-data.js', 'backup/export.js', 'backup/restore.js', 'webdav-panel.js', 'docx-import.js', 'pdf-import.js', 'ocr-import.js', 'table-import.js', 'import-preview.js', 'ai-results.js', 'ai-import-sessions.js', 'ai-question-sessions.js', 'ai-settings.js', 'ai-transport.js', 'ai-prompts.js', 'question-view.js', 'bank-page.js', 'banks/metadata.js', 'banks/question-operations.js', 'banks/deletion.js', 'study/saved-questions.js', 'saved-questions-page.js', 'training-review-page.js', 'bank-editor.js', 'study/scope.js', 'study-sessions.js', 'exam-page.js', 'practice-selection.js', 'practice-page.js', 'ai-import-panel.js', 'ai-question-panels.js', 'question-editor.js', 'import/find-replace.js', 'import/commit.js']);
+  runWebScripts(context, ['platform/validation.js', 'platform/browser.js', 'training.js', 'quiz-core.js', 'text-answers.js', 'questions/rich-content.js', 'text-parser.js', 'import/dual-answers.js', 'backup-core.js', 'zip.js', 'backup-archive.js', 'backup-data.js', 'backup/export.js', 'backup/restore.js', 'webdav-panel.js', 'docx-import.js', 'pdf-import.js', 'ocr-import.js', 'table-import.js', 'import-preview.js', 'ai-results.js', 'ai-import-sessions.js', 'ai-question-sessions.js', 'ai-settings.js', 'ai-transport.js', 'ai-prompts.js', 'question-view.js', 'bank-page.js', 'banks/metadata.js', 'banks/question-operations.js', 'banks/deletion.js', 'study/saved-questions.js', 'saved-questions-page.js', 'training-review-page.js', 'bank-editor.js', 'study/scope.js', 'study-sessions.js', 'exam-page.js', 'practice-selection.js', 'study/dashboard.js', 'practice-page.js', 'ai-import-panel.js', 'ai-question-panels.js', 'question-editor.js', 'import/find-replace.js', 'import/commit.js']);
   assert.deepEqual(loaded, names);
   assert.equal(typeof context.ShirohaPlatformValidation, 'object');
   assert.equal(typeof context.ShirohaBrowser, 'object');
@@ -237,6 +237,7 @@ test('共享脚本在同一沙箱按显式次序加载，不允许越界路径',
   assert.equal(typeof context.ShirohaStudySessions.createExam, 'function');
   assert.equal(typeof context.ShirohaExamPage.create, 'function');
   assert.equal(typeof context.ShirohaPracticeSelection.create, 'function');
+  assert.equal(typeof context.ShirohaStudyDashboard.create, 'function');
   assert.equal(typeof context.ShirohaPracticePage.create, 'function');
   assert.equal(typeof context.ShirohaAiImportPanel.create, 'function');
   assert.equal(typeof context.ShirohaAiQuestionPanels.create, 'function');
@@ -259,7 +260,7 @@ test('页面工厂装配不访问 DOM，事件绑定留给页面初始化', () =
     'question-view.js', 'bank-page.js', 'banks/metadata.js', 'banks/question-operations.js', 'banks/deletion.js',
     'study/saved-questions.js', 'saved-questions-page.js', 'training-review-page.js',
     'bank-editor.js', 'study/scope.js', 'study-sessions.js', 'exam-page.js', 'practice-selection.js',
-    'practice-page.js', 'ai-import-panel.js', 'ai-question-panels.js', 'question-editor.js',
+    'study/dashboard.js', 'practice-page.js', 'ai-import-panel.js', 'ai-question-panels.js', 'question-editor.js',
     'import/find-replace.js', 'import/dual-answers.js', 'import/commit.js',
     'backup/export.js', 'backup/restore.js',
   ]);
@@ -281,6 +282,7 @@ test('页面工厂装配不访问 DOM，事件绑定留给页面初始化', () =
     () => context.ShirohaStudyScope.create({}),
     () => context.ShirohaExamPage.create({ session: exam, question: empty, practice: empty, view: empty, storage: empty }),
     () => context.ShirohaPracticeSelection.create({ session: practice, scope: empty, questions: empty, progress: empty }),
+    () => context.ShirohaStudyDashboard.create({ data: empty }),
     () => context.ShirohaPracticePage.create({ session: practice, selection: empty, scope: empty, question: empty, review: empty, favorites: empty, ai: empty, shell: empty, storage: empty }),
     () => context.ShirohaAiImportPanel.create({ settings: empty, requests: empty, editor: empty, preview: empty, limits: empty }),
     () => context.ShirohaAiQuestionPanels.create({ session: practice, question: empty, settings: empty, actions: empty }),
