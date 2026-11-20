@@ -696,6 +696,8 @@ test('statement-per-line pilot covers zero-hit modules without affecting other f
     'apps/web/study/scope.js',
     'apps/web/study/saved-questions.js',
     'apps/web/study/dashboard.js',
+    'apps/web/ui/pagination.js',
+    'apps/web/ui/shell.js',
   ]) {
     await t.test(filePath, async () => {
       const [result] = await lint.lintText(source, { filePath });
@@ -726,6 +728,8 @@ test('the entry and extracted modules require separate lines for statements and 
     'apps/web/study/scope.js',
     'apps/web/study/saved-questions.js',
     'apps/web/study/dashboard.js',
+    'apps/web/ui/pagination.js',
+    'apps/web/ui/shell.js',
   ]) {
     const [compact] = await lint.lintText(
       `${declaration}if (button) { button.onclick = () => true; }\n`,

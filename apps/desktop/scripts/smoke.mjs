@@ -730,6 +730,18 @@ async function focusVisualSmoke(runtime, mode) {
     await page.locator(`body.${mode}-focus.side-collapsed`).waitFor({ state: 'attached' });
     for (const size of VISUAL_WINDOW_SIZES) {
       await resizeTestWindow(runtime, size);
+      await page.waitForFunction((focusMode) => {
+        const card = document.getElementById(`${focusMode}-card`);
+        const rail = card?.querySelector(`:scope > .${focusMode}-side-v31`);
+        if (!card || !(rail instanceof window.HTMLElement)) { return false; }
+        const top = rail.style.getPropertyValue('top');
+        const height = rail.style.getPropertyValue('max-height');
+        if (window.innerWidth < 1280) { return !top && !height; }
+        const offset = Math.max(12, Math.round(card.getBoundingClientRect().top));
+        // CSSOM 可以重排 calc 项，按窗口高度和下边距比较实际计算值。
+        const { maxHeight } = window.getComputedStyle(rail);
+        return top === `${offset}px` && height !== '' && maxHeight === `${window.innerHeight - offset - 18}px`;
+      }, mode);
       const question = page.locator(`#${mode}-card .question-title`).first();
       await question.scrollIntoViewIfNeeded();
       assert.match(await question.innerText(), /TAURI PROTOTYPE 1\+1 = \?/);
@@ -778,6 +790,7 @@ async function practiceAndExamFocusSmoke(runtime) {
   await page.locator('#app-dialog [data-dialog-accept]').click();
   // 手动切换会取代自动收起状态；考试不切换导航，另行覆盖退出后的自动恢复。
   await page.waitForFunction(() => !document.body.classList.contains('practice-focus') && document.body.classList.contains('side-collapsed'));
+  assert.equal(await page.evaluate(() => localStorage.getItem('shiroha-sidebar-collapsed')), '1');
   await page.locator('#sidebar-toggle').click();
   await page.locator('.nav[data-view="exam"]').click();
   await page.locator('#exam-count').fill('1');
@@ -793,8 +806,66 @@ async function practiceAndExamFocusSmoke(runtime) {
   await page.locator('#exam-exit-focus').click();
   await page.locator('#app-dialog [data-dialog-accept]').click();
   await page.waitForFunction(() => !document.body.classList.contains('exam-focus') && !document.body.classList.contains('side-collapsed'));
+  assert.equal(await page.evaluate(() => localStorage.getItem('shiroha-sidebar-collapsed')), '0');
   await page.locator('#exam-setup').waitFor({ state: 'visible' });
   return { practice, exam, manualNavigationRetained: true, automaticNavigationRestored: true };
+}
+
+/** 从真实页面启动两轮训练，检查切页只保留两轮需要的题目正文。 @param {Page} page */
+async function retainStudyBodiesSmoke(page) {
+  await page.reload();
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.locator('#active-bank-select').selectOption('lazy-a');
+  await page.locator('.nav[data-view="practice"]').click();
+  await page.locator('#practice-submit-mode').selectOption('single');
+  await page.locator('#practice-start-mode-v58916').selectOption('custom');
+  await page.locator('#practice-number-range-v58916').fill('11-12');
+  await page.locator('#start-practice-btn').click();
+  await page.locator('#practice-card .question-title').getByText('lazy-a 正文 10', { exact: true }).waitFor();
+  await page.locator('#sidebar-toggle').click();
+  await page.locator('.nav[data-view="exam"]').click();
+  await page.locator('#exam-count').fill('1');
+  await page.locator('#exam-minutes').fill('0');
+  await page.locator('#exam-order').selectOption('sequence');
+  await page.locator('#start-exam-btn').click();
+  await page.locator('#exam-card .question-title').getByText('1. lazy-a 正文 0', { exact: true }).waitFor();
+  await page.locator('#sidebar-toggle').click();
+  await page.locator('.nav[data-view="banks"]').click();
+  await page.locator('#bank-preview').getByText('lazy-a 正文 9', { exact: true }).waitFor();
+
+  await page.evaluate(() => {
+    const { storage } = /** @type {{storage: import('../../web/platform/runtime.d.ts').BrowserStorage}} */ (
+      Reflect.get(window, 'ShirohaPlatform')
+    );
+    const { releaseView } = storage;
+    if (!releaseView) { throw new Error('本地正文释放入口缺失'); }
+    const loaded = () => Object.fromEntries(['q0', 'q9', 'q10', 'q11'].map((id) => (
+      [id, storage.isQuestionLoaded?.('lazy-a', id)]
+    )));
+
+    // 读取真实适配器释放前后的缓存状态，避免 DOM 仍显示旧文字掩盖正文误释放。
+    storage.releaseView = (snapshot, keep) => {
+      const before = loaded();
+      releaseView.call(storage, snapshot, keep);
+      Reflect.set(window, '__studyBodies', { before, after: loaded(), keep });
+    };
+  });
+  await page.locator('.nav[data-view="dashboard"]').click();
+  const released = await page.evaluate(() => Reflect.get(window, '__studyBodies'));
+  assert.deepEqual(released, {
+    before: { q0: true, q9: true, q10: true, q11: true },
+    after: { q0: true, q9: false, q10: true, q11: true },
+    keep: ['q10', 'q11', 'q0'].map((questionId) => ({ bankId: 'lazy-a', questionId })),
+  });
+  await page.locator('.nav[data-view="practice"]').click();
+  await page.locator('#practice-card .question-title').getByText('lazy-a 正文 10', { exact: true }).waitFor();
+  await page.locator('#practice-resume').click();
+  await page.locator('#p-next').click();
+  await page.locator('#practice-card .question-title').getByText('lazy-a 正文 11', { exact: true }).waitFor();
+  await page.locator('#sidebar-toggle').click();
+  await page.locator('.nav[data-view="banks"]').click();
+  await page.locator('#bank-preview').getByText('lazy-a 正文 9', { exact: true }).waitFor();
+  return { practiceBodies: 2, examBodies: 1, otherBodyReleasedAndReread: true };
 }
 
 function textPdf() {
@@ -1888,6 +1959,7 @@ async function main() {
       });
       return { questions: 130, defaultPageSize: 10, pageSizes: [20, 50], directLastPage: 5, lastPage: 15, initialBodies: 0, crossBankIdentity: true };
     });
+    await check('切页释放正文时保留当前练习和考试的题目', () => retainStudyBodiesSmoke(migratedRestart.page));
     await check('自选题号同时设置题量，仅加载范围内指定数量', async () => {
       const { page } = migratedRestart;
       await page.reload();await page.locator('body[data-storage-state="ready"]').waitFor();

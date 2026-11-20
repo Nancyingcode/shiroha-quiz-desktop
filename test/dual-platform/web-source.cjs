@@ -9,7 +9,6 @@ const { webcrypto } = require('node:crypto');
 const sourcePath = path.resolve(__dirname, '../../apps/web/app.js');
 const source = loadWebSource();
 const exportedNames = [
-  'listPageNumbers', 'listPageRange',
   'short', 'shuffle',
   'parseSlashRegexV51: importFindReplace.parseSlashRegexV51',
   'buildFindRegExpV51: importFindReplace.buildFindRegExpV51',
@@ -119,7 +118,7 @@ function loadWeb({
   const context = vm.createContext(sandbox);
   runWebScripts(context, ['platform/validation.js', 'platform/browser.js', 'platform/dialogs.js']);
   context.ShirohaPlatform = { files: context.ShirohaBrowser.files, media: context.ShirohaBrowser.media };
-  runWebScripts(context, ['training.js', 'quiz-core.js', 'text-answers.js', 'questions/rich-content.js']);
+  runWebScripts(context, ['training.js', 'quiz-core.js', 'ui/pagination.js', 'ui/shell.js', 'text-answers.js', 'questions/rich-content.js']);
   if (parserSourceTransform) {
     const parserPath = path.join(path.dirname(sourcePath), 'text-parser.js');
     const parserSource = parserSourceTransform(readFileSync(parserPath, 'utf8'));

@@ -1228,11 +1228,28 @@ test('WebDAV 取消网络任务后释放忙碌状态并保留当前数据', asyn
 
 test('恢复后重复初始化不会重复挂载 WebDAV 面板或绑定处理器', async (t) => {
   const transform = (source) => createWebSource(source).replaceStartup('globalThis.__repeatAppStart = startApplication;\nstartApplication();');
-  const page = await pageFor(t, JSON.stringify(webState()), '', transform);
+  const trackRailSubscriptions = `{
+    const add = globalThis.EventTarget.prototype.addEventListener;
+    globalThis.__railSubscriptions = [];
+    globalThis.EventTarget.prototype.addEventListener = function (type, listener, options) {
+      if (this === globalThis && options?.passive && (type === 'resize' || type === 'scroll')) {
+        globalThis.__railSubscriptions.push({ type, listener });
+      }
+      return add.call(this, type, listener, options);
+    };
+  }`;
+  const page = await pageFor(t, JSON.stringify(webState()), trackRailSubscriptions, transform);
   await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.locator('.nav[data-view="practice"]').click();
+  await page.locator('#practice-limit').selectOption('all');
+  await page.locator('#start-practice-btn').click();
+  await page.locator('body.practice-focus.side-collapsed').waitFor({ state: 'attached' });
+  await page.locator('#practice-card > .practice-side-v31').waitFor();
   const result = await page.evaluate(async () => {
     const button = globalThis.document.getElementById('webdav-test-v378');
     const previousHandler = button.onclick;
+    const sidebarButton = globalThis.document.getElementById('sidebar-toggle');
+    const sidebarHandler = sidebarButton.onclick;
     const targets = new Map([
       [globalThis, 'window'],
       [globalThis.document, 'document'],
@@ -1267,6 +1284,8 @@ test('恢复后重复初始化不会重复挂载 WebDAV 面板或绑定处理器
       modals: globalThis.document.querySelectorAll('#webdav-restore-modal-v378').length,
       sameButton: globalThis.document.getElementById('webdav-test-v378') === button,
       sameHandler: button.onclick === previousHandler,
+      sidebars: globalThis.document.querySelectorAll('#sidebar-toggle').length,
+      sameSidebarHandler: sidebarButton.onclick === sidebarHandler,
       rebound: rebound.map(({ event }) => event),
       released: released.map(({ event }) => event),
       sameVisibilityHandler: rebound[0]?.listener === released[0]?.listener,
@@ -1277,10 +1296,22 @@ test('恢复后重复初始化不会重复挂载 WebDAV 面板或绑定处理器
     modals: 1,
     sameButton: true,
     sameHandler: true,
+    sidebars: 1,
+    sameSidebarHandler: true,
     rebound: ['document:visibilitychange'],
     released: ['document:visibilitychange'],
     sameVisibilityHandler: true,
   });
+  await page.locator('#p-next').click();
+  assert.match(await page.locator('#practice-progress').innerText(), /^2 \//);
+  const rail = await page.evaluate(() => {
+    const subscriptions = globalThis.__railSubscriptions;
+    return {
+      events: subscriptions.map(({ type }) => type),
+      sameListener: subscriptions[0]?.listener === subscriptions[1]?.listener,
+    };
+  });
+  assert.deepEqual(rail, { events: ['resize', 'scroll'], sameListener: true });
 });
 
 for (const mode of ['merge', 'overwrite']) {
@@ -1608,7 +1639,16 @@ test('训练复盘：提前结束保留全部快照，选错与未答可筛选�
   await page.locator('[data-training-filter="unanswered"]').click();
   assert.match(await page.locator('#training-question').textContent(), /未作答/);
   await page.locator('[data-training-filter="all"]').click();
-  await page.locator('#training-answer-card-pager .is-wide [aria-label="下一页"]').click();
+  const pager = page.locator('#training-answer-card-pager');
+  const currentPage = pager.locator('[aria-current="page"]:visible');
+  await page.locator('[data-training-question="9"]').click();
+  await page.locator('#training-next').click();
+  assert.equal(await currentPage.innerText(), '2');
+  assert.equal(await page.locator('[data-training-question="10"]').getAttribute('aria-pressed'), 'true');
+  await page.locator('#training-prev').click();
+  assert.equal(await currentPage.innerText(), '1');
+  assert.equal(await page.locator('[data-training-question="9"]').getAttribute('aria-pressed'), 'true');
+  await pager.getByRole('button', { name: '下一页', exact: true }).click();
   await page.locator('[data-training-question="11"]').click();
   assert.match(await page.locator('#training-question').textContent(), /历史快照第12题/);
   await page.setViewportSize({ width: 320, height: 900 });
@@ -1978,7 +2018,18 @@ test('列表分页：直接跳页、四档条数、跨页选择、键盘与窄�
     await current().focus();
     await page.keyboard.press('Enter');
     assert.equal(await current().innerText(), '3');
+    assert.equal(await current().evaluate((node) => node === globalThis.document.activeElement), true);
   }
+
+  await page.setViewportSize({ width: 390, height: 900 });
+  await pager.getByRole('button', { name: '第 51 页', exact: true }).click();
+  const previous = pager.getByRole('button', { name: '上一页', exact: true });
+  await previous.press('Enter');
+  assert.equal(await current().innerText(), '50');
+  await pager.getByRole('button', { name: '下一页', exact: true }).press('Enter');
+  assert.equal(await current().innerText(), '51');
+  assert.equal(await current().evaluate((node) => node === globalThis.document.activeElement), true);
+  assert.equal(await current().locator('..').evaluate((node) => node.classList.contains('is-compact')), true);
 });
 
 test('列表分页：浏览器题库、错题、收藏、记录独立分页和筛选回首页', async (t) => {
@@ -2080,6 +2131,99 @@ test('列表分页：快速翻页拒绝迟到正文，加载失败可在当前�
   assert.equal(await pager.locator('[aria-current="page"]:visible').innerText(), '4');
   const loads = await page.evaluate(() => globalThis.__pageLoads);
   assert.deepEqual(loads.map((refs) => [refs[0], refs.length]), [['delay-10', 10], ['delay-20', 10], ['delay-30', 10], ['delay-30', 10]]);
+});
+
+test('列表分页：快速返回同一页后旧读取不能再滚动或覆盖当前页', async (t) => {
+  const initial = webState();
+  const bank = initial.banks[0];
+  bank.questions = Array.from({ length: 31 }, (_, index) => ({
+    ...bank.questions[0], id: `paging-return-${index}`, question: `往返分页第 ${index + 1} 题`,
+  }));
+  const page = await pageFor(t, JSON.stringify(initial));
+  page.setDefaultTimeout(5000);
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.locator('.nav[data-view="banks"]').click();
+  const pager = page.locator('#bank-preview-pager');
+  const pageButton = (number) => pager.getByRole('button', { name: `第 ${number} 页`, exact: true });
+  await pageButton(2).evaluate((button) => {
+    const preview = globalThis.document.getElementById('bank-preview');
+    globalThis.__pageScrolls = 0;
+    preview.scrollIntoView = () => {
+      globalThis.__pageScrolls += 1;
+    };
+    const originalClick = button.onclick;
+    button.onclick = (event) => {
+      globalThis.__oldPageChange = originalClick.call(button, event);
+    };
+
+    globalThis.ShirohaPlatform.storage.ensureQuestions = async (_snapshot, refs) => {
+      if (refs[0]?.questionId === 'paging-return-10' && !globalThis.__finishOldPage) {
+        await new Promise((resolve) => {
+          globalThis.__finishOldPage = resolve;
+        });
+      }
+    };
+  });
+  await pageButton(2).press('Enter');
+  await page.waitForFunction(() => typeof globalThis.__finishOldPage === 'function');
+  await pageButton(3).press('Enter');
+  await page.locator('[data-select-bank-question="paging-return-20"]').waitFor();
+  await pageButton(2).press('Enter');
+  const currentRow = page.locator('[data-select-bank-question="paging-return-10"]');
+  await currentRow.waitFor();
+  assert.equal(await page.evaluate(() => globalThis.__pageScrolls), 2);
+  await currentRow.evaluate((row) => {
+    globalThis.__finishedPageRow = row;
+  });
+  await page.evaluate(async () => {
+    globalThis.__finishOldPage();
+    await globalThis.__oldPageChange;
+  });
+  assert.equal(await page.evaluate(() => globalThis.__pageScrolls), 2);
+  assert.equal(await currentRow.evaluate((row) => row === globalThis.__finishedPageRow), true);
+  assert.equal(await pageButton(2).evaluate((node) => node === globalThis.document.activeElement), true);
+});
+
+test('列表分页：同题库同题量覆盖恢复后只重置页码和筛选键，保留各列表条数', async (t) => {
+  const initial = webState();
+  const bank = initial.banks[0];
+  bank.questions = Array.from({ length: 41 }, (_, index) => ({
+    ...bank.questions[0], id: `paging-backup-${index}`, question: `原题干 ${index + 1}`,
+  }));
+  initial.favorites = { [bank.id]: bank.questions.map(({ id }) => id) };
+  const restored = structuredClone(initial);
+  restored.banks[0].questions[0].question = '恢复后的第一题';
+  const { api } = loadWeb({ state: restored });
+  const payload = api.buildBackupPayloadV23(api.snapshot().banks, 'all_data', true);
+
+  const page = await pageFor(t, JSON.stringify(initial));
+  page.setDefaultTimeout(5000);
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  const bankPager = page.locator('#bank-preview-pager');
+  const favoritePager = page.locator('#favorites-list-v596-pager');
+  await page.locator('.nav[data-view="banks"]').click();
+  await bankPager.locator('select').selectOption('20');
+  await bankPager.getByRole('button', { name: '第 2 页', exact: true }).click();
+  await page.locator('[data-select-bank-question="paging-backup-20"]').waitFor();
+  await page.locator('.nav[data-view="favorites"]').click();
+  await favoritePager.getByRole('button', { name: '第 3 页', exact: true }).click();
+  await page.locator('#favorites-list-v596 [data-preview-question="paging-backup-20"]').waitFor();
+
+  await page.locator('.nav[data-view="settings"]').click();
+  await page.locator('#settings-backup-mode-v23').selectOption('overwrite');
+  await page.locator('#settings-import-backup-v23').click();
+  await page.locator('#backup-json-file-v23').setInputFiles({
+    name: '同一题库的备份.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(payload)),
+  });
+  await page.waitForFunction(() => globalThis.document.getElementById('import-summary').textContent.includes('导入完成'));
+  await page.locator('.nav[data-view="banks"]').click();
+  assert.equal(await bankPager.locator('select').inputValue(), '20');
+  assert.equal(await bankPager.locator('[aria-current="page"]:visible').innerText(), '1');
+  assert.equal(await page.locator('[data-select-bank-question]').count(), 20);
+  assert.match(await page.locator('#bank-preview tbody tr').first().innerText(), /恢复后的第一题/);
+  await page.locator('.nav[data-view="favorites"]').click();
+  assert.equal(await favoritePager.locator('select').inputValue(), '10');
+  assert.equal(await favoritePager.locator('[aria-current="page"]:visible').innerText(), '1');
 });
 
 for (const mode of ['single', 'total']) {

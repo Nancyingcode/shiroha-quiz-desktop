@@ -193,6 +193,7 @@ test('copies only scripts listed for nested business directories', async (t) => 
   const f = await fixture(t);
   const scripts = [
     'ai/settings-actions.js', 'ai/analysis-save.js',
+    'ui/pagination.js', 'ui/shell.js',
     'import/find-replace.js', 'import/dual-answers.js', 'import/commit.js', 'import/ocr-output.js', 'import/page.js',
     'questions/rich-content.js', 'banks/metadata.js', 'banks/question-operations.js', 'banks/deletion.js',
     'banks/built-in.js',

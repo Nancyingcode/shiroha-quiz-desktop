@@ -144,9 +144,8 @@
 
   // 本页仅保存已读取正文；索引参与统计和组卷，读取完成后才能进入修改事务。
   const nativeReads = new Set();
-  // 分页仅归当前页面会话；每个列表独立保存条数，切换范围或恢复数据时重置页码。
-  const nativePages = new Map();
-  const LIST_PAGE_SIZES = [10, 20, 50, 100];
+  const pagination = globalThis.ShirohaPagination.create();
+  const shell = globalThis.ShirohaShell.create({ preferences: ShirohaPlatform.preferences, status: platformStatus });
   const nativeOpenRecords = new Set();
   const nativeRenderVersions = new Map();
   const {
@@ -168,11 +167,7 @@
     state,
     select: $,
     escape: esc,
-    resetPages() {
-      for (const entry of nativePages.values()) {
-        entry.page = 0;
-      }
-    },
+    resetPages: pagination.resetPages,
   });
   const savedQuestions = globalThis.ShirohaSavedQuestions.create({
     state,
@@ -241,8 +236,6 @@
   }
 
   const {
-    listPageRange,
-    listPageNumbers,
     normalizeWebQuestionType,
     isTextType,
     normalizeBlankAnswersV58914,
@@ -534,7 +527,7 @@
       bankType: PRACTICE_SCOPE_BANK_V8916,
     },
     paging: {
-      page: nativePage,
+      page: pagination.render,
       visible: nativeViewVisible,
       begin: beginNativeRender,
       versions: nativeRenderVersions,
@@ -831,7 +824,7 @@
     paging: {
       visible: nativeViewVisible,
       begin: beginNativeRender,
-      page: nativePage,
+      page: pagination.render,
       versions: nativeRenderVersions,
       loadItems: loadNativeItems,
       itemsForBanks: practiceSessionItemsForBanksV8916,
@@ -888,9 +881,10 @@
     paging: {
       visible: nativeViewVisible,
       begin: beginNativeRender,
-      page: nativePage,
+      page: pagination.render,
       versions: nativeRenderVersions,
-      pages: nativePages,
+      goToItem: pagination.goToItem,
+      restoreFocus: pagination.restoreFocus,
       openRecords: nativeOpenRecords,
       loadItems: loadNativeItems,
       read: readNative,
@@ -1041,11 +1035,11 @@
       activeBank,
     },
     view: {
-      restoreSidebar: restoreSidebarAfterFocusV47,
-      collapseSidebar: autoCollapseSidebarForFocusV47,
-      shell: updateShellLayoutByView,
+      restoreSidebar: shell.restoreSidebarAfterFocus,
+      collapseSidebar: shell.collapseSidebarForFocus,
+      shell: shell.updateView,
       prewarmMath: prewarmMathJaxV56,
-      bindRail: bindFocusRailToggleV34,
+      bindRail: shell.bindRail,
       renderAll,
       renderReviewAnalysis: (...args) => renderReviewAnalysis(...args),
 
@@ -1164,7 +1158,7 @@
       data: ShirohaTraining.buildReviewData,
       completion: trainingCompletion,
       open: openTrainingReview,
-      page: nativePage,
+      page: pagination.render,
       analysis: (...args) => renderReviewAnalysis(...args),
 
       updatePanels: (...args) => updateReviewAnalysisPanels(...args),
@@ -1172,10 +1166,10 @@
     favorites: { isFavorite: savedQuestions.isFavorite, toggle: savedQuestions.toggleFavorite },
     ai: { reset: resetAiSinglePracticeV613, render: (...args) => renderPracticeAiPanelV613(...args) },
     shell: {
-      collapse: autoCollapseSidebarForFocusV47,
-      restore: restoreSidebarAfterFocusV47,
-      update: updateShellLayoutByView,
-      bindRail: bindFocusRailToggleV34,
+      collapse: shell.collapseSidebarForFocus,
+      restore: shell.restoreSidebarAfterFocus,
+      update: shell.updateView,
+      bindRail: shell.bindRail,
       prewarmMath: prewarmMathJaxV56,
       editQuestion: (...args) => openPracticeEditQuestionV120(...args),
 
@@ -1468,139 +1462,6 @@
     view: { select: $, renderAll, showNotice, toast, warnDev },
   });
 
-  // 为宽窄布局建立可切换的页码与每页条数控件，两组按钮共用翻页行为。
-  function renderNativePageActions({
-    controls,
-    page,
-    pages,
-    title,
-    entry,
-    changePage,
-  }) {
-    const actions = document.createElement('div');
-    actions.className = 'list-pagination-controls';
-    controls.appendChild(actions);
-    // 构造带可访问名称的分页按钮，保留重渲染后定位焦点所需的控件标识。
-    const addButton = (group, text, name, value, disabled, control) => {
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.textContent = text;
-      button.className = 'list-page-button';
-      button.setAttribute('aria-label', name);
-      button.dataset.pageControl = control;
-      button.disabled = disabled;
-      if (control === `page:${page}`) {
-        button.setAttribute('aria-current', 'page');
-      }
-
-      button.onclick = () => changePage(value);
-
-      group.appendChild(button);
-    };
-
-    // 容器宽度决定显示哪组页码；窄卡片（含桌面侧栏布局）也保留首末页与键盘入口。
-    for (const compact of [false, true]) {
-      const group = document.createElement('div');
-      group.className = `list-page-numbers ${compact ? 'is-compact' : 'is-wide'}`;
-      actions.appendChild(group);
-      addButton(group, '‹', '上一页', page - 1, page === 0, 'previous');
-      for (const n of listPageNumbers(page + 1, pages, compact)) {
-        if (n === 'ellipsis') {
-          const gap = document.createElement('span');
-          gap.className = 'list-page-gap';
-          gap.textContent = '…';
-          gap.setAttribute('aria-hidden', 'true');
-          group.appendChild(gap);
-        } else {
-          addButton(group, String(n), `第 ${n} 页`, n - 1, false, `page:${n - 1}`);
-        }
-      }
-
-      addButton(group, '›', '下一页', page + 1, page === pages - 1, 'next');
-    }
-
-    const select = document.createElement('select');
-    select.className = 'list-page-size';
-    select.setAttribute('aria-label', `${title}每页条数`);
-    select.dataset.pageControl = 'size';
-    for (const size of LIST_PAGE_SIZES) {
-      const option = document.createElement('option');
-      option.value = String(size);
-      option.textContent = `${size} 条/页`;
-      select.appendChild(option);
-    }
-
-    select.value = String(entry.size);
-    select.onchange = () => changePage(0, Number(select.value));
-
-    actions.appendChild(select);
-  }
-
-  // 为分页目标维护独立的请求页与焦点，换题库后重置页码并仅获取可见题目。
-  function nativePage(rows, key, target, render) {
-    let entry = nativePages.get(target.id);
-    if (!entry) {
-      entry = { key, page: 0, size: LIST_PAGE_SIZES[0] };
-      nativePages.set(target.id, entry);
-    }
-
-    if (entry.key !== key) {
-      entry.key = key;
-      entry.page = 0;
-    }
-
-    const {
-      page,
-      pages,
-      start,
-      end,
-    } = listPageRange(rows.length, entry.page, entry.size);
-    entry.page = page;
-    const id = `${target.id}-pager`;
-    let controls = document.getElementById(id);
-    if (!controls) {
-      controls = document.createElement('nav');
-      controls.id = id;
-      controls.className = 'list-pagination';
-      const anchor = target.closest('.table-wrap') || target;
-      anchor.insertAdjacentElement('afterend', controls);
-    }
-
-    const focusKey = controls.contains(document.activeElement) ? document.activeElement.dataset.pageControl : null;
-    const view = target.closest('.view');
-    const title = target.closest('.card')?.querySelector('h2')?.textContent || target.getAttribute('aria-label') || '列表';
-    controls.setAttribute('aria-label', `${title}分页`);
-    controls.replaceChildren();
-    const status = document.createElement('span');
-    status.className = 'list-pagination-status';
-    status.setAttribute('role', 'status');
-    status.textContent = rows.length ? `第 ${page + 1} / ${pages} 页 · ${start + 1}–${end} 项，共 ${rows.length} 项` : '共 0 项';
-    controls.appendChild(status);
-    if (!rows.length) {
-      return [];
-    }
-
-    // 页码和每页数量同时写入分页状态，并在重新渲染后同步列表。
-    const changePage = async (next, size = entry.size) => {
-      entry.page = next;
-      entry.size = size;
-      await render();
-      const stillCurrent = entry.key === key && entry.page === next && entry.size === size && target.isConnected;
-      if (stillCurrent && (!view || view.classList.contains('active'))) {
-        target.scrollIntoView({ block: 'start', behavior: 'instant' });
-      }
-    };
-
-    renderNativePageActions({ controls, page, pages, title, entry, changePage });
-    if (focusKey) {
-      const candidates = [...controls.querySelectorAll('[data-page-control]')].filter((node) => node.getClientRects().length && !node.disabled);
-      const nextFocus = candidates.find((node) => node.dataset.pageControl === focusKey) || candidates.find((node) => node.getAttribute('aria-current') === 'page');
-      nextFocus?.focus({ preventScroll: true });
-    }
-
-    return rows.slice(start, end);
-  }
-
   // 切页释放题目缓存前避开在途读写，并保留当前练习和考试的题目。
   function releaseNativeView() {
     if (nativeReads.size || mutationBusy) {
@@ -1633,37 +1494,11 @@
     return (practiceSession.current && practiceSession.current.items && practiceSession.current.items[practiceSession.current.idx]) || null;
   }
 
-  // 切换页面时复位内容滚动，兼容不提供窗口滚动能力的宿主。
-  function resetViewScrollV282() {
-    try {
-      const main = document.querySelector('.main');
-      if (main) {
-        main.scrollTop = 0;
-      }
-
-      requestAnimationFrame(() => window.scrollTo({ top: 0, left: 0, behavior: 'auto' }));
-    } catch {
-      try {
-        window.scrollTo(0, 0);
-      } catch { /* 部分宿主不支持滚动，导航仍应继续。 */ }
-    }
-  }
-
-  // 同步当前视图对应的应用外壳属性，避免页态与侧栏布局分离。
-  function updateShellLayoutByView(viewId) {
-    const current = viewId || document.querySelector('.view.active')?.id || 'dashboard';
-    document.body.dataset.activeView = current;
-    const topbar = $('.topbar');
-    if (topbar) {
-      const hideTopbar = ['wrongbook', 'favorites', 'records', 'training-review', 'ai-settings', 'settings'].includes(current);
-      topbar.classList.toggle('is-hidden-by-view', hideTopbar);
-    }
-  }
-
   // 页面变化后取消原视图仍在进行的读取和导航任务，阻止迟到结果回写。
   function cancelPendingViewActions(target) {
     const from = $('.view.active');
     if (from && from.id !== target) {
+      pagination.cancelPendingScrolls();
       cancelPendingReviewAnalysis(from);
     }
 
@@ -1728,7 +1563,7 @@
         title.textContent = btn.textContent;
       }
 
-      updateShellLayoutByView(target);
+      shell.updateView(target);
       releaseNativeView();
       renderNativeView();
       if (target === 'practice' && practiceSession.current.items.length && !practiceSession.current.completed) {
@@ -1744,7 +1579,7 @@
         syncAiImportActionV99();
       }
 
-      resetViewScrollV282();
+      shell.resetScroll();
     });
   }
 
@@ -2191,10 +2026,10 @@
     bindEvents();
     bindMultiBlankEditorV58914();
     builtInBank.bind();
-    setupSidebarCollapse();
+    shell.bindSidebar();
     setupEnhancedDataToolsV23();
     renderAll();
-    updateShellLayoutByView();
+    shell.updateView();
     syncHomeVersionPromptV586();
     setTimeout(syncHomeVersionPromptV586, 80);
     setTimeout(syncHomeVersionPromptV586, 300);
@@ -2202,11 +2037,7 @@
 
   // 迁移已读状态的字段与题库分组，防止归一化改写尚未加载的原生题目。
   function upgradeState() {
-    for (const entry of nativePages.values()) {
-      entry.page = 0;
-      entry.key = '';
-    }
-
+    pagination.resetAfterRestore();
     state.schemaVersion = CURRENT_SCHEMA_VERSION;
     state.banks = Array.isArray(state.banks) ? state.banks : [];
     state.records = Array.isArray(state.records) ? state.records : [];
@@ -2444,153 +2275,6 @@
 
   /* SHIROHA_V25_2_TO_V28_ENHANCEMENTS_END */
 
-  /* SHIROHA_WEB_V28_2_LAYOUT_AND_IMMERSIVE_FIX_START */
-  function refreshSidebarToggleV47() {
-    const btn = $('#sidebar-toggle');
-    if (!btn) {
-      return;
-    }
-
-    const collapsed = document.body.classList.contains('side-collapsed');
-    btn.textContent = collapsed ? '展开导航' : '收起导航';
-    btn.setAttribute('aria-label', collapsed ? '展开左侧导航' : '收起左侧导航');
-    btn.setAttribute('aria-pressed', String(collapsed));
-  }
-
-  // 侧栏状态与按钮同步，只有调用者显式请求时才保存偏好。
-  function setSidebarCollapsedV47(collapsed, persist = false) {
-    document.body.classList.toggle('side-collapsed', !!collapsed);
-    if (persist) {
-      try {
-        ShirohaPlatform.preferences.setSidebar(document.body.classList.contains('side-collapsed'));
-      } catch {
-        platformStatus('侧栏设置保存失败，请检查浏览器存储权限。', true);
-      }
-    }
-
-    refreshSidebarToggleV47();
-  }
-
-  // 进入专注练习时自动收起展开的侧栏，记录是否由入口自动改变。
-  function autoCollapseSidebarForFocusV47() {
-    if (!document.body.classList.contains('side-collapsed')) {
-      document.body.dataset.focusAutoCollapsedV47 = '1';
-      setSidebarCollapsedV47(true, false);
-    } else {
-      delete document.body.dataset.focusAutoCollapsedV47;
-      refreshSidebarToggleV47();
-    }
-  }
-
-  // 离开专注状态时只还原自动收起的侧栏，保留用户自己的选择。
-  function restoreSidebarAfterFocusV47() {
-    if (document.body.dataset.focusAutoCollapsedV47 === '1') {
-      setSidebarCollapsedV47(false, false);
-      delete document.body.dataset.focusAutoCollapsedV47;
-    } else {
-      refreshSidebarToggleV47();
-    }
-  }
-
-  // 初始化可折叠侧栏及持久化偏好，多次装配时保持单一控件。
-  function setupSidebarCollapse() {
-    if ($('#sidebar-toggle')) {
-      return;
-    }
-
-    const btn = document.createElement('button');
-    btn.id = 'sidebar-toggle';
-    btn.type = 'button';
-    btn.className = 'sidebar-toggle';
-    document.body.appendChild(btn);
-    const stored = ShirohaPlatform.preferences.sidebar();
-    setSidebarCollapsedV47(stored, false);
-    btn.onclick = () => {
-      delete document.body.dataset.focusAutoCollapsedV47;
-      setSidebarCollapsedV47(!document.body.classList.contains('side-collapsed'), true);
-    };
-
-    refreshSidebarToggleV47();
-  }
-
-  // 按当前专注页面的布局测量答题栏顶部，避免切页或窗口变化后遮挡内容。
-  function syncFocusRailTopV35() {
-    const isPractice = document.body.classList.contains('practice-focus');
-    const isExam = document.body.classList.contains('exam-focus');
-    let card = null;
-    let rail = null;
-    if (isPractice) {
-      card = $('#practice-card');
-      rail = $('#practice-card > .practice-side-v31');
-    } else if (isExam) {
-      card = $('#exam-card');
-      rail = $('#exam-card > .exam-side-v31');
-    }
-
-    if (!card || !rail) {
-      return;
-    }
-
-    if (window.innerWidth < 1280) {
-      rail.style.removeProperty('top');
-      rail.style.removeProperty('max-height');
-      return;
-    }
-
-    const top = Math.max(12, Math.round(card.getBoundingClientRect().top));
-    rail.style.setProperty('top', `${top}px`, 'important');
-    rail.style.setProperty('max-height', `calc(100vh - ${top + 18}px)`, 'important');
-  }
-
-  let focusRailSyncBoundV35 = false;
-  // 全局只绑定一次专注栏重算监听，供滚动和窗口尺寸变化共用。
-  function setupFocusRailSyncV35() {
-    if (focusRailSyncBoundV35) {
-      return;
-    }
-
-    focusRailSyncBoundV35 = true;
-    let ticking = false;
-    // 让多个布局事件在同一动画帧合并，避免重复测量。
-    const schedule = () => {
-      if (ticking) {
-        return;
-      }
-
-      ticking = true;
-      requestAnimationFrame(() => {
-        ticking = false;
-        syncFocusRailTopV35();
-      });
-    };
-
-    window.addEventListener('resize', schedule, { passive: true });
-    window.addEventListener('scroll', schedule, { passive: true });
-  }
-
-  // 绑定各专注页自己的答题栏按钮，并确保尺寸监听已启用。
-  function bindFocusRailToggleV34() {
-    setupFocusRailSyncV35();
-    $$('[data-rail-toggle-v34]').forEach(/* 给练习与考试按钮保留不同的收起状态来源。 */ (btn) => btn.onclick = /* 只切换按钮所属的答题栏，再同步可访问状态与定位。 */ () => {
-      const kind = btn.dataset.railToggleV34;
-      if (kind === 'practice') {
-        document.body.classList.toggle('practice-rail-collapsed-v34');
-      }
-
-      if (kind === 'exam') {
-        document.body.classList.toggle('exam-rail-collapsed-v34');
-      }
-
-      syncFocusRailTopV35();
-    });
-
-    syncFocusRailTopV35();
-    requestAnimationFrame(syncFocusRailTopV35);
-    setTimeout(syncFocusRailTopV35, 80);
-  }
-
-  /* SHIROHA_WEB_V28_2_LAYOUT_AND_IMMERSIVE_FIX_END */
-
   // 在独占保存事务中重置数据，经用户确认后才调用平台清除入口。
   async function resetData() {
     return runMutation(/* 确认后停止原任务并清理可恢复的本地状态，然后重新初始化数据。 */ async () => {
@@ -2644,7 +2328,7 @@
       title.textContent = nav.textContent;
     }
 
-    updateShellLayoutByView(viewId);
+    shell.updateView(viewId);
     releaseNativeView();
     renderNativeView();
     if (viewId === 'practice' && resumePractice && practiceSession.current.items.length && !practiceSession.current.completed) {
@@ -2660,7 +2344,7 @@
       syncAiImportActionV99();
     }
 
-    resetViewScrollV282();
+    shell.resetScroll();
   }
 
   /* SHIROHA_WEB_V45_BANK_EDITOR_AND_FOCUS_NAV_END */
