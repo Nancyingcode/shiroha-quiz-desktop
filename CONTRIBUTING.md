@@ -77,7 +77,7 @@ pnpm run commitlint --from main --to HEAD --verbose
 
 在 `apps/desktop` 运行 `pnpm run lint:css` 可单独检查 Web 根目录、`apps/web/styles/` 和桌面 `frontend/` 中的 CSS，扩展名大小写均纳入。命令只读，使用 Stylelint 官方推荐规则。现有样式按文件和规则记录历史诊断数量，没有历史来源的新文件从零开始检查。修复历史问题后同步下调对应计数；同一文件同一规则一增一减时，计数无法区分具体位置，审查时仍要核对变更。[拆分设计与基线](./docs/superpowers/specs/2026-11-10-web-styles-split.md) · [历史计数](./apps/desktop/stylelint-suppressions.json)
 
-修改 AI 面板样式时编辑 [SCSS 源文件](./apps/web-scss/ai-panels.scss)，在 `apps/desktop` 运行 `pnpm run styles:build`，一起提交源码和生成的 `apps/web/styles/ai-panels.css`。本地静态 Web、Pages 和 Windows 桌面都使用这份产物。桌面资源准备和 Pages 上传前执行只读的 `pnpm run styles:check`。在同一目录可用 `pnpm run lint:scss` 检查源码指令和语法。[接入设计](./docs/superpowers/specs/2026-11-21-web-scss-integration.md)
+修改 AI 面板或控件与反馈样式时，编辑对应的 SCSS，再在 `apps/desktop` 运行 `pnpm run styles:build`。一起提交源码和 `apps/web/styles/` 下相应的生成 CSS。本地静态 Web、Pages 和 Windows 桌面都使用这些产物。桌面资源准备和 Pages 上传前执行只读的 `pnpm run styles:check`。在同一目录可用 `pnpm run lint:scss` 检查源码指令和语法。[AI 面板 SCSS](./apps/web-scss/ai-panels.scss) · [控件与反馈 SCSS](./apps/web-scss/controls-and-feedback.scss) · [迁移设计](./docs/superpowers/specs/2026-11-21-web-controls-feedback-scss.md)
 
 Windows CI 运行类型检查、测试和 `pnpm run lint:ci`。有可信基线的普通 PR 按变更检查 JavaScript，涉及 CSS 增删改名或内容变更时也执行 `lint:css`。SCSS 变更会触发源码 lint 和产物一致性校验，单独修改生成的 CSS 也会触发一致性校验。检查配置或历史计数有变动、基线无法确认及推送 `main` 时执行全量 lint。开发者可以在 `apps/desktop` 运行 `pnpm run lint` 执行上述门禁和文档检查。PR 还校验 base 到 head 的提交说明。
 
