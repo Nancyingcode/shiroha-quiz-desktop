@@ -317,7 +317,11 @@ async function visualLayout(page, screenshotName) {
     return {
       view: active.id,
       viewport: { width: window.innerWidth, height: window.innerHeight, devicePixelRatio: window.devicePixelRatio },
-      horizontalOverflow: Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) - window.innerWidth,
+      horizontalOverflow: Math.max(
+        document.documentElement.scrollWidth - window.innerWidth,
+        document.body.scrollWidth - window.innerWidth,
+        main.scrollWidth - main.clientWidth,
+      ),
       mainLeft: main.getBoundingClientRect().left,
       mainWidth: main.getBoundingClientRect().width,
       navigationRight: side.getBoundingClientRect().right,
@@ -505,12 +509,21 @@ async function toggleNavigationMotion(page) {
 /** @param {Page} page */
 async function scrollbarSmoke(page) {
   const input = page.locator('#import-text');
+  const main = page.locator('.main');
+  const titlebar = page.locator('#desktop-titlebar');
   const original = await input.inputValue();
-  const scrollTop = await page.evaluate(() => document.scrollingElement?.scrollTop ?? 0);
+  const scrollTop = await main.evaluate((node) => node.scrollTop);
+  const mainBounds = await main.boundingBox();
+  const titlebarBounds = await titlebar.boundingBox();
+  assert(mainBounds && titlebarBounds, '没有找到正文滚动区域或标题栏');
+  assert.equal(mainBounds.y, titlebarBounds.y + titlebarBounds.height, '正文滚动区域应从标题栏下方开始');
+  const viewportHeight = await page.evaluate(() => window.innerHeight);
+  assert(Math.abs(mainBounds.y + mainBounds.height - viewportHeight) <= 1, '正文滚动区域应到窗口底部为止');
   try {
     await input.fill(Array.from({ length: 80 }, (_, index) => `滚动验证 ${index + 1}`).join('\n'));
     await input.scrollIntoViewIfNeeded();
-    const styles = await input.evaluate((node) => [document.documentElement, node].map((element) => {
+    const styles = await input.evaluate((node) => [document.querySelector('.main'), node].map((element) => {
+      if (!element) { throw new Error('没有找到待验证滚动条的元素'); }
       const scrollbar = window.getComputedStyle(element, '::-webkit-scrollbar');
       const thumb = window.getComputedStyle(element, '::-webkit-scrollbar-thumb');
       const track = window.getComputedStyle(element, '::-webkit-scrollbar-track');
@@ -540,15 +553,34 @@ async function scrollbarSmoke(page) {
     await page.mouse.move(bounds.x + bounds.width - 6, bounds.y + 18);await page.mouse.down();
     await page.mouse.move(bounds.x + bounds.width - 6, bounds.y + 80, { steps: 8 });await page.mouse.up();
     await page.waitForFunction(() => (document.getElementById('import-text')?.scrollTop ?? 0) > 0);
-    await page.evaluate(() => window.scrollTo(0, 0));
-    const viewport = page.viewportSize() ?? await page.evaluate(() => ({ width: window.innerWidth, height: window.innerHeight }));
-    await page.mouse.move(viewport.width - 30, viewport.height / 2);
+    await main.evaluate((node) => node.scrollTo(0, 0));
+    await page.mouse.move(mainBounds.x + mainBounds.width - 30, mainBounds.y + (mainBounds.height / 2));
     await page.mouse.wheel(0, 360);
-    await page.waitForFunction(() => (document.scrollingElement?.scrollTop ?? 0) > 0);
-    return { styles, pageScrolled: true, textareaScrolled: true, thumbDragged: true };
+    await page.waitForFunction(() => (document.querySelector('.main')?.scrollTop ?? 0) > 0);
+    assert.equal(await page.evaluate(() => window.scrollY), 0, '正文滚动带动了整个窗口');
+    assert.deepEqual(await titlebar.boundingBox(), titlebarBounds, '正文滚动改变了标题栏的位置或宽度');
+    await main.evaluate((node) => node.scrollTo(0, 0));
+    const scrollbarX = mainBounds.x + mainBounds.width - 6;
+    await page.mouse.move(scrollbarX, mainBounds.y + 18);
+    await page.mouse.down();
+    await page.mouse.move(scrollbarX, mainBounds.y + 80, { steps: 8 });
+    await page.mouse.up();
+    await page.waitForFunction(() => (document.querySelector('.main')?.scrollTop ?? 0) > 0);
+    await titlebar.hover();
+    const contentPosition = await main.evaluate((node) => node.scrollTop);
+    await page.mouse.wheel(0, -360);
+    await page.evaluate(() => new Promise((resolve) => {
+      window.requestAnimationFrame(() => window.requestAnimationFrame(resolve));
+    }));
+    assert.equal(await main.evaluate((node) => node.scrollTop), contentPosition, '在标题栏上滚轮时正文发生了滚动');
+    await page.locator('.nav[data-view="settings"]').click();
+    await page.waitForFunction(() => document.body.dataset.activeView === 'settings'
+      && document.querySelector('.main')?.scrollTop === 0);
+    return { styles, contentScrolled: true, contentThumbDragged: true, textareaScrolled: true, thumbDragged: true };
   } finally {
+    await page.locator('.nav[data-view="import"]').click();
     await input.fill(original);
-    await page.evaluate((top) => window.scrollTo(0, top), scrollTop);
+    await main.evaluate((node, top) => node.scrollTo(0, top), scrollTop);
   }
 }
 
@@ -737,7 +769,8 @@ async function focusVisualSmoke(runtime, mode) {
         const top = rail.style.getPropertyValue('top');
         const height = rail.style.getPropertyValue('max-height');
         if (window.innerWidth < 1280) { return !top && !height; }
-        const offset = Math.max(12, Math.round(card.getBoundingClientRect().top));
+        const contentTop = document.querySelector('.main')?.getBoundingClientRect().top ?? 0;
+        const offset = Math.round(Math.max(contentTop + 12, card.getBoundingClientRect().top));
         // CSSOM 可以重排 calc 项，按窗口高度和下边距比较实际计算值。
         const { maxHeight } = window.getComputedStyle(rail);
         return top === `${offset}px` && height !== '' && maxHeight === `${window.innerHeight - offset - 18}px`;
