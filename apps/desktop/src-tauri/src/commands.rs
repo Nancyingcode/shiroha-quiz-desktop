@@ -1,4 +1,4 @@
-use crate::files::Files;
+use crate::files::{FilePurpose, Files};
 use crate::tasks::Tasks;
 use crate::{
     error::{Error, Result},
@@ -434,7 +434,9 @@ pub async fn local_file(
                     ))
                     .pick_file();
                 match path {
-                    Some(path) => Ok(serde_json::to_value(files.authorize(&path, false)?)?),
+                    Some(path) => Ok(serde_json::to_value(
+                        files.authorize(&path, FilePurpose::Import)?,
+                    )?),
                     None => Ok(Value::Null),
                 }
             }
@@ -450,7 +452,9 @@ pub async fn local_file(
                     .set_file_name(name)
                     .save_file();
                 match path {
-                    Some(path) => Ok(serde_json::to_value(files.authorize(&path, true)?)?),
+                    Some(path) => Ok(serde_json::to_value(
+                        files.authorize(&path, FilePurpose::Export)?,
+                    )?),
                     None => Ok(Value::Null),
                 }
             }
