@@ -2057,33 +2057,73 @@
       return normalizeQuestion(q, idx);
     }
 
+    // 按已定位的题号构造题目，让两种定位方式沿用相同的分区、共享材料和答案边界。
+    function parseRecruitmentQuestionBlocks(text, starts, {
+      answerMap,
+      analysisMap,
+      group,
+      restore,
+    }) {
+      const questions = [];
+      let currentGroup = group || '';
+      // 只有资料分区携带当前共享材料，保持其他题型的独立题干。
+      let currentMaterial = '';
+      for (let index = 0; index < starts.length; index += 1) {
+        const start = starts[index];
+        const previousStart = starts[index - 1]?.idx ?? 0;
+        const nextStart = starts[index + 1]?.idx ?? text.length;
+        const gap = text.slice(previousStart, start.idx);
+        const heading = gap.split('\n').map(getRecruitmentSectionHeading).filter(Boolean).pop();
+        if (heading) {
+          currentGroup = heading;
+        }
+
+        // 只有资料或材料分析分区才继承上一个共享材料块。
+        const inMaterialSection = /(?:资料分析|材料分析)/.test(currentGroup);
+        if (inMaterialSection) {
+          // 材料分析题可以使用题块附近的共享资料；其他分区保持独立。
+          const material = extractRecruitmentMaterialFromGap(gap);
+          if (material) {
+            currentMaterial = material;
+          }
+        }
+
+        let segment = text.slice(start.idx, nextStart).trim();
+        // 答案区哨兵之后不再属于当前题干。
+        const answerSectionStart = segment.indexOf('<<ANSWER_SECTION>>');
+        if (answerSectionStart !== -1) {
+          // 截掉答案分区哨兵及其后内容，避免混入题干。
+          segment = segment.slice(0, answerSectionStart).trim();
+        }
+
+        const context = {
+          number: start.number,
+          group: currentGroup,
+          answer: answerMap[start.number] || [],
+          analysis: analysisMap[start.number] || '',
+          // 仅向资料分区题目传入共享材料，防止材料泄漏到其他分区。
+          material: inMaterialSection ? currentMaterial : '',
+        };
+        const question = makeRecruitmentQuestion(segment, context, questions.length, restore);
+        if (!question?.question) {
+          continue;
+        }
+
+        // 允许可辨认的内嵌图片成为保留无独立选项或答案题目的证据。
+        if (question.options.length || question.answer.length
+          || /* 只有题干仍含内嵌图片时，才接受缺少独立选项或答案的图片题。 */ /data:image\//.test(question.question)) {
+          questions.push(question);
+        }
+      }
+
+      return questions.map((question, index) => normalizeQuestion(question, index));
+    }
+
     // 按可辨认的题号切分招聘题试卷，并为资料分区中的每题绑定共享材料。
     function parseRecruitmentQuestionPart(qText, answerMap = {}, analysisMap = {}, group = '', restore = (x) => x) {
       const text = normalizeRecruitmentExamTextForParser(protectAnswerAnalysisForQuestionPart(qText));
       const starts = splitRecruitmentQuestionStarts(text);
-      const out = [];let currentGroup = group || '';let currentMaterial = '';
-      for (let i = 0;i < starts.length;i += 1) {
-        const st = starts[i]; const next = i + 1 < starts.length ? starts[i + 1].idx : text.length;
-        const gap = text.slice(i ? starts[i - 1].idx : 0, st.idx);
-        const gh = gap.split('\n').map(getRecruitmentSectionHeading).filter(Boolean).pop();
-        if (gh) { currentGroup = gh; }
-
-        // 只有资料或材料分析分区才继承上一个共享材料块。
-        if (/(资料分析|材料分析)/.test(currentGroup)) {
-          const material = extractRecruitmentMaterialFromGap(gap);
-          if (material) { currentMaterial = material; }
-        }
-
-        let seg = text.slice(st.idx, next).trim();
-        // 答案区哨兵之后不再属于当前题干。
-        if (/<<ANSWER_SECTION>>/.test(seg)) { seg = seg.split('<<ANSWER_SECTION>>')[0].trim(); }
-
-        const ctx = { number: st.number, group: currentGroup, answer: answerMap[st.number] || [], analysis: analysisMap[st.number] || '', material: /* 仅向资料分区题目传入共享材料，防止材料泄漏到其他分区。 */ /(资料分析|材料分析)/.test(currentGroup) ? currentMaterial : '' };
-        const q = makeRecruitmentQuestion(seg, ctx, out.length, restore);
-        if (q && q.question && (q.options.length || q.answer.length || /* 只有题干仍含内嵌图片时，才接受缺少独立选项或答案的图片题。 */ /data:image\//.test(q.question))) { out.push(q); }
-      }
-
-      return out.map((q, i) => normalizeQuestion(q, i));
+      return parseRecruitmentQuestionBlocks(text, starts, { answerMap, analysisMap, group, restore });
     }
 
     // 按已有可信题号查找正文锚点，拒绝答案或解析中的同号候选。
@@ -2113,31 +2153,7 @@
     function parseRecruitmentQuestionPartByExpectedNumbers(qText, nums, answerMap = {}, analysisMap = {}, group = '', restore = (x) => x) {
       const text = normalizeRecruitmentExamTextForParser(protectAnswerAnalysisForQuestionPart(qText));
       const starts = findExpectedRecruitmentQuestionStarts(text, nums);
-      if (!starts.length) { return []; }
-
-      const out = [];let currentGroup = group || '';let currentMaterial = '';
-      for (let i = 0;i < starts.length;i += 1) {
-        const st = starts[i]; const next = i + 1 < starts.length ? starts[i + 1].idx : text.length;
-        const gap = text.slice(i ? starts[i - 1].idx : 0, st.idx);
-        const gh = gap.split('\n').map(getRecruitmentSectionHeading).filter(Boolean).pop();
-        if (gh) { currentGroup = gh; }
-
-        // 材料分析题可以使用题块附近的共享资料；其他分区保持独立。
-        if (/(资料分析|材料分析)/.test(currentGroup)) {
-          const material = extractRecruitmentMaterialFromGap(gap);
-          if (material) { currentMaterial = material; }
-        }
-
-        let seg = text.slice(st.idx, next).trim();
-        // 截掉答案分区哨兵及其后内容，避免混入题干。
-        if (/<<ANSWER_SECTION>>/.test(seg)) { seg = seg.split('<<ANSWER_SECTION>>')[0].trim(); }
-
-        const ctx = { number: st.number, group: currentGroup, answer: answerMap[st.number] || [], analysis: analysisMap[st.number] || '', material: /* 只有资料分区携带当前共享材料，保持其他题型的独立题干。 */ /(资料分析|材料分析)/.test(currentGroup) ? currentMaterial : '' };
-        const q = makeRecruitmentQuestion(seg, ctx, out.length, restore);
-        if (q && q.question && (q.options.length || q.answer.length || /* 允许可辨认的内嵌图片成为保留无独立选项或答案题目的证据。 */ /data:image\//.test(q.question))) { out.push(q); }
-      }
-
-      return out.map((q, i) => normalizeQuestion(q, i));
+      return parseRecruitmentQuestionBlocks(text, starts, { answerMap, analysisMap, group, restore });
     }
 
     function numberRange(a, b) {

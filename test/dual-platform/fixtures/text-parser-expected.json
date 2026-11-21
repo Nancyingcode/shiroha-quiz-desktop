@@ -3570,5 +3570,380 @@
     "segments": [
       "第2-2题：标准试卷段落解析，仅替换异常题，前后题保持锁定"
     ]
-  }
+  },
+  "recruitmentQuestionParts": [
+    {
+      "name": "共享材料限定在资料分析分区",
+      "automatic": [
+        {
+          "id": "imp_0_test-1",
+          "type": "single",
+          "number": 1,
+          "volume": "",
+          "group": "第一部分 资料分析",
+          "question": "根据以下资料回答 1至 2题。 甲地种植松树十棵，乙地种植柏树八棵。 甲地种植哪种树？",
+          "options": [
+            {
+              "key": "A",
+              "text": "松树"
+            },
+            {
+              "key": "B",
+              "text": "柏树"
+            }
+          ],
+          "answer": [
+            "A"
+          ],
+          "analysis": "答案：A。根据甲地记录。",
+          "category": "第一部分 资料分析",
+          "images": [],
+          "subject": "",
+          "grade": "",
+          "difficulty": "",
+          "knowledgePoints": [],
+          "tags": [],
+          "source": "",
+          "sourceFileId": "",
+          "version": 1,
+          "reviewStatus": "approved",
+          "aiConfidence": null,
+          "warnings": [],
+          "normalized": "根据以下资料回答1至2题甲地种植松树十棵乙地种植柏树八棵甲地种植哪种树",
+          "recruitmentOptions": [
+            {
+              "key": "A",
+              "text": "松树"
+            },
+            {
+              "key": "B",
+              "text": "柏树"
+            }
+          ]
+        },
+        {
+          "id": "imp_1_test-2",
+          "type": "single",
+          "number": 2,
+          "volume": "",
+          "group": "第一部分 资料分析",
+          "question": "根据以下资料回答 1至 2题。 甲地种植松树十棵，乙地种植柏树八棵。 乙地种植哪种树？",
+          "options": [
+            {
+              "key": "A",
+              "text": "松树"
+            },
+            {
+              "key": "B",
+              "text": "柏树"
+            }
+          ],
+          "answer": [
+            "B"
+          ],
+          "analysis": "",
+          "category": "第一部分 资料分析",
+          "images": [],
+          "subject": "",
+          "grade": "",
+          "difficulty": "",
+          "knowledgePoints": [],
+          "tags": [],
+          "source": "",
+          "sourceFileId": "",
+          "version": 1,
+          "reviewStatus": "approved",
+          "aiConfidence": null,
+          "warnings": [],
+          "normalized": "根据以下资料回答1至2题甲地种植松树十棵乙地种植柏树八棵乙地种植哪种树",
+          "recruitmentOptions": [
+            {
+              "key": "A",
+              "text": "松树"
+            },
+            {
+              "key": "B",
+              "text": "柏树"
+            }
+          ]
+        },
+        {
+          "id": "imp_2_test-3",
+          "type": "single",
+          "number": 3,
+          "volume": "",
+          "group": "第二部分 数学运算",
+          "question": "两地一共种植多少棵树？",
+          "options": [
+            {
+              "key": "A",
+              "text": "十八棵"
+            },
+            {
+              "key": "B",
+              "text": "十棵"
+            }
+          ],
+          "answer": [
+            "A"
+          ],
+          "analysis": "答案：A。十加八等于十八。",
+          "category": "第二部分 数学运算",
+          "images": [],
+          "subject": "",
+          "grade": "",
+          "difficulty": "",
+          "knowledgePoints": [],
+          "tags": [],
+          "source": "",
+          "sourceFileId": "",
+          "version": 1,
+          "reviewStatus": "approved",
+          "aiConfidence": null,
+          "warnings": [],
+          "normalized": "两地一共种植多少棵树",
+          "recruitmentOptions": [
+            {
+              "key": "A",
+              "text": "十八棵"
+            },
+            {
+              "key": "B",
+              "text": "十棵"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "纯图片题保留内嵌图和 Word 图片占位",
+      "automatic": [
+        {
+          "id": "imp_0_test-1",
+          "type": "single",
+          "number": 1,
+          "volume": "",
+          "group": "三、图形推理",
+          "question": "![题图](data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=)",
+          "options": [],
+          "answer": [],
+          "analysis": "",
+          "category": "三、图形推理",
+          "images": [],
+          "subject": "",
+          "grade": "",
+          "difficulty": "",
+          "knowledgePoints": [],
+          "tags": [],
+          "source": "",
+          "sourceFileId": "",
+          "version": 1,
+          "reviewStatus": "approved",
+          "aiConfidence": null,
+          "warnings": [],
+          "normalized": "题图dataimage/pngbase64ivborw0kggoaaaansuheugaaaaeaaaabcaqaaac1hawcaaaac0leqvr42mp8/x8aawmcao+ip1saaaaasuvork5cyii=",
+          "recruitmentOptions": null
+        },
+        {
+          "id": "imp_1_test-2",
+          "type": "single",
+          "number": 2,
+          "volume": "",
+          "group": "三、图形推理",
+          "question": "![题图](data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=)",
+          "options": [
+            {
+              "key": "A",
+              "text": "A"
+            },
+            {
+              "key": "B",
+              "text": "B"
+            },
+            {
+              "key": "C",
+              "text": "C"
+            },
+            {
+              "key": "D",
+              "text": "D"
+            }
+          ],
+          "answer": [],
+          "analysis": "",
+          "category": "三、图形推理",
+          "images": [],
+          "subject": "",
+          "grade": "",
+          "difficulty": "",
+          "knowledgePoints": [],
+          "tags": [],
+          "source": "",
+          "sourceFileId": "",
+          "version": 1,
+          "reviewStatus": "approved",
+          "aiConfidence": null,
+          "warnings": [],
+          "normalized": "题图dataimage/pngbase64ivborw0kggoaaaansuheugaaaaeaaaabcaqaaac1hawcaaaac0leqvr42mp8/x8aawmcao+ip1saaaaasuvork5cyii=",
+          "recruitmentOptions": [
+            {
+              "key": "A",
+              "text": "A"
+            },
+            {
+              "key": "B",
+              "text": "B"
+            },
+            {
+              "key": "C",
+              "text": "C"
+            },
+            {
+              "key": "D",
+              "text": "D"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "答案区截断且预期题号可排除独立例题",
+      "automatic": [
+        {
+          "id": "imp_0_test-1",
+          "type": "single",
+          "number": 8,
+          "volume": "",
+          "group": "",
+          "question": "这是例题吗？",
+          "options": [
+            {
+              "key": "A",
+              "text": "是"
+            },
+            {
+              "key": "B",
+              "text": "否"
+            }
+          ],
+          "answer": [],
+          "analysis": "",
+          "category": "",
+          "images": [],
+          "subject": "",
+          "grade": "",
+          "difficulty": "",
+          "knowledgePoints": [],
+          "tags": [],
+          "source": "",
+          "sourceFileId": "",
+          "version": 1,
+          "reviewStatus": "approved",
+          "aiConfidence": null,
+          "warnings": [],
+          "normalized": "这是例题吗",
+          "recruitmentOptions": [
+            {
+              "key": "A",
+              "text": "是"
+            },
+            {
+              "key": "B",
+              "text": "否"
+            }
+          ]
+        },
+        {
+          "id": "imp_1_test-2",
+          "type": "single",
+          "number": 10,
+          "volume": "",
+          "group": "",
+          "question": "正文题的结果是什么？",
+          "options": [
+            {
+              "key": "A",
+              "text": "甲"
+            },
+            {
+              "key": "B",
+              "text": "乙"
+            }
+          ],
+          "answer": [],
+          "analysis": "",
+          "category": "",
+          "images": [],
+          "subject": "",
+          "grade": "",
+          "difficulty": "",
+          "knowledgePoints": [],
+          "tags": [],
+          "source": "",
+          "sourceFileId": "",
+          "version": 1,
+          "reviewStatus": "approved",
+          "aiConfidence": null,
+          "warnings": [],
+          "normalized": "正文题的结果是什么",
+          "recruitmentOptions": [
+            {
+              "key": "A",
+              "text": "甲"
+            },
+            {
+              "key": "B",
+              "text": "乙"
+            }
+          ]
+        }
+      ],
+      "byExpectedNumbers": [
+        {
+          "id": "imp_0_test-1",
+          "type": "single",
+          "number": 10,
+          "volume": "",
+          "group": "",
+          "question": "正文题的结果是什么？",
+          "options": [
+            {
+              "key": "A",
+              "text": "甲"
+            },
+            {
+              "key": "B",
+              "text": "乙"
+            }
+          ],
+          "answer": [],
+          "analysis": "",
+          "category": "",
+          "images": [],
+          "subject": "",
+          "grade": "",
+          "difficulty": "",
+          "knowledgePoints": [],
+          "tags": [],
+          "source": "",
+          "sourceFileId": "",
+          "version": 1,
+          "reviewStatus": "approved",
+          "aiConfidence": null,
+          "warnings": [],
+          "normalized": "正文题的结果是什么",
+          "recruitmentOptions": [
+            {
+              "key": "A",
+              "text": "甲"
+            },
+            {
+              "key": "B",
+              "text": "乙"
+            }
+          ]
+        }
+      ]
+    }
+  ]
 }

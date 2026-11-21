@@ -3,7 +3,7 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const expected = require('./fixtures/text-parser-expected.json');
-const { parseSnapshots, repairSnapshot } = require('./text-parser-cases.cjs');
+const { parseSnapshots, recruitmentQuestionPartSnapshots, repairSnapshot } = require('./text-parser-cases.cjs');
 const { loadWeb, plain } = require('./web-source.cjs');
 
 test('四种策略保留题目、原文元数据、警告和完整诊断', () => {
@@ -14,6 +14,22 @@ test('局部修复只替换异常题，保留前后题及修复报告', () => {
   const result = repairSnapshot();
   assert.equal(result.repaired, 1);
   assert.deepEqual(result, expected.repair);
+});
+
+test('招聘试卷的两个题号入口保留各自的题块输出', async (t) => {
+  const snapshots = recruitmentQuestionPartSnapshots();
+  assert.equal(snapshots.length, expected.recruitmentQuestionParts.length);
+  for (const [index, baseline] of expected.recruitmentQuestionParts.entries()) {
+    const { name, automatic, byExpectedNumbers = automatic } = baseline;
+    const actual = snapshots[index];
+    assert.equal(actual.name, name);
+    await t.test(`${name}（自动识别题号）`, () => {
+      assert.deepEqual(actual.automatic, automatic);
+    });
+    await t.test(`${name}（按预期题号定位）`, () => {
+      assert.deepEqual(actual.byExpectedNumbers, byExpectedNumbers);
+    });
+  }
 });
 
 test('诊断构建失败时保留新报告和上一次诊断', () => {
