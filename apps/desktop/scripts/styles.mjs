@@ -3,11 +3,9 @@ import { lstat, open, readFile, rename, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { compileString } from 'sass';
+import { styleTargets } from './styles-targets.mjs';
 
 const root = fileURLToPath(new URL('../../..', import.meta.url));
-const source = 'apps/web-scss/ai-panels.scss';
-const output = 'apps/web/styles/ai-panels.css';
-const header = `/* 由 ${source} 生成。在 apps/desktop 运行 pnpm run styles:build 更新。 */`;
 
 /** @param {string} relative */
 async function readLocalStyle(relative) {
@@ -33,7 +31,8 @@ async function readLocalStyle(relative) {
   }
 }
 
-async function compileStyles() {
+/** @param {string} source */
+async function compileStyle(source) {
   const contents = await readLocalStyle(source);
   if (contents === null) { throw new Error(`缺少 SCSS 源码：${source}`); }
   const { css } = compileString(new TextDecoder('utf-8', { fatal: true }).decode(contents), {
@@ -42,11 +41,12 @@ async function compileStyles() {
     sourceMap: false,
     charset: false,
   });
+  const header = `/* 由 ${source} 生成。在 apps/desktop 运行 pnpm run styles:build 更新。 */`;
   return Buffer.from(`${header}\n${css.replace(/\r\n?/g, '\n').trimEnd()}\n`);
 }
 
-/** @param {Buffer} contents */
-async function replaceCss(contents) {
+/** @param {string} output @param {Buffer} contents */
+async function replaceCss(output, contents) {
   const file = path.join(root, output);
   const temporary = `${file}.${randomUUID()}.tmp`;
   // 独占的同目录临时文件让并发写入互不干扰，读者只会看到完整的 CSS。
@@ -61,13 +61,20 @@ async function replaceCss(contents) {
 }
 
 export async function synchronizeStyles({ write = false } = {}) {
-  const expected = await compileStyles();
-  const existing = await readLocalStyle(output);
-  if (existing && expected.equals(existing)) { return; }
-  if (!write) {
-    throw new Error(`${output} 缺失或与 SCSS 源码不一致。请在 apps/desktop 运行 pnpm run styles:build。`);
+  // 所有入口都通过编译和路径校验后才开始写，避免后一份语法错误时更新前一份产物。
+  const compiled = await Promise.all(styleTargets.map(async ({ source, output }) => ({
+    output,
+    expected: await compileStyle(source),
+    existing: await readLocalStyle(output),
+  })));
+  const pending = compiled.filter(({ expected, existing }) => !existing || !expected.equals(existing));
+  if (!write && pending.length > 0) {
+    const files = pending.map(({ output }) => output).join('、');
+    throw new Error(`${files} 缺失或与 SCSS 源码不一致。请在 apps/desktop 运行 pnpm run styles:build。`);
   }
-  await replaceCss(expected);
+  for (const { output, expected } of pending) {
+    await replaceCss(output, expected);
+  }
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
@@ -76,5 +83,6 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
     throw new Error('用法：node scripts/styles.mjs --build 或 --check');
   }
   await synchronizeStyles({ write: mode === '--build' });
-  console.log(`${mode === '--build' ? '已生成' : '已核对'} ${output}`);
+  const files = styleTargets.map(({ output }) => output).join('、');
+  console.log(`${mode === '--build' ? '已生成' : '已核对'} ${files}`);
 }

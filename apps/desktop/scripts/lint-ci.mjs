@@ -3,6 +3,7 @@ import { lstat, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { packageScript } from './package-manager.mjs';
+import { styleTargets } from './styles-targets.mjs';
 
 /** @typedef {{ pull_request?: { base?: { sha?: string, ref?: string }, head?: { sha?: string } } }} PullRequestEvent */
 /** @typedef {{ mode: 'full' | 'changed', reason: string, changed: string[], files: string[] }} LintPlan */
@@ -30,7 +31,7 @@ function affectsLintConfiguration(file) {
     || file.startsWith('.husky/')
     || file === 'apps/desktop/.stylelintignore'
     || file === 'apps/desktop/stylelint-suppressions.json'
-    || /^apps\/desktop\/scripts\/(?:lint[^/]*|check-docs|package-manager|styles)\.mjs$/i.test(file)
+    || /^apps\/desktop\/scripts\/(?:lint[^/]*|check-docs|package-manager|styles(?:-targets)?)\.mjs$/i.test(file)
     || /^apps\/desktop\/test\/lint-[^/]*\.mjs$/i.test(file)
     || /^(?:eslint(?:\.|$)|\.eslint|prettier(?:\.|$)|\.prettier|tsconfig(?:\.|$)|jsconfig(?:\.|$))/i.test(name)
     || file === 'apps/desktop/pnpm-workspace.yaml'
@@ -211,8 +212,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
     const passed = await lintChangedFiles(root, plan.files);
     const cssChanged = plan.changed.some((file) => /\.css$/i.test(file));
     const scssChanged = plan.changed.some((file) => /^apps\/web-scss\/.+\.scss$/i.test(file));
+    const generatedOutputs = styleTargets.map(({ output }) => output);
     const compiledStylesChanged = scssChanged
-      || plan.changed.some((file) => file.toLowerCase() === 'apps/web/styles/ai-panels.css');
+      || plan.changed.some((file) => generatedOutputs.includes(file.toLowerCase()));
     const cssPassed = !cssChanged || runPackageScript('lint:css');
     const scssPassed = !scssChanged || runPackageScript('lint:scss');
     const compiledStylesPassed = !compiledStylesChanged || runPackageScript('styles:check');
