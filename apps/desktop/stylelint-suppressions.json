@@ -44,13 +44,13 @@
   },
   "../web/styles/bank-and-study-tools.css": {
     "no-descending-specificity": {
-      "count": 4
+      "count": 3
     },
     "no-duplicate-selectors": {
-      "count": 5
+      "count": 3
     },
     "selector-max-compound-selectors": {
-      "count": 5
+      "count": 3
     }
   },
   "../web/styles/ai-panels.css": {
