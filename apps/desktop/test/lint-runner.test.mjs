@@ -96,5 +96,7 @@ test('native pnpm entries run directly and forward arguments without npm separat
     ['lint:docs'],
     ['lint:fixtures'],
     ['lint:incremental', '--complete'],
+    ['lint:scss'],
+    ['styles:check'],
   ]);
 });

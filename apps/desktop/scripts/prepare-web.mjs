@@ -282,6 +282,8 @@ export async function prepareWeb(sourceDir, projectDir) {
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const { synchronizeStyles } = await import('./styles.mjs');
+  await synchronizeStyles();
   const output = await prepareWeb(path.resolve(desktopRoot, '../web'), desktopRoot);
   console.log(`Desktop assets prepared: ${output}`);
 }

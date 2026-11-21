@@ -280,7 +280,7 @@ async function ciEntryFixture(t, change) {
   const driver = path.join(f.temporary, 'npm-driver.mjs');
   await writeFile(driver, [
     'console.log(process.argv[3]);',
-    "if (['lint', 'lint:css'].includes(process.argv[3])) { process.exitCode = 7; }",
+    "if (['lint', 'lint:css', 'styles:check'].includes(process.argv[3])) { process.exitCode = 7; }",
   ].join('\n'));
   await writeFile(path.join(f.temporary, 'apps/web/styles.css'), 'body { color: black; }\n');
   const base = commit(f, 'initial');
@@ -360,6 +360,46 @@ test('a CSS-only deletion runs the CSS check once and propagates its failure', a
   assert.match(result.stdout, /CI lint: changed/);
   assert.deepEqual(result.stdout.split(/\r?\n/).filter((line) => line === 'lint:css'), ['lint:css']);
   assert.match(result.stdout, /^lint:docs$/m);
+  assert.doesNotMatch(result.stdout, /^(?:styles:check|lint:scss)$/m);
+});
+
+test('an SCSS partial alone triggers the SCSS lint and generated CSS check', async (t) => {
+  const { runCi } = await ciEntryFixture(t, async (root) => {
+    const directory = path.join(root, 'apps/web-scss');
+    await mkdir(directory);
+    await writeFile(path.join(directory, '_new.SCSS'), '@mixin label { color: black; }\n');
+  });
+  const result = runCi('yes');
+  assert.equal(result.status, 1, result.stderr + result.stdout);
+  assert.match(result.stdout, /CI lint: changed/);
+  assert.match(result.stdout, /^lint:scss$/m);
+  assert.match(result.stdout, /^styles:check$/m);
+  assert.doesNotMatch(result.stdout, /^lint:css$/m);
+});
+
+test('editing only the generated CSS triggers CSS lint and the generated CSS check', async (t) => {
+  const { runCi } = await ciEntryFixture(t, async (root) => {
+    const directory = path.join(root, 'apps/web/styles');
+    await mkdir(directory);
+    await writeFile(path.join(directory, 'ai-panels.css'), '.label { color: black; }\n');
+  });
+  const result = runCi('yes');
+  assert.equal(result.status, 1, result.stderr + result.stdout);
+  assert.match(result.stdout, /CI lint: changed/);
+  assert.match(result.stdout, /^lint:css$/m);
+  assert.match(result.stdout, /^styles:check$/m);
+  assert.doesNotMatch(result.stdout, /^lint:scss$/m);
+});
+
+test('changing only the CSS generator requires the full check', async (t) => {
+  const { runCi } = await ciEntryFixture(t, (root) => writeFile(
+    path.join(root, 'apps/desktop/scripts/styles.mjs'),
+    'export const revision = 2;\n',
+  ));
+  const result = runCi('yes');
+  assert.equal(result.status, 1, result.stderr + result.stdout);
+  assert.match(result.stdout, /CI lint: full .*styles\.mjs/);
+  assert.match(result.stdout, /^lint$/m);
 });
 
 test('changing only the Stylelint suppression baseline requires the full check', async (t) => {

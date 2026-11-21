@@ -46,7 +46,7 @@ test('full lint orchestrates one complete JavaScript pass and the independent no
   });
   assert.equal(result.status, 0, result.stderr);
   assert.deepEqual(result.stdout.trim().split(/\r?\n/).sort(), [
-    'lint:css', 'lint:docs', 'lint:fixtures', 'lint:incremental',
+    'lint:css', 'lint:docs', 'lint:fixtures', 'lint:incremental', 'lint:scss', 'styles:check',
   ]);
 });
 

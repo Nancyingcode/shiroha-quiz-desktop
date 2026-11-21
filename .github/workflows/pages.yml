@@ -7,6 +7,8 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    env:
+      HUSKY: '0'
     permissions:
       contents: read
       pages: write
@@ -16,6 +18,20 @@ jobs:
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: apps/desktop/package.json
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.17.0'
+          cache: pnpm
+          cache-dependency-path: apps/desktop/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+        working-directory: apps/desktop
+      - name: Verify generated CSS
+        run: pnpm run styles:check
+        working-directory: apps/desktop
       # GITHUB_TOKEN 无法首次启用 Pages；管理员须先按 .github/PAGES.md 初始化站点。
       - uses: actions/configure-pages@v4
       - uses: actions/upload-pages-artifact@v3
