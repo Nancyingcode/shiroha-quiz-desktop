@@ -374,12 +374,20 @@
 
     // 优先记录用户操作的题目，缺少锚点时保留当前屏幕内的位置。
     function position(anchor) {
+      const scrollContainer = globalThis.ShirohaShell.desktopScrollContainer();
+      const scrollBounds = scrollContainer?.getBoundingClientRect();
+      const top = scrollBounds?.top ?? 0;
+      const bottom = scrollBounds?.bottom ?? window.innerHeight;
       const buttons = [...document.querySelectorAll('#import-preview [data-edit-import]')];
       const visible = buttons.find((button) => Number(button.dataset.editImport) === anchor) || buttons.find((button) => {
         const rect = button.getBoundingClientRect();
-        return rect.bottom > 0 && rect.top < window.innerHeight;
+        return rect.bottom > top && rect.top < bottom;
       });
-      return { index: visible ? Number(visible.dataset.editImport) : null, offset: visible ? visible.getBoundingClientRect().top : 0, scrollY: window.scrollY };
+      return {
+        index: visible ? Number(visible.dataset.editImport) : null,
+        offset: visible?.getBoundingClientRect().top ?? 0,
+        scrollY: scrollContainer?.scrollTop ?? window.scrollY,
+      };
     }
 
     // 采集恢复预览所需的输入、选择、建议与滚动位置。
@@ -456,10 +464,18 @@
       } catch (error) { status(`保存草稿失败，现有预览和已保存草稿均保留。${error?.message || ''}`);if (Number.isInteger(anchor)) { actions.notify('草稿保存失败，原内容已保留。', 'warn'); } } finally { setBusy(false); }
     }
 
+    // 草稿锚点仍以窗口为坐标基准，恢复时滚动当前平台的正文区域。
     function restorePosition(saved) {
-      globalThis.requestAnimationFrame(() => {
-        const button = Number.isInteger(saved?.index) ? $(`#import-preview [data-edit-import="${saved.index}"]`) : null;
-        if (button) { window.scrollBy(0, button.getBoundingClientRect().top - (Number(saved.offset) || 0)); } else { window.scrollTo(0, Math.max(0, Number(saved?.scrollY) || 0)); }
+      globalThis.requestAnimationFrame(/* 等待预览布局完成后再测量锚点。 */ () => {
+        const scrollTarget = globalThis.ShirohaShell.desktopScrollContainer() ?? window;
+        const button = Number.isInteger(saved?.index)
+          ? $(`#import-preview [data-edit-import="${saved.index}"]`)
+          : null;
+        if (button) {
+          scrollTarget.scrollBy(0, button.getBoundingClientRect().top - (Number(saved.offset) || 0));
+        } else {
+          scrollTarget.scrollTo(0, Math.max(0, Number(saved?.scrollY) || 0));
+        }
       });
     }
 

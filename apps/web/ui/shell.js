@@ -4,6 +4,10 @@
   const i18n = globalThis.ShirohaI18n;
 
   /* SHIROHA_WEB_V28_2_LAYOUT_AND_IMMERSIVE_FIX_START */
+  function desktopScrollContainer() {
+    return document.querySelector('body.desktop-mist-blue .main');
+  }
+
   // 切换页面时复位内容滚动，兼容不提供窗口滚动能力的宿主。
   function resetScroll() {
     try {
@@ -69,7 +73,8 @@
       return;
     }
 
-    const top = Math.max(12, Math.round(card.getBoundingClientRect().top));
+    const contentTop = desktopScrollContainer()?.getBoundingClientRect().top ?? 0;
+    const top = Math.round(Math.max(contentTop + 12, card.getBoundingClientRect().top));
     rail.style.setProperty('top', `${top}px`, 'important');
     rail.style.setProperty('max-height', `calc(100vh - ${top + 18}px)`, 'important');
   }
@@ -156,7 +161,8 @@
       };
 
       window.addEventListener('resize', schedule, { passive: true });
-      window.addEventListener('scroll', schedule, { passive: true });
+      const scrollTarget = desktopScrollContainer() ?? window;
+      scrollTarget.addEventListener('scroll', schedule, { passive: true });
     }
 
     // 只切换按钮所属的答题栏，再同步该栏的位置。
@@ -196,5 +202,5 @@
   }
   /* SHIROHA_WEB_V28_2_LAYOUT_AND_IMMERSIVE_FIX_END */
 
-  globalThis.ShirohaShell = Object.freeze({ create });
+  globalThis.ShirohaShell = Object.freeze({ create, desktopScrollContainer });
 })();
