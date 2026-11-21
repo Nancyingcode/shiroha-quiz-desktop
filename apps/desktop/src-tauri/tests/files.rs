@@ -1,4 +1,4 @@
-use shiroha_quiz_desktop::files::Files;
+use shiroha_quiz_desktop::files::{FilePurpose, Files};
 use std::fs;
 
 #[test]
@@ -8,19 +8,33 @@ fn grants_are_scoped_and_output_remains_untouched_until_finish() {
     let target = root.join("中文.json");
     fs::write(&target, b"original").unwrap();
     let mut files = Files::default();
-    let token = files.authorize(&target, true).unwrap();
-    assert!(files.read(&token.token, 0).is_err());
+    let token = files.authorize(&target, FilePurpose::Export).unwrap();
+    assert_eq!(
+        files.read(&token.token, 0).unwrap_err().code,
+        "permission_denied"
+    );
     assert!(files.append("forged", 0, b"bad").is_err());
     files.append(&token.token, 0, b"replacement").unwrap();
     assert_eq!(fs::read(&target).unwrap(), b"original");
     files.finish(&token.token, 11).unwrap();
     assert_eq!(fs::read(&target).unwrap(), b"replacement");
     assert!(files.append(&token.token, 11, b"late").is_err());
-    let cancelled = files.authorize(&target, true).unwrap();
+    let cancelled = files.authorize(&target, FilePurpose::Export).unwrap();
     files.append(&cancelled.token, 0, b"discard").unwrap();
     files.release(&cancelled.token).unwrap();
     assert_eq!(fs::read(&target).unwrap(), b"replacement");
-    let read = files.authorize(&target, false).unwrap();
+    let read = files.authorize(&target, FilePurpose::Import).unwrap();
+    assert_eq!(
+        files
+            .append(&read.token, read.size_bytes, b"bad")
+            .unwrap_err()
+            .code,
+        "permission_denied"
+    );
+    assert_eq!(
+        files.finish(&read.token, read.size_bytes).unwrap_err().code,
+        "permission_denied"
+    );
     assert_eq!(files.read(&read.token, 0).unwrap(), b"replacement");
     files.release(&read.token).unwrap();
     drop(files);
@@ -34,7 +48,7 @@ fn failed_finalization_and_reordered_chunks_never_replace_target() {
     let target = root.join("backup.json");
     fs::write(&target, b"old").unwrap();
     let mut files = Files::default();
-    let grant = files.authorize(&target, true).unwrap();
+    let grant = files.authorize(&target, FilePurpose::Export).unwrap();
     assert!(files.append(&grant.token, 1, b"bad").is_err());
     files.append(&grant.token, 0, b"new").unwrap();
     assert!(files.finish(&grant.token, 100).is_err());
@@ -51,7 +65,7 @@ fn corrupted_temporary_file_and_locked_target_preserve_original() {
     let target = root.join("备份.json");
     fs::write(&target, b"old").unwrap();
     let mut files = Files::default();
-    let grant = files.authorize(&target, true).unwrap();
+    let grant = files.authorize(&target, FilePurpose::Export).unwrap();
     files.append(&grant.token, 0, b"new").unwrap();
     let temporary = fs::read_dir(&root)
         .unwrap()
@@ -65,7 +79,7 @@ fn corrupted_temporary_file_and_locked_target_preserve_original() {
     #[cfg(windows)]
     {
         use std::os::windows::fs::OpenOptionsExt;
-        let grant = files.authorize(&target, true).unwrap();
+        let grant = files.authorize(&target, FilePurpose::Export).unwrap();
         files.append(&grant.token, 0, b"new").unwrap();
         let locked = fs::OpenOptions::new()
             .read(true)
@@ -88,8 +102,8 @@ fn page_reinitialization_revokes_old_file_handles() {
     let target = root.join("backup.json");
     fs::write(&target, b"old").unwrap();
     let mut files = Files::default();
-    let read = files.authorize(&target, false).unwrap();
-    let write = files.authorize(&target, true).unwrap();
+    let read = files.authorize(&target, FilePurpose::Import).unwrap();
+    let write = files.authorize(&target, FilePurpose::Export).unwrap();
     files.append(&write.token, 0, b"partial").unwrap();
     files.reset().unwrap();
     assert!(files.read(&read.token, 0).is_err());

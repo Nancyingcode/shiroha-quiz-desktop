@@ -15,6 +15,14 @@ use std::{
 const MAX_FILE_BYTES: u64 = 256 * 1024 * 1024;
 const CHUNK_BYTES: usize = 256 * 1024;
 const GRANT_LIFETIME: Duration = Duration::from_secs(600);
+
+/// 导入授权读取源文件，导出授权写入同目录的临时文件。
+#[derive(Debug)]
+pub enum FilePurpose {
+    Import,
+    Export,
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Grant {
@@ -44,7 +52,7 @@ impl Files {
         Ok(())
     }
 
-    pub fn authorize(&mut self, path: &Path, export: bool) -> Result<Grant> {
+    pub fn authorize(&mut self, path: &Path, purpose: FilePurpose) -> Result<Grant> {
         self.prune()?;
         if self.grants.len() >= 8 {
             return Err(Error::new("operation_busy"));
@@ -56,8 +64,12 @@ impl Files {
                 .ok_or_else(|| Error::new("invalid_input"))?,
         );
         let token = uuid::Uuid::new_v4().to_string();
-        let temporary = export
-            .then(|| destination.with_file_name(format!(".shiroha-{}.tmp", uuid::Uuid::new_v4())));
+        let temporary = match purpose {
+            FilePurpose::Import => None,
+            FilePurpose::Export => {
+                Some(destination.with_file_name(format!(".shiroha-{}.tmp", uuid::Uuid::new_v4())))
+            }
+        };
         let file = if let Some(temporary) = &temporary {
             OpenOptions::new()
                 .read(true)
@@ -106,15 +118,19 @@ impl Files {
         }
         Ok(())
     }
-    fn grant(&mut self, token: &str, export: bool) -> Result<&mut AuthorizedFile> {
+    fn grant(&mut self, token: &str, purpose: FilePurpose) -> Result<&mut AuthorizedFile> {
         self.prune()?;
         self.grants
             .get_mut(token)
-            .filter(|g| g.temporary.is_some() == export)
+            // 临时路径同时标记导出授权，避免另外记录的用途与文件状态脱节。
+            .filter(|grant| match purpose {
+                FilePurpose::Import => grant.temporary.is_none(),
+                FilePurpose::Export => grant.temporary.is_some(),
+            })
             .ok_or_else(|| Error::new("permission_denied"))
     }
     pub fn read(&mut self, token: &str, offset: u64) -> Result<Vec<u8>> {
-        let grant = self.grant(token, false)?;
+        let grant = self.grant(token, FilePurpose::Import)?;
         if offset > grant.size || grant.file.metadata()?.len() != grant.size {
             return Err(Error::new("integrity_failed"));
         }
@@ -124,7 +140,7 @@ impl Files {
         Ok(bytes)
     }
     pub fn append(&mut self, token: &str, offset: u64, bytes: &[u8]) -> Result<()> {
-        let grant = self.grant(token, true)?;
+        let grant = self.grant(token, FilePurpose::Export)?;
         if offset != grant.size
             || bytes.len() > CHUNK_BYTES
             || offset + bytes.len() as u64 > MAX_FILE_BYTES
@@ -137,7 +153,7 @@ impl Files {
         Ok(())
     }
     pub fn finish(&mut self, token: &str, size: u64) -> Result<()> {
-        let grant = self.grant(token, true)?;
+        let grant = self.grant(token, FilePurpose::Export)?;
         if grant.size != size || grant.file.metadata()?.len() != size {
             return Err(Error::new("integrity_failed"));
         }
