@@ -470,35 +470,6 @@ body.practice-focus.practice-rail-collapsed-v34 #practice-card > .practice-side-
   overflow:visible !important;
 }
 body.practice-focus.practice-rail-collapsed-v34 #practice-card > .practice-side-v31 #practice-stat-card-v30 > :not(.rail-show-btn-v34){display:none !important;}
-body.practice-focus.practice-rail-collapsed-v34 #practice-card > .practice-side-v31 #practice-stat-card-v30 > .rail-show-btn-v34{
-  display:inline-flex !important;
-  align-items:center !important;
-  justify-content:center !important;
-  width:auto !important;
-  min-width:58px !important;
-  max-width:none !important;
-  height:30px !important;
-  min-height:30px !important;
-  max-height:30px !important;
-  padding:0 12px !important;
-  border:1px solid rgba(210,223,246,.96) !important;
-  border-radius:999px !important;
-  background:rgba(255,255,255,.88) !important;
-  color:#7386a5 !important;
-  box-shadow:0 10px 24px rgba(132,156,204,.12) !important;
-  backdrop-filter:blur(10px) !important;
-  writing-mode:horizontal-tb !important;
-  letter-spacing:.02em !important;
-  font-size:11px !important;
-  font-weight:800 !important;
-  line-height:1 !important;
-  white-space:nowrap !important;
-}
-body.practice-focus.practice-rail-collapsed-v34 #practice-card > .practice-side-v31 #practice-stat-card-v30 > .rail-show-btn-v34:hover{
-  color:#5676ac !important;
-  border-color:rgba(174,198,236,.98) !important;
-  background:rgba(255,255,255,.96) !important;
-}
 @media(max-width:720px){
   .favorites-hero-v596{grid-template-columns:1fr;}
   .favorites-actions-top-v596{justify-content:flex-start;}
@@ -510,6 +481,9 @@ body.practice-focus.practice-rail-collapsed-v34 #practice-card > .practice-side-
 /* SHIROHA_WEB_V58_9_6_1_PRACTICE_STATS_TOGGLE_TRANSPARENT_FIX_START
    刷题统计收起按钮对齐右下角人物“显示/隐藏”胶囊：半透明、弱边框、无重阴影。 */
 body.practice-focus.practice-rail-collapsed-v34 #practice-card > .practice-side-v31 #practice-stat-card-v30 > .rail-show-btn-v34{
+  display:inline-flex !important;
+  align-items:center !important;
+  justify-content:center !important;
   width:auto !important;
   min-width:50px !important;
   max-width:none !important;
