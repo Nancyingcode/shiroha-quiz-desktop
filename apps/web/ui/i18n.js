@@ -6,7 +6,7 @@
   const defaultLocale = 'zh-CN';
   const attributes = ['aria-label', 'alt', 'placeholder', 'title'];
   const escapeCodes = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
-  const formats = new Map([defaultLocale, 'en'].map((locale) => [
+  const formats = new Map([defaultLocale, 'en'].map(/* 复用各语言的格式化器和词条索引。 */ (locale) => [
     locale,
     {
       messageIndex: locale === defaultLocale ? 0 : 1,
@@ -107,6 +107,7 @@
     document.querySelectorAll('[data-i18n]').forEach((element) => {
       element.textContent = boundText(element, 'data-i18n');
     });
+
     for (const name of attributes) {
       const markerName = `data-i18n-${name}`;
       document.querySelectorAll(`[${markerName}]`).forEach((element) => {
@@ -119,6 +120,7 @@
     });
   }
 
+  // 即使读取偏好失败，首次渲染也始终有可用的界面语言。
   function loadLocale(preferences) {
     try {
       const saved = preferences.locale();
@@ -132,8 +134,8 @@
   function initialize(preferences, refresh, reportError) {
     locale = loadLocale(preferences);
     apply();
-    document.querySelectorAll('[data-ui-language]').forEach((control) => {
-      control.onchange = () => {
+    document.querySelectorAll('[data-ui-language]').forEach(/* 各入口都根据同一个语言偏好刷新。 */ (control) => {
+      control.onchange = /* 校验选值和写入结果，失败时恢复触发控件的显示。 */ () => {
         const next = control.value;
         if (next === locale || !formats.has(next)) {
           control.value = locale;
@@ -158,16 +160,20 @@
   // 共用答题组件可以为尚未绑定语言的历史渲染入口生成固定中文。
   const chinese = Object.freeze({
     html: (key, values) => escape(translate(defaultLocale, key, values)),
+
     attribute: (name, key, values) => `${name}="${escape(translate(defaultLocale, key, values))}"`,
+
     bindText(element, key, values) {
       element.textContent = translate(defaultLocale, key, values);
     },
+
     bindAttribute(element, name, key, values) {
       element.setAttribute(name, translate(defaultLocale, key, values));
     },
   });
   globalThis.ShirohaI18n = Object.freeze({
     locale: () => locale,
+
     text,
     html,
     attribute,

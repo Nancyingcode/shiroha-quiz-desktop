@@ -276,6 +276,7 @@ export function createConfig({ desktop = false, debt = false, semanticOnly = fal
         'apps/web/backup/export.js', 'apps/web/backup/restore.js',
         'apps/web/study/scope.js', 'apps/web/study/saved-questions.js', 'apps/web/study/dashboard.js',
         'apps/web/ui/pagination.js', 'apps/web/ui/shell.js',
+        'apps/web/ui/i18n-messages.js', 'apps/web/ui/i18n.js',
       ].map(relative),
       rules: readabilityGate,
     }]),
