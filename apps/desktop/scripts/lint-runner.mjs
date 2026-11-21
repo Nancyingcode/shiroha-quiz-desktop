@@ -37,7 +37,7 @@ export async function runChecks(checks, options = {}) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
-  const scripts = ['lint:incremental', 'lint:fixtures', 'lint:docs', 'lint:css'];
+  const scripts = ['lint:incremental', 'lint:fixtures', 'lint:docs', 'lint:css', 'lint:scss', 'styles:check'];
   // 各项只读源码或使用隔离临时目录；全部成功后提交钩子才会继续检查暂存区。
   const checks = scripts.map((name) => ({
     name,

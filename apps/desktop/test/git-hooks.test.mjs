@@ -215,10 +215,12 @@ test('the hook checks the index while the CI lint command still runs every full 
   const pkgPath = path.join(f.project, 'package.json');
   const pkg = JSON.parse(await readFile(pkgPath, 'utf8'));
   pkg.scripts.lint = 'node scripts/lint-runner.mjs';
-  const names = ['incremental', 'fixtures', 'docs', 'css'];
-  for (const name of names) {
+  const lintNames = ['incremental', 'fixtures', 'docs', 'css', 'scss'];
+  for (const name of lintNames) {
     pkg.scripts[`lint:${name}`] = `node scripts/hook-check.mjs ${name}`;
   }
+  pkg.scripts['styles:check'] = 'node scripts/hook-check.mjs styles';
+  const names = [...lintNames, 'styles'];
   await writeFile(pkgPath, JSON.stringify(pkg));
   await writeFile(path.join(f.repository, '.git/fail-incremental'), 'fail');
   expectSuccess(f.git(['add', '.']));

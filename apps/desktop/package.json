@@ -11,6 +11,8 @@
     "prepare": "cd ../.. && husky",
     "dev": "tauri dev --port 51736",
     "prepare:web": "node scripts/prepare-web.mjs",
+    "styles:build": "node scripts/styles.mjs --build",
+    "styles:check": "node scripts/styles.mjs --check",
     "test": "node --test test/*.test.mjs && pnpm run test:shared",
     "test:web-platform": "node --test ../../test/dual-platform/browser-page.cjs ../../test/dual-platform/dialog-page.cjs ../../test/dual-platform/select-page.cjs ../../test/dual-platform/settings-action-page.cjs",
     "test:documents": "node --test ../../test/dual-platform/document-page.cjs",
@@ -19,6 +21,7 @@
     "lint": "node scripts/lint-runner.mjs",
     "lint:ci": "node scripts/lint-ci.mjs",
     "lint:css": "stylelint --config stylelint.config.mjs --suppress-location stylelint-suppressions.json --report-needless-disables --report-invalid-scope-disables --max-warnings 0 \"../web/{*.[cC][sS][sS],styles/**/*.[cC][sS][sS]}\" \"frontend/**/*.[cC][sS][sS]\"",
+    "lint:scss": "stylelint --config stylelint.scss.config.mjs --report-needless-disables --report-invalid-scope-disables --max-warnings 0 \"../web-scss/**/*.[sS][cC][sS][sS]\"",
     "lint:eslint": "eslint scripts test *.config.mjs eslint.rules.mjs eslint.migration.mjs --max-warnings 0",
     "lint:platform": "node scripts/lint-platform.mjs",
     "lint:docs": "node scripts/check-docs.mjs",
@@ -56,8 +59,11 @@
     "husky": "9.1.7",
     "parse5": "8.1.1",
     "playwright-core": "^1.58.0",
+    "postcss-scss": "4.0.9",
+    "sass": "1.108.2",
     "stylelint": "17.16.0",
     "stylelint-config-recommended": "18.0.0",
+    "stylelint-scss": "7.5.0",
     "typescript": "7.0.2"
   }
 }

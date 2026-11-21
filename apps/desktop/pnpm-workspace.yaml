@@ -1,3 +1,5 @@
 verifyDepsBeforeRun: error
 allowBuilds:
+  # styles:build 使用一次性编译，Sass 的可选监听器无需运行安装脚本。
+  '@parcel/watcher': false
   esbuild: true
