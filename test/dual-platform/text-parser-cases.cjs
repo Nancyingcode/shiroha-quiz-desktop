@@ -1,8 +1,10 @@
 'use strict';
 
+const assert = require('node:assert/strict');
 const { readFileSync } = require('node:fs');
 const path = require('node:path');
 const { loadWeb } = require('./web-source.cjs');
+const { IMAGE } = require('./fixtures/dataset.cjs');
 
 const fixture = (name) => readFileSync(path.join(__dirname, 'fixtures', name), 'utf8');
 const cases = [
@@ -21,8 +23,76 @@ const repairText = [
   '3. 丙问题？', 'A. 甲', 'B. 乙', '答案：B',
 ].join('\n');
 
+const recruitmentImage = `![题图](${IMAGE})`;
+const recruitmentQuestionParts = [
+  {
+    name: '共享材料限定在资料分析分区',
+    text: [
+      '第一部分 资料分析', '根据以下资料回答1至2题。', '甲地种植松树十棵，乙地种植柏树八棵。',
+      '1. 甲地种植哪种树？', 'A. 松树', 'B. 柏树',
+      '2. 乙地种植哪种树？', 'A. 松树', 'B. 柏树',
+      '第二部分 数学运算', '3. 两地一共种植多少棵树？', 'A. 十八棵', 'B. 十棵',
+    ].join('\n'),
+    numbers: [1, 2, 3],
+    answerMap: { 1: ['a'], 2: ['B'], 3: ['A'] },
+    analysisMap: { 1: '根据甲地记录。', 3: '十加八等于十八。' },
+  },
+  {
+    name: '纯图片题保留内嵌图和 Word 图片占位',
+    text: [`1. ${recruitmentImage}`, '2. [[DOCX_IMAGE_1]]', '3. 缺少作答依据的文字。'].join('\n'),
+    numbers: [1, 2, 3],
+    group: '三、图形推理',
+    restore: (text) => text.replace('[[DOCX_IMAGE_1]]', recruitmentImage),
+  },
+  {
+    name: '答案区截断且预期题号可排除独立例题',
+    text: [
+      '8. 这是例题吗？', 'A. 是', 'B. 否',
+      '10. 正文题的结果是什么？', 'A. 甲', 'B. 乙',
+      '参考答案', 'C. 答案区内容', '10. 【解析】选 C。',
+    ].join('\n'),
+    numbers: [10, 11],
+  },
+];
+
 function stable(value) {
   return JSON.parse(JSON.stringify(value));
+}
+
+function recruitmentQuestionPartSnapshot(entry, args) {
+  const marker = '    return Object.freeze({';
+  const { api, context } = loadWeb({
+    deterministicIds: true,
+    parserSourceTransform(source) {
+      assert.equal(source.split(marker).length, 2);
+      return source.replace(marker, [
+        '    globalThis.__recruitmentQuestionParts = {',
+        '      parseRecruitmentQuestionPart,',
+        '      parseRecruitmentQuestionPartByExpectedNumbers,',
+        '    };',
+        marker,
+      ].join('\n'));
+    },
+  });
+  const questions = context.__recruitmentQuestionParts[entry](...args);
+  return stable(questions.map((question) => ({
+    ...question,
+    recruitmentOptions: api.getRecruitmentOptionsV58915(question),
+  })));
+}
+
+function recruitmentQuestionPartSnapshots() {
+  return recruitmentQuestionParts.map((part) => {
+    const { name, text, numbers } = part;
+    const args = [part.answerMap, part.analysisMap, part.group, part.restore];
+    return {
+      name,
+      automatic: recruitmentQuestionPartSnapshot('parseRecruitmentQuestionPart', [text, ...args]),
+      byExpectedNumbers: recruitmentQuestionPartSnapshot('parseRecruitmentQuestionPartByExpectedNumbers', [
+        text, numbers, ...args,
+      ]),
+    };
+  });
 }
 
 function parseSnapshots() {
@@ -47,4 +117,10 @@ function repairSnapshot() {
   return stable(api.repairParsedQuestionsLocally(repairText, original, profile));
 }
 
-module.exports = { cases, parseSnapshots, repairSnapshot, stable };
+module.exports = {
+  cases,
+  parseSnapshots,
+  recruitmentQuestionPartSnapshots,
+  repairSnapshot,
+  stable,
+};
