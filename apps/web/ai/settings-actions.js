@@ -1,6 +1,7 @@
 // 将 AI 设置写入、凭据结算和连接请求绑定到当前应用事务与设置面板。
 (() => {
   'use strict';
+  const i18n = globalThis.ShirohaI18n;
 
   // 只组装按钮动作，实际表单读取和原生调用均在用户发起操作后执行。
   function create({
@@ -48,8 +49,8 @@
         await harness.saveMode('api');
         return true;
       } catch (error) {
-        // eslint-disable-next-line prefer-template -- 异常信息可能是对象，保留 + 的默认转换；统一异常类型后移除此例外。
-        setAiSettingsStatusV99('API 配置已保存，但执行方式切换失败，原执行方式仍生效：' + (error.message || error), 'warn');
+        // 旧适配器可能用对象返回错误，沿用字符串转换后再展示。
+        setAiSettingsStatusV99(i18n.text('ai.modeSwitchFailed', { detail: String(error.message || error) }), 'warn');
         return false;
       }
     }
@@ -85,30 +86,30 @@
 
         renderSavedApiSettingsV99(config);
         syncImportAction();
-        showNotice('AI 设置', '设置已保存。', 'ok');
+        showNotice(i18n.text('ai.settingsTitle'), i18n.text('ai.settingsSaved'), 'ok');
       } catch (error) {
         recordSaveError(error);
-        setAiSettingsStatusV99(error.message || '保存失败。', 'warn');
+        setAiSettingsStatusV99(error.message || i18n.text('ai.saveFailed'), 'warn');
         updateAiConnectionPillV99('error');
-        showNotice('AI 设置', error.message || '保存失败。', 'danger');
+        showNotice(i18n.text('ai.settingsTitle'), error.message || i18n.text('ai.saveFailed'), 'danger');
       }
     }
 
     // AI 任务空闲后才保存执行配置，区分桌面 Harness 和 API 设置。
     async function saveAiSettingsV99() {
       if (isBusy()) {
-        setAiSettingsStatusV99('AI 任务仍在执行或停止中，请等待结束后保存设置。', 'warn');
+        setAiSettingsStatusV99(i18n.text('ai.waitToSave'), 'warn');
         return;
       }
 
       if (harness?.formMode() === 'harness') {
         try {
           await harness.saveMode('harness');
-          setAiSettingsStatusV99('Harness 设置已保存；原直接 API 设置已保留。', 'ok');
+          setAiSettingsStatusV99(i18n.text('ai.harnessSaved'), 'ok');
           syncImportAction();
           updateAiConnectionPillV99('idle');
         } catch (error) {
-          setAiSettingsStatusV99(error.message || 'Harness 设置保存失败。', 'warn');
+          setAiSettingsStatusV99(error.message || i18n.text('ai.harnessSaveFailed'), 'warn');
         }
 
         return;
@@ -122,33 +123,33 @@
       const execution = harness.snapshot();
       const adapter = harness.formAdapter?.() ?? execution.adapter;
       if (adapter !== 'codex') {
-        setAiSettingsStatusV99(`${aiHarnessLabelV99(adapter)} 的账户操作请使用对应面板；其他提供方配置已保留。`, 'warn');
+        setAiSettingsStatusV99(i18n.text('ai.accountCard', { provider: aiHarnessLabelV99(adapter) }), 'warn');
         return;
       }
 
       if (execution.adapter !== adapter) {
-        setAiSettingsStatusV99('提供方选择尚未保存，请等待保存完成后再清除配置。', 'warn');
+        setAiSettingsStatusV99(i18n.text('ai.providerUnsaved'), 'warn');
         return;
       }
 
-      if (!await confirm('确定停止 Harness 任务并清除 Codex 配置和订阅授权？原直接 API 配置将保留。')) {
+      if (!await confirm(i18n.text('ai.clearHarnessConfirm'))) {
         return;
       }
 
       try {
         await harness.cancelAll();
         await harness.clear();
-        setAiSettingsStatusV99('Codex 配置已清除；如需使用直接 API，请明确选择并保存执行方式。');
+        setAiSettingsStatusV99(i18n.text('ai.codexCleared'));
         updateAiConnectionPillV99('idle');
         syncImportAction();
       } catch (error) {
-        setAiSettingsStatusV99(error.message || '清除失败。', 'warn');
+        setAiSettingsStatusV99(error.message || i18n.text('ai.clearFailed'), 'warn');
       }
     }
 
     // 经用户确认后清除 API 配置及凭据，并用保存结果更新提示。
     async function clearApiSettings() {
-      if (!await confirm('确定清除 AI 接口配置和已保存的 API Key？')) {
+      if (!await confirm(i18n.text('ai.clearApiConfirm'))) {
         return;
       }
 
@@ -158,17 +159,17 @@
         await save(credentials.operationId?.(undoCredential));
       } catch (error) {
         await undoCredential();
-        // eslint-disable-next-line prefer-template -- 异常信息可能是对象，保留 + 的默认转换；统一异常类型后移除此例外。
-        setAiSettingsStatusV99('清除失败，原配置已保留：' + (error.message || error), 'warn');
+        // 旧适配器可能用对象返回错误，沿用字符串转换后再展示。
+        setAiSettingsStatusV99(i18n.text('ai.clearFailedDetail', { detail: String(error.message || error) }), 'warn');
         return;
       }
 
       await credentials.finalize?.(undoCredential);
       reset();
       renderAiSettingsV99();
-      setAiSettingsStatusV99('AI 配置已清除。');
+      setAiSettingsStatusV99(i18n.text('ai.cleared'));
       syncImportAction();
-      showNotice('AI 设置', '配置已清除。', 'ok');
+      showNotice(i18n.text('ai.settingsTitle'), i18n.text('ai.clearedResult'), 'ok');
     }
 
     // 按执行模式清除相应 AI 设置，运行中的任务仍由各模式的状态约束。
@@ -178,7 +179,7 @@
       }
 
       if (isBusy()) {
-        setAiSettingsStatusV99('请等待 AI 任务结束后清除配置。', 'warn');
+        setAiSettingsStatusV99(i18n.text('ai.waitToClear'), 'warn');
         return undefined;
       }
 
@@ -196,19 +197,19 @@
         }
 
         if (execution.mode !== 'harness' || execution.adapter !== adapter) {
-          throw new Error('请先保存当前提供方和执行方式，再测试执行。');
+          throw new Error(i18n.text('ai.saveProviderFirst'));
         }
 
         if (!aiConfiguredV99({ execution }, 'connection_test')) {
-          throw new Error(execution.reason || '当前 Harness 尚未就绪，请先检查设置。');
+          throw new Error(execution.reason || i18n.text('ai.harnessCheck'));
         }
 
         setConnectionTestingV99(true);
         await harness.test();
-        setAiSettingsStatusV99(`${aiHarnessLabelV99(adapter)} 测试执行成功，结果已通过校验。`, 'ok');
+        setAiSettingsStatusV99(i18n.text('ai.harnessTestOk', { provider: aiHarnessLabelV99(adapter) }), 'ok');
         updateAiConnectionPillV99('ok', true);
       } catch (error) {
-        setAiSettingsStatusV99(error.message || 'Harness 测试执行失败。', 'warn');
+        setAiSettingsStatusV99(error.message || i18n.text('ai.harnessTestFailed'), 'warn');
         updateAiConnectionPillV99('error');
       }
     }
@@ -219,7 +220,7 @@
       try {
         config = readAiFormV99();
         setConnectionTestingV99(true);
-        setAiSettingsStatusV99('正在连接接口并调用所选模型……');
+        setAiSettingsStatusV99(i18n.text('ai.callingModel'));
         setAiDiagnosticV375(buildAiDiagnosticV375(null, config, 'idle'));
         const messages = [
           { role: 'system', content: '只回复一个 JSON 对象。' },
@@ -236,14 +237,14 @@
           }),
         );
         if (!result.payload) {
-          throw new Error('接口没有返回有效结果。');
+          throw new Error(i18n.text('ai.noResult'));
         }
 
         const diag = buildAiDiagnosticV375(null, config, 'ok');
         updateAiConnectionPillV99('ok', true);
         setAiDiagnosticV375(diag);
         setAiSettingsStatusV99(diag.statusMessage, 'ok');
-        showNotice('AI 连接', '连接测试成功。', 'ok');
+        showNotice(i18n.text('ai.connectionTitle'), i18n.text('ai.connectionOk'), 'ok');
       } catch (error) {
         const diag = config ? buildAiDiagnosticV375(error, config, 'error') : null;
         updateAiConnectionPillV99('error', !!config);
@@ -251,8 +252,8 @@
           setAiDiagnosticV375(diag, true);
         }
 
-        setAiSettingsStatusV99(diag?.statusMessage || error.message || '连接测试失败。', 'warn');
-        showNotice('AI 连接', diag?.summary || error.message || '连接测试失败。', 'danger');
+        setAiSettingsStatusV99(diag?.statusMessage || error.message || i18n.text('ai.diagTestFailedHint'), 'warn');
+        showNotice(i18n.text('ai.connectionTitle'), diag?.summary || error.message || i18n.text('ai.diagTestFailedHint'), 'danger');
       }
     }
 

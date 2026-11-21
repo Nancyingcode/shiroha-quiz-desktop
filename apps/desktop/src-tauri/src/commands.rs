@@ -47,12 +47,35 @@ pub enum Query {
         expected_revision: i64,
     },
 }
+#[derive(Clone, Copy, Default, Deserialize)]
+pub enum UiLocale {
+    #[default]
+    #[serde(rename = "zh-CN")]
+    Chinese,
+    #[serde(rename = "en")]
+    English,
+}
+
+impl UiLocale {
+    pub(crate) fn text(self, chinese: &'static str, english: &'static str) -> &'static str {
+        match self {
+            Self::Chinese => chinese,
+            Self::English => english,
+        }
+    }
+}
+
 #[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum FileRequest {
-    ChooseImport,
+    ChooseImport {
+        #[serde(default)]
+        locale: UiLocale,
+    },
     ChooseExport {
         name: String,
+        #[serde(default)]
+        locale: UiLocale,
     },
     Read {
         token: String,
@@ -403,16 +426,19 @@ pub async fn local_file(
             .lock()
             .map_err(|_| Error::new("storage_unavailable"))?;
         match request {
-            FileRequest::ChooseImport => {
+            FileRequest::ChooseImport { locale } => {
                 let path = rfd::FileDialog::new()
-                    .set_title("选择题库、文档或备份")
+                    .set_title(locale.text(
+                        "选择题库、文档或备份",
+                        "Open a question bank, document, or backup",
+                    ))
                     .pick_file();
                 match path {
                     Some(path) => Ok(serde_json::to_value(files.authorize(&path, false)?)?),
                     None => Ok(Value::Null),
                 }
             }
-            FileRequest::ChooseExport { name } => {
+            FileRequest::ChooseExport { name, locale } => {
                 if name.is_empty()
                     || name.len() > 180
                     || name.contains(['/', '\\', ':', '*', '?', '"', '<', '>', '|'])
@@ -420,7 +446,7 @@ pub async fn local_file(
                     return Err(Error::new("invalid_input"));
                 }
                 let path = rfd::FileDialog::new()
-                    .set_title("保存导出文件")
+                    .set_title(locale.text("保存导出文件", "Save exported file"))
                     .set_file_name(name)
                     .save_file();
                 match path {

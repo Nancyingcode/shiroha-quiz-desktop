@@ -1,6 +1,8 @@
 (() => {
   /** @typedef {{minimize: () => Promise<void>, toggleMaximize: () => Promise<void>, isMaximized: () => Promise<boolean>, close: () => Promise<void>, startDragging: () => Promise<void>}} DesktopWindow */
   const host = /** @type {Window & {ShirohaDesktopHost?: {window: DesktopWindow}}} */ (window);
+  /** @typedef {import('../../web/platform/runtime').LocaleGlobals} LocaleGlobals */
+  const { ShirohaI18n: i18n } = /** @type {typeof globalThis & LocaleGlobals} */ (globalThis);
   const titlebar = document.getElementById('desktop-titlebar');
   const drag = document.getElementById('desktop-window-drag');
   const status = document.getElementById('desktop-window-status');
@@ -24,7 +26,7 @@
   const appWindow = host.ShirohaDesktopHost?.window;
   if (!appWindow) {
     status.hidden = false;
-    status.textContent = '窗口控制不可用，请在桌面程序中打开。';
+    i18n.bindText(status, 'window.unavailable');
     return;
   }
 
@@ -37,13 +39,13 @@
     const maximized = await appWindow.isMaximized();
     if (request !== stateRequest) { return; }
     titlebar.dataset.maximized = String(maximized);
-    const label = maximized ? '还原' : '最大化';
-    maximize.setAttribute('aria-label', label);
-    maximize.title = label;
+    const key = maximized ? 'window.restore' : 'window.maximize';
+    i18n.bindAttribute(maximize, 'aria-label', key);
+    i18n.bindAttribute(maximize, 'title', key);
   };
   const showError = () => {
     status.hidden = false;
-    status.textContent = '窗口操作未完成，请重试；可按 Alt+F4 关闭窗口。';
+    i18n.bindText(status, 'window.error');
   };
   /** @param {() => Promise<void>} action */
   const run = async (action) => {

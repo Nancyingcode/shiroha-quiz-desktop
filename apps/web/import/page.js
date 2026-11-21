@@ -1,6 +1,7 @@
 // 编排导入控件、识别和共享预览，题目保存沿用现有提交及恢复事务。
 (() => {
   'use strict';
+  const i18n = globalThis.ShirohaI18n;
 
   function cleanImportBankNameFromFile(fileName) {
     return String(fileName || '')
@@ -118,7 +119,7 @@
       if (input && !$(`#${groupInputId}`)) {
         const holder = document.createElement('label');
         holder.className = 'bank-group-field-v58';
-        holder.innerHTML = `一级分组<input id="${groupInputId}" list="bank-group-list-v58" placeholder="留空则归入未分组">`;
+        holder.innerHTML = `${i18n.html('import.group')}<input id="${groupInputId}" list="bank-group-list-v58" ${i18n.attribute('placeholder', 'import.groupPlaceholder')}>`;
         const anchor = input.closest('label') || input;
         anchor.insertAdjacentElement('afterend', holder);
       }
@@ -146,7 +147,7 @@
       if (nameInput && !$('#import-save-mode-v59')) {
         const mode = document.createElement('label');
         mode.className = 'bank-group-field-v58 import-save-mode-field-v59';
-        mode.innerHTML = '导入方式<select id="import-save-mode-v59"><option value="new">新建题库</option><option value="append">追加到已有题库</option></select>';
+        mode.innerHTML = `${i18n.html('import.saveMode')}<select id="import-save-mode-v59"><option value="new" data-i18n="import.newBank">${i18n.text('import.newBank')}</option><option value="append" data-i18n="import.appendBank">${i18n.text('import.appendBank')}</option></select>`;
         const anchor = $('#import-bank-group-v58')?.closest('label') || nameInput.closest('label') || nameInput;
         anchor.insertAdjacentElement('afterend', mode);
         const select = mode.querySelector('select');
@@ -159,7 +160,7 @@
         const target = document.createElement('label');
         target.id = 'import-target-bank-label-v59';
         target.className = 'bank-group-field-v58 import-target-bank-field-v59';
-        target.innerHTML = '追加到<select id="import-target-bank-v59"></select>';
+        target.innerHTML = `${i18n.html('import.appendTo')}<select id="import-target-bank-v59"></select>`;
         const anchor = $('#import-save-mode-v59')?.closest('label') || $('#import-bank-group-v58')?.closest('label') || nameInput.closest('label') || nameInput;
         anchor.insertAdjacentElement('afterend', target);
       }
@@ -177,7 +178,7 @@
 
       const previous = select.value || state.activeBankId || '';
       const banks = Array.isArray(state.banks) ? state.banks : [];
-      select.innerHTML = banks.map((b) => `<option value="${esc(b.id)}">${esc(bankPathLabelV58(b))}（${(b.questions || []).length}题）</option>`).join('');
+      select.innerHTML = banks.map((b) => `<option value="${esc(b.id)}">${esc(i18n.text('import.bankOption', { bank: bankPathLabelV58(b), count: (b.questions || []).length }))}</option>`).join('');
 
       if (banks.some((b) => b.id === previous)) {
         select.value = previous;
@@ -219,11 +220,11 @@
       }
 
       if (confirmBtn) {
-        confirmBtn.textContent = isAppend ? '确认追加' : '确认导入';
+        i18n.bindText(confirmBtn, isAppend ? 'import.confirmAppend' : 'import.confirm');
       }
 
       if (dualConfirm) {
-        dualConfirm.textContent = isAppend ? '确认追加' : '确认导入';
+        i18n.bindText(dualConfirm, isAppend ? 'import.confirmAppend' : 'import.confirm');
       }
     }
 
@@ -252,10 +253,15 @@
         }
 
         control.dataset.fileBoundV615 = '1';
-        const emptyText = nameEl.dataset.emptyText || nameEl.textContent;
-        input.addEventListener('change', () => {
+        input.addEventListener('change', /* 文件名使用原文，清空时恢复可随语言切换的占位。 */ () => {
           const file = input.files && input.files[0];
-          nameEl.textContent = file ? file.name : emptyText;
+          if (file) {
+            nameEl.removeAttribute('data-i18n');
+            nameEl.textContent = file.name;
+          } else {
+            i18n.bindText(nameEl, 'import.noFile');
+          }
+
           control.classList.toggle('has-file-v615', Boolean(file));
         });
       });
@@ -394,12 +400,12 @@
 
         const files = Array.from(event.dataTransfer.files || []);
         if (files.length !== 1) {
-          toast('请每次拖入一个文件。', 'warn');
+          toast(i18n.text('import.dropOne'), 'warn');
           return;
         }
 
         if (!/* 检查拖入文件是否属于导入流程能识别的扩展名，大小写不影响判断。 */ /\.(txt|json|csv|xlsx|docx|doc|pdf)$/i.test(files[0].name)) {
-          toast('不支持此文件类型，请选择 TXT、JSON、CSV、XLSX、DOCX 或 PDF。', 'warn');
+          toast(i18n.text('import.unsupportedType'), 'warn');
           return;
         }
 
@@ -435,7 +441,7 @@
         const control = input.closest('.file-control-v615');
         const name = control?.querySelector('.file-name-v615');
         if (name) {
-          name.textContent = name.dataset.emptyText || '未选择文件';
+          i18n.bindText(name, 'import.noFile');
         }
 
         control?.classList.remove('has-file-v615');
@@ -589,7 +595,7 @@ D、高速通过积水路段`;
     async function mergeRecognizedBackup(data, isCurrentSource) {
       const normalized = normalizeBackupPayloadV23(data, importDraft.sourceMeta.name || '导入备份.json');
       if (!normalized.banks.length) {
-        showNotice('识别失败', '备份中没有可导入的题库。', 'danger');
+        showNotice(i18n.text('import.parseFailed'), '备份中没有可导入的题库。', 'danger');
         return;
       }
 
@@ -607,7 +613,7 @@ D、高速通过积水路段`;
       const applyImport = () => runMutation(/* 等待备份合并成功后再清空题目预览。 */ async () => {
         // 确认、等待原生读取及失败期间都可能换文件或离页，不能继续使用已失效的合并确认。
         if (!isCurrentSource()) {
-          toast('备份来源已变化，请重新识别。', 'warn');
+          toast(i18n.text('import.sourceChanged'), 'warn');
           return false;
         }
 
@@ -669,7 +675,7 @@ D、高速通过积水路段`;
       }
 
       if (!text) {
-        toast('请先粘贴或上传题库文本。', 'warn', '导入未开始');
+        toast(i18n.text('import.emptyInput'), 'warn', i18n.text('import.notStarted'));
         return;
       }
 
@@ -701,11 +707,11 @@ D、高速通过积水路段`;
           const risk = largeImportRiskMessageV376(questions);
           showNotice('识别完成', summarizeImportResultV376(questions, warnings), (warnings.length || risk) ? 'warn' : 'ok');
         } else {
-          showNotice('识别失败', '没有识别到有效题目。请检查题号、选项或答案格式，也可以先粘贴纯文本后再试。', 'danger');
+          showNotice(i18n.text('import.parseFailed'), '没有识别到有效题目。请检查题号、选项或答案格式，也可以先粘贴纯文本后再试。', 'danger');
         }
       } catch (e) {
-        // eslint-disable-next-line prefer-template -- 异常信息可能是对象，保留 + 的默认转换；统一异常类型后移除此例外。
-        toast('识别失败：' + e.message, 'danger', '识别失败');
+        // 文本预览只展示异常详情，不把它作为 HTML。
+        toast(i18n.text('import.parseFailedDetail', { detail: String(e.message) }), 'danger', i18n.text('import.parseFailed'));
       }
     }
 
@@ -746,7 +752,7 @@ D. 高速通过积水路段`;
       $('#dual-question-text').value = DUAL_SAMPLE_QUESTIONS;
       $('#dual-answer-text').value = DUAL_SAMPLE_ANSWERS;
       $('#dual-match-mode').value = 'auto';
-      toast('已填入C1双文件示例，请点击“识别并合并双文件”。', 'ok');
+      toast(i18n.text('import.dualSampleReady'), 'ok');
     }
 
     // 独立读取题目与答案文本，再按用户选择或自动策略匹配并给出诊断。
@@ -758,7 +764,7 @@ D. 高速通过积水路段`;
       const qText = $('#dual-question-text').value.trim();
       const aText = $('#dual-answer-text').value.trim();
       if (!qText || !aText) {
-        toast('请先提供题目文本和答案文本。', 'warn', '双文件导入未开始');
+        toast(i18n.text('import.dualEmptyInput'), 'warn', i18n.text('import.dualNotStarted'));
         return;
       }
 
@@ -793,8 +799,8 @@ D. 高速通过积水路段`;
           showNotice('双文件合并失败', '没有得到可导入题目，请检查题目文件和答案文件的对应方式。', 'danger');
         }
       } catch (e) {
-        // eslint-disable-next-line prefer-template -- 异常信息可能是对象，保留 + 的默认转换；统一异常类型后移除此例外。
-        toast('双文件识别失败：' + e.message, 'danger', '双文件识别失败');
+        // 文本预览只展示异常详情，不把它作为 HTML。
+        toast(i18n.text('import.dualFailedDetail', { detail: String(e.message) }), 'danger', i18n.text('import.dualFailed'));
       }
     }
 

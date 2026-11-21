@@ -2,8 +2,9 @@
 // 复用页内原生模态框，串行显示提示并在关闭后还原焦点。
 (() => {
   'use strict';
-  /** @typedef {{title?: string, acceptLabel?: string, cancelLabel?: string, context?: string, danger?: boolean}} DialogOptions */
+  /** @typedef {{title?: string, acceptLabel?: string, cancelLabel?: string, closeLabel?: string, context?: string, danger?: boolean}} DialogOptions */
   /** @typedef {'alert' | 'confirm' | 'prompt'} DialogKind */
+  const localeScope = /** @type {typeof globalThis & Partial<import('./runtime').LocaleGlobals>} */ (globalThis);
   // 队列属于当前页面；关闭后释放节点与回调，避免并发提示互相覆盖或重复提交。
   let pending = Promise.resolve();
 
@@ -44,7 +45,8 @@
     const context = /** @type {HTMLElement} */ (dialog.querySelector('#app-dialog-context'));
     const messageElement = /** @type {HTMLElement} */ (dialog.querySelector('#app-dialog-message'));
     const icon = /** @type {HTMLElement} */ (dialog.querySelector('.app-dialog-icon'));
-    title.textContent = options.title || ({ alert: '提示', confirm: '请确认', prompt: '请输入' })[kind];
+    title.textContent = options.title || localeScope.ShirohaI18n?.text(`dialog.${kind}`)
+      || ({ alert: '提示', confirm: '请确认', prompt: '请输入' })[kind];
     context.hidden = !options.context;
     context.textContent = options.context || '';
     messageElement.textContent = message;
@@ -52,8 +54,12 @@
     input.hidden = kind !== 'prompt';
     input.value = initial;
     cancel.hidden = kind === 'alert';
-    cancel.textContent = options.cancelLabel || '取消';
-    accept.textContent = options.acceptLabel || (kind === 'alert' ? '知道了' : '确定');
+    cancel.textContent = options.cancelLabel || localeScope.ShirohaI18n?.text('dialog.cancel') || '取消';
+    const acceptKey = kind === 'alert' ? 'dialog.gotIt' : 'dialog.accept';
+    accept.textContent = options.acceptLabel || localeScope.ShirohaI18n?.text(acceptKey)
+      || (kind === 'alert' ? '知道了' : '确定');
+    close.setAttribute('aria-label', options.closeLabel || localeScope.ShirohaI18n?.text('dialog.close') || '关闭');
+
     return { dialog, form, input, cancel, accept, close };
   }
 

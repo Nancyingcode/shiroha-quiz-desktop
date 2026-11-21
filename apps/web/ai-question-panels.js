@@ -1,6 +1,7 @@
 // 渲染练习与复盘中的 AI 解析入口，并把用户操作交给所属会话。
 (() => {
   'use strict';
+  const i18n = globalThis.ShirohaI18n;
   // 绑定题目、会话和设置依赖，供练习与复盘共用解析组件。
   function create({
     session: practiceSession,
@@ -75,17 +76,17 @@
       }
 
       const saved = !!String(result.analysis || '').trim() && String(q.analysis || '').trim() === String(result.analysis || '').trim();
-      blocks.push(`<p class="practice-ai-meta-v613"><span class="pill practice-ai-confidence-v613 is-${result.confidence.toLowerCase()}">${aiSingleConfidenceLabelV613(result.confidence)}</span><span>AI 参考答案：${esc(result.suggestedAnswer || '未给出')}${esc(match)}</span></p>`);
-      blocks.push(`<div class="practice-ai-text-v613">${result.analysis ? renderQuestionContent(result.analysis) : '<span class="muted">AI 未生成可靠解析。</span>'}</div>`);
+      blocks.push(`<p class="practice-ai-meta-v613"><span class="pill practice-ai-confidence-v613 is-${result.confidence.toLowerCase()}">${aiSingleConfidenceLabelV613(result.confidence)}</span><span>${i18n.html('ai.referenceAnswer')}${result.suggestedAnswer ? esc(result.suggestedAnswer) : i18n.html('question.notProvided')}${esc(match)}</span></p>`);
+      blocks.push(`<div class="practice-ai-text-v613">${result.analysis ? renderQuestionContent(result.analysis) : `<span class="muted">${i18n.html('ai.noExplanation')}</span>`}</div>`);
       if (result.needsReview) {
-        blocks.push('<p class="practice-ai-warn-v613">需要人工确认：AI 对本题答案没有把握，请自行核对后再决定是否写入题库。</p>');
+        blocks.push(`<p class="practice-ai-warn-v613">${i18n.html('ai.manualCheckAnswer')}</p>`);
       }
 
       if (result.warning) {
         blocks.push(`<p class="practice-ai-note-v613">${esc(result.warning)}</p>`);
       }
 
-      blocks.push(`<div class="actions practice-ai-actions-v613"><button class="primary mini-btn" type="button" data-ai-single-save-v613="1" ${(!result.analysis || busy || saved) ? 'disabled' : ''}>${saved ? '已写入题库解析' : '保存到题库解析'}</button><button class="ghost mini-btn" type="button" data-ai-single-analysis-v613="1" ${generationDisabled ? 'disabled' : ''}>重新生成</button><button class="ghost mini-btn" type="button" data-ai-single-follow-v613="1" ${busy ? 'disabled' : ''}>${session.followUpOpen ? '收起追问' : '追问'}</button></div>`);
+      blocks.push(`<div class="actions practice-ai-actions-v613"><button class="primary mini-btn" type="button" data-ai-single-save-v613="1" ${(!result.analysis || busy || saved) ? 'disabled' : ''}>${i18n.html(saved ? 'ai.writtenExplanation' : 'ai.saveExplanation')}</button><button class="ghost mini-btn" type="button" data-ai-single-analysis-v613="1" ${generationDisabled ? 'disabled' : ''}>${i18n.html('ai.regenerate')}</button><button class="ghost mini-btn" type="button" data-ai-single-follow-v613="1" ${busy ? 'disabled' : ''}>${i18n.html(session.followUpOpen ? 'ai.hideFollowUp' : 'ai.askFollowUp')}</button></div>`);
     }
 
     // 对话区保留错误、草稿和追问状态，生成期间禁用输入及重复发送。
@@ -99,11 +100,11 @@
       }
 
       if (session.messages.length) {
-        blocks.push(`<div class="practice-ai-chat-v613"><b>追问记录</b>${session.messages.map((message) => `<div class="practice-ai-msg-v613 is-${message.role}"><span>${message.role === 'user' ? '你' : 'AI'}</span><div>${message.role === 'user' ? esc(message.content) : renderQuestionContent(message.content)}</div></div>`).join('')}</div>`);
+        blocks.push(`<div class="practice-ai-chat-v613"><b>${i18n.html('ai.followUpHistory')}</b>${session.messages.map((message) => `<div class="practice-ai-msg-v613 is-${message.role}"><span>${message.role === 'user' ? i18n.html('ai.you') : 'AI'}</span><div>${message.role === 'user' ? esc(message.content) : renderQuestionContent(message.content)}</div></div>`).join('')}</div>`);
       }
 
       if (session.followUpOpen && result) {
-        blocks.push(`<div class="practice-ai-follow-v613"><textarea id="practice-ai-follow-input-v613" rows="2" placeholder="例如：为什么 C 选项不对？" ${busy ? 'disabled' : ''}>${esc(session.draft || '')}</textarea><button class="primary mini-btn" type="button" data-ai-single-send-v613="1" ${generationDisabled ? 'disabled' : ''}>发送追问</button></div>`);
+        blocks.push(`<div class="practice-ai-follow-v613"><textarea id="practice-ai-follow-input-v613" rows="2" ${i18n.attribute('placeholder', 'ai.followUpExample')} ${busy ? 'disabled' : ''}>${esc(session.draft || '')}</textarea><button class="primary mini-btn" type="button" data-ai-single-send-v613="1" ${generationDisabled ? 'disabled' : ''}>${i18n.html('ai.sendFollowUp')}</button></div>`);
       }
     }
 
@@ -138,19 +139,19 @@
       const session = aiSingleSessionV613(key); const result = session.analysis; const busy = !!session.loading;
       const savedAnalysis = String(q.analysis || '').trim();
       const hasSavedAnalysis = !result && !!savedAnalysis;
-      const entryText = result || hasSavedAnalysis ? '查看 AI 解析' : 'AI 解析';
-      let panelStatus = result ? '已生成' : '按需生成';
+      const entryText = result || hasSavedAnalysis ? 'ai.viewExplanation' : 'ai.entry';
+      let panelStatus = result ? 'ai.explanationReady' : 'ai.explanationAvailable';
       if (hasSavedAnalysis) {
-        panelStatus = '已保存';
+        panelStatus = 'ai.explanationStored';
       }
 
       if (busy) {
-        panelStatus = session.loading === 'followUp' ? '追问中……' : '生成中……';
+        panelStatus = session.loading === 'followUp' ? 'ai.followUpBusy' : 'ai.generatingExplanation';
       }
 
       if (!session.expanded) {
         box.className = 'practice-ai-entry-v613';
-        box.innerHTML = `<button class="ghost mini-btn" type="button" data-ai-single-open-v613="1" aria-expanded="false">${busy ? 'AI 解析中……' : entryText}</button>`;
+        box.innerHTML = `<button class="ghost mini-btn" type="button" data-ai-single-open-v613="1" aria-expanded="false">${i18n.html(busy ? 'ai.entryBusy' : entryText)}</button>`;
         bindPracticeAiPanelV613();
         return;
       }
@@ -162,14 +163,14 @@
       const needsSettings = !configured && availability.state !== 'checking' && !retryable;
       const isHarness = isAiHarnessExecutionV99(config.execution);
       const generationDisabled = !configured || busy;
-      const blocks = [`<div class="practice-ai-head-v613"><div><b>AI 单题解析</b><span>${configured || isHarness ? esc(aiExecutionLabelV99(config)) + (config.model ? ` · ${esc(config.model)}` : '') : '尚未配置 AI 服务'}</span></div><span class="pill practice-ai-status-v613${busy ? ' is-busy' : ''}">${panelStatus}</span></div>`];
+      const blocks = [`<div class="practice-ai-head-v613"><div><b>${i18n.html('ai.singleExplanation')}</b><span>${configured || isHarness ? esc(aiExecutionLabelV99(config)) + (config.model ? ` · ${esc(config.model)}` : '') : i18n.html('ai.notConfigured')}</span></div><span class="pill practice-ai-status-v613${busy ? ' is-busy' : ''}">${i18n.html(panelStatus)}</span></div>`];
       if (!configured) {
         blocks.push(`<p class="practice-ai-hint-v613" role="status" aria-live="polite" aria-busy="${availability.state === 'checking'}">${esc(availability.reason)}</p>`);
       }
 
-      blocks.push(`<div class="actions practice-ai-actions-v613"><button class="ghost mini-btn" type="button" data-ai-single-close-v613="1" aria-expanded="true">收起 AI 面板</button>${busy ? '<button class="ghost mini-btn" type="button" data-ai-single-stop-v613="1">停止请求</button>' : ''}</div>`);
+      blocks.push(`<div class="actions practice-ai-actions-v613"><button class="ghost mini-btn" type="button" data-ai-single-close-v613="1" aria-expanded="true">${i18n.html('ai.collapsePanel')}</button>${busy ? `<button class="ghost mini-btn" type="button" data-ai-single-stop-v613="1">${i18n.html('ai.stopRequest')}</button>` : ''}</div>`);
       if (aiSingleHasImagesV613(item)) {
-        blocks.push('<p class="practice-ai-warn-v613">本次仅发送文字，未发送题目图片；AI 无法读取图表细节，请人工核对。</p>');
+        blocks.push(`<p class="practice-ai-warn-v613">${i18n.html('ai.imagesExcluded')}</p>`);
       }
 
       if (isHarness) {
@@ -179,15 +180,15 @@
       if (result) {
         appendPracticeDraft(blocks, q, session, result, generationDisabled, busy);
       } else if (hasSavedAnalysis) {
-        blocks.push(`<p class="practice-ai-hint-v613">题库已保存解析</p><div class="practice-ai-text-v613">${renderQuestionContent(savedAnalysis)}</div>`);
-        blocks.push(`<div class="actions practice-ai-actions-v613"><button class="ghost mini-btn" type="button" data-ai-single-analysis-v613="1" ${generationDisabled ? 'disabled' : ''}>重新生成</button>${needsSettings ? '<button class="ghost mini-btn" type="button" data-ai-single-settings-v613="1">前往 AI 设置</button>' : ''}${retryable ? '<button class="ghost mini-btn" type="button" data-ai-single-retry-v613="1">重试检查</button>' : ''}</div>`);
+        blocks.push(`<p class="practice-ai-hint-v613">${i18n.html('ai.savedExplanation')}</p><div class="practice-ai-text-v613">${renderQuestionContent(savedAnalysis)}</div>`);
+        blocks.push(`<div class="actions practice-ai-actions-v613"><button class="ghost mini-btn" type="button" data-ai-single-analysis-v613="1" ${generationDisabled ? 'disabled' : ''}>${i18n.html('ai.regenerate')}</button>${needsSettings ? `<button class="ghost mini-btn" type="button" data-ai-single-settings-v613="1">${i18n.html('import.openAi')}</button>` : ''}${retryable ? `<button class="ghost mini-btn" type="button" data-ai-single-retry-v613="1">${i18n.html('import.aiRetryCheck')}</button>` : ''}</div>`);
       } else {
-        blocks.push('<p class="practice-ai-hint-v613">只把当前这道题的题干、选项、答案和你的作答发给 AI，生成一段简短解析；结果先作为草稿，确认后再写入题库。</p>');
-        blocks.push(`<div class="actions practice-ai-actions-v613"><button class="primary mini-btn" type="button" data-ai-single-analysis-v613="1" ${generationDisabled ? 'disabled' : ''}>${busy ? '生成中……' : 'AI 解析'}</button>${needsSettings ? '<button class="ghost mini-btn" type="button" data-ai-single-settings-v613="1">前往 AI 设置</button>' : ''}${retryable ? '<button class="ghost mini-btn" type="button" data-ai-single-retry-v613="1">重试检查</button>' : ''}</div>`);
+        blocks.push(`<p class="practice-ai-hint-v613">${i18n.html('ai.singleHint')}</p>`);
+        blocks.push(`<div class="actions practice-ai-actions-v613"><button class="primary mini-btn" type="button" data-ai-single-analysis-v613="1" ${generationDisabled ? 'disabled' : ''}>${i18n.html(busy ? 'ai.generatingExplanation' : 'ai.entry')}</button>${needsSettings ? `<button class="ghost mini-btn" type="button" data-ai-single-settings-v613="1">${i18n.html('import.openAi')}</button>` : ''}${retryable ? `<button class="ghost mini-btn" type="button" data-ai-single-retry-v613="1">${i18n.html('import.aiRetryCheck')}</button>` : ''}</div>`);
       }
 
       if (result && (needsSettings || retryable)) {
-        blocks.push(`<div class="actions practice-ai-actions-v613">${needsSettings ? '<button class="ghost mini-btn" type="button" data-ai-single-settings-v613="1">前往 AI 设置</button>' : ''}${retryable ? '<button class="ghost mini-btn" type="button" data-ai-single-retry-v613="1">重试检查</button>' : ''}</div>`);
+        blocks.push(`<div class="actions practice-ai-actions-v613">${needsSettings ? `<button class="ghost mini-btn" type="button" data-ai-single-settings-v613="1">${i18n.html('import.openAi')}</button>` : ''}${retryable ? `<button class="ghost mini-btn" type="button" data-ai-single-retry-v613="1">${i18n.html('import.aiRetryCheck')}</button>` : ''}</div>`);
       }
 
       appendPracticeConversation(blocks, session, result, busy, generationDisabled);
@@ -308,7 +309,7 @@
     function renderReviewAnalysis(item, chosen, scope) {
       const q = practiceQuestionV8916(item); const key = JSON.stringify([scope, item.bankId || '', q.id || '']);
       const session = reviewAiSessions.getOrCreate(key, item, chosen);
-      return `<section class="review-analysis" data-review-analysis="${esc(key)}" aria-label="题目解析" aria-live="polite">${reviewAnalysisContent(session)}</section>`;
+      return `<section class="review-analysis" data-review-analysis="${esc(key)}" lang="zh-CN" ${i18n.attribute('aria-label', 'ai.questionExplanation')} aria-live="polite">${reviewAnalysisContent(session)}</section>`;
     }
 
     // 根据读取、草稿、保存和服务就绪状态展示复盘操作。
@@ -318,7 +319,7 @@
       const configured = !isApplicationReady() || aiConfiguredV99(config, 'question_analysis');
       const availability = aiAvailabilityV99(config, 'question_analysis');
       const { retryable } = availability;
-      const title = '<b class="review-analysis-title">解析</b>';
+      const title = `<b class="review-analysis-title">${i18n.html('editor.analysis')}</b>`;
       const button = (action, label, primary = false, disabled = false) => `<button type="button" class="${primary ? 'primary' : 'ghost'} mini-btn" data-review-ai="${action}" ${disabled ? 'disabled' : ''}>${label}</button>`;
 
       const error = session.error ? `<p class="review-analysis-warning" role="alert">${esc(session.error)}</p>` : '';
@@ -332,11 +333,11 @@
           match = result.matchesLocalAnswer ? ' · 与题库答案一致' : ' · 与题库答案可能不一致，请人工确认';
         }
 
-        return `<div class="review-analysis-head"><b class="review-analysis-title">AI 解析草稿</b><span class="pill">草稿 · 未保存</span></div><p class="muted">AI 参考答案：${esc(result.suggestedAnswer || '未给出')}${esc(match)} · ${aiSingleConfidenceLabelV613(result.confidence)}</p><div class="q-multiline-text">${renderQuestionContent(result.analysis)}</div>${result.needsReview ? '<p class="review-analysis-warning">需要人工核对后再决定是否保存。</p>' : ''}${result.warning ? `<p class="review-analysis-warning">${esc(result.warning)}</p>` : ''}<p class="muted">AI 生成内容仅供参考，请核对后保存。</p>${error}${configured ? '' : `<p role="status">${esc(availability.reason)}</p>`}<div class="actions">${button('save', session.saving ? '保存中…' : '保存到题库解析', true, session.saving)}${button('generate', '重新生成', false, session.saving || !configured)}${button('discard', '放弃草稿', false, session.saving)}${retryable ? button('retry', '重试检查') : ''}${!configured && !retryable && availability.state !== 'checking' ? button('settings', '前往 AI 设置') : ''}</div>`;
+        return `<div class="review-analysis-head"><b class="review-analysis-title">${i18n.html('ai.explanationDraft')}</b><span class="pill">${i18n.html('ai.unsavedDraft')}</span></div><p class="muted">${i18n.html('ai.referenceAnswer')}${result.suggestedAnswer ? esc(result.suggestedAnswer) : i18n.html('question.notProvided')}${esc(match)} · ${aiSingleConfidenceLabelV613(result.confidence)}</p><div class="q-multiline-text">${renderQuestionContent(result.analysis)}</div>${result.needsReview ? `<p class="review-analysis-warning">${i18n.html('ai.checkBeforeSaving')}</p>` : ''}${result.warning ? `<p class="review-analysis-warning">${esc(result.warning)}</p>` : ''}<p class="muted">${i18n.html('ai.generatedHint')}</p>${error}${configured ? '' : `<p role="status">${esc(availability.reason)}</p>`}<div class="actions">${button('save', session.saving ? '保存中…' : '保存到题库解析', true, session.saving)}${button('generate', '重新生成', false, session.saving || !configured)}${button('discard', '放弃草稿', false, session.saving)}${retryable ? button('retry', '重试检查') : ''}${!configured && !retryable && availability.state !== 'checking' ? button('settings', '前往 AI 设置') : ''}</div>`;
       }
 
       if (text) {
-        return `<div class="review-analysis-head">${title}${session.saved ? '<span class="review-analysis-saved" role="status">✓ 已保存到题库解析</span>' : ''}</div><div class="q-multiline-text">${renderQuestionContent(text)}</div>`;
+        return `<div class="review-analysis-head">${title}${session.saved ? `<span class="review-analysis-saved" role="status">${i18n.html('ai.savedMark')}</span>` : ''}</div><div class="q-multiline-text">${renderQuestionContent(text)}</div>`;
       }
 
       let action = button('generate', 'AI 生成解析', true);

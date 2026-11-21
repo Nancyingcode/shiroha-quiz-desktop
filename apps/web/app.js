@@ -1,6 +1,7 @@
 // 隔离应用状态和共享模块装配，待浏览器或桌面平台准备好后启动页面。
 (function () {
   const APP_VERSION = 'V38：单题AI解析与追问版';
+  const i18n = globalThis.ShirohaI18n;
   const {
     RICH_CONTENT_VERSION_V57,
     pickRichTextFieldV57,
@@ -38,7 +39,6 @@
   const AI_REVIEW_DEFAULT_BATCH_V991 = 20;
   const AI_ANALYSIS_DEFAULT_BATCH_V991 = 10;
   const AI_PROVIDER_PRESETS_V99 = globalThis.ShirohaAiSettings.presets;
-  const TYPE_LABEL = { single: '单选题', multiple: '多选题', multi: '多选题', judge: '判断题', blank: '填空题', short: '简答题', short_answer: '简答题' };
   const PRACTICE_START_FROM_V58916 = 'from_start';
   const PRACTICE_START_CONTINUE_V58916 = 'continue';
   const PRACTICE_START_CUSTOM_V58916 = 'custom';
@@ -125,10 +125,12 @@
     await ShirohaPlatform.harness?.initialize({ restored: true });
   }
 
+  // 手动保存沿用共享事务，确认落盘后再根据当前平台通知用户。
   async function saveState() {
     return runMutation(async () => {
       await saveSilent();
-      toast(ShirohaPlatform.storage.checkpoint ? '已保存到本机数据库。' : '已保存到浏览器本地。', 'ok');
+      const key = ShirohaPlatform.storage.checkpoint ? 'shell.savedDesktop' : 'shell.savedWeb';
+      toast(i18n.text(key), 'ok', i18n.text('shell.done'));
     });
   }
 
@@ -194,7 +196,7 @@
       return true;
     } catch (error) {
       if (shouldReport()) {
-        platformStatus(error.message || '读取本地数据失败，请重试。', true);
+        platformStatus(error.message || i18n.text('storage.readFailed'), true);
       }
 
       return false;
@@ -321,6 +323,7 @@
     scheduleMathJaxTypesetV56,
     parseDocxMarkdownTableBlockV55,
     renderQuestionBodyV83,
+    practiceTypeLabel,
     questionHtml,
     bindAnswerOptionControls,
     refreshAnswerOptionControls,
@@ -350,7 +353,6 @@
     questionImageDataUriRegexV83,
     questionTextContainsDataUriV83,
     practiceSourceMeta,
-    label,
     scoreOf,
     hasAnswerValueV58914,
     isMultiBlankQuestionV58914,
@@ -635,6 +637,8 @@
     copyAiDiagnosticV375,
     copyAiOllamaCorsCommandV375,
     updateAiConnectionPillV99,
+    renderAiDiagnosticV375,
+    setConnectionTestingV99,
     renderAiSettingsV99,
   } = aiSettings;
   const aiTransport = globalThis.ShirohaAiTransport.create({
@@ -935,7 +939,6 @@
   });
   const {
     renderRecords,
-    trainingCompletion,
     renderRecentTraining,
     openTrainingReview,
     leaveTrainingReview,
@@ -1098,7 +1101,6 @@
     select: $,
     selectAll: $$,
     escape: esc,
-    label,
     now,
     makeId,
     toast,
@@ -1139,6 +1141,7 @@
       body: renderQuestionBodyV83,
       reviewOptions: renderReviewOptions,
       reviewSummary: renderReviewAnswerSummary,
+      typeLabel: practiceTypeLabel,
       html: questionHtml,
       applyAnswer: applyAnswerStateV26,
       collectAnswer,
@@ -1156,7 +1159,6 @@
     review: {
       items: trainingSessionItems,
       data: ShirohaTraining.buildReviewData,
-      completion: trainingCompletion,
       open: openTrainingReview,
       page: pagination.render,
       analysis: (...args) => renderReviewAnalysis(...args),
@@ -1688,7 +1690,8 @@
   /* SHIROHA_WEB_ISSUE_99_AI_IMPORT_END */
 
   function label(t) {
-    return TYPE_LABEL[t] || t || '未知';
+    const type = normalizeWebQuestionType(t);
+    return type ? i18n.text(`question.${type}`) : (t || i18n.text('question.unknown'));
   }
 
   /* SHIROHA_WEB_V58_9_14_MULTI_BLANK_SYNC_START */
@@ -1831,7 +1834,7 @@
   }
 
   function fmt(s) {
-    return new Date(s).toLocaleString('zh-CN', { hour12: false });
+    return i18n.date(s);
   }
 
   /* SHIROHA_V23_DATA_TOOLS_PATCH_START
@@ -1986,7 +1989,7 @@
 
   /* SHIROHA_WEB_V58_9_12_1_HOME_VERSION_SYNC_FIX */
   function syncHomeVersionPromptV586() {
-    const label = APP_VERSION;
+    const label = i18n.text('home.version');
     try {
       const root = document.querySelector('#dashboard') || document.body || document;
       document.title = `Shiroha Quiz - ${label}`;
@@ -2016,6 +2019,42 @@
     } catch { /* 版本提示同步失败不应阻断页面启动。 */ }
   }
 
+  // 导航名称已经更新，当前页标题可以同步而无需触发切页。
+  function syncLocalizedPageTitle() {
+    const activeNav = $('.nav.active');
+    const title = $('#page-title');
+    if (activeNav && title) {
+      title.textContent = activeNav.textContent;
+    }
+  }
+
+  // 只刷新依赖区域格式的摘要，练习和其他已挂载控件由词条更新保留原节点。
+  function refreshLocale() {
+    syncLocalizedPageTitle();
+    syncHomeVersionPromptV586();
+    renderStats();
+    renderBankSelect();
+    renderBankList();
+    renderMergeSelect(true);
+    renderBankPreview();
+    renderWrongBook();
+    renderFavoritesPageV596();
+    renderRecords();
+    renderRecentTraining();
+    renderPracticeScopeUiV8916();
+    builtInBank.render();
+    importPage.refreshAppendTarget();
+    if (importDraft.questions.length) {
+      renderImportPreview(importDraft.questions, { syncPreviewTools: false });
+    }
+
+    syncAiImportActionV99();
+    updateAiConnectionPillV99();
+    setConnectionTestingV99(isConnectionTestingV99());
+    renderAiDiagnosticV375();
+    renderWebdavPanelV378();
+  }
+
   // 完成状态迁移和默认值补齐后绑定事件，首次渲染即可读取完整状态。
   function init() {
     upgradeState();
@@ -2030,6 +2069,7 @@
     setupEnhancedDataToolsV23();
     renderAll();
     shell.updateView();
+    syncLocalizedPageTitle();
     syncHomeVersionPromptV586();
     setTimeout(syncHomeVersionPromptV586, 80);
     setTimeout(syncHomeVersionPromptV586, 300);
@@ -2278,7 +2318,7 @@
   // 在独占保存事务中重置数据，经用户确认后才调用平台清除入口。
   async function resetData() {
     return runMutation(/* 确认后停止原任务并清理可恢复的本地状态，然后重新初始化数据。 */ async () => {
-      if (!await ShirohaDialogs.confirm('确定清除全部本地数据？默认题库也会重新初始化。')) {
+      if (!await ShirohaDialogs.confirm(i18n.text('storage.clearConfirm'))) {
         return;
       }
 
@@ -2287,7 +2327,7 @@
       try {
         await importDraftPersistence.clearForReset();
       } catch {
-        await ShirohaDialogs.alert('题库数据已清除，但本机导入草稿未能清除，请刷新后手动删除草稿。');
+        await ShirohaDialogs.alert(i18n.text('storage.draftClearFailed'));
       }
 
       location.reload();
@@ -2434,7 +2474,7 @@
     mutationBusy = true;
     mutationSaveError = null;
     lockApplication(true);
-    platformStatus('正在保存，请勿关闭页面…');
+    platformStatus(i18n.text('storage.saving'));
     await Promise.allSettled([...nativeReads]);
     const rollbackView = ShirohaPlatform.storage.checkpointView?.();
     const disabledBefore = [...document.querySelectorAll('button,input,select,textarea')].map((el) => [el, el.disabled]);
@@ -2466,7 +2506,7 @@
       if (ShirohaPlatform.storage.revision() !== revisionBefore) {
         mutationSaveError = null;
         retryMutation = null;
-        platformStatus('数据已保存，但界面刷新失败，请重新打开页面。', true);
+        platformStatus(i18n.text('storage.refreshFailed'), true);
         return false;
       }
 
@@ -2493,7 +2533,7 @@
 
       retryMutation = retry;
 
-      platformStatus(error?.message || '保存失败，原数据与编辑内容已保留，请重试。', true);
+      platformStatus(error?.message || i18n.text('storage.saveFailed'), true);
       return false;
     } finally {
       mutationBusy = false;
@@ -2605,9 +2645,13 @@
     applicationGeneration += 1;
     const generation = applicationGeneration;
     studyDashboard.stop();
+    i18n.initialize(ShirohaPlatform.preferences, refreshLocale, (message) => {
+      showNotice(i18n.text('shell.done'), message, 'warn');
+    });
+
     lockApplication(true);
     document.body.dataset.storageState = 'loading';
-    platformStatus('正在读取本地数据…');
+    platformStatus(i18n.text('shell.loading'));
     try {
       Object.assign(state, await loadState());
       await ShirohaPlatform.credentials.initialize(ensureAiImportStateV99(), state.serviceConfigurations);
@@ -2625,7 +2669,7 @@
           return undefined;
         }).catch(() => {
           if (generation === applicationGeneration) {
-            platformStatus('AI 状态检查未完成，请在 AI 设置中重试。', true);
+            platformStatus(i18n.text('storage.aiCheckFailed'), true);
           }
         });
       }
@@ -2639,7 +2683,7 @@
             renderWebdavPanelV378(true);
             platformStatus('');
           } catch {
-            platformStatus('旧凭据迁移未完成，旧值已保留，可独立重试。', true);
+            platformStatus(i18n.text('storage.credentialMigrationFailed'), true);
             const retry = document.createElement('button');
             retry.textContent = '重试凭据迁移';
             retry.onclick = retryCredentials;
@@ -2654,14 +2698,14 @@
       studyDashboard.stop();
       document.body.dataset.storageState = 'recovery_required';
       retryMutation = startApplication;
-      platformStatus(error?.message || '数据加载失败，原数据已保留。', true);
+      platformStatus(error?.message || i18n.text('storage.initializationFailed'), true);
       const button = document.createElement('button');
       button.textContent = '导出原始数据';
       button.onclick = /* 启动发现异常的旧数据时，提供原始副本供用户另行恢复。 */ async () => {
         try {
           await ShirohaPlatform.download('shiroha-recovery.json', new Blob([ShirohaPlatform.storage.recoveryText()], { type: 'application/json' }));
         } catch {
-          platformStatus('无法读取原始数据，请检查浏览器存储权限。', true);
+          platformStatus(i18n.text('storage.readOriginalFailed'), true);
         }
       };
 
@@ -2734,13 +2778,13 @@
   if (globalThis.ShirohaDesktopHost) {
     globalThis.ShirohaDesktopHost.canClose = /* 在宿主关闭前检查未保存的练习、考试与识别任务，按操作状态允许取消退出。 */ async () => {
       if (mutationBusy) {
-        platformStatus('正在保存，请完成后再关闭。', true);
+        platformStatus(i18n.text('storage.finishSaving'), true);
         return false;
       }
 
       if (practiceSession.current.submitMode === 'total' && !practiceSession.current.completed) {
         if (practiceSession.current.totalLocked) {
-          platformStatus('本轮答案已锁定，请完成简答题自评和保存后再关闭。');
+          platformStatus(i18n.text('storage.finishSelfAssessment'));
           return false;
         }
 
@@ -2777,7 +2821,7 @@
         await ShirohaPlatform.saves.idle();
         return true;
       } catch (error) {
-        platformStatus(error.message || '退出前检查失败，请重试。', true);
+        platformStatus(error.message || i18n.text('storage.exitCheckFailed'), true);
         return false;
       }
     };

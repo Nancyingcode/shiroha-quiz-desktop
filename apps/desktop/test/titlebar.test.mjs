@@ -5,13 +5,15 @@ import test from 'node:test';
 import vm from 'node:vm';
 
 const source = await readFile(new URL('../frontend/titlebar.js', import.meta.url), 'utf8');
+const localeScripts = await Promise.all(['i18n-messages.js', 'i18n.js'].map((name) => (
+  readFile(new URL(`../../web/ui/${name}`, import.meta.url), 'utf8')
+)));
 
 /** @typedef {{button?: number, detail?: number, preventDefault?: () => void}} EventInput */
 class Element {
   hidden = true;
   disabled = true;
   textContent = '';
-  title = '';
   right = 0;
   /** @type {Element | null} */
   label = null;
@@ -28,6 +30,10 @@ class Element {
   /** @param {string} name @param {string} value */
   setAttribute(name, value) {
     this.attributes.set(name, value);
+  }
+  /** @param {string} name */
+  removeAttribute(name) {
+    this.attributes.delete(name);
   }
   /** @param {string} name @param {EventInput} [event] */
   emit(name, event = {}) {
@@ -107,7 +113,12 @@ function fixture() {
       },
     },
   };
-  const start = () => vm.runInNewContext(source, { window: host, document, ResizeObserver, Event: globalThis.Event });
+  const start = () => {
+    const context = vm.createContext({ window: host, document, ResizeObserver, Event: globalThis.Event });
+    for (const script of [...localeScripts, source]) {
+      vm.runInContext(script, context);
+    }
+  };
   return { get, calls, events, api, start, host, label, properties, observed, resize: () => resize() };
 }
 
@@ -123,10 +134,12 @@ test('navigation toggle follows the title text when its measured width changes',
 test('window actions use only the current window and synchronize maximize/restore labels', async () => {
   const f = fixture(); f.start(); await setImmediate();
   f.get('window-maximize').emit('click'); await setImmediate();
-  assert.equal(f.get('window-maximize').title, '还原');
+  assert.equal(f.get('window-maximize').attributes.get('title'), '还原');
+  assert.equal(f.get('window-maximize').attributes.get('aria-label'), '还原');
   assert.equal(f.get('titlebar').dataset.maximized, 'true');
   f.get('window-maximize').emit('click'); await setImmediate();
-  assert.equal(f.get('window-maximize').title, '最大化');
+  assert.equal(f.get('window-maximize').attributes.get('title'), '最大化');
+  assert.equal(f.get('window-maximize').attributes.get('aria-label'), '最大化');
   f.get('window-minimize').emit('click'); await setImmediate();
   f.get('window-close').emit('click'); await setImmediate();
   assert.deepEqual(f.calls, ['toggle', 'toggle', 'minimize', 'close']);

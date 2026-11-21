@@ -2,6 +2,8 @@
 (() => {
   'use strict';
 
+  const i18n = globalThis.ShirohaI18n;
+
   // 将 Web 题型对应到跨端备份使用的原生题型枚举，保留主观题回退。
   function toNativeQuestionType(type) {
     const value = globalThis.ShirohaQuizCore.normalizeWebQuestionType(type);
@@ -115,7 +117,8 @@
 
     function reportError(error) {
       // eslint-disable-next-line prefer-template -- 异常信息可能是对象，保留 + 的默认转换；统一异常类型后移除此例外。
-      platformStatus('导出失败：' + error.message, true);
+      const detail = '' + error.message;
+      platformStatus(i18n.text('backup.exportFailed', { detail }), true);
       return false;
     }
 
@@ -269,7 +272,7 @@
         toast(`已生成含图片备份 ZIP。${assets}`, 'ok');
       } catch (error) {
         warnDev('导出含图片备份 ZIP 失败', error);
-        toast('导出含图片备份 ZIP 失败，请先使用完整 JSON 备份。', 'danger');
+        toast(i18n.text('backup.exportZipFailed'), 'danger');
       }
     }
 

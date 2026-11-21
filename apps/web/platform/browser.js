@@ -177,6 +177,15 @@
     },
   };
   const preferences = {
+    locale() {
+      return localStorage.getItem('shiroha-ui-locale');
+    },
+
+    /** @param {string} value */
+    setLocale(value) {
+      localStorage.setItem('shiroha-ui-locale', value);
+    },
+
     sidebar() {
       return localStorage.getItem('shiroha-sidebar-collapsed') === '1';
     },

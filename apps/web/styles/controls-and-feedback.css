@@ -526,3 +526,17 @@ body.practice-focus .practice-focus-head{flex-wrap:wrap}
     outline-offset:-2px !important
   }
 }
+.interface-language{
+  display:flex;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:8px;
+  margin-block:12px
+}
+.interface-language > [data-ui-language]{
+  width:auto;
+  max-width:100%
+}
+#practice > .interface-language{
+  justify-content:flex-end
+}

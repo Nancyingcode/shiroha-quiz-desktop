@@ -1,6 +1,7 @@
 // 让用户从题库管理进入二次编辑，并用来源快照拦截冲突写入。
 (() => {
   'use strict';
+  const i18n = globalThis.ShirohaI18n;
   // 装配题库二次编辑流程，由页面提供事务、题库和预览入口。
   function create({
     state,
@@ -62,7 +63,7 @@
       }
 
       if (!panel) {
-        summary.insertAdjacentHTML('beforebegin', '<div id="bank-edit-panel-v45" class="bank-edit-panel-v45 hidden"><div><b>题库二次编辑</b><span id="bank-edit-title-v45"></span></div><div class="bank-edit-panel-actions-v45"><button class="primary" id="bank-edit-save-v45" type="button">保存回题库</button><button class="ghost" id="bank-edit-cancel-v45" type="button">退出编辑</button></div></div>');
+        summary.insertAdjacentHTML('beforebegin', `<div id="bank-edit-panel-v45" class="bank-edit-panel-v45 hidden"><div><b>${i18n.html('editor.secondary')}</b><span id="bank-edit-title-v45"></span></div><div class="bank-edit-panel-actions-v45"><button class="primary" id="bank-edit-save-v45" type="button">${i18n.html('editor.saveToBank')}</button><button class="ghost" id="bank-edit-cancel-v45" type="button">${i18n.html('editor.exit')}</button></div></div>`);
         panel = $('#bank-edit-panel-v45');
         $('#bank-edit-save-v45').onclick = saveBankEditSessionV45;
         $('#bank-edit-cancel-v45').onclick = cancelBankEditSessionV45;
@@ -85,26 +86,26 @@
         panel.classList.remove('hidden');
         const title = $('#bank-edit-title-v45');
         if (title) {
-          title.textContent = `正在编辑：${b?.name || bankEditSessionV45.name || '题库'}｜${count || importDraft.questions.length} 题`;
+          title.textContent = i18n.text('editor.editingBank', { name: b?.name || bankEditSessionV45.name || i18n.text('scope.untitledBank'), count: count || importDraft.questions.length });
         }
 
         if (confirmBtn) {
-          confirmBtn.textContent = '保存回题库';
+          i18n.bindText(confirmBtn, 'editor.saveToBank');
           confirmBtn.disabled = false;
         }
 
         if (dualConfirm) {
-          dualConfirm.textContent = '保存回题库';
+          i18n.bindText(dualConfirm, 'editor.saveToBank');
           dualConfirm.disabled = false;
         }
       } else {
         panel.classList.add('hidden');
         if (confirmBtn) {
-          confirmBtn.textContent = '确认导入';
+          i18n.bindText(confirmBtn, 'import.confirm');
         }
 
         if (dualConfirm) {
-          dualConfirm.textContent = '确认导入';
+          i18n.bindText(dualConfirm, 'import.confirm');
         }
       }
     }
@@ -156,7 +157,7 @@
 
       const bank = state.banks.find((value) => value.id === id);
       if (!bank) {
-        toast('没有找到该题库。', 'warn');
+        toast(i18n.text('editor.missingBank'), 'warn');
         return;
       }
 
@@ -175,7 +176,7 @@
         $('#bank-edit-panel-v45')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }, 60);
 
-      toast('已进入题库二次编辑。', 'ok');
+      toast(i18n.text('editor.editStarted'), 'ok');
     }
 
     function saveBankEditSessionV45() {
@@ -199,12 +200,12 @@
 
           const bank = state.banks.find((b) => b.id === session.bankId);
           if (!bank) {
-            toast('原题库不存在，无法保存。', 'danger');
+            toast(i18n.text('editor.missingSource'), 'danger');
             return;
           }
 
           if (bankEditQuestionSnapshot(bank.questions) !== session.sourceQuestions) {
-            toast('题库已变化，请退出编辑后重新打开，避免覆盖其他修改。', 'warn');
+            toast(i18n.text('editor.changedBank'), 'warn');
             return;
           }
 
@@ -238,10 +239,10 @@
           renderAll();
           await switchViewV45('banks');
           if (scopeFellBack) {
-            toast('原练习分组已无题库，已切换为当前题库。', 'warn');
+            toast(i18n.text('editor.groupCleared'), 'warn');
           }
 
-          toast(`已保存题库“${name}”：${bank.questions.length} 道题${warnings.length ? `，仍有 ${warnings.length} 条提示可后续再核对` : ''}。`, warnings.length ? 'warn' : 'ok');
+          toast(i18n.text(warnings.length ? 'editor.bankSavedWithWarnings' : 'editor.bankSaved', { name, count: bank.questions.length, warnings: warnings.length }), warnings.length ? 'warn' : 'ok');
         },
         // 离开编辑页可释放题目正文，重试仍需为原编辑会话重新预读。
         () => saveBankEditSession(session),
@@ -255,7 +256,7 @@
       }
 
       resetAiSuggestionsV991();
-      if (!await globalThis.ShirohaDialogs.confirm('退出题库二次编辑？未保存的修改不会写回题库。')) {
+      if (!await globalThis.ShirohaDialogs.confirm(i18n.text('editor.closeEditing'))) {
         return;
       }
 

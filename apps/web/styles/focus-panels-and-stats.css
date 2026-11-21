@@ -1113,7 +1113,7 @@ body.exam-rail-collapsed-v34 #exam-answer-card-v30 .rail-show-btn-v34:hover{
    考试右侧答题卡进一步压缩并限制高度；练习退出直接回设置区；记录导航统一承载练习/考试记录。 */
 @media(min-width:1280px){
   body.exam-focus #exam-card.card{
-    width:min(920px, calc(100vw - 390px)) !important;
+    width:min(100%, 920px, calc(100vw - 390px)) !important;
     max-width:920px !important;
   }
   body.exam-focus #exam-card > .exam-side-v31{

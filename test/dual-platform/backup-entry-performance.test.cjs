@@ -41,7 +41,7 @@ function setup(data, assets) {
       },
     },
   });
-  runWebScripts(context, ['backup/restore.js']);
+  runWebScripts(context, ['ui/i18n-messages.js', 'ui/i18n.js', 'backup/restore.js']);
   context.backupRestore = context.ShirohaBackupRestore.create({
     platform: context.ShirohaPlatform,
     archive: {

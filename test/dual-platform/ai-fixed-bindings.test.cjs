@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
+const { runWebScripts } = require('./source-tools.cjs');
 
 test('AI 六个固定按钮直接绑定原处理器，缺节点和重复绑定不改变调用语义', () => {
   const calls = [];
@@ -28,6 +29,7 @@ test('AI 六个固定按钮直接绑定原处理器，缺节点和重复绑定�
     nodes['#ai-import-panel-v99'] = { classList: { contains: () => true } };
     nodes['#ai-preview-panel-v991'] = { classList: { contains: () => true } };
     const context = vm.createContext({});
+    runWebScripts(context, ['ui/i18n-messages.js', 'ui/i18n.js']);
     let source = fs.readFileSync(path.join(__dirname, '../../apps/web/ai-import-panel.js'), 'utf8');
     // 单行锚点：不依赖文件换行符（CRLF/LF），也不受逐行排版规则影响。
     const anchor = 'bindAiImportEventsV99,';

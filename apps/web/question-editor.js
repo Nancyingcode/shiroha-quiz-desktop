@@ -1,6 +1,41 @@
 // 装配导入预览与题目编辑，保存前保护原草稿、题目来源和练习状态。
 (() => {
   'use strict';
+  const i18n = globalThis.ShirohaI18n;
+  const issueMessages = new Map([
+    ['正常', 'diagnostic.valid'],
+    ['缺少题干', 'diagnostic.missingQuestion'],
+    ['选择题缺少选项', 'diagnostic.missingChoices'],
+    ['判断题缺少正确/错误选项', 'diagnostic.missingJudgeChoices'],
+    ['缺少答案', 'diagnostic.missingAnswer'],
+    ['判断题答案无法映射到正确/错误', 'diagnostic.unknownJudgeAnswer'],
+    ['判断题出现多个答案', 'diagnostic.multipleJudgeAnswers'],
+    ['判断题选项含义疑似不明确', 'diagnostic.ambiguousJudgeChoices'],
+    ['缺少参考答案', 'diagnostic.missingReference'],
+    ['多空题存在缺少主答案的题空', 'diagnostic.missingBlankAnswer'],
+    ['答案超出选项范围', 'diagnostic.answerOutOfRange'],
+    ['单选题出现多个答案', 'diagnostic.multipleSingleAnswers'],
+    ['多选题只有一个答案', 'diagnostic.onlyOneMultipleAnswer'],
+    ['题干疑似混入A选项', 'diagnostic.mergedChoiceA'],
+    ['题干残留答案标记', 'diagnostic.answerMarker'],
+    ['选项疑似粘连', 'diagnostic.mergedChoices'],
+    ['题干过长', 'diagnostic.longQuestion'],
+    ['单选题选项数量偏少', 'diagnostic.fewSingleChoices'],
+    ['多选题选项数量偏少', 'diagnostic.fewMultipleChoices'],
+  ]);
+
+  // 解析器仍使用原有状态判断风险等级。只对已知诊断的显示文案做翻译。
+  function issueText(status) {
+    const detail = status.replace(/* 兼容中英文冒号，拆分风险前缀后查找诊断正文。 */ /^异常[:：]/, '');
+    const message = issueMessages.get(detail);
+    if (!message) {
+      return status;
+    }
+
+    const issue = i18n.text(message);
+    return detail === status ? issue : i18n.text('diagnostic.warning', { issue });
+  }
+
   // 使用应用注入的识别、预览和保存能力，把编辑状态限制在当前入口及草稿。
   function create({
     state,
@@ -116,14 +151,38 @@
       const typeExpected = expected.types || {};
       const expLine = Object.entries({ single: '单选', multiple: '多选', judge: '判断', blank: '填空', short: '简答' }).map(([k, n]) => (typeExpected[k] ? `${n}${typeExpected[k]}题` : null)).filter(Boolean).join('、');
       el.classList.remove('hidden');
+      const strategyLabels = new Map([
+        ['标准逐行解析', 'import.lineStrategy'],
+        ['分卷分区三层解析', 'import.volumeStrategy'],
+        ['紧凑格式解析', 'import.compactStrategy'],
+        ['自动推荐', 'import.autoStrategy'],
+        ['表格题库解析', 'import.tableStrategy'],
+        ['Excel/CSV 表格题库解析', 'import.tableStrategy'],
+        ['JSON结构化导入', 'import.jsonStrategy'],
+        ['双文件导入', 'import.dualFormat'],
+      ]);
+      const mode = strategyLabels.get(d.mode);
+      const strategy = strategyLabels.get(d.strategy);
+      const modeText = mode ? i18n.text(mode) : d.mode || i18n.text('import.autoStrategy');
+      const strategyText = strategy ? i18n.text(strategy) : d.strategy || i18n.text('question.notRecorded');
+      const typeCounts = i18n.text('import.typeCounts', {
+        single: stats.single || 0,
+        multiple: (stats.multiple || 0) + (stats.multi || 0),
+        judge: stats.judge || 0,
+        blank: stats.blank || 0,
+        short: stats.short || 0,
+      });
+      const totalNote = expTotal
+        ? i18n.html('import.totalDifference', { diff: diff > 0 ? `+${diff}` : diff })
+        : i18n.html('import.reviewCount');
       el.innerHTML = `<div class="report-grid">
-    <div><span>采用策略</span><b>${esc(d.strategy || '未记录')}</b><small>模式：${esc(d.mode || '自动推荐')}</small></div>
-    <div><span>识别题量</span><b>${arr.length}</b><small>单选${stats.single || 0}｜多选${(stats.multiple || 0) + (stats.multi || 0)}｜判断${stats.judge || 0}｜填空${stats.blank || 0}｜简答${stats.short || 0}</small></div>
-    <div class="${diffClass}"><span>题量核对</span><b>${expTotal ? `${arr.length}/${expTotal}` : '未发现标题题量'}</b><small>${expTotal ? `差值 ${diff > 0 ? '+' : ''}${diff}` : '可在预览区人工核对'}</small></div>
-    <div><span>错误/异常</span><b>${hardCount}/${riskCount}</b><small>错误 ${hardCount}｜需确认 ${riskCount}</small></div>
-  </div>
-  <div class="report-detail"><b>格式画像：</b>${profileBits.length ? profileBits.join('、') : '标准或低风险格式'}${expLine ? `；<b>标题分布：</b>${esc(expLine)}` : ''}${repairedSegments.length ? `；<b>已局部修复：</b>${esc(repairedSegments.slice(0, 3).join('；'))}${repairedSegments.length > 3 ? '……' : ''}` : ''}</div>
-  ${candidates ? `<details class="candidate-details"><summary>查看候选策略质量对比</summary><table><thead><tr><th>策略</th><th>题数</th><th>质量分</th><th>异常数</th><th>局部修复</th></tr></thead><tbody>${candidates}</tbody></table></details>` : ''}`;
+        <div><span>${esc(i18n.text('import.chosenStrategy'))}</span><b>${esc(strategyText)}</b><small>${i18n.html('import.reportMode', { mode: modeText })}</small></div>
+        <div><span>${esc(i18n.text('import.recognizedCount'))}</span><b>${i18n.number(arr.length)}</b><small>${esc(typeCounts)}</small></div>
+        <div class="${diffClass}"><span>${esc(i18n.text('import.compareCount'))}</span><b>${expTotal ? `${i18n.number(arr.length)}/${i18n.number(expTotal)}` : i18n.html('import.noExpectedCount')}</b><small>${totalNote}</small></div>
+        <div><span>${esc(i18n.text('import.issueCounts'))}</span><b>${i18n.number(hardCount)}/${i18n.number(riskCount)}</b><small>${i18n.html('import.issueBreakdown', { errors: hardCount, warnings: riskCount })}</small></div>
+      </div>
+      <div class="report-detail"><b>${i18n.html('import.profile')}</b>${profileBits.length ? profileBits.join('、') : i18n.html('import.standardProfile')}${expLine ? `；<b>${i18n.html('import.expectedTypes')}</b>${esc(expLine)}` : ''}${repairedSegments.length ? `；<b>${i18n.html('import.repairedSections')}</b>${esc(repairedSegments.slice(0, 3).join('；'))}${repairedSegments.length > 3 ? '……' : ''}` : ''}</div>
+      ${candidates ? `<details class="candidate-details"><summary>${i18n.html('import.compareStrategies')}</summary><table><thead><tr><th>${i18n.html('import.strategyShort')}</th><th>${i18n.html('import.questionsColumn')}</th><th>${i18n.html('import.quality')}</th><th>${i18n.html('import.warningsColumn')}</th><th>${i18n.html('import.repaired')}</th></tr></thead><tbody>${candidates}</tbody></table></details>` : ''}`;
     }
 
     // 将结构化的预览状态映射到界面严重度，未知状态使用原有提示样式。
@@ -147,7 +206,7 @@
       const rows = (arr || []).map(/* 每条预览行单独计算异常状态，并保留它对应的原稿位置。 */ (q, i) => {
         const status = importIssueStatus(q, importDraft.diagnostics?.profile || {});
         if (status !== '正常') {
-          warnings.push(`第${i + 1}题：${status}`);
+          warnings.push(i18n.text('diagnostic.questionWarning', { number: i + 1, issue: issueText(status) }));
         }
 
         return { q, i, status };
@@ -171,14 +230,26 @@
         const [cls, rowCls] = styles[severity];
         const seqInfo = [q.volume, q.group, q.number ? `原${q.number}` : ''].filter(Boolean).join(' · ');
         const checked = importDraft.selected.has(i) ? 'checked' : '';
-        return `<tr class="${rowCls}"><td class="select-cell"><input type="checkbox" class="import-row-check" data-select-import="${i}" ${checked}></td><td class="seq-cell"><b>${i + 1}</b>${seqInfo ? `<small>${esc(seqInfo)}</small>` : ''}</td><td>${label(q.type)}</td><td>${esc(short(q.question, 72))}</td><td>${q.options.length}</td><td>${esc(q.answer.join(''))}</td><td class="${cls}">${esc(status)}</td><td><div class="row-actions"><button class="ghost mini-btn" data-edit-import="${i}">编辑</button><button class="ghost mini-btn" data-save-import-draft="${i}" aria-label="保存草稿并记住第 ${i + 1} 题位置">保存草稿</button><button class="ghost danger mini-btn" data-delete-import="${i}">删除</button></div></td></tr>${renderAiSuggestionRowV991(q, i)}`;
+        return `<tr class="${rowCls}"><td class="select-cell"><input type="checkbox" class="import-row-check" data-select-import="${i}" ${checked}></td><td class="seq-cell"><b>${i + 1}</b>${seqInfo ? `<small>${esc(seqInfo)}</small>` : ''}</td><td>${esc(label(q.type))}</td><td>${esc(short(q.question, 72))}</td><td>${q.options.length}</td><td>${esc(q.answer.join(''))}</td><td class="${cls}">${esc(issueText(status))}</td><td><div class="row-actions"><button class="ghost mini-btn" data-edit-import="${i}">${i18n.html('common.edit')}</button><button class="ghost mini-btn" data-save-import-draft="${i}" ${i18n.attribute('aria-label', 'import.saveDraftPosition', { number: i + 1 })}>${i18n.html('import.saveDraft')}</button><button class="ghost danger mini-btn" data-delete-import="${i}">${i18n.html('common.delete')}</button></div></td></tr>${renderAiSuggestionRowV991(q, i)}`;
       }).join('');
 
-      const filterLabel = { priority: '异常优先', problem: '仅异常', normal: '仅正常', all: '全部' }[importDraft.filter] || '异常优先';
-      const report = importDraft.report ? `<div class="import-report">${esc(importDraft.report)}</div>` : '';
+      const filterKeys = { priority: 'import.priority', problem: 'import.problemsOnly', normal: 'import.normalOnly', all: 'import.all' };
+      const filter = i18n.text(filterKeys[importDraft.filter] || filterKeys.priority);
+      let report = '';
+      if (importDraft.report) {
+        const content = `<div class="import-report">${esc(importDraft.report)}</div>`;
+        report = i18n.locale() === 'en'
+          ? `<details><summary>${i18n.html('import.originalReport')}</summary>${content}</details>`
+          : content;
+      }
+
       renderImportReportPanel(arr, rows.map((row) => row.status));
 
-      $('#import-summary').innerHTML = arr.length ? `${report}<b>识别到 ${arr.length} 道题，当前显示 ${shown.length} 道（${filterLabel}），已选择 ${importDraft.selected.size} 道。</b>${warnings.length ? `<br>警告 ${warnings.length} 条：<br>${warnings.slice(0, 12).map(esc).join('<br>')}${warnings.length > 12 ? '<br>……' : ''}` : '<br>未发现明显异常。'}` : '尚未识别到题目。';
+      const summary = i18n.html('import.summary', { total: arr.length, shown: shown.length, filter, selected: importDraft.selected.size });
+      const warningsMarkup = warnings.length
+        ? `${i18n.html('import.warningCount', { count: warnings.length })}<br>${warnings.slice(0, 12).map(esc).join('<br>')}${warnings.length > 12 ? '<br>……' : ''}`
+        : i18n.html('import.noWarnings');
+      $('#import-summary').innerHTML = arr.length ? `${report}<b>${summary}</b><br>${warningsMarkup}` : i18n.html('import.noQuestions');
       $('#import-summary').className = `notice ${warnings.length ? 'warn' : 'ok'}`;
       const pf = $('#import-preview-filter');
       if (pf && pf.value !== importDraft.filter) {
@@ -600,7 +671,7 @@
       removeAiSuggestionsForQuestionV991(oldQuestion, i);
       importDraft.questions[i] = q;
       const status = validateQuestion(q);
-      $('#edit-status').textContent = `已保存。当前状态：${status}`;
+      $('#edit-status').textContent = i18n.text('editor.savedStatus', { status: issueText(status) });
       $('#edit-status').className = `notice ${status === '正常' ? 'ok' : 'warn'}`;
       renderImportPreview(importDraft.questions);
     }
@@ -718,7 +789,7 @@
 
         await saveSilent();
         const status = validateQuestion(next);
-        $('#edit-status').textContent = `已保存到来源题库。当前状态：${status}`;
+        $('#edit-status').textContent = i18n.text('editor.savedSourceStatus', { status: issueText(status) });
         $('#edit-status').className = `notice ${status === '正常' ? 'ok' : 'warn'}`;
         toast('已保存题目修改。', 'ok');
         renderStats();

@@ -1,6 +1,7 @@
 // 封装练习选题、顺序进度和今日错题队列，交给应用按当前视图初始化。
 (() => {
   'use strict';
+  const i18n = globalThis.ShirohaI18n;
   // 通过页面状态和选题规则装配练习配置，供普通练习和错题重练共用。
   function create({
     state,
@@ -276,13 +277,17 @@
       const fromOption = select.querySelector(`option[value="${PRACTICE_START_FROM_V58916}"]`);
       const continueOption = select.querySelector(`option[value="${PRACTICE_START_CONTINUE_V58916}"]`);
       if (fromOption) {
-        fromOption.textContent = order === 'random' ? '全部范围' : '从头开始';
+        i18n.bindText(fromOption, order === 'random' ? 'practice.wholeScope' : 'practice.fromStart');
       }
 
       if (continueOption) {
         continueOption.hidden = order !== 'sequence';
         continueOption.disabled = !progress;
-        continueOption.textContent = progress ? `继续上次 · 第${progress.index + 1}题` : '继续上次 · 暂无进度';
+        if (progress) {
+          i18n.bindText(continueOption, 'practice.continueAt', { number: progress.index + 1 });
+        } else {
+          i18n.bindText(continueOption, 'practice.noProgress');
+        }
       }
 
       if (order !== 'sequence' && select.value === PRACTICE_START_CONTINUE_V58916) {

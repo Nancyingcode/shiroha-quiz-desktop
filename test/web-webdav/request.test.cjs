@@ -25,7 +25,7 @@ function harness(protocol, fetch) {
     },
   });
   vm.runInContext(readFileSync(path.resolve(__dirname, '../../apps/web/platform/browser-network.js'), 'utf8'), context);
-  runWebScripts(context, ['webdav-panel.js']);
+  runWebScripts(context, ['ui/i18n-messages.js', 'ui/i18n.js', 'webdav-panel.js']);
   Object.assign(context, context.ShirohaWebdavPanel.create({ platform: { network: context.ShirohaBrowserNetwork } }));
   return { context, timers };
 }

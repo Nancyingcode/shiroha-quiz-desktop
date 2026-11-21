@@ -24,7 +24,7 @@
     <div class="app-splash-card">
       <img class="app-splash-logo" src="./media/home_welcome_avatar.webp" alt="" />
       <div class="app-splash-title">Shiroha Quiz</div>
-      <div class="app-splash-subtitle">轻量刷题 · 题库导入 · 错题复习</div>
+      <div class="app-splash-subtitle" data-i18n="shell.splash">轻量刷题 · 题库导入 · 错题复习</div>
       <div class="app-splash-dots"><span></span><span></span><span></span></div>
     </div>
   </div>
@@ -32,19 +32,19 @@
   <div class="app">
     <aside class="side">
       <div class="brand">
-        <img src="./app-icon.png" alt="图标" onerror="this.style.display='none'" />
-        <div><b>Shiroha Quiz</b><span>自导入题库 · 练习 · 考试</span></div>
+        <img src="./app-icon.png" alt="图标" data-i18n-alt="shell.icon" onerror="this.style.display='none'" />
+        <div><b>Shiroha Quiz</b><span data-i18n="shell.description">自导入题库 · 练习 · 考试</span></div>
       </div>
-      <button class="nav active" data-view="dashboard">首页</button>
-      <button class="nav" data-view="import">导入题库</button>
-      <button class="nav" data-view="banks">题库管理</button>
-      <button class="nav" data-view="practice">刷题练习</button>
-      <button class="nav" data-view="exam">考试模式</button>
-      <button class="nav" data-view="wrongbook">错题本</button>
-      <button class="nav" data-view="favorites">收藏夹</button>
-      <button class="nav" data-view="records">训练记录</button>
-      <button class="nav" data-view="ai-settings">AI 设置</button>
-      <button class="nav" data-view="settings">设置/导出</button>
+      <button class="nav active" data-view="dashboard" data-i18n="nav.home">首页</button>
+      <button class="nav" data-view="import" data-i18n="nav.import">导入题库</button>
+      <button class="nav" data-view="banks" data-i18n="nav.banks">题库管理</button>
+      <button class="nav" data-view="practice" data-i18n="nav.practice">刷题练习</button>
+      <button class="nav" data-view="exam" data-i18n="nav.exam">考试模式</button>
+      <button class="nav" data-view="wrongbook" data-i18n="nav.wrongbook">错题本</button>
+      <button class="nav" data-view="favorites" data-i18n="nav.favorites">收藏夹</button>
+      <button class="nav" data-view="records" data-i18n="nav.records">训练记录</button>
+      <button class="nav" data-view="ai-settings" data-i18n="nav.ai">AI 设置</button>
+      <button class="nav" data-view="settings" data-i18n="nav.settings">设置/导出</button>
     </aside>
 
     <main class="main">
@@ -54,349 +54,356 @@
           <h1 id="page-title">首页</h1>
         </div>
         <div class="top-actions">
-          <select id="active-bank-select"></select>
-          <button id="save-all-btn" class="ghost">保存数据</button>
+          <select id="active-bank-select" aria-label="活动题库" data-i18n-aria-label="shell.bankSelector"></select>
+          <button id="save-all-btn" class="ghost" data-i18n="shell.save">保存数据</button>
         </div>
       </header>
 
       <section id="dashboard" class="view active">
         <div class="hero-card dashboard-home-hero">
           <div class="dashboard-home-main">
-            <p class="kicker">当前版本</p>
+            <p class="kicker" data-i18n="home.versionLabel">当前版本</p>
             <h2 id="home-version-label">V38：单题AI解析与追问版</h2>
-            <p class="dashboard-home-desc">新增按题型分层的单题 AI 解析，追问产出可独立保存到题库的完整解析草稿；AI 导入改为结构化优先。</p><div id="home-practice-scope-v8916" class="practice-scope-summary-v8916 home-practice-scope-v8916"></div>
-            <div class="dashboard-action-grid" aria-label="首页快捷入口">
+            <p class="dashboard-home-desc" data-i18n="home.description">新增按题型分层的单题 AI 解析，追问产出可独立保存到题库的完整解析草稿；AI 导入改为结构化优先。</p><div id="home-practice-scope-v8916" class="practice-scope-summary-v8916 home-practice-scope-v8916"></div>
+            <div class="dashboard-action-grid" aria-label="首页快捷入口" data-i18n-aria-label="home.shortcuts">
               <button type="button" class="dashboard-action-card blue" onclick="var n=document.querySelector('.nav[data-view=&quot;practice&quot;]');if(n)n.click();">
-                <span>开始刷题</span><small>顺序练习</small>
+                <span data-i18n="home.startPractice">开始刷题</span><small data-i18n="home.inOrder">顺序练习</small>
               </button>
               <button type="button" class="dashboard-action-card green" onclick="var n=document.querySelector('.nav[data-view=&quot;import&quot;]');if(n)n.click();">
-                <span>导入题库</span><small>题库导入</small>
+                <span data-i18n="nav.import">导入题库</span><small data-i18n="home.importDetail">题库导入</small>
               </button>
               <button type="button" class="dashboard-action-card violet" onclick="var n=document.querySelector('.nav[data-view=&quot;banks&quot;]');if(n)n.click();">
-                <span>管理题库</span><small>查看管理</small>
+                <span data-i18n="home.manageBanks">管理题库</span><small data-i18n="home.browseBanks">查看管理</small>
               </button>
               <button type="button" class="dashboard-action-card amber" onclick="var n=document.querySelector('.nav[data-view=&quot;settings&quot;]');if(n)n.click();">
-                <span>设置导出</span><small>数据备份</small>
+                <span data-i18n="home.settingsAction">设置导出</span><small data-i18n="home.backup">数据备份</small>
               </button>
             </div>
           </div>
           <div class="dashboard-home-side">
             <div class="hero-visual-card dashboard-character-card">
-              <img class="hero-mascot hero-mascot-main" src="./media/splash_mascot.webp" alt="Shiroha Quiz 首页欢迎素材" />
+              <img class="hero-mascot hero-mascot-main" src="./media/splash_mascot.webp" alt="Shiroha Quiz 首页欢迎素材" data-i18n-alt="home.artwork" />
             </div>
             <div class="dashboard-stat-grid hero-stats-app">
-              <div><b id="stat-total">0</b><span>当前练习范围题数</span></div>
-              <div><b id="stat-wrong">0</b><span>错题数</span></div>
-              <div><b id="stat-records">0</b><span>记录数</span></div>
+              <div><b id="stat-total">0</b><span data-i18n="home.scopeCount">当前练习范围题数</span></div>
+              <div><b id="stat-wrong">0</b><span data-i18n="home.wrongCount">错题数</span></div>
+              <div><b id="stat-records">0</b><span data-i18n="home.records">记录数</span></div>
             </div>
           </div>
         </div>
 
         <div class="dashboard-lower-grid">
           <div class="card dashboard-panel">
-            <div class="section-head compact"><div><p class="kicker">Practice</p><h3>学习建议</h3></div></div>
+            <div class="section-head compact"><div><p class="kicker">Practice</p><h3 data-i18n="home.tips">学习建议</h3></div></div>
             <ul class="dashboard-tips">
-              <li>先顺序练习建立题感，再用随机练习检查薄弱点。</li>
-              <li>错题会自动进入错题本，建议每天集中复习一次。</li>
-              <li>考试前用模拟考试确认限时状态和正确率。</li>
+              <li data-i18n="home.tipSequence">先顺序练习建立题感，再用随机练习检查薄弱点。</li>
+              <li data-i18n="home.tipMistakes">错题会自动进入错题本，建议每天集中复习一次。</li>
+              <li data-i18n="home.tipExam">考试前用模拟考试确认限时状态和正确率。</li>
             </ul>
           </div>
           <div class="card dashboard-panel">
-            <div class="section-head compact"><div><p class="kicker">Stat</p><h3>学习统计</h3></div></div>
-            <div class="dashboard-stats-row learning-stats-v42" aria-label="学习统计">
+            <div class="section-head compact"><div><p class="kicker">Stat</p><h3 data-i18n="home.stats">学习统计</h3></div></div>
+            <div class="dashboard-stats-row learning-stats-v42" aria-label="学习统计" data-i18n-aria-label="home.stats">
               <div class="learning-stat-tile-v42">
-                <span>今日练习</span>
+                <span data-i18n="home.today">今日练习</span>
                 <b id="stat-today-count">0</b>
               </div>
               <div class="learning-stat-tile-v42">
-                <span>正确率</span>
+                <span data-i18n="practice.accuracy">正确率</span>
                 <b id="stat-today-rate">—</b>
               </div>
               <button id="start-due-review" class="learning-stat-tile-v42 due-review-tile" type="button" disabled>
-                <span>待复习错题 <span aria-hidden="true">↗</span></span>
+                <span><span data-i18n="home.dueReview">待复习错题</span> <span aria-hidden="true">↗</span></span>
                 <b id="stat-review-due">0</b>
               </button>
               <div class="learning-stat-tile-v42">
-                <span>总练习次数</span>
+                <span data-i18n="home.practiceCount">总练习次数</span>
                 <b id="stat-total-practice">0</b>
               </div>
             </div>
           </div>
           <div class="card dashboard-panel">
-            <div class="section-head compact"><div><p class="kicker">Data</p><h3>数据备份</h3></div></div>
-            <p class="muted">题库和练习记录保存在浏览器本地。更换浏览器、清理缓存或重装 App 前，请先导出全部数据 JSON。</p>
-            <div class="actions dashboard-card-actions"><button type="button" class="ghost" onclick="var n=document.querySelector('.nav[data-view=&quot;settings&quot;]');if(n)n.click();">去设置/导出</button></div>
+            <div class="section-head compact"><div><p class="kicker">Data</p><h3 data-i18n="home.backup">数据备份</h3></div></div>
+            <p class="muted" data-i18n="home.backupInfo">题库和练习记录保存在本机。更换浏览器、清理缓存或重装 App 前，请先导出完整备份。</p>
+            <div class="actions dashboard-card-actions"><button type="button" class="ghost" onclick="var n=document.querySelector('.nav[data-view=&quot;settings&quot;]');if(n)n.click();" data-i18n="home.goToSettings">去设置/导出</button></div>
           </div>
         </div>
       </section>
 
-      <section id="training-review" class="view" aria-label="训练复盘"><div class="card" id="training-review-content"></div></section>
+      <section id="training-review" class="view" aria-label="训练复盘" data-i18n-aria-label="record.review"><div class="card" id="training-review-content"></div></section>
 
       <section id="import" class="view">
         <div class="card">
-          <div class="section-head"><div><p class="kicker">Import</p><h2>单文件智能导入</h2></div><button id="load-sample-btn" class="ghost">填入示例</button></div>
+          <div class="section-head"><div><p class="kicker">Import</p><h2 data-i18n="import.single">单文件智能导入</h2></div><button id="load-sample-btn" class="ghost" data-i18n="import.sample">填入示例</button></div>
           <div class="import-stage-panel">
             <div class="import-stage-copy">
-              <b>标准导入优先，扫描件再用 OCR 兜底。</b>
-              <p>Word、Excel、TXT、JSON 和文字层 PDF 会优先走普通导入；扫描 PDF 可先 OCR 成可编辑文本或 DOCX，再人工核对并导入题库。</p>
+              <b data-i18n="import.ocrFallback">标准导入优先，扫描件再用 OCR 兜底。</b>
+              <p data-i18n="import.introduction">Word、Excel、TXT、JSON 和文字层 PDF 会优先走普通导入；扫描 PDF 可先 OCR 成可编辑文本或 DOCX，再人工核对并导入题库。</p>
               <div class="import-stage-tags">
-                <span class="stage-tag active">1 导入文件</span>
-                <span class="stage-tag">2 核对结果</span>
-                <span class="stage-tag">3 创建题库</span>
+                <span class="stage-tag active" data-i18n="import.stepFile">1 导入文件</span>
+                <span class="stage-tag" data-i18n="import.stepReview">2 核对结果</span>
+                <span class="stage-tag" data-i18n="import.stepBank">3 创建题库</span>
               </div>
             </div>
             <div class="import-stage-art">
-              <img class="import-art-main" src="./media/import_question_bank_folder.webp" alt="导入题库提示" />
+              <img class="import-art-main" src="./media/import_question_bank_folder.webp" alt="导入题库提示" data-i18n-alt="import.art" />
             </div>
           </div>
           <div class="form-grid">
-            <label>题库名称<input id="import-bank-name" placeholder="例如：安全培训题库" /></label>
-            <label>识别模式<select id="import-mode"><option value="auto">自动识别</option><option value="wenjuanxing">问卷星/考试星</option><option value="normal">普通题库</option><option value="json">JSON</option></select></label>
-            <label>解析策略<select id="import-strategy"><option value="auto" selected>自动推荐</option><option value="standard">标准逐行解析</option><option value="volume">分卷分区三层解析</option><option value="compact">紧凑格式解析</option></select></label>
-            <label>上传文件<span class="file-control-v615"><input id="import-file" class="file-input-v615" type="file" accept=".txt,.json,.csv,.xlsx,.docx,.doc,.pdf" aria-label="选择要导入的题库文件" /><span class="file-button-v615" aria-hidden="true">选择文件</span><span class="file-name-v615" id="import-file-name-v615" data-empty-text="未选择文件" aria-live="polite">未选择文件</span></span></label>
+            <label><span data-i18n="import.bankName">题库名称</span><input id="import-bank-name" placeholder="例如：安全培训题库" data-i18n-placeholder="import.bankExample" /></label>
+            <label><span data-i18n="import.detection">识别模式</span><select id="import-mode"><option value="auto" data-i18n="import.autoDetect">自动识别</option><option value="wenjuanxing" data-i18n="import.examSites">问卷星/考试星</option><option value="normal" data-i18n="import.standardBank">普通题库</option><option value="json">JSON</option></select></label>
+            <label><span data-i18n="import.strategy">解析策略</span><select id="import-strategy"><option value="auto" selected data-i18n="import.autoStrategy">自动推荐</option><option value="standard" data-i18n="import.lineStrategy">标准逐行解析</option><option value="volume" data-i18n="import.volumeStrategy">分卷分区三层解析</option><option value="compact" data-i18n="import.compactStrategy">紧凑格式解析</option></select></label>
+            <label><span data-i18n="import.uploadFile">上传文件</span><span class="file-control-v615"><input id="import-file" class="file-input-v615" type="file" accept=".txt,.json,.csv,.xlsx,.docx,.doc,.pdf" aria-label="选择要导入的题库文件" data-i18n-aria-label="import.selectBankFile" /><span class="file-button-v615" aria-hidden="true" data-i18n="import.chooseFile">选择文件</span><span class="file-name-v615" id="import-file-name-v615" aria-live="polite" data-i18n="import.noFile">未选择文件</span></span></label>
           </div>
-          <textarea id="import-text" placeholder="把题库文本粘贴到这里，或上传 .docx / .xlsx / .csv / .txt / .json / 文字层 PDF 后导入。扫描 PDF 请先使用下方 OCR 测试功能转成文本或 DOCX，再核对导入。支持：A、选项(正确答案)、答案：D、答案：A/B/C、解析：……"></textarea>
+          <textarea id="import-text" placeholder="把题库文本粘贴到这里，或上传 .docx / .xlsx / .csv / .txt / .json / 文字层 PDF 后导入。扫描 PDF 请先使用下方 OCR 测试功能转成文本或 DOCX，再核对导入。支持：A、选项(正确答案)、答案：D、答案：A/B/C、解析：……" data-i18n-placeholder="import.paste"></textarea>
           <div class="ai-import-panel-v99 ai-hidden-v99" id="ai-import-panel-v99">
             <div class="ai-import-panel-head-v99">
-              <div><p class="kicker">AI Assisted Import</p><h3>AI 辅助整理</h3></div>
-              <span class="ocr-badge" id="ai-import-badge-v99">AI 辅助</span>
+              <div><p class="kicker">AI Assisted Import</p><h3 data-i18n="import.aiOrganize">AI 辅助整理</h3></div>
+              <span class="ocr-badge" id="ai-import-badge-v99" data-i18n="import.aiBadge">AI 辅助</span>
             </div>
-            <p class="muted">AI 只整理本次指定的原始文本并生成题目预览，不会自动写入题库。原始文本会保留，整理失败时也不会覆盖现有识别结果。</p>
+            <p class="muted" data-i18n="import.aiExplanation">AI 只整理本次指定的原始文本并生成题目预览，不会自动写入题库。原始文本会保留，整理失败时也不会覆盖现有识别结果。</p>
             <div class="ai-scope-block-v992">
-              <span class="ai-field-caption-v992">处理范围</span>
+              <span class="ai-field-caption-v992" data-i18n="import.aiScope">处理范围</span>
               <div class="ai-scope-options-v992">
-                <label class="ai-scope-option-v992"><input id="ai-import-scope-all-v992" name="ai-import-scope-v992" type="radio" value="all" checked /><span>全部原始文本</span></label>
-                <label class="ai-scope-option-v992"><input id="ai-import-scope-selection-v992" name="ai-import-scope-v992" type="radio" value="selection" /><span>当前选中文本</span><small id="ai-import-selection-size-v992">未选择</small></label>
+                <label class="ai-scope-option-v992"><input id="ai-import-scope-all-v992" name="ai-import-scope-v992" type="radio" value="all" checked /><span data-i18n="import.aiAllText">全部原始文本</span></label>
+                <label class="ai-scope-option-v992"><input id="ai-import-scope-selection-v992" name="ai-import-scope-v992" type="radio" value="selection" /><span data-i18n="import.aiSelectedText">当前选中文本</span><small id="ai-import-selection-size-v992" data-i18n="import.aiNoSelection">未选择</small></label>
               </div>
-              <p id="ai-import-range-hint-v992" class="ai-range-hint-v992">将整理导入框中的全部原始文本。</p>
+              <p id="ai-import-range-hint-v992" class="ai-range-hint-v992" data-i18n="import.aiAllHint">将整理导入框中的全部原始文本。</p>
             </div>
             <div class="ai-import-meta-grid-v99">
-              <div><span>服务</span><b id="ai-import-provider-v99">未配置</b></div>
-              <div><span>模型</span><b id="ai-import-model-v99">—</b></div>
-              <div><span>本次处理</span><b id="ai-import-size-v99">0 字</b></div>
-              <div><span>当前预览</span><b id="ai-import-preview-count-v99">0 题</b></div>
+              <div><span data-i18n="ai.provider">服务</span><b id="ai-import-provider-v99" data-i18n="ai.notConfigured">未配置</b></div>
+              <div><span data-i18n="ai.model">模型</span><b id="ai-import-model-v99">—</b></div>
+              <div><span data-i18n="import.aiWork">本次处理</span><b id="ai-import-size-v99" data-i18n="import.aiCharCount" data-i18n-values='{"count":0}'>0 字</b></div>
+              <div><span data-i18n="import.aiCurrentPreview">当前预览</span><b id="ai-import-preview-count-v99" data-i18n="import.aiPreviewCount" data-i18n-values='{"count":0}'>0 题</b></div>
             </div>
-            <div id="ai-import-privacy-v99" class="notice">请先确认 AI 服务配置。</div>
+            <div id="ai-import-privacy-v99" class="notice" data-i18n="import.aiCheckSettings">请先确认 AI 服务配置。</div>
             <div class="actions ai-import-actions-v99">
-              <button id="ai-import-start-btn-v99" class="primary" type="button">开始整理</button>
-              <button id="ai-import-cancel-btn-v99" class="ghost" type="button">取消</button>
-              <button id="ai-import-settings-btn-v99" class="ghost ai-hidden-v99" type="button">前往 AI 设置</button>
+              <button id="ai-import-start-btn-v99" class="primary" type="button" data-i18n="import.aiStart">开始整理</button>
+              <button id="ai-import-cancel-btn-v99" class="ghost" type="button" data-i18n="dialog.cancel">取消</button>
+              <button id="ai-import-settings-btn-v99" class="ghost ai-hidden-v99" type="button" data-i18n="import.openAi">前往 AI 设置</button>
             </div>
-            <div id="ai-import-status-v99" class="notice">等待开始。</div>
+            <div id="ai-import-status-v99" class="notice" data-i18n="import.waiting">等待开始。</div>
           </div>
           <div class="ocr-panel hidden" id="ocr-panel">
             <div class="ocr-panel-head">
               <div>
-                <p class="kicker">OCR 扫描件兜底</p>
-                <h3>扫描 PDF 转文字 / DOCX</h3>
+                <p class="kicker" data-i18n="import.ocrSection">OCR 扫描件兜底</p>
+                <h3 data-i18n="import.ocrTitle">扫描 PDF 转文字 / DOCX</h3>
               </div>
-              <span class="ocr-badge">OCR 扫描兜底</span>
+              <span class="ocr-badge" data-i18n="import.ocrBadge">OCR 扫描兜底</span>
             </div>
-            <p class="muted">仅建议在文字层 PDF 提取失败、扫描件或图片型 PDF 场景使用。OCR 会先生成可编辑文本，并可下载 DOCX；请人工核对后再导入题库。</p>
+            <p class="muted" data-i18n="import.ocrHint">仅建议在文字层 PDF 提取失败、扫描件或图片型 PDF 场景使用。OCR 会先生成可编辑文本，并可下载 DOCX；请人工核对后再导入题库。</p>
             <div class="ocr-options">
-              <label>识别页数<input id="ocr-page-limit" type="number" min="1" max="200" value="20" /></label>
-              <label>语言<select id="ocr-language"><option value="chi_sim+eng" selected>简体中文 + 英文</option><option value="chi_sim">简体中文</option><option value="eng">英文</option></select></label>
+              <label><span data-i18n="import.ocrPages">识别页数</span><input id="ocr-page-limit" type="number" min="1" max="200" value="20" /></label>
+              <label><span data-i18n="import.ocrLanguage">语言</span><select id="ocr-language"><option value="chi_sim+eng" selected data-i18n="import.ocrZhEn">简体中文 + 英文</option><option value="chi_sim" data-i18n="import.ocrChinese">简体中文</option><option value="eng" data-i18n="import.ocrEnglish">英文</option></select></label>
             </div>
             <div class="actions ocr-actions">
-              <button id="ocr-start-btn" class="primary" type="button">尝试 OCR 识别</button>
-              <button id="ocr-cancel-btn" class="ghost" type="button" disabled>取消 OCR</button>
-              <button id="ocr-use-text-btn" class="ghost" type="button" disabled>填入导入文本</button>
-              <button id="ocr-copy-btn" class="ghost" type="button" disabled>复制 OCR 文本</button>
-              <button id="ocr-download-docx-btn" class="ghost" type="button" disabled>下载 DOCX</button>
+              <button id="ocr-start-btn" class="primary" type="button" data-i18n="import.ocrRun">尝试 OCR 识别</button>
+              <button id="ocr-cancel-btn" class="ghost" type="button" disabled data-i18n="import.ocrStop">取消 OCR</button>
+              <button id="ocr-use-text-btn" class="ghost" type="button" disabled data-i18n="import.ocrUseText">填入导入文本</button>
+              <button id="ocr-copy-btn" class="ghost" type="button" disabled data-i18n="import.ocrCopy">复制 OCR 文本</button>
+              <button id="ocr-download-docx-btn" class="ghost" type="button" disabled data-i18n="import.ocrDownload">下载 DOCX</button>
             </div>
-            <div class="notice" id="ocr-status" role="status" aria-live="polite">选择 PDF 后可使用 OCR 测试功能。首次使用会加载 OCR 扩展资源，识别速度取决于设备性能。</div>
-            <textarea id="ocr-result" class="ocr-result" placeholder="OCR 识别结果会显示在这里，可核对后填入导入文本或下载 DOCX。"></textarea>
+            <div class="notice" id="ocr-status" role="status" aria-live="polite" data-i18n="import.ocrSelect">选择 PDF 后可使用 OCR 测试功能。首次使用会加载 OCR 扩展资源，识别速度取决于设备性能。</div>
+            <textarea id="ocr-result" class="ocr-result" placeholder="OCR 识别结果会显示在这里，可核对后填入导入文本或下载 DOCX。" data-i18n-placeholder="import.ocrOutput"></textarea>
           </div>
-          <div class="actions import-actions-v51"><button id="parse-import-btn" class="primary">开始识别</button><button id="ai-organize-import-btn-v99" class="ghost" type="button">AI 辅助整理</button><button id="confirm-import-btn" class="primary" disabled>确认导入</button><button id="clear-import-btn" class="ghost">清空</button><span class="import-actions-spacer-v51" aria-hidden="true"></span><button id="find-replace-import-btn" class="ghost import-find-replace-trigger-v51" type="button">查找替换</button></div>
+          <div class="actions import-actions-v51"><button id="parse-import-btn" class="primary" data-i18n="import.parse">开始识别</button><button id="ai-organize-import-btn-v99" class="ghost" type="button" data-i18n="import.aiOrganize">AI 辅助整理</button><button id="confirm-import-btn" class="primary" disabled data-i18n="import.confirm">确认导入</button><button id="clear-import-btn" class="ghost" data-i18n="import.clear">清空</button><span class="import-actions-spacer-v51" aria-hidden="true"></span><button id="find-replace-import-btn" class="ghost import-find-replace-trigger-v51" type="button" data-i18n="import.findReplace">查找替换</button></div>
         </div>
         <div class="card">
-          <div class="section-head"><div><p class="kicker">Dual File Import</p><h2>双文件导入：题目文件 + 答案文件</h2></div><button id="dual-load-sample-btn" class="ghost">填入双文件示例</button></div>
-          <p class="muted">适用于“一个文件只写题目，另一个文件只写答案”的试卷/答案卷。题目文件支持 .docx / .txt / .json / 文字层 .pdf；答案文件支持 .docx / .txt / 文字层 .pdf。双文件导入仍建议使用文字层 PDF；扫描 PDF 请先在 OCR 测试区转成文本后再整理导入。</p>
+          <div class="section-head"><div><p class="kicker">Dual File Import</p><h2 data-i18n="import.dual">双文件导入：题目文件 + 答案文件</h2></div><button id="dual-load-sample-btn" class="ghost" data-i18n="import.dualSample">填入双文件示例</button></div>
+          <p class="muted" data-i18n="import.dualHint">适用于“一个文件只写题目，另一个文件只写答案”的试卷/答案卷。题目文件支持 .docx / .txt / .json / 文字层 .pdf；答案文件支持 .docx / .txt / 文字层 .pdf。双文件导入仍建议使用文字层 PDF；扫描 PDF 请先在 OCR 测试区转成文本后再整理导入。</p>
           <div class="form-grid">
-            <label>题目文件<span class="file-control-v615"><input id="dual-question-file" class="file-input-v615" type="file" accept=".txt,.json,.csv,.docx,.doc,.pdf" aria-label="选择题目的题目文件" /><span class="file-button-v615" aria-hidden="true">选择文件</span><span class="file-name-v615" id="dual-question-file-name-v615" data-empty-text="未选择文件" aria-live="polite">未选择文件</span></span></label>
-            <label>答案文件<span class="file-control-v615"><input id="dual-answer-file" class="file-input-v615" type="file" accept=".txt,.csv,.docx,.doc,.pdf" aria-label="选择题目的答案文件" /><span class="file-button-v615" aria-hidden="true">选择文件</span><span class="file-name-v615" id="dual-answer-file-name-v615" data-empty-text="未选择文件" aria-live="polite">未选择文件</span></span></label>
-            <label>匹配方式<select id="dual-match-mode"><option value="auto" selected>自动匹配</option><option value="group">题型分组 + 顺序匹配</option><option value="number">按题号匹配</option><option value="number-strict">严格题号匹配</option><option value="order">按顺序匹配</option></select></label>
+            <label><span data-i18n="import.questionFile">题目文件</span><span class="file-control-v615"><input id="dual-question-file" class="file-input-v615" type="file" accept=".txt,.json,.csv,.docx,.doc,.pdf" aria-label="选择题目的题目文件" data-i18n-aria-label="import.chooseQuestions" /><span class="file-button-v615" aria-hidden="true" data-i18n="import.chooseFile">选择文件</span><span class="file-name-v615" id="dual-question-file-name-v615" aria-live="polite" data-i18n="import.noFile">未选择文件</span></span></label>
+            <label><span data-i18n="import.answerFile">答案文件</span><span class="file-control-v615"><input id="dual-answer-file" class="file-input-v615" type="file" accept=".txt,.csv,.docx,.doc,.pdf" aria-label="选择题目的答案文件" data-i18n-aria-label="import.chooseAnswers" /><span class="file-button-v615" aria-hidden="true" data-i18n="import.chooseFile">选择文件</span><span class="file-name-v615" id="dual-answer-file-name-v615" aria-live="polite" data-i18n="import.noFile">未选择文件</span></span></label>
+            <label><span data-i18n="import.matchMode">匹配方式</span><select id="dual-match-mode"><option value="auto" selected data-i18n="import.matchAuto">自动匹配</option><option value="group" data-i18n="import.matchGroupOrder">题型分组 + 顺序匹配</option><option value="number" data-i18n="import.matchNumber">按题号匹配</option><option value="number-strict" data-i18n="import.matchStrict">严格题号匹配</option><option value="order" data-i18n="import.matchOrder">按顺序匹配</option></select></label>
           </div>
           <div class="split-grid">
-            <label>题目文本<textarea id="dual-question-text" placeholder="也可以直接粘贴题目文件内容。"></textarea></label>
-            <label>答案文本<textarea id="dual-answer-text" placeholder="也可以直接粘贴答案文件内容，例如：&#10;1. D&#10;2. ACD&#10;3. 正确"></textarea></label>
+            <label><span data-i18n="import.questionsText">题目文本</span><textarea id="dual-question-text" placeholder="也可以直接粘贴题目文件内容。" data-i18n-placeholder="import.pasteQuestionText"></textarea></label>
+            <label><span data-i18n="import.answersText">答案文本</span><textarea id="dual-answer-text" placeholder="也可以直接粘贴答案文件内容，例如：&#10;1. D&#10;2. ACD&#10;3. 正确" data-i18n-placeholder="import.pasteAnswerText"></textarea></label>
           </div>
-          <div class="actions"><button id="parse-dual-import-btn" class="primary">开始合并识别</button><button id="dual-confirm-import-btn" class="primary" disabled>确认导入</button><button id="clear-dual-import-btn" class="ghost">清空双文件</button></div>
+          <div class="actions"><button id="parse-dual-import-btn" class="primary" data-i18n="import.mergeParse">开始合并识别</button><button id="dual-confirm-import-btn" class="primary" disabled data-i18n="import.confirm">确认导入</button><button id="clear-dual-import-btn" class="ghost" data-i18n="import.dualClear">清空双文件</button></div>
         </div>
 
-        <details class="card import-help import-help-details"><summary>查看导入格式说明</summary>
-          <h2>支持的题库格式</h2>
-          <p>支持 Word / Excel / TXT / 普通题库 JSON / 文字层 PDF 等常见题库来源。普通题库会进入识别预览；扫描 PDF 可先用 OCR 测试功能转成可编辑文本或 DOCX，再人工核对后导入。从 Shiroha Quiz 导出的完整备份 JSON/ZIP、题库集合 JSON 或配置文件，请到“设置/导出”页使用“导入备份 JSON/ZIP”，不要当作普通题库文本解析。</p>
+        <details class="card import-help import-help-details"><summary data-i18n="import.formatHelp">查看导入格式说明</summary>
+          <h2 data-i18n="import.formats">支持的题库格式</h2>
+          <p data-i18n="import.formatsHint">支持 Word / Excel / TXT / 普通题库 JSON / 文字层 PDF 等常见题库来源。普通题库会进入识别预览；扫描 PDF 可先用 OCR 测试功能转成可编辑文本或 DOCX，再人工核对后导入。从 Shiroha Quiz 导出的完整备份 JSON/ZIP、题库集合 JSON 或配置文件，请到“设置/导出”页使用“导入备份 JSON/ZIP”，不要当作普通题库文本解析。</p>
           <div class="help-grid">
-            <div><b>单选题</b><code>1. 下列说法正确的是？
+            <div><b data-i18n="question.single">单选题</b><code>1. 下列说法正确的是？
 A. 选项一
 B. 选项二
 答案：A</code></div>
-            <div><b>多选题</b><code>1. 以下哪些属于常见题型？
+            <div><b data-i18n="question.multiple">多选题</b><code>1. 以下哪些属于常见题型？
 A. 单选题
 B. 多选题
 C. 判断题
 答案：AB</code></div>
-            <div><b>判断题</b><code>1. Shiroha Quiz 支持导入题库。
+            <div><b data-i18n="question.judge">判断题</b><code>1. Shiroha Quiz 支持导入题库。
 答案：正确</code></div>
-            <div><b>填空 / 简答</b><code>1. 请填写关键词：____。
+            <div><b data-i18n="import.textQuestions">填空 / 简答</b><code>1. 请填写关键词：____。
 参考答案：题库导入</code></div>
-            <div><b>双文件导入</b><code>题目文件：只放题目和选项
+            <div><b data-i18n="import.dualFormat">双文件导入</b><code>题目文件：只放题目和选项
 答案文件：1. A / 2. ACD / 3. 正确
 系统会按题号或顺序匹配</code></div>
-            <div><b>OCR 测试</b><code>扫描 PDF → OCR 识别文本
+            <div><b data-i18n="import.ocrFormat">OCR 测试</b><code>扫描 PDF → OCR 识别文本
 可复制文本 / 下载 DOCX
 核对后再填入导入文本</code></div>
-            <div><b>备份 JSON</b><code>由“设置/导出”页导出的完整备份生成
+            <div><b data-i18n="import.backupFormat">备份 JSON</b><code>由“设置/导出”页导出的完整备份生成
 包含题库、错题本、收藏夹、记录和设置</code></div>
           </div>
         </details>
         <div class="card">
-          <div class="section-head import-preview-head-v5981"><div class="import-preview-title-v5981"><h2>识别结果预览</h2><p class="muted">识别后请先核对题型、答案和异常提示。AI 核对与补解析只生成建议，不会自动修改题目。</p></div><div class="row-actions import-preview-tools-v5981"><button id="ai-review-import-btn-v991" class="ghost ai-preview-tool-v991" type="button" disabled>AI 核对</button><button id="ai-analysis-import-btn-v991" class="ghost ai-preview-tool-v991" type="button" disabled>AI 补解析</button><label class="inline-filter import-preview-filter-v5981">筛选<select id="import-preview-filter"><option value="priority">异常优先</option><option value="problem">仅异常</option><option value="normal">仅正常</option><option value="all">全部</option></select></label><button id="revalidate-import-btn" class="ghost">重新校验</button><button id="batch-delete-import-btn" class="ghost danger" disabled>删除选中</button><button id="clear-import-selection-btn" class="ghost" disabled>清空选择</button></div></div>
-          <div class="actions"><button id="save-import-draft-btn" class="ghost" type="button">保存草稿</button><button id="restore-import-draft-btn" class="ghost" type="button">恢复草稿</button><button id="delete-import-draft-btn" class="ghost" type="button">删除草稿</button></div>
-          <p id="import-draft-status" class="muted" role="status" aria-live="polite">草稿仅保存在当前浏览器或桌面的本机存储，不包含在备份中。</p>
+          <div class="section-head import-preview-head-v5981"><div class="import-preview-title-v5981"><h2 data-i18n="import.preview">识别结果预览</h2><p class="muted" data-i18n="import.reviewHint">识别后请先核对题型、答案和异常提示。AI 核对与补解析只生成建议，不会自动修改题目。</p></div><div class="row-actions import-preview-tools-v5981"><button id="ai-review-import-btn-v991" class="ghost ai-preview-tool-v991" type="button" disabled data-i18n="import.aiCheck">AI 核对</button><button id="ai-analysis-import-btn-v991" class="ghost ai-preview-tool-v991" type="button" disabled data-i18n="import.aiExplain">AI 补解析</button><label class="inline-filter import-preview-filter-v5981"><span data-i18n="import.filter">筛选</span><select id="import-preview-filter"><option value="priority" data-i18n="import.priority">异常优先</option><option value="problem" data-i18n="import.problemsOnly">仅异常</option><option value="normal" data-i18n="import.normalOnly">仅正常</option><option value="all" data-i18n="import.all">全部</option></select></label><button id="revalidate-import-btn" class="ghost" data-i18n="import.revalidate">重新校验</button><button id="batch-delete-import-btn" class="ghost danger" disabled data-i18n="import.deleteSelected">删除选中</button><button id="clear-import-selection-btn" class="ghost" disabled data-i18n="import.clearSelection">清空选择</button></div></div>
+          <div class="actions"><button id="save-import-draft-btn" class="ghost" type="button" data-i18n="import.saveDraft">保存草稿</button><button id="restore-import-draft-btn" class="ghost" type="button" data-i18n="import.restoreDraft">恢复草稿</button><button id="delete-import-draft-btn" class="ghost" type="button" data-i18n="import.deleteDraft">删除草稿</button></div>
+          <p id="import-draft-status" class="muted" role="status" aria-live="polite" data-i18n="import.draftHint">草稿仅保存在当前浏览器或桌面的本机存储，不包含在备份中。</p>
           <div id="ai-preview-panel-v991" class="ai-preview-panel-v991 ai-hidden-v99">
-            <div class="ai-import-panel-head-v99"><div><p class="kicker">AI Preview Assistant</p><h3 id="ai-preview-title-v991">AI 核对</h3></div><span id="ai-preview-badge-v991" class="ocr-badge">结果核对</span></div>
-            <p id="ai-preview-description-v991" class="muted">检查识别结果，只生成修改建议，不会自动改题。</p>
+            <div class="ai-import-panel-head-v99"><div><p class="kicker">AI Preview Assistant</p><h3 id="ai-preview-title-v991" data-i18n="import.aiCheck">AI 核对</h3></div><span id="ai-preview-badge-v991" class="ocr-badge" data-i18n="import.aiReview">结果核对</span></div>
+            <p id="ai-preview-description-v991" class="muted" data-i18n="import.aiReviewHint">检查识别结果，只生成修改建议，不会自动改题。</p>
             <div class="ai-preview-control-grid-v991">
-              <label>处理范围<select id="ai-preview-scope-v991"></select></label>
-              <label id="ai-preview-condition-field-v992" class="ai-hidden-v99">解析条件<select id="ai-preview-condition-v992"><option value="missing">仅无解析题目</option><option value="short">无解析或解析少于20字</option><option value="all">不限制解析状态</option></select></label>
-              <label>单批提交题数<input id="ai-preview-batch-v991" type="number" min="1" max="30" step="1" value="20" /></label>
+              <label><span data-i18n="import.aiScope">处理范围</span><select id="ai-preview-scope-v991"></select></label>
+              <label id="ai-preview-condition-field-v992" class="ai-hidden-v99"><span data-i18n="import.aiExplanationFilter">解析条件</span><select id="ai-preview-condition-v992"><option value="missing" data-i18n="import.aiMissing">仅无解析题目</option><option value="short" data-i18n="import.aiShort">无解析或解析少于20字</option><option value="all" data-i18n="import.aiAny">不限制解析状态</option></select></label>
+              <label><span data-i18n="import.aiBatch">单批提交题数</span><input id="ai-preview-batch-v991" type="number" min="1" max="30" step="1" value="20" /></label>
             </div>
             <div id="ai-preview-range-fields-v992" class="ai-preview-range-fields-v992 ai-hidden-v99">
-              <label>开始题号<input id="ai-preview-range-start-v992" type="number" min="1" step="1" value="1" /></label>
-              <label>结束题号<input id="ai-preview-range-end-v992" type="number" min="1" step="1" value="20" /></label>
-              <p>按完整识别结果中的题号计算，不受当前筛选条件影响。</p>
+              <label><span data-i18n="import.aiFrom">开始题号</span><input id="ai-preview-range-start-v992" type="number" min="1" step="1" value="1" /></label>
+              <label><span data-i18n="import.aiTo">结束题号</span><input id="ai-preview-range-end-v992" type="number" min="1" step="1" value="20" /></label>
+              <p data-i18n="import.aiRangeHelp">按完整识别结果中的题号计算，不受当前筛选条件影响。</p>
             </div>
-            <div class="ai-preview-meta-grid-v991"><div><span>服务</span><b id="ai-preview-service-v991">未配置</b></div><div><span>模型</span><b id="ai-preview-model-v991">—</b></div><div><span>范围内题目</span><b id="ai-preview-range-count-v992">0 题</b></div><div><span>实际处理</span><b id="ai-preview-count-v991">0 题</b></div><div><span>预计请求</span><b id="ai-preview-request-count-v992">0 次</b></div></div>
-            <div class="actions ai-import-actions-v99"><button id="ai-preview-start-btn-v991" class="primary" type="button">开始处理</button><button id="ai-preview-cancel-btn-v991" class="ghost" type="button">取消</button><button id="ai-preview-settings-btn-v991" class="ghost ai-hidden-v99" type="button">前往 AI 设置</button></div>
-            <div id="ai-preview-status-v991" class="notice">AI 结果只作为建议，必须由你主动采纳。</div>
+            <div class="ai-preview-meta-grid-v991"><div><span data-i18n="ai.provider">服务</span><b id="ai-preview-service-v991" data-i18n="ai.notConfigured">未配置</b></div><div><span data-i18n="ai.model">模型</span><b id="ai-preview-model-v991">—</b></div><div><span data-i18n="import.aiRangeCount">范围内题目</span><b id="ai-preview-range-count-v992" data-i18n="import.aiPreviewCount" data-i18n-values='{"count":0}'>0 题</b></div><div><span data-i18n="import.aiActual">实际处理</span><b id="ai-preview-count-v991" data-i18n="import.aiPreviewCount" data-i18n-values='{"count":0}'>0 题</b></div><div><span data-i18n="import.aiRequests">预计请求</span><b id="ai-preview-request-count-v992" data-i18n="import.aiRequestCount" data-i18n-values='{"count":0}'>0 次</b></div></div>
+            <div class="actions ai-import-actions-v99"><button id="ai-preview-start-btn-v991" class="primary" type="button" data-i18n="import.aiProcess">开始处理</button><button id="ai-preview-cancel-btn-v991" class="ghost" type="button" data-i18n="dialog.cancel">取消</button><button id="ai-preview-settings-btn-v991" class="ghost ai-hidden-v99" type="button" data-i18n="import.openAi">前往 AI 设置</button></div>
+            <div id="ai-preview-status-v991" class="notice" data-i18n="import.aiAcceptHint">AI 结果只作为建议，必须由你主动采纳。</div>
           </div>
-          <div id="import-summary" class="notice">尚未识别到题目。</div>
+          <div id="import-summary" class="notice"><span data-i18n="import.noQuestions">尚未识别到题目。</span></div>
           <div id="import-report-panel" class="report-panel hidden"></div>
-          <div class="table-wrap"><table id="import-preview"><thead><tr><th><input type="checkbox" id="import-select-all-visible" title="选择当前显示"></th><th>序号</th><th>题型</th><th>题干</th><th>选项数</th><th>答案</th><th>状态</th><th>操作</th></tr></thead><tbody></tbody></table></div>
+          <div class="table-wrap"><table id="import-preview"><thead><tr><th><input type="checkbox" id="import-select-all-visible" title="选择当前显示" data-i18n-title="import.selectShown"></th><th data-i18n="import.number">序号</th><th data-i18n="import.type">题型</th><th data-i18n="import.prompt">题干</th><th data-i18n="import.optionCount">选项数</th><th data-i18n="import.answer">答案</th><th data-i18n="import.status">状态</th><th data-i18n="import.actions">操作</th></tr></thead><tbody></tbody></table></div>
         </div>
       </section>
 
       <section id="banks" class="view">
         <div class="card">
-          <div class="section-head"><div><p class="kicker">Banks</p><h2>题库列表</h2></div><button id="dedupe-btn" class="ghost">当前题库去重</button></div>
+          <div class="section-head"><div><p class="kicker">Banks</p><h2 data-i18n="banks.list">题库列表</h2></div><button id="dedupe-btn" class="ghost" data-i18n="banks.dedupe">当前题库去重</button></div>
           <div class="page-art-strip bank-art-strip">
-            <div><b>题库列表与批量管理</b><span>没有题库时可先导入或新建空题库；已有题库可在这里整理、复制、合并和批量导出。</span></div>
-            <img src="./media/empty_state_no_question_bank.webp" alt="空题库提示素材" />
+            <div><b data-i18n="banks.manage">题库列表与批量管理</b><span data-i18n="banks.manageInfo">没有题库时可先导入或新建空题库；已有题库可在这里整理、复制、合并和批量导出。</span></div>
+            <img src="./media/empty_state_no_question_bank.webp" alt="空题库提示素材" data-i18n-alt="banks.emptyArtwork" />
           </div>
           <div id="bank-practice-scope-v8916" class="bank-scope-status-v8916"></div>
           <div class="form-grid">
-            <label>当前题库名称<input id="bank-rename-input" placeholder="输入新名称后点击重命名" /></label>
-            <label>合并来源题库<select id="merge-bank-select"></select></label>
-            <label>管理操作<select id="bank-sort-mode"><option value="created">按创建时间</option><option value="name">按名称</option><option value="count">按题量</option></select></label>
+            <label><span data-i18n="banks.currentName">当前题库名称</span><input id="bank-rename-input" placeholder="输入新名称后点击重命名" data-i18n-placeholder="banks.renamePlaceholder" /></label>
+            <label><span data-i18n="banks.mergeSource">合并来源题库</span><select id="merge-bank-select"></select></label>
+            <label><span data-i18n="banks.manageActions">管理操作</span><select id="bank-sort-mode"><option value="created" data-i18n="banks.sortCreated">按创建时间</option><option value="name" data-i18n="banks.sortName">按名称</option><option value="count" data-i18n="banks.sortCount">按题量</option></select></label>
           </div>
           <div class="actions">
-            <button id="rename-bank-btn" class="primary">重命名当前题库</button>
-            <button id="duplicate-bank-btn" class="ghost">复制当前题库</button>
-            <button id="new-empty-bank-btn" class="ghost">新建空题库</button>
-            <button id="merge-bank-btn" class="ghost">把来源题库合并到当前题库</button>
+            <button id="rename-bank-btn" class="primary" data-i18n="banks.renameCurrent">重命名当前题库</button>
+            <button id="duplicate-bank-btn" class="ghost" data-i18n="banks.copyCurrent">复制当前题库</button>
+            <button id="new-empty-bank-btn" class="ghost" data-i18n="banks.new">新建空题库</button>
+            <button id="merge-bank-btn" class="ghost" data-i18n="banks.mergeIntoCurrent">把来源题库合并到当前题库</button>
           </div>
           <div id="bank-list" class="bank-list"></div>
         </div>
         <div class="card">
-          <h2>当前题库预览</h2>
+          <h2 data-i18n="banks.preview">当前题库预览</h2>
           <div class="form-grid bank-search-controls">
-            <label>搜索题干或选项<input id="bank-search-query" type="search" placeholder="输入关键词" autocomplete="off" /></label>
-            <label>筛选题型<select id="bank-search-type"><option value="all">全部题型</option><option value="single">单选题</option><option value="multiple">多选题</option><option value="judge">判断题</option><option value="blank">填空题</option><option value="short">简答题</option></select></label>
+            <label><span data-i18n="banks.search">搜索题干或选项</span><input id="bank-search-query" type="search" placeholder="输入关键词" data-i18n-placeholder="banks.searchPlaceholder" autocomplete="off" /></label>
+            <label><span data-i18n="banks.filterType">筛选题型</span><select id="bank-search-type"><option value="all" data-i18n="question.allTypes">全部题型</option><option value="single" data-i18n="question.single">单选题</option><option value="multiple" data-i18n="question.multiple">多选题</option><option value="judge" data-i18n="question.judge">判断题</option><option value="blank" data-i18n="question.blank">填空题</option><option value="short" data-i18n="question.short">简答题</option></select></label>
           </div>
-          <div class="actions bank-question-actions" aria-label="试题批量管理">
-            <button id="select-bank-question-page" class="ghost" type="button">全选本页</button>
-            <button id="clear-bank-question-selection" class="ghost" type="button">清空选择</button>
-            <button id="delete-selected-questions" class="ghost danger" type="button" disabled>删除选中试题</button>
-            <span id="bank-question-selection" role="status" aria-live="polite" hidden>已选择 0 道试题</span>
+          <div class="actions bank-question-actions" aria-label="试题批量管理" data-i18n-aria-label="banks.bulkQuestions">
+            <button id="select-bank-question-page" class="ghost" type="button" data-i18n="common.selectPage">全选本页</button>
+            <button id="clear-bank-question-selection" class="ghost" type="button" data-i18n="common.clearSelection">清空选择</button>
+            <button id="delete-selected-questions" class="ghost danger" type="button" disabled data-i18n="banks.deleteSelectedQuestions">删除选中试题</button>
+            <span id="bank-question-selection" role="status" aria-live="polite" hidden data-i18n="banks.selectionEmpty">已选择 0 道试题</span>
           </div>
-          <div class="table-wrap"><table id="bank-preview"><thead><tr><th>选择</th><th>#</th><th>题型</th><th>题干</th><th>答案</th><th>分类</th><th>分值</th><th>操作</th></tr></thead><tbody></tbody></table></div>
+          <div class="table-wrap"><table id="bank-preview"><thead><tr><th data-i18n="common.select">选择</th><th>#</th><th data-i18n="practice.type">题型</th><th data-i18n="question.stem">题干</th><th data-i18n="question.answer">答案</th><th data-i18n="question.category">分类</th><th data-i18n="question.points">分值</th><th data-i18n="common.actions">操作</th></tr></thead><tbody></tbody></table></div>
         </div>
       </section>
 
       <section id="practice" class="view">
         <div class="card">
-          <div class="section-head"><div><p class="kicker">Practice</p><h2>练习设置</h2></div><div class="pill" id="practice-progress">0 / 0</div></div>
+          <div class="section-head"><div><p class="kicker">Practice</p><h2 data-i18n="practice.setup">练习设置</h2></div><div class="pill" id="practice-progress">0 / 0</div></div>
           <div class="page-art-strip practice-art-strip">
-            <div><b>选择题型和题量后开始练习</b><span>练习页保留一个学习状态素材，避免占用答题区域。</span></div>
-            <img src="./media/quiz_in_progress_study.webp" alt="刷题学习素材" />
+            <div><b data-i18n="practice.artTitle">选择题型和题量后开始练习</b><span data-i18n="practice.artDetail">练习页保留一个学习状态素材，避免占用答题区域。</span></div>
+            <img src="./media/quiz_in_progress_study.webp" alt="刷题学习素材" data-i18n-alt="practice.artwork" />
           </div>
           <div id="practice-scope-summary-v8916" class="practice-scope-summary-v8916"></div>
           <div class="form-grid">
-            <label>题型<select id="practice-type"><option value="all">全部</option><option value="single">单选</option><option value="multiple">多选</option><option value="multi">多选兼容</option><option value="judge">判断</option><option value="blank">填空</option><option value="short">简答</option></select></label>
-            <label>来源<select id="practice-source"><option value="all">全部题目</option><option value="wrong">仅错题本</option><option value="due">今日待复习错题</option><option value="favorite">仅收藏题</option></select></label>
-            <label>顺序<select id="practice-order"><option value="sequence">顺序</option><option value="random">随机</option></select></label>
-            <label>提交方式<select id="practice-submit-mode"><option value="single">单题提交</option><option value="total">总提交</option></select></label>
-            <label class="practice-start-field-v58916">练习起点<select id="practice-start-mode-v58916"><option value="from_start">从头开始</option><option value="continue">继续上次</option><option value="custom">自选题号</option></select></label>
-            <label class="limit-field-v60">题量<div id="practice-limit-control-v58916" class="limit-control-v60"><select id="practice-limit" aria-label="练习题量"><option value="custom" selected>自定义</option><option value="50">50题</option><option value="100">100题</option><option value="half">一半</option><option value="all">全部</option></select><input id="practice-custom-count" type="number" value="20" min="1" inputmode="numeric" aria-label="自定义练习题量" /></div></label>
-            <label id="practice-range-label-v58916" class="practice-range-field-v58916" hidden>自选题号<input id="practice-number-range-v58916" class="practice-number-range-v58916" type="text" inputmode="text" placeholder="如：10 或 1,3,5-10" aria-label="自选练习题号" aria-describedby="practice-number-hint-v58916" title="按当前题型、来源筛选后的顺序编号；一级分组按汇总顺序计算" hidden /><small id="practice-number-hint-v58916" class="muted">单个题号从该题起选题，随机时打乱；多个题号或范围仅选所填题，单题可填 3-3。</small></label>
+            <label><span data-i18n="practice.type">题型</span><select id="practice-type"><option value="all" data-i18n="import.all">全部</option><option value="single" data-i18n="practice.single">单选</option><option value="multiple" data-i18n="practice.multiple">多选</option><option value="multi" data-i18n="practice.multipleAlias">多选兼容</option><option value="judge" data-i18n="practice.judge">判断</option><option value="blank" data-i18n="practice.blank">填空</option><option value="short" data-i18n="practice.short">简答</option></select></label>
+            <label><span data-i18n="practice.source">来源</span><select id="practice-source"><option value="all" data-i18n="practice.allQuestions">全部题目</option><option value="wrong" data-i18n="practice.mistakesOnly">仅错题本</option><option value="due" data-i18n="practice.dueOnly">今日待复习错题</option><option value="favorite" data-i18n="practice.favoritesOnly">仅收藏题</option></select></label>
+            <label><span data-i18n="practice.order">顺序</span><select id="practice-order"><option value="sequence" data-i18n="practice.inOrder">顺序</option><option value="random" data-i18n="practice.shuffle">随机</option></select></label>
+            <label><span data-i18n="practice.submitMode">提交方式</span><select id="practice-submit-mode"><option value="single" data-i18n="practice.submitEach">单题提交</option><option value="total" data-i18n="practice.submitAll">总提交</option></select></label>
+            <label class="practice-start-field-v58916"><span data-i18n="practice.startAt">练习起点</span><select id="practice-start-mode-v58916"><option value="from_start" data-i18n="practice.fromStart">从头开始</option><option value="continue" data-i18n="practice.continue">继续上次</option><option value="custom" data-i18n="practice.customRange">自选题号</option></select></label>
+            <label class="limit-field-v60"><span data-i18n="practice.count">题量</span><div id="practice-limit-control-v58916" class="limit-control-v60"><select id="practice-limit" aria-label="练习题量" data-i18n-aria-label="practice.countLabel"><option value="custom" selected data-i18n="practice.custom">自定义</option><option value="50" data-i18n="practice.fifty">50题</option><option value="100" data-i18n="practice.hundred">100题</option><option value="half" data-i18n="practice.half">一半</option><option value="all" data-i18n="import.all">全部</option></select><input id="practice-custom-count" type="number" value="20" min="1" inputmode="numeric" aria-label="自定义练习题量" data-i18n-aria-label="practice.customCount" /></div></label>
+            <label id="practice-range-label-v58916" class="practice-range-field-v58916" hidden><span data-i18n="practice.customRange">自选题号</span><input id="practice-number-range-v58916" class="practice-number-range-v58916" type="text" inputmode="text" placeholder="如：10 或 1,3,5-10" data-i18n-placeholder="practice.rangePlaceholder" aria-label="自选练习题号" data-i18n-aria-label="practice.rangeLabel" aria-describedby="practice-number-hint-v58916" title="按当前题型、来源筛选后的顺序编号；一级分组按汇总顺序计算" data-i18n-title="practice.rangeTitle" hidden /><small id="practice-number-hint-v58916" class="muted" data-i18n="practice.rangeHelp">单个题号从该题起选题，随机时打乱；多个题号或范围仅选所填题，单题可填 3-3。</small></label>
             <div class="settings-action-cell web-settings-action-cell">
-              <span class="control-label">快捷操作</span>
+              <span class="control-label" data-i18n="practice.quickActions">快捷操作</span>
               <div class="settings-action-buttons">
-                <button id="start-practice-btn" class="primary">开始练习</button>
-                <button id="reset-practice-btn" class="ghost">重置</button>
+                <button id="start-practice-btn" class="primary" data-i18n="practice.start">开始练习</button>
+                <button id="reset-practice-btn" class="ghost" data-i18n="practice.reset">重置</button>
               </div>
             </div>
           </div>
-          <p class="muted">单题提交：每题提交后查看结果。总提交：先完成作答，最后统一判题，简答题对照参考答案自评。开始后本轮提交方式固定。</p>
+          <p class="muted" data-i18n="practice.submitHelp">单题提交：每题提交后查看结果。总提交：先完成作答，最后统一判题，简答题对照参考答案自评。开始后本轮提交方式固定。</p>
+        </div>
+        <div class="interface-language">
+          <label for="practice-language" data-i18n="language.name">界面语言</label>
+          <select id="practice-language" data-ui-language>
+            <option value="zh-CN" lang="zh-CN">简体中文</option>
+            <option value="en" lang="en">English</option>
+          </select>
         </div>
         <div class="card quiz-card" id="practice-card">
-          <div class="empty">选择条件后点击“开始练习”。</div>
+          <div class="empty" data-i18n="practice.empty">选择条件后点击“开始练习”。</div>
         </div>
       </section>
 
       <section id="exam" class="view">
         <div class="card" id="exam-setup">
-          <div class="section-head"><div><p class="kicker">Exam</p><h2>考试设置</h2></div><div class="pill" id="exam-timer">未开始</div></div>
+          <div class="section-head"><div><p class="kicker">Exam</p><h2 data-i18n="exam.setup">考试设置</h2></div><div class="pill" id="exam-timer" data-i18n="exam.notStarted">未开始</div></div>
           <p id="exam-bank-summary-v8916" class="muted scope-platform-note-v8916"></p>
           <div class="page-art-strip exam-art-strip">
-            <div><b>配置考试参数，再开始模拟</b><span>考试模式使用思考提示素材，保持页面轻量，不遮挡试卷区域。</span></div>
-            <img src="./media/thinking_state_question.webp" alt="思考提示素材" />
+            <div><b data-i18n="exam.setupArtTitle">配置考试参数，再开始模拟</b><span data-i18n="exam.setupArtText">考试模式使用思考提示素材，保持页面轻量，不遮挡试卷区域。</span></div>
+            <img src="./media/thinking_state_question.webp" alt="思考提示素材" data-i18n-alt="exam.artwork" />
           </div>
           <div class="form-grid">
-            <label>考试名称<input id="exam-name" value="模拟考试" /></label>
-            <label>题量<input id="exam-count" type="number" value="50" min="1" /></label>
-            <label>限时/分钟<input id="exam-minutes" type="number" value="60" min="0" /></label>
-            <label>及格线<input id="exam-pass-score" type="number" value="60" min="0" step="0.5" /></label>
-            <label>单选分值<input id="score-single" type="number" value="1" min="0" step="0.5" /></label>
-            <label>多选分值<input id="score-multiple" type="number" value="2" min="0" step="0.5" /></label>
-            <label>判断分值<input id="score-judge" type="number" value="1" min="0" step="0.5" /></label>
-            <label>填空分值<input id="score-blank" type="number" value="1" min="0" step="0.5" /></label>
-            <label>简答分值<input id="score-short" type="number" value="5" min="0" step="0.5" /></label>
-            <label>题型范围<select id="exam-type"><option value="all">全部题型</option><option value="single">只考单选</option><option value="multiple">只考多选</option><option value="judge">只考判断</option><option value="blank">只考填空</option><option value="short">只考简答</option></select></label>
-            <label>抽题方式<select id="exam-order"><option value="random">随机抽题</option><option value="sequence">顺序抽题</option></select></label>
+            <label><span data-i18n="exam.name">考试名称</span><input id="exam-name" value="模拟考试" /></label>
+            <label><span data-i18n="practice.count">题量</span><input id="exam-count" type="number" value="50" min="1" /></label>
+            <label><span data-i18n="exam.minutes">限时/分钟</span><input id="exam-minutes" type="number" value="60" min="0" /></label>
+            <label><span data-i18n="exam.passScore">及格线</span><input id="exam-pass-score" type="number" value="60" min="0" step="0.5" /></label>
+            <label><span data-i18n="exam.singlePoints">单选分值</span><input id="score-single" type="number" value="1" min="0" step="0.5" /></label>
+            <label><span data-i18n="exam.multiplePoints">多选分值</span><input id="score-multiple" type="number" value="2" min="0" step="0.5" /></label>
+            <label><span data-i18n="exam.judgePoints">判断分值</span><input id="score-judge" type="number" value="1" min="0" step="0.5" /></label>
+            <label><span data-i18n="exam.blankPoints">填空分值</span><input id="score-blank" type="number" value="1" min="0" step="0.5" /></label>
+            <label><span data-i18n="exam.shortPoints">简答分值</span><input id="score-short" type="number" value="5" min="0" step="0.5" /></label>
+            <label><span data-i18n="exam.typeScope">题型范围</span><select id="exam-type"><option value="all" data-i18n="question.allTypes">全部题型</option><option value="single" data-i18n="exam.singleOnly">只考单选</option><option value="multiple" data-i18n="exam.multipleOnly">只考多选</option><option value="judge" data-i18n="exam.judgeOnly">只考判断</option><option value="blank" data-i18n="exam.blankOnly">只考填空</option><option value="short" data-i18n="exam.shortOnly">只考简答</option></select></label>
+            <label><span data-i18n="exam.order">抽题方式</span><select id="exam-order"><option value="random" data-i18n="exam.random">随机抽题</option><option value="sequence" data-i18n="exam.sequence">顺序抽题</option></select></label>
             <div class="settings-action-cell web-settings-action-cell">
-              <span class="control-label">快捷操作</span>
+              <span class="control-label" data-i18n="practice.quickActions">快捷操作</span>
               <div class="settings-action-buttons">
-                <button id="start-exam-btn" class="primary">开始考试</button>
-                <button id="submit-exam-btn" class="danger" disabled>交卷评分</button>
+                <button id="start-exam-btn" class="primary" data-i18n="exam.start">开始考试</button>
+                <button id="submit-exam-btn" class="danger" disabled data-i18n="exam.submit">交卷评分</button>
               </div>
             </div>
           </div>
         </div>
-        <div class="card quiz-card" id="exam-card"><div class="empty">考试开始后会在这里显示整套试卷。</div></div>
+        <div class="card quiz-card" id="exam-card"><div class="empty" data-i18n="exam.empty">考试开始后会在这里显示整套试卷。</div></div>
       </section>
 
-      <section id="wrongbook" class="view"><div class="card"><div class="section-head"><div><p class="kicker">Wrongbook</p><h2>错题整理</h2></div><button id="clear-wrong-btn" class="danger">清空错题</button></div><div class="page-art-strip wrongbook-art-strip"><div><b>错题复习与掌握状态</b><span>错题本页面使用一个复习素材，帮助区分学习场景，不额外堆叠图片。</span></div><img src="./media/wrong_question_review_clipboard.webp" alt="错题复习素材" /></div><div class="form-grid wrongbook-controls-v60"><label>掌握状态筛选<select id="wrong-status-filter"><option value="active">未掌握/复习中</option><option value="all">全部错题记录</option><option value="未掌握">未掌握</option><option value="复习中">复习中</option><option value="已掌握">已掌握</option></select></label><label>排序<select id="wrong-sort-mode"><option value="lastWrong">最近答错优先</option><option value="wrongCount">错误次数最多</option><option value="status">按掌握状态</option></select></label><label class="limit-field-v60">错题重练题量<div class="limit-control-v60"><select id="wrong-practice-limit"><option value="custom" selected>自定义</option><option value="50">50题</option><option value="100">100题</option><option value="half">一半</option><option value="all">全部</option></select><input id="wrong-practice-custom-count" type="number" value="20" min="1" inputmode="numeric" aria-label="自定义错题重练题量" /></div></label><label class="quick-action-field-v60">快捷操作<button id="practice-wrong-btn" class="primary" type="button">重练未掌握错题</button></label></div><div id="wrongbook-list" class="list"></div></div></section>
-      <section id="favorites" class="view"><div class="card favorites-card-v596"><div class="section-head"><div><p class="kicker">Favorites</p><h2>收藏夹</h2></div><div class="pill" id="favorites-count-v596">0 道</div></div><div class="favorites-hero-v596"><div><b>收藏题独立复习</b><span>保留当前题库的收藏题，可查看完整题干、选项和解析，或直接练习。</span></div><div class="favorites-actions-top-v596"><button id="practice-favorites-btn-v596" class="primary" type="button">练习收藏题</button><button id="clear-favorites-btn-v596" class="ghost danger" type="button">清空收藏</button></div></div><div class="table-wrap"><table id="favorites-list-v596" aria-label="收藏题目列表"><thead><tr><th scope="col">题号</th><th scope="col">题型</th><th scope="col">题目</th><th scope="col">答案</th><th scope="col">分类</th><th scope="col">分值</th><th scope="col">操作</th></tr></thead><tbody></tbody></table></div></div></section>
-      <section id="records" class="view"><div class="card"><div class="section-head"><div><p class="kicker">Records</p><h2>记录筛选与导出</h2></div><div class="actions"><button id="export-records-btn" class="ghost">导出记录</button><button id="clear-records-btn" class="danger">清空记录</button></div></div><div class="page-art-strip records-art-strip"><div><b>查看练习与考试记录</b><span>记录页使用休息状态素材，表示阶段性回顾和复盘。</span></div><img src="./media/rest_sleep_pillow.webp" alt="休息睡眠素材" /></div><div class="form-grid"><label>记录类型<select id="record-mode-filter"><option value="all">全部</option><option value="练习">练习</option><option value="考试">考试</option></select></label><label>题目筛选<select id="record-detail-filter-v385"><option value="all">全部题目</option><option value="wrong">只看错题</option></select></label><label>显示范围<select id="record-limit"><option value="30">最近30条</option><option value="100">最近100条</option><option value="all">全部</option></select></label><label>统计<button id="record-refresh-btn" class="ghost" type="button">刷新记录</button></label></div><div id="records-list" class="list"></div></div></section>
+      <section id="wrongbook" class="view"><div class="card"><div class="section-head"><div><p class="kicker">Wrongbook</p><h2 data-i18n="saved.mistakes">错题整理</h2></div><button id="clear-wrong-btn" class="danger" data-i18n="saved.clearWrong">清空错题</button></div><div class="page-art-strip wrongbook-art-strip"><div><b data-i18n="saved.masteryIntro">错题复习与掌握状态</b><span data-i18n="saved.masteryInfo">错题本页面使用一个复习素材，帮助区分学习场景，不额外堆叠图片。</span></div><img src="./media/wrong_question_review_clipboard.webp" alt="错题复习素材" data-i18n-alt="saved.mistakesArtwork" /></div><div class="form-grid wrongbook-controls-v60"><label><span data-i18n="saved.filterMastery">掌握状态筛选</span><select id="wrong-status-filter"><option value="active" data-i18n="saved.activeWrong">未掌握/复习中</option><option value="all" data-i18n="saved.allWrong">全部错题记录</option><option value="未掌握" data-i18n="saved.notMastered">未掌握</option><option value="复习中" data-i18n="saved.reviewing">复习中</option><option value="已掌握" data-i18n="saved.mastered">已掌握</option></select></label><label><span data-i18n="saved.sort">排序</span><select id="wrong-sort-mode"><option value="lastWrong" data-i18n="saved.newestFirst">最近答错优先</option><option value="wrongCount" data-i18n="saved.mostWrong">错误次数最多</option><option value="status" data-i18n="saved.byMastery">按掌握状态</option></select></label><label class="limit-field-v60"><span data-i18n="saved.retryCount">错题重练题量</span><div class="limit-control-v60"><select id="wrong-practice-limit"><option value="custom" selected data-i18n="practice.custom">自定义</option><option value="50" data-i18n="practice.fifty">50题</option><option value="100" data-i18n="practice.hundred">100题</option><option value="half" data-i18n="practice.half">一半</option><option value="all" data-i18n="import.all">全部</option></select><input id="wrong-practice-custom-count" type="number" value="20" min="1" inputmode="numeric" aria-label="自定义错题重练题量" data-i18n-aria-label="saved.customRetryCount" /></div></label><label class="quick-action-field-v60"><span data-i18n="practice.quickActions">快捷操作</span><button id="practice-wrong-btn" class="primary" type="button" data-i18n="saved.retryUnmastered">重练未掌握错题</button></label></div><div id="wrongbook-list" class="list"></div></div></section>
+      <section id="favorites" class="view"><div class="card favorites-card-v596"><div class="section-head"><div><p class="kicker">Favorites</p><h2 data-i18n="nav.favorites">收藏夹</h2></div><div class="pill" id="favorites-count-v596" data-i18n="saved.emptyCount">0 道</div></div><div class="favorites-hero-v596"><div><b data-i18n="saved.favoritesIntro">收藏题独立复习</b><span data-i18n="saved.favoritesDetail">保留当前题库的收藏题，可查看完整题干、选项和解析，或直接练习。</span></div><div class="favorites-actions-top-v596"><button id="practice-favorites-btn-v596" class="primary" type="button" data-i18n="saved.practiceFavorites">练习收藏题</button><button id="clear-favorites-btn-v596" class="ghost danger" type="button" data-i18n="saved.clearFavorites">清空收藏</button></div></div><div class="table-wrap"><table id="favorites-list-v596" aria-label="收藏题目列表" data-i18n-aria-label="saved.favoritesList"><thead><tr><th scope="col" data-i18n="question.number">题号</th><th scope="col" data-i18n="practice.type">题型</th><th scope="col" data-i18n="question.question">题目</th><th scope="col" data-i18n="question.answer">答案</th><th scope="col" data-i18n="question.category">分类</th><th scope="col" data-i18n="question.points">分值</th><th scope="col" data-i18n="common.actions">操作</th></tr></thead><tbody></tbody></table></div></div></section>
+      <section id="records" class="view"><div class="card"><div class="section-head"><div><p class="kicker">Records</p><h2 data-i18n="record.title">记录筛选与导出</h2></div><div class="actions"><button id="export-records-btn" class="ghost" data-i18n="record.export">导出记录</button><button id="clear-records-btn" class="danger" data-i18n="record.clear">清空记录</button></div></div><div class="page-art-strip records-art-strip"><div><b data-i18n="record.intro">查看练习与考试记录</b><span data-i18n="record.about">记录页使用休息状态素材，表示阶段性回顾和复盘。</span></div><img src="./media/rest_sleep_pillow.webp" alt="休息睡眠素材" data-i18n-alt="record.artwork" /></div><div class="form-grid"><label><span data-i18n="record.mode">记录类型</span><select id="record-mode-filter"><option value="all" data-i18n="import.all">全部</option><option value="练习" data-i18n="record.practice">练习</option><option value="考试" data-i18n="record.exam">考试</option></select></label><label><span data-i18n="record.filterQuestions">题目筛选</span><select id="record-detail-filter-v385"><option value="all" data-i18n="practice.allQuestions">全部题目</option><option value="wrong" data-i18n="record.onlyWrong">只看错题</option></select></label><label><span data-i18n="record.range">显示范围</span><select id="record-limit"><option value="30" data-i18n="record.recent30">最近30条</option><option value="100" data-i18n="record.recent100">最近100条</option><option value="all" data-i18n="import.all">全部</option></select></label><label><span data-i18n="record.stats">统计</span><button id="record-refresh-btn" class="ghost" type="button" data-i18n="record.refresh">刷新记录</button></label></div><div id="records-list" class="list"></div></div></section>
       <section id="ai-settings" class="view">
         <div class="card ai-settings-card-v99">
           <div class="section-head">
-            <div><p class="kicker">AI Import</p><h2>AI 设置</h2></div>
-            <span id="ai-connection-pill-v99" class="pill ai-status-pill-v99">未配置</span>
+            <div><p class="kicker">AI Import</p><h2 data-i18n="ai.settingsTitle">AI 设置</h2></div>
+            <span id="ai-connection-pill-v99" class="pill ai-status-pill-v99" data-i18n="ai.notConfigured">未配置</span>
           </div>
           <div class="ai-settings-intro-v99">
-            <b>配置现有 AI 任务的执行方式</b>
-            <p>直接 API 支持 Ollama、LM Studio 和自定义兼容接口；本地 Harness 需要桌面环境。普通解析仍是默认主线，AI 结果必须进入预览并由人工核对后才能导入。</p>
+            <b data-i18n="ai.settingsIntro">配置现有 AI 任务的执行方式</b>
+            <p data-i18n="ai.settingsHint">直接 API 支持 Ollama、LM Studio 和自定义兼容接口；本地 Harness 需要桌面环境。普通解析仍是默认主线，AI 结果必须进入预览并由人工核对后才能导入。</p>
           </div>
           <div id="ai-execution-settings" hidden>
-            <div id="ai-harness-loading" class="notice" role="status" aria-live="polite" hidden>正在读取 AI 设置…</div>
-            <button id="ai-harness-load-retry" class="ghost" type="button" hidden>重新读取设置</button>
-            <fieldset class="ai-execution-choice"><legend>执行方式</legend>
-              <label><input id="ai-execution-api" name="ai-execution-mode" type="radio" value="api" checked /> 直接调用 API</label>
-              <label><input id="ai-execution-harness" name="ai-execution-mode" type="radio" value="harness" /> 使用 Harness</label>
+            <div id="ai-harness-loading" class="notice" role="status" aria-live="polite" hidden data-i18n="ai.loading">正在读取 AI 设置…</div>
+            <button id="ai-harness-load-retry" class="ghost" type="button" hidden data-i18n="ai.reload">重新读取设置</button>
+            <fieldset class="ai-execution-choice"><legend data-i18n="ai.execution">执行方式</legend>
+              <label><input id="ai-execution-api" name="ai-execution-mode" type="radio" value="api" checked /> <span data-i18n="ai.direct">直接调用 API</span></label>
+              <label><input id="ai-execution-harness" name="ai-execution-mode" type="radio" value="harness" /> <span data-i18n="ai.useHarness">使用 Harness</span></label>
             </fieldset>
             <div id="ai-harness-settings" hidden>
               <div class="ai-settings-grid-v99">
@@ -404,141 +411,154 @@ C. 判断题
               </div>
               <div id="ai-harness-background" class="notice" hidden>
                 <p id="ai-harness-background-status" role="status" aria-live="polite"></p>
-                <div class="actions"><button id="ai-harness-background-view" class="ghost" type="button">查看</button><button id="ai-harness-background-cancel" class="ghost" type="button">取消下载</button></div>
+                <div class="actions"><button id="ai-harness-background-view" class="ghost" type="button" data-i18n="ai.view">查看</button><button id="ai-harness-background-cancel" class="ghost" type="button" data-i18n="ai.cancelDownload">取消下载</button></div>
               </div>
-              <div id="ai-codex-settings" class="notice" role="group" aria-label="Codex 订阅">
-                <h3>Codex 订阅</h3>
+              <div id="ai-codex-settings" class="notice" role="group" aria-label="Codex 订阅" data-i18n-aria-label="ai.codexSubscription">
+                <h3 data-i18n="ai.codexSubscription">Codex 订阅</h3>
                 <div class="ai-settings-grid-v99">
-                  <label>模型名称<select id="ai-harness-model"><option value="gpt-6.1-sol">gpt-6.1-sol</option></select></label>
-                  <label>任务超时（秒）<input id="ai-harness-timeout" type="number" min="10" max="600" step="10" value="120" /></label>
+                  <label><span data-i18n="ai.modelName">模型名称</span><select id="ai-harness-model"><option value="gpt-6.1-sol">gpt-6.1-sol</option></select></label>
+                  <label><span data-i18n="ai.taskTimeout">任务超时（秒）</span><input id="ai-harness-timeout" type="number" min="10" max="600" step="10" value="120" /></label>
                 </div>
-                <div class="notice" role="status" aria-live="polite"><b id="ai-harness-runtime-status">自动管理 · 尚未准备</b><p id="ai-harness-runtime-progress" hidden></p></div>
-                <p class="muted">应用会自动准备官方 Codex 组件。首次需要下载约 341 MB，缓存通过校验后可直接复用；组件准备不会发送题目或调用模型。</p>
-                <div class="actions"><button id="ai-harness-prepare" class="ghost" type="button">重试准备</button><button id="ai-harness-prepare-cancel" class="ghost" type="button" hidden>取消准备</button></div>
-                <p role="status" aria-live="polite">订阅授权：<b id="ai-harness-auth-status">正在读取登录状态…</b></p>
-                <div class="actions"><button id="ai-harness-login" class="primary" type="button">登录订阅</button><button id="ai-harness-auth-refresh" class="ghost" type="button">刷新状态</button><button id="ai-harness-logout" class="ghost danger" type="button">退出订阅登录</button><button id="ai-harness-stop" class="ghost" type="button">停止 Harness 任务</button></div>
-                <p class="muted">点击登录会先完成组件准备并自动保存 Harness 设置，再启动官方授权。登录后可主动测试模型访问；模型可选不代表当前订阅已获得访问权限。</p>
-                <p class="muted">登录取消或失败后，请先点击“退出订阅登录”清理未完成的授权，再重新登录。</p>
-                <div id="ai-harness-login-details" class="notice" hidden><p>请自行打开官方登录地址：<span id="ai-harness-login-url"></span></p><p>验证码：<b id="ai-harness-login-code"></b></p><div class="actions"><button id="ai-harness-copy-url" class="ghost" type="button">复制登录地址</button><button id="ai-harness-copy-code" class="ghost" type="button">复制验证码</button></div></div>
-                <p class="notice">Harness 仅使用独立订阅登录，不使用 API Key，也不自动读取 Codex 的全局登录或配置。授权和运行条件核验通过后才可执行。仅将本次任务所需文本交给 Codex 发送到 OpenAI，不发送题库文件或图片。</p>
-                <details id="ai-harness-advanced"><summary>高级设置：运行组件</summary>
-                  <p class="muted">程序：<span id="ai-harness-runtime">组件准备后由应用管理</span><br />版本：<span id="ai-harness-version">未检测</span><br />手动程序仅接受已校验的 Codex 0.163.0 Windows x64 正式版。选择后，登录或保存设置才会提交当前选择。</p>
-                  <div class="actions"><button id="ai-harness-choose" class="ghost" type="button">选择 Codex 程序</button><button id="ai-harness-inspect" class="ghost" type="button">检测环境</button><button id="ai-harness-use-managed" class="ghost" type="button">恢复自动管理</button></div>
+                <div class="notice" role="status" aria-live="polite"><b id="ai-harness-runtime-status" data-i18n="ai.autoUnprepared">自动管理 · 尚未准备</b><p id="ai-harness-runtime-progress" hidden></p></div>
+                <p class="muted" data-i18n="ai.codexSetupHint">应用会自动准备官方 Codex 组件。首次需要下载约 341 MB，缓存通过校验后可直接复用；组件准备不会发送题目或调用模型。</p>
+                <div class="actions"><button id="ai-harness-prepare" class="ghost" type="button" data-i18n="ai.retrySetup">重试准备</button><button id="ai-harness-prepare-cancel" class="ghost" type="button" hidden data-i18n="ai.cancelSetup">取消准备</button></div>
+                <p role="status" aria-live="polite"><span data-i18n="ai.subscriptionAuth">订阅授权：</span><b id="ai-harness-auth-status" data-i18n="ai.loadingLogin">正在读取登录状态…</b></p>
+                <div class="actions"><button id="ai-harness-login" class="primary" type="button" data-i18n="ai.signIn">登录订阅</button><button id="ai-harness-auth-refresh" class="ghost" type="button" data-i18n="ai.refresh">刷新状态</button><button id="ai-harness-logout" class="ghost danger" type="button" data-i18n="ai.signOut">退出订阅登录</button><button id="ai-harness-stop" class="ghost" type="button" data-i18n="ai.stopHarness">停止 Harness 任务</button></div>
+                <p class="muted" data-i18n="ai.signInHint">点击登录会先完成组件准备并自动保存 Harness 设置，再启动官方授权。登录后可主动测试模型访问；模型可选不代表当前订阅已获得访问权限。</p>
+                <p class="muted" data-i18n="ai.signInRetry">登录取消或失败后，请先点击“退出订阅登录”清理未完成的授权，再重新登录。</p>
+                <div id="ai-harness-login-details" class="notice" hidden><p><span data-i18n="ai.openLoginUrl">请自行打开官方登录地址：</span><span id="ai-harness-login-url"></span></p><p><span data-i18n="ai.loginCode">验证码：</span><b id="ai-harness-login-code"></b></p><div class="actions"><button id="ai-harness-copy-url" class="ghost" type="button" data-i18n="ai.copyLoginUrl">复制登录地址</button><button id="ai-harness-copy-code" class="ghost" type="button" data-i18n="ai.copyCode">复制验证码</button></div></div>
+                <p class="notice" data-i18n="ai.codexScope">Harness 仅使用独立订阅登录，不使用 API Key，也不自动读取 Codex 的全局登录或配置。授权和运行条件核验通过后才可执行。仅将本次任务所需文本交给 Codex 发送到 OpenAI，不发送题库文件或图片。</p>
+                <details id="ai-harness-advanced"><summary data-i18n="ai.advanced">高级设置：运行组件</summary>
+                  <p class="muted"><span data-i18n="ai.executable">程序：</span><span id="ai-harness-runtime" data-i18n="ai.managed">组件准备后由应用管理</span><br /><span data-i18n="ai.version">版本：</span><span id="ai-harness-version" data-i18n="ai.notDetected">未检测</span><br /><span data-i18n="ai.manualHint">手动程序仅接受已校验的 Codex 0.163.0 Windows x64 正式版。选择后，登录或保存设置才会提交当前选择。</span></p>
+                  <div class="actions"><button id="ai-harness-choose" class="ghost" type="button" data-i18n="ai.chooseExecutable">选择 Codex 程序</button><button id="ai-harness-inspect" class="ghost" type="button" data-i18n="ai.detect">检测环境</button><button id="ai-harness-use-managed" class="ghost" type="button" data-i18n="ai.restoreManaged">恢复自动管理</button></div>
                 </details>
-                <div id="ai-harness-status" class="notice" role="status" aria-live="polite">尚未检测。</div>
+                <div id="ai-harness-status" class="notice" role="status" aria-live="polite" data-i18n="ai.notChecked">尚未检测。</div>
               </div>
               <div id="ai-codebuddy-settings" data-auth-source="cli" class="notice" role="group" aria-labelledby="ai-codebuddy-title" hidden>
-                <div class="section-head"><h3 id="ai-codebuddy-title">CodeBuddy 个人账户</h3><span id="ai-codebuddy-phase" class="pill">读取中</span></div>
-                <p>使用 CodeBuddy CLI 登录状态。登录、续期和退出由 CLI 管理；客户端不另存登录凭据，关闭应用不会退出 CLI。</p>
+                <div class="section-head"><h3 id="ai-codebuddy-title" data-i18n="ai.codebuddyAccount">CodeBuddy 个人账户</h3><span id="ai-codebuddy-phase" class="pill" data-i18n="ai.reading">读取中</span></div>
+                <p data-i18n="ai.codebuddySignInScope">使用 CodeBuddy CLI 登录状态。登录、续期和退出由 CLI 管理；客户端不另存登录凭据，关闭应用不会退出 CLI。</p>
                 <div id="ai-codebuddy-cli-guide" class="notice">
-                  <b>尚未登录？请先在 CodeBuddy CLI 完成登录</b>
-                  <ol><li>打开终端（PowerShell 或命令提示符）。</li><li>运行 <code>codebuddy</code>；未安装时先按 <a href="https://www.codebuddy.cn/docs/cli/installation" target="_blank" rel="noopener noreferrer">官方安装说明</a>安装。</li><li>选择国内站，按 CLI 提示在浏览器完成个人账户登录。</li><li>返回本页面，点击“刷新登录状态”。</li></ol>
-                  <button id="ai-codebuddy-copy-command" class="ghost" type="button">复制登录命令</button>
+                  <b data-i18n="ai.codebuddySignInFirst">尚未登录？请先在 CodeBuddy CLI 完成登录</b>
+                  <ol><li data-i18n="ai.openTerminal">打开终端（PowerShell 或命令提示符）。</li><li><span data-i18n="ai.commandRun">运行</span> <code>codebuddy</code><span data-i18n="ai.commandInstall">；未安装时先按</span> <a href="https://www.codebuddy.cn/docs/cli/installation" target="_blank" rel="noopener noreferrer" data-i18n="ai.installDocs">官方安装说明</a><span data-i18n="ai.installEnd">安装。</span></li><li data-i18n="ai.codebuddyDomestic">选择国内站，按 CLI 提示在浏览器完成个人账户登录。</li><li data-i18n="ai.codebuddyRefreshHint">返回本页面，点击“刷新登录状态”。</li></ol>
+                  <button id="ai-codebuddy-copy-command" class="ghost" type="button" data-i18n="ai.copyCommand">复制登录命令</button>
                 </div>
-                <p class="muted">CodeBuddy 当前支持连接测试、单题解析和追问；暂不支持导入与批量任务。每次最多等待 120 秒。执行会使用当前个人账户并消耗账户用量。</p>
-                <label for="ai-codebuddy-model">CodeBuddy 模型</label>
-                <select id="ai-codebuddy-model" aria-describedby="ai-codebuddy-model-status"><option value="deepseek-v4.1-flash">DeepSeek V4.1 Flash</option><option value="hy4-preview">Hy4 preview</option><option value="hy3">Hy3</option><option value="default">Default（服务端默认）</option></select>
-                <p id="ai-codebuddy-model-status" class="muted" role="status" aria-live="polite">选择模型后自动保存，不会立即调用模型。</p>
-                <button id="ai-codebuddy-model-retry" class="ghost" type="button" hidden>重试保存模型</button>
-                <div class="notice" role="status" aria-live="polite"><b id="ai-codebuddy-runtime-status">尚未准备组件</b><p id="ai-codebuddy-runtime-progress" hidden></p></div>
-                <div class="actions"><button id="ai-codebuddy-prepare" class="ghost" type="button">准备组件</button><button id="ai-codebuddy-prepare-cancel" class="ghost" type="button" hidden>取消准备</button><button id="ai-codebuddy-stop" class="ghost" type="button" hidden>停止 CodeBuddy 任务</button></div>
-                <p class="muted">组件准备和登录不会调用模型。就绪后可点击下方“测试连接”，或在练习中主动生成单题解析。</p>
+                <p class="muted" data-i18n="ai.codebuddyScope">CodeBuddy 当前支持连接测试、单题解析和追问；暂不支持导入与批量任务。每次最多等待 120 秒。执行会使用当前个人账户并消耗账户用量。</p>
+                <label for="ai-codebuddy-model"><span data-i18n="ai.codebuddyModel">CodeBuddy 模型</span></label>
+                <select id="ai-codebuddy-model" aria-describedby="ai-codebuddy-model-status"><option value="deepseek-v4.1-flash">DeepSeek V4.1 Flash</option><option value="hy4-preview">Hy4 preview</option><option value="hy3">Hy3</option><option value="default" data-i18n="ai.serverDefault">Default（服务端默认）</option></select>
+                <p id="ai-codebuddy-model-status" class="muted" role="status" aria-live="polite" data-i18n="ai.autoSaveModel">选择模型后自动保存，不会立即调用模型。</p>
+                <button id="ai-codebuddy-model-retry" class="ghost" type="button" hidden data-i18n="ai.retrySaveModel">重试保存模型</button>
+                <div class="notice" role="status" aria-live="polite"><b id="ai-codebuddy-runtime-status" data-i18n="ai.componentUnprepared">尚未准备组件</b><p id="ai-codebuddy-runtime-progress" hidden></p></div>
+                <div class="actions"><button id="ai-codebuddy-prepare" class="ghost" type="button" data-i18n="ai.prepare">准备组件</button><button id="ai-codebuddy-prepare-cancel" class="ghost" type="button" hidden data-i18n="ai.cancelSetup">取消准备</button><button id="ai-codebuddy-stop" class="ghost" type="button" hidden data-i18n="ai.stopCodebuddy">停止 CodeBuddy 任务</button></div>
+                <p class="muted" data-i18n="ai.codebuddyReadyHint">组件准备和登录不会调用模型。就绪后可点击下方“测试连接”，或在练习中主动生成单题解析。</p>
                 <div class="actions">
-                  <button id="ai-codebuddy-refresh" class="ghost" type="button">刷新登录状态</button>
+                  <button id="ai-codebuddy-refresh" class="ghost" type="button" data-i18n="ai.refreshSignIn">刷新登录状态</button>
                 </div>
-                <p id="ai-codebuddy-status" class="notice" role="status" aria-live="polite">正在读取 CodeBuddy 登录状态…</p>
-                <p id="ai-codebuddy-execution-status" class="notice" role="status" aria-live="polite">请准备组件并完成登录。</p>
+                <p id="ai-codebuddy-status" class="notice" role="status" aria-live="polite" data-i18n="ai.loadingCodebuddy">正在读取 CodeBuddy 登录状态…</p>
+                <p id="ai-codebuddy-execution-status" class="notice" role="status" aria-live="polite" data-i18n="ai.prepareAndSignIn">请准备组件并完成登录。</p>
               </div>
               <div id="ai-deepseek-settings" class="notice" role="group" aria-labelledby="ai-deepseek-title" hidden>
-                <h3 id="ai-deepseek-title">DeepSeek 订阅</h3>
-                <p>DeepSeek 订阅尚未接入，暂不能登录或执行 AI 任务。</p>
-                <p class="muted">切换 Harness 会保留其他账户的登录状态。当前不会使用其他提供方代为执行。</p>
+                <h3 id="ai-deepseek-title" data-i18n="ai.deepseek">DeepSeek 订阅</h3>
+                <p data-i18n="ai.deepseekUnavailable">DeepSeek 订阅尚未接入，暂不能登录或执行 AI 任务。</p>
+                <p class="muted" data-i18n="ai.harnessSwitch">切换 Harness 会保留其他账户的登录状态。当前不会使用其他提供方代为执行。</p>
               </div>
             </div>
           </div>
           <div id="ai-api-settings-fields" class="ai-settings-grid-v99">
-            <label>服务类型
+            <label><span data-i18n="ai.serviceType">服务类型</span>
               <select id="ai-provider-v99">
-                <option value="ollama">Ollama（本地）</option>
-                <option value="lmstudio">LM Studio（本地）</option>
-                <option value="custom">自定义 OpenAI-compatible</option>
+                <option value="ollama" data-i18n="ai.ollamaLocal">Ollama（本地）</option>
+                <option value="lmstudio" data-i18n="ai.lmStudioLocal">LM Studio（本地）</option>
+                <option value="custom" data-i18n="ai.custom">自定义 OpenAI-compatible</option>
               </select>
             </label>
-            <label class="ai-endpoint-field-v99">Chat Completions 接口地址
+            <label class="ai-endpoint-field-v99"><span data-i18n="ai.endpoint">Chat Completions 接口地址</span>
               <input id="ai-endpoint-v99" type="url" spellcheck="false" placeholder="http://127.0.0.1:11434/v1/chat/completions" />
             </label>
-            <label>模型名称
-              <input id="ai-model-v99" spellcheck="false" placeholder="例如：qwen3:8b" />
+            <label><span data-i18n="ai.modelName">模型名称</span>
+              <input id="ai-model-v99" spellcheck="false" placeholder="例如：qwen3:8b" data-i18n-placeholder="ai.modelExample" />
             </label>
-            <label>API Key（本地服务可留空）
-              <input id="ai-api-key-v99" type="password" autocomplete="off" spellcheck="false" placeholder="不会写入题库备份" />
+            <label><span data-i18n="ai.apiKey">API Key（本地服务可留空）</span>
+              <input id="ai-api-key-v99" type="password" autocomplete="off" spellcheck="false" placeholder="不会写入题库备份" data-i18n-placeholder="ai.keyPlaceholder" />
             </label>
-            <label>请求超时（秒）
+            <label><span data-i18n="ai.timeout">请求超时（秒）</span>
               <input id="ai-timeout-v99" type="number" min="10" max="600" step="10" value="120" />
             </label>
-            <label class="ai-checkbox-label-v99"><span>密钥保存</span>
-              <span class="ai-checkbox-row-v99"><input id="ai-remember-key-v99" type="checkbox" />在本机浏览器中记住 API Key</span>
+            <label class="ai-checkbox-label-v99"><span data-i18n="ai.keyStorage">密钥保存</span>
+              <span class="ai-checkbox-row-v99"><input id="ai-remember-key-v99" type="checkbox" /><span data-i18n="ai.browserRemember">在本机浏览器中记住 API Key</span></span>
             </label>
           </div>
           <div id="ai-settings-actions" class="actions ai-settings-actions-v99">
-            <button id="ai-save-settings-v99" class="primary" type="button">保存设置</button>
-            <button id="ai-test-connection-v99" class="ghost" type="button">测试连接</button>
-            <button id="ai-toggle-diagnostics-v375" class="ghost" type="button">显示诊断</button>
-            <button id="ai-clear-settings-v99" class="ghost danger" type="button">清除配置</button>
+            <button id="ai-save-settings-v99" class="primary" type="button" data-i18n="ai.save">保存设置</button>
+            <button id="ai-test-connection-v99" class="ghost" type="button" data-i18n="connection.test">测试连接</button>
+            <button id="ai-toggle-diagnostics-v375" class="ghost" type="button" data-i18n="ai.showDiagnostic">显示诊断</button>
+            <button id="ai-clear-settings-v99" class="ghost danger" type="button" data-i18n="connection.clear">清除配置</button>
           </div>
-          <div id="ai-settings-status-v99" class="notice">尚未测试连接。API Key 默认只保留在当前标签页；勾选“在本机浏览器中记住”后也不会进入 Web 完整备份。</div>
+          <div id="ai-settings-status-v99" class="notice"><span data-i18n="ai.browserInitialStatus">尚未测试连接。API Key 默认只保留在当前标签页；勾选“在本机浏览器中记住”后也不会进入 Web 完整备份。</span></div>
           <div id="ai-diagnostics-v375" class="ai-diagnostics-v375 ai-hidden-v99" aria-live="polite">
             <div class="ai-diagnostics-head-v375">
-              <div><b id="ai-diagnostics-title-v375">连接状态待确认</b><span id="ai-diagnostics-subtitle-v375">尚未测试</span></div>
+              <div><b id="ai-diagnostics-title-v375" data-i18n="ai.connectionUnknown">连接状态待确认</b><span id="ai-diagnostics-subtitle-v375" data-i18n="ai.untested">尚未测试</span></div>
               <div class="actions ai-diagnostics-actions-v375">
-                <button id="ai-copy-diagnostics-v375" class="ghost" type="button">复制诊断</button>
-                <button id="ai-copy-ollama-cors-v375" class="ghost ai-hidden-v99" type="button">复制 Ollama 跨域命令</button>
+                <button id="ai-copy-diagnostics-v375" class="ghost" type="button" data-i18n="connection.copyDiagnostics">复制诊断</button>
+                <button id="ai-copy-ollama-cors-v375" class="ghost ai-hidden-v99" type="button" data-i18n="ai.copyCors">复制 Ollama 跨域命令</button>
               </div>
             </div>
             <div id="ai-diagnostics-body-v375" class="ai-diagnostics-body-v375"></div>
           </div>
         </div>
         <div class="card ai-guide-card-v99">
-          <div class="section-head"><div><p class="kicker">Usage</p><h3>使用边界</h3></div></div>
+          <div class="section-head"><div><p class="kicker">Usage</p><h3 data-i18n="ai.usage">使用边界</h3></div></div>
           <div class="ai-guide-grid-v99">
-            <div><b>本地服务</b><span>Ollama 和 LM Studio 通常无需填写密钥，但需要允许当前网页跨域访问本机接口。</span></div>
-            <div><b>远程服务</b><span>题库文本会发送到所填写的远程接口。纯前端页面无法绝对保护云端密钥，建议使用自己的代理服务。</span></div>
-            <div><b>人工核对</b><span>AI 整理、核对和补解析都只生成预览或建议，不会自动写入题库，也不会绕过确认导入。</span></div>
+            <div><b data-i18n="ai.localService">本地服务</b><span data-i18n="ai.localHint">Ollama 和 LM Studio 通常无需填写密钥，但需要允许当前网页跨域访问本机接口。</span></div>
+            <div><b data-i18n="ai.remoteService">远程服务</b><span data-i18n="ai.remoteHint">题库文本会发送到所填写的远程接口。纯前端页面无法绝对保护云端密钥，建议使用自己的代理服务。</span></div>
+            <div><b data-i18n="ai.humanReview">人工核对</b><span data-i18n="ai.humanReviewHint">AI 整理、核对和补解析都只生成预览或建议，不会自动写入题库，也不会绕过确认导入。</span></div>
           </div>
         </div>
       </section>
-      <section id="settings" class="view"><div class="card"><h2>设置与导出</h2><div class="page-art-strip settings-art-strip"><div><b>定期导出备份，避免本地数据丢失</b><span>设置页只导出完整数据备份；单个题库或选中题库 JSON 请到题库管理页导出。</span></div><img src="./media/loading_waiting_hourglass.webp" alt="加载等待素材" /></div><p>数据保存在浏览器 localStorage 中。更换浏览器或清理缓存会丢失数据，请定期导出。Web 完整备份适合 Web 端恢复；含图片备份 ZIP 可保留图片及现有可交换学习数据，并兼容旧版备份格式。</p><div class="actions settings-main-actions-v611"><button id="export-all-btn" class="primary">导出 Web 完整备份</button><button id="reset-data-btn" class="danger">清除全部本地数据</button></div><textarea id="export-output" readonly placeholder="导出内容会显示在这里，也会自动下载文件。"></textarea></div></section>
+      <section id="settings" class="view">
+        <div class="card">
+          <h2 data-i18n="settings.title">设置与导出</h2>
+          <div class="interface-language">
+            <label for="settings-language" data-i18n="language.name">界面语言</label>
+            <select id="settings-language" data-ui-language>
+              <option value="zh-CN" lang="zh-CN">简体中文</option>
+              <option value="en" lang="en">English</option>
+            </select>
+          </div>
+          <div><div class="page-art-strip settings-art-strip"><div><b data-i18n="settings.backupReminder">定期导出备份，避免本地数据丢失</b><span data-i18n="settings.exportScope">设置页只导出完整数据备份；单个题库或选中题库 JSON 请到题库管理页导出。</span></div><img src="./media/loading_waiting_hourglass.webp" alt="加载等待素材" data-i18n-alt="settings.backupArt" /></div><p data-i18n="settings.webStorage">数据保存在浏览器 localStorage 中。更换浏览器或清理缓存会丢失数据，请定期导出。Web 完整备份适合 Web 端恢复；含图片备份 ZIP 可保留图片及现有可交换学习数据，并兼容旧版备份格式。</p><div class="actions settings-main-actions-v611"><button id="export-all-btn" class="primary" data-i18n="settings.exportWeb">导出 Web 完整备份</button><button id="reset-data-btn" class="danger" data-i18n="settings.clearData">清除全部本地数据</button></div><textarea id="export-output" readonly placeholder="导出内容会显示在这里，也会自动下载文件。" data-i18n-placeholder="settings.exportOutput"></textarea>
+          </div>
+        </div>
+      </section>
     </main>
   </div>
 
   <div class="web-peeking-wrap">
     <img class="web-peeking-art" src="./media/peeking.webp" alt="" />
-    <button type="button" class="web-peeking-toggle" aria-pressed="false" onclick="var wrap=this.parentElement; var hidden=wrap.classList.toggle('collapsed'); this.setAttribute('aria-pressed', hidden ? 'true' : 'false'); this.textContent = hidden ? '显示' : '隐藏';">隐藏</button>
+    <button type="button" class="web-peeking-toggle" aria-pressed="false" data-i18n="shell.hideArtwork" onclick="var wrap=this.parentElement; var hidden=wrap.classList.toggle('collapsed'); this.setAttribute('aria-pressed', hidden ? 'true' : 'false'); globalThis.ShirohaI18n.bindText(this, hidden ? 'shell.showArtwork' : 'shell.hideArtwork');">隐藏</button>
   </div>
 
   <div id="edit-modal" class="modal hidden" aria-hidden="true">
     <div class="modal-panel">
       <div class="section-head">
-        <div><p class="kicker">Edit Question</p><h2>修正题目</h2></div>
-        <button id="edit-close-btn" class="ghost">关闭</button>
+        <div><p class="kicker">Edit Question</p><h2 data-i18n="editor.correct">修正题目</h2></div>
+        <button id="edit-close-btn" class="ghost" data-i18n="dialog.close">关闭</button>
       </div>
       <input id="edit-index" type="hidden" />
       <div class="form-grid">
-        <label>题型<select id="edit-type"><option value="single">单选题</option><option value="multiple">多选题</option><option value="judge">判断题</option><option value="blank">填空题</option><option value="short">简答题</option></select></label>
-        <label id="edit-answer-single-wrap-v58914">答案<input id="edit-answer" placeholder="选择题填 D 或 ACD；判断题可填 A/B/正确/错误；填空/简答可填参考答案，多个等价答案用 || 分隔" /></label>
-        <label>分类<input id="edit-category" placeholder="例如：基础知识 / 安全规范" /></label>
-        <label>分值<input id="edit-score" type="number" min="0" step="0.5" placeholder="可空，考试时按题型默认分值" /></label>
+        <label><span data-i18n="practice.type">题型</span><select id="edit-type"><option value="single" data-i18n="question.single">单选题</option><option value="multiple" data-i18n="question.multiple">多选题</option><option value="judge" data-i18n="question.judge">判断题</option><option value="blank" data-i18n="question.blank">填空题</option><option value="short" data-i18n="question.short">简答题</option></select></label>
+        <label id="edit-answer-single-wrap-v58914"><span data-i18n="question.answer">答案</span><input id="edit-answer" placeholder="选择题填 D 或 ACD；判断题可填 A/B/正确/错误；填空/简答可填参考答案，多个等价答案用 || 分隔" data-i18n-placeholder="editor.answerPlaceholder" /></label>
+        <label><span data-i18n="question.category">分类</span><input id="edit-category" placeholder="例如：基础知识 / 安全规范" data-i18n-placeholder="editor.categoryPlaceholder" /></label>
+        <label><span data-i18n="question.points">分值</span><input id="edit-score" type="number" min="0" step="0.5" placeholder="可空，考试时按题型默认分值" data-i18n-placeholder="editor.scorePlaceholder" /></label>
       </div>
       <div id="edit-multi-blank-wrap-v58914" class="multi-blank-editor-v58914 hidden">
-        <div class="multi-blank-editor-head-v58914"><div><b>逐空答案</b><p id="edit-blank-count-tip-v58914" class="muted"></p></div><div class="row-actions"><button id="edit-add-blank-btn-v58914" class="ghost" type="button">增加题空</button><button id="edit-disable-multi-blank-btn-v58914" class="ghost danger" type="button">退出多空模式</button></div></div>
+        <div class="multi-blank-editor-head-v58914"><div><b data-i18n="editor.blanks">逐空答案</b><p id="edit-blank-count-tip-v58914" class="muted"></p></div><div class="row-actions"><button id="edit-add-blank-btn-v58914" class="ghost" type="button" data-i18n="editor.addBlank">增加题空</button><button id="edit-disable-multi-blank-btn-v58914" class="ghost danger" type="button" data-i18n="editor.disableBlanks">退出多空模式</button></div></div>
         <div id="edit-blank-groups-v58914"></div>
       </div>
-      <button id="edit-enable-multi-blank-btn-v58914" class="ghost hidden" type="button">启用多空答案</button>
-      <label>题干<textarea id="edit-question" class="small-area" placeholder="题干"></textarea></label>
-      <label>选项<textarea id="edit-options" class="small-area" placeholder="每行一个选项，例如：&#10;A. 选项一&#10;B. 选项二"></textarea></label>
-      <label>解析<textarea id="edit-analysis" class="small-area" placeholder="解析，可空"></textarea></label>
-      <div id="edit-status" class="notice">等待保存。</div>
-      <div class="actions"><button id="edit-save-btn" class="primary">保存修改</button><button id="edit-delete-btn" class="danger">删除本题</button></div>
+      <button id="edit-enable-multi-blank-btn-v58914" class="ghost hidden" type="button" data-i18n="editor.enableBlanks">启用多空答案</button>
+      <label><span data-i18n="question.stem">题干</span><textarea id="edit-question" class="small-area" placeholder="题干" data-i18n-placeholder="question.stem"></textarea></label>
+      <label><span data-i18n="question.options">选项</span><textarea id="edit-options" class="small-area" placeholder="每行一个选项，例如：&#10;A. 选项一&#10;B. 选项二" data-i18n-placeholder="editor.optionsPlaceholder"></textarea></label>
+      <label><span data-i18n="editor.analysis">解析</span><textarea id="edit-analysis" class="small-area" placeholder="解析，可空" data-i18n-placeholder="editor.analysisPlaceholder"></textarea></label>
+      <div id="edit-status" class="notice" data-i18n="editor.awaitSave">等待保存。</div>
+      <div class="actions"><button id="edit-save-btn" class="primary" data-i18n="editor.save">保存修改</button><button id="edit-delete-btn" class="danger" data-i18n="editor.delete">删除本题</button></div>
     </div>
   </div>
   <div id="app-toast" class="app-toast" aria-live="polite"></div>
@@ -548,6 +568,8 @@ C. 判断题
   <script src="./platform/browser-network.js"></script>
   <script src="./platform/browser-credentials.js"></script>
   <script src="./platform/save-queue.js"></script>
+  <script src="./ui/i18n-messages.js"></script>
+  <script src="./ui/i18n.js"></script>
   <!-- platform-entry: 桌面适配入口在此之前注入 -->
   <script src="./platform/index.js"></script>
   <script src="./platform/dialogs.js"></script>

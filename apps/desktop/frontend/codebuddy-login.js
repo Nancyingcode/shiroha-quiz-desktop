@@ -5,13 +5,18 @@
   /** @typedef {'login'|'open_login'|'cancel'|'logout'|'set_remember'|'retry_restore'} Action */
   /** @typedef {'none'|'saving'|'saved'|'clearing'|'cleanup_required'|'error'} PersistenceState */
   /** @typedef {{phase:Phase,revision:number,loginUrl:string,message:string,browserOpened:boolean,busy:boolean,rememberLogin:boolean,persistenceState:PersistenceState,persistenceErrorCode:string|null}} AccountStatus */
-  const scope = /** @type {typeof globalThis & Partial<import('../../web/platform/runtime').BrowserGlobals> & {ShirohaDesktopHost?:{invoke(command:string,args:Record<string,unknown>):Promise<unknown>}}} */ (globalThis);
+  const scope = /** @type {typeof globalThis & Partial<import('../../web/platform/runtime').BrowserGlobals & import('../../web/platform/runtime').LocaleGlobals> & {ShirohaDesktopHost?:{invoke(command:string,args:Record<string,unknown>):Promise<unknown>}}} */ (globalThis);
   const host = scope.ShirohaDesktopHost;
   if (!host) { return; }
   const pollIntervalMs = 1000;
   const statusTimeoutMs = 15000;
   /** @type {Record<Phase,string>} */
   const labels = { signed_out: '尚未登录', authenticating: '等待完成登录', restoring: '正在恢复登录', signed_in: '个人账户已登录', expired: '登录已过期', failed: '登录未完成', cancelled: '登录已取消' };
+
+  /** @param {string} key @param {string} fallback */
+  const text = (key, fallback) => scope.ShirohaI18n?.text(key) ?? fallback;
+  /** @param {Phase} phase */
+  const phaseText = (phase) => text(`codebuddy.phase.${phase}`, labels[phase]);
 
   /** @param {unknown} value @returns {AccountStatus} */
   function readStatus(value) {
@@ -84,9 +89,9 @@
       panel.dataset.phase = cleanupPending ? 'signed_out' : current.phase;
       panel.setAttribute('aria-busy', String(reading));
       const phase = element('phase');
-      let phaseLabel = labels[current.phase];
-      if (readFailed) { phaseLabel = '读取失败'; }
-      if (reading || (current.revision < 0 && !readFailed)) { phaseLabel = '读取中'; }
+      let phaseLabel = phaseText(current.phase);
+      if (readFailed) { phaseLabel = text('codebuddy.readFailed', '读取失败'); }
+      if (reading || (current.revision < 0 && !readFailed)) { phaseLabel = text('ai.reading', '读取中'); }
       if (cleanupPending) { phaseLabel = '正在确认登录已结束'; }
       if (current.persistenceState === 'cleanup_required') { phaseLabel = '清理未完成'; }
       if (phase) { phase.textContent = phaseLabel; }
@@ -275,17 +280,17 @@
       panel.setAttribute('aria-busy', String(checkingAccount || initialRead));
       panel.dataset.phase = current?.phase || 'loading';
       const phase = element('phase');
-      let phaseLabel = labels[current?.phase || 'signed_out'];
-      if (current?.phase === 'restoring') { phaseLabel = '正在核验 CLI 登录'; }
-      if (!current || reading === 'refresh') { phaseLabel = '读取中'; }
-      if (failed) { phaseLabel = '读取失败'; }
+      let phaseLabel = phaseText(current?.phase || 'signed_out');
+      if (current?.phase === 'restoring') { phaseLabel = text('codebuddy.checkingCli', '正在核验 CLI 登录'); }
+      if (!current || reading === 'refresh') { phaseLabel = text('ai.reading', '读取中'); }
+      if (failed) { phaseLabel = text('codebuddy.readFailed', '读取失败'); }
       if (phase && phase.textContent !== phaseLabel) { phase.textContent = phaseLabel; }
       const message = element('status');
-      const messageText = notice || current?.message || '正在读取 CodeBuddy CLI 登录状态…';
+      const messageText = notice || current?.message || text('ai.loadingCodebuddy', '正在读取 CodeBuddy CLI 登录状态…');
       if (message && message.textContent !== messageText) { message.textContent = messageText; }
       const guide = element('cli-guide');
       if (guide) { guide.hidden = current?.phase === 'signed_in' && !failed; }
-      if (refresh) { refresh.disabled = reading === 'refresh' || initialRead || current?.busy === true; refresh.textContent = '刷新登录状态'; }
+      if (refresh) { refresh.disabled = reading === 'refresh' || initialRead || current?.busy === true; refresh.textContent = text('ai.refreshSignIn', '刷新登录状态'); }
     }
     /** @param {number} requestSequence */
     function isCurrentCliRead(requestSequence) {

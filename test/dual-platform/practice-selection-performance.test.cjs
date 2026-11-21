@@ -13,8 +13,17 @@ function fixture() {
       type: index % 2 ? 'multiple' : 'single',
     })),
   }));
-  const from = {};
-  const continued = {};
+  const option = () => ({
+    attributes: new Map(),
+    setAttribute(name, value) {
+      this.attributes.set(name, value);
+    },
+    removeAttribute(name) {
+      this.attributes.delete(name);
+    },
+  });
+  const from = option();
+  const continued = option();
   const start = {
     value: 'continue',
     querySelector: (selector) => (selector.includes('"from"') ? from : continued),
@@ -31,7 +40,7 @@ function fixture() {
   const state = { settings: {} };
   let enumerated = 0;
   const context = vm.createContext({});
-  runWebScripts(context, ['practice-selection.js']);
+  runWebScripts(context, ['ui/i18n-messages.js', 'ui/i18n.js', 'practice-selection.js']);
   const api = context.ShirohaPracticeSelection.create({
     state,
     session: {},

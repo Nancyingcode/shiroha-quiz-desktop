@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   /** @typedef {import('../../web/platform/contracts').Snapshot} Snapshot */
-  const scope = /** @type {typeof globalThis & import('../../web/platform/runtime').BrowserGlobals & {ShirohaDesktopHost?: {invoke<T>(command:string,args?:Record<string,unknown>):Promise<T>}}} */ (globalThis);
+  const scope = /** @type {typeof globalThis & import('../../web/platform/runtime').BrowserGlobals & Partial<import('../../web/platform/runtime').LocaleGlobals> & {ShirohaDesktopHost?: {invoke<T>(command:string,args?:Record<string,unknown>):Promise<T>}}} */ (globalThis);
   const KEY = 'shiroha_quiz_state_v28_4_c1';
   // 原生修订归当前页面，持久操作结果归数据库；初始化失败始终阻止写入。
   let revision = 0;
@@ -78,7 +78,7 @@
   }
   /** @template T @param {string} command @param {Record<string,unknown>} [args] @returns {Promise<T>} */
   async function invoke(command, args) {
-    if (!scope.ShirohaDesktopHost) { throw new Error('桌面服务不可用，请重新启动应用。'); }
+    if (!scope.ShirohaDesktopHost) { throw new Error(scope.ShirohaI18n?.text('native.serviceMissing') ?? '桌面服务不可用，请重新启动应用。'); }
     try { return await scope.ShirohaDesktopHost.invoke(command, args); } catch (error) {
       const code = error && typeof error === 'object' && 'code' in error ? String(error.code) : 'storage_unavailable';
       const messages = { cancelled: '请求已取消。', timeout: '请求超时，请检查服务连接。', network_unavailable: '无法连接服务，请检查地址、证书和网络。', binding_required: '服务绑定已变化，请重新输入凭据。', credential_pending: '凭据保存尚未完成，请重试保存设置。', credential_unavailable: '系统凭据不可用，未确认清除或保存成功。', configuration_not_committed: '配置尚未保存，凭据尚未生效。', result_unknown: '远端写入结果尚不确定，请先刷新远端列表核对备份。' };
@@ -93,7 +93,10 @@
       const message = Object.hasOwn(messages, code) ? /** @type {Record<string,string>} */ (messages)[code] : '';
       const localMessage = command === 'local_initialize' && Object.hasOwn(localMessages, code) ? /** @type {Record<string,string>} */ (localMessages)[code] : '';
       const serviceMessage = ['service_request', 'service_credential'].includes(command) && Object.hasOwn(serviceMessages, code) ? /** @type {Record<string,string>} */ (serviceMessages)[code] : '';
-      throw Object.assign(new Error(message || localMessage || serviceMessage || '本地操作未完成，原数据已保留。请检查权限、空间或重新启动。'), { code, name: code === 'cancelled' && command === 'service_request' ? 'AbortError' : 'Error' });
+      const known = message || localMessage || serviceMessage;
+      const key = known ? `native.${code}` : 'native.operationFailed';
+      const display = scope.ShirohaI18n?.text(key) ?? (known || '本地操作未完成，原数据已保留。请检查权限、空间或重新启动。');
+      throw Object.assign(new Error(display), { code, name: code === 'cancelled' && command === 'service_request' ? 'AbortError' : 'Error' });
     }
   }
   /** @param {string} type */
@@ -105,7 +108,7 @@
   /** @param {number} expected */
   function assertReadRevision(expected) {
     if (revision !== expected) {
-      throw new Error('数据修订已变化，请重试读取。');
+      throw new Error(scope.ShirohaI18n?.text('native.revisionChanged') ?? '数据修订已变化，请重试读取。');
     }
   }
   const storage = {
@@ -298,8 +301,8 @@
   }
   /** @param {string} name @param {Blob} blob */
   async function download(name, blob) {
-    const grant = await file({ kind: 'choose_export', name });
-    if (!grant) { throw new Error('已取消保存。'); }
+    const grant = await file({ kind: 'choose_export', name, locale: scope.ShirohaI18n?.locale() });
+    if (!grant) { throw new Error(scope.ShirohaI18n?.text('native.saveCanceled') ?? '已取消保存。'); }
     try {
       for (let offset = 0; offset < blob.size; offset += 262144) {
         const bytes = new Uint8Array(await blob.slice(offset, offset + 262144).arrayBuffer());
@@ -313,13 +316,13 @@
     if (selecting) { return; }
     selecting = true;
     try {
-      const grant = await file({ kind: 'choose_import' });
+      const grant = await file({ kind: 'choose_import', locale: scope.ShirohaI18n?.locale() });
       if (!grant) { return; }
       try {
         const parts = [];
         for (let offset = 0; offset < grant.sizeBytes;) {
           const bytes = new Uint8Array(await file({ kind: 'read', token: grant.token, offset }));
-          if (!bytes.length) { throw new Error('文件读取未完成。'); }
+          if (!bytes.length) { throw new Error(scope.ShirohaI18n?.text('native.fileIncomplete') ?? '文件读取未完成。'); }
           parts.push(bytes); offset += bytes.length;
         }
         const transfer = new DataTransfer();

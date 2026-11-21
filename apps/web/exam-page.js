@@ -1,6 +1,7 @@
 // 将模拟考试的页面状态、作答、计时和成绩更新集中装配。
 (() => {
   'use strict';
+  const i18n = globalThis.ShirohaI18n;
   // 使用应用注入的题库、保存和练习范围能力建立考试页面，考试轮次仍由会话持有。
   function create({
     session: examSession,
@@ -153,7 +154,7 @@
         scopeSummary,
       };
       if (!selected.items.length) {
-        $('#exam-card').innerHTML = '<div class="empty">当前考试范围下没有题目。</div>';
+        $('#exam-card').innerHTML = `<div class="empty">${i18n.html('exam.noQuestions')}</div>`;
         return;
       }
 
@@ -169,7 +170,7 @@
         examSession.current.deadline = Date.now() + (min * 60000);
         startExamTicker(examSession.current);
       } else {
-        $('#exam-timer').textContent = '不限时';
+        i18n.bindText($('#exam-timer'), 'exam.untimed');
       }
 
       $('#submit-exam-btn').disabled = false;
@@ -203,12 +204,13 @@
       }
 
       const left = Math.max(0, examSession.current.deadline - Date.now());
-      const m = Math.floor(left / 60000); const s = Math.floor((left % 60000) / 1000);
-      const text = `剩余 ${m}:${String(s).padStart(2, '0')}`;
-      $('#exam-timer').textContent = text;
+      const m = Math.floor(left / 60000);
+      const s = Math.floor((left % 60000) / 1000);
+      const time = `${m}:${String(s).padStart(2, '0')}`;
+      i18n.bindText($('#exam-timer'), 'exam.remaining', { time });
       const focusTimer = $('#exam-focus-timer');
       if (focusTimer) {
-        focusTimer.textContent = text;
+        i18n.bindText(focusTimer, 'exam.remaining', { time });
       }
 
       if (left <= 0) {
@@ -218,14 +220,15 @@
 
     // 渲染当前试卷的作答区和答题卡，确保重绘保持已保存的选择。
     function renderExamPaper() {
-      const timerText = examSession.current.deadline ? ($('#exam-timer')?.textContent || '计时中') : '不限时';
-      let html = `<main class="exam-focus-main-v31"><div class="exam-focus-head"><div><b>${esc(examSession.current.name || '模拟考试')}</b><span id="exam-focus-timer">${esc(timerText)}</span>${examSession.current.scopeName ? `<span class="pill">范围：${esc(examSession.current.scopeName)}</span>` : ''}</div><div class="exam-head-actions"><button class="ghost mini-btn focus-mini-btn" id="exam-exit-focus" type="button">退出考试</button><button class="danger focus-mini-btn" id="exam-submit-focus" type="button">交卷评分</button></div></div><div class="notice warn">考试中：多选题需完全一致才得分；填空/简答按参考答案规范化匹配评分，简答题建议交卷后人工核对。</div>`;
+      const timerText = examSession.current.deadline
+        ? ($('#exam-timer')?.textContent || i18n.text('exam.timing')) : i18n.text('exam.untimed');
+      let html = `<main class="exam-focus-main-v31"><div class="exam-focus-head"><div><b>${esc(examSession.current.name || i18n.text('exam.defaultName'))}</b><span id="exam-focus-timer">${esc(timerText)}</span>${examSession.current.scopeName ? `<span class="pill">${i18n.html('exam.scopeName', { scope: examSession.current.scopeName })}</span>` : ''}</div><div class="exam-head-actions"><button class="ghost mini-btn focus-mini-btn" id="exam-exit-focus" type="button">${i18n.html('exam.exit')}</button><button class="danger focus-mini-btn" id="exam-submit-focus" type="button">${i18n.html('exam.submit')}</button></div></div><div class="notice warn">${i18n.html('exam.scoringHelp')}</div>`;
       examSession.current.items.forEach((item, i) => {
         const key = examItemKeyV113(item);
         html += `<div class="exam-q" data-qid="${esc(key)}" id="exam-q-${i + 1}">${questionHtml(examRenderQuestionV113(item), true, i + 1)}</div>`;
       });
 
-      html += `<div class="exam-focus-actions"><button class="danger" id="exam-submit-focus-bottom" type="button">交卷评分</button></div></main><aside class="exam-side-v31">${renderExamAnswerCardV30()}</aside>`;
+      html += `<div class="exam-focus-actions"><button class="danger" id="exam-submit-focus-bottom" type="button">${i18n.html('exam.submit')}</button></div></main><aside class="exam-side-v31">${renderExamAnswerCardV30()}</aside>`;
       $('#exam-card').innerHTML = html;
       $('#exam-submit-focus').onclick = () => submitExam(false);
 
@@ -233,7 +236,7 @@
 
       $('#exam-exit-focus').onclick = /* 退出确认结束后再次验证原考试仍有效，防止清除等待期间启动的新轮次。 */ async () => {
         const session = examSession.current;
-        if (!await globalThis.ShirohaDialogs.confirm('退出本次考试？当前作答不会评分保存。')) {
+        if (!await globalThis.ShirohaDialogs.confirm(i18n.text('exam.confirmExit'))) {
           return;
         }
 
@@ -245,9 +248,9 @@
         globalThis.clearInterval(examSession.current.timer);
         examSession.current = { items: [], answers: {}, start: 0, timer: null, deadline: 0, submitted: false };
         examAnswerCard = null;
-        $('#exam-card').innerHTML = '<div class="empty">考试已退出，可重新配置后开始。</div>';
+        $('#exam-card').innerHTML = `<div class="empty">${i18n.html('exam.exited')}</div>`;
         $('#submit-exam-btn').disabled = true;
-        $('#exam-timer').textContent = '未开始';
+        i18n.bindText($('#exam-timer'), 'exam.notStarted');
         exitExamFocus();
       };
 
@@ -295,10 +298,10 @@
 
         indexes.get(key).push(i);
         const done = hasAnswerValueV58914((examSession.current.answers || {})[key] || []);
-        return `<button type="button" class="${done ? 'answered' : ''}" data-exam-jump="${i}" title="第${i + 1}题">${i + 1}</button>`;
+        return `<button type="button" class="${done ? 'answered' : ''}" data-exam-jump="${i}" ${i18n.attribute('title', 'practice.navNumber', { number: i + 1 })}>${i + 1}</button>`;
       }).join('');
       examAnswerCard = { owner: examSession.current, answered, total, indexes, box: null, buttons: [] };
-      return `<div id="exam-answer-card-v30" class="exam-answer-card-v30"><div class="exam-answer-card-head-v30"><div><b>答题卡</b><span data-exam-answer-summary>已答 ${answered} / ${total}，未答 ${remain}</span></div><div class="exam-answer-mini-stats-v30"><span>进度</span><b data-exam-answer-progress>${total ? Math.round(answered / total * 100) : 0}%</b></div><button class="rail-hide-btn-v34" data-rail-toggle-v34="exam" type="button" title="隐藏答题卡">隐藏</button></div><div class="exam-nav-grid-v30">${buttons}</div><button class="rail-show-btn-v34" data-rail-toggle-v34="exam" type="button" title="显示答题卡">答题卡</button></div>`;
+      return `<div id="exam-answer-card-v30" class="exam-answer-card-v30"><div class="exam-answer-card-head-v30"><div><b>${i18n.html('practice.nav')}</b><span data-exam-answer-summary>${i18n.html('exam.answerProgress', { answered, total, remaining: remain })}</span></div><div class="exam-answer-mini-stats-v30"><span>${i18n.html('exam.progress')}</span><b data-exam-answer-progress>${total ? Math.round(answered / total * 100) : 0}%</b></div><button class="rail-hide-btn-v34" data-rail-toggle-v34="exam" type="button" ${i18n.attribute('title', 'exam.hideSheet')}>${i18n.html('shell.hideArtwork')}</button></div><div class="exam-nav-grid-v30">${buttons}</div><button class="rail-show-btn-v34" data-rail-toggle-v34="exam" type="button" ${i18n.attribute('title', 'exam.showSheet')}>${i18n.html('practice.nav')}</button></div>`;
     }
 
     // 更新一题的作答后同步已答计数及答题卡状态，避免重复加减。
@@ -318,8 +321,12 @@
 
       indexes.forEach((index) => card.buttons[index]?.classList.toggle('answered', isAnswered));
 
-      card.summary.textContent = `已答 ${card.answered} / ${card.total}，未答 ${Math.max(0, card.total - card.answered)}`;
-      card.progress.textContent = `${card.total ? Math.round(card.answered / card.total * 100) : 0}%`;
+      i18n.bindText(card.summary, 'exam.answerProgress', {
+        answered: card.answered,
+        total: card.total,
+        remaining: Math.max(0, card.total - card.answered),
+      });
+      card.progress.textContent = i18n.percent(card.total ? card.answered / card.total * 100 : 0);
     }
 
     // 在当前答题卡绑定滚动定位和选择状态更新。
@@ -439,7 +446,7 @@
         await saveSilent();
         globalThis.clearInterval(examSession.current.timer);
         $('#submit-exam-btn').disabled = true;
-        $('#exam-timer').textContent = auto ? '已自动交卷' : '已交卷';
+        i18n.bindText($('#exam-timer'), auto ? 'exam.autoSubmitted' : 'exam.submitted');
         renderExamResult(rec);
         renderAll();
       });
@@ -449,7 +456,7 @@
     function renderExamResult(rec) {
       examAnswerCard = null;
       const typeRows = Object.entries(rec.byType || {}).map(([t, v]) => `<tr><td>${label(t)}</td><td>${v.correct}/${v.total}</td><td>${Number(v.score.toFixed ? v.score.toFixed(1) : v.score)}/${v.fullScore}</td></tr>`).join('');
-      let html = `<div class="exam-focus-head"><div><b>考试结果</b><span>${esc(rec.name || '模拟考试')}</span></div><div class="exam-head-actions"><button class="primary focus-mini-btn" id="exam-back-setup" type="button">返回考试设置</button></div></div><div class="score-card"><div class="metric"><span>得分</span><b>${rec.score}/${rec.totalScore}</b></div><div class="metric"><span>结果</span><b>${rec.passed ? '合格' : '未合格'}</b></div><div class="metric"><span>正确率</span><b>${rec.accuracy}%</b></div><div class="metric"><span>用时</span><b>${rec.duration}秒</b></div></div><div class="notice ${rec.passed ? 'ok' : 'warn'}">${esc(rec.name || '模拟考试')}：及格线 ${rec.passScore} 分，${rec.autoSubmitted ? '系统已自动交卷。' : '已交卷。'}</div>${typeRows ? `<div class="table-wrap"><table><thead><tr><th>题型</th><th>正确</th><th>得分</th></tr></thead><tbody>${typeRows}</tbody></table></div>` : ''}`;
+      let html = `<div class="exam-focus-head"><div><b>${i18n.html('exam.results')}</b><span>${esc(rec.name || i18n.text('exam.defaultName'))}</span></div><div class="exam-head-actions"><button class="primary focus-mini-btn" id="exam-back-setup" type="button">${i18n.html('exam.backSetup')}</button></div></div><div class="score-card"><div class="metric"><span>${i18n.html('exam.score')}</span><b>${rec.score}/${rec.totalScore}</b></div><div class="metric"><span>${i18n.html('common.result')}</span><b>${i18n.html(rec.passed ? 'exam.passed' : 'exam.notPassed')}</b></div><div class="metric"><span>${i18n.html('practice.accuracy')}</span><b>${i18n.percent(rec.accuracy)}</b></div><div class="metric"><span>${i18n.html('practice.elapsed')}</span><b>${i18n.html('exam.seconds', { duration: rec.duration })}</b></div></div><div class="notice ${rec.passed ? 'ok' : 'warn'}">${i18n.html('exam.resultNotice', { name: rec.name || i18n.text('exam.defaultName'), score: rec.passScore })}${i18n.html(rec.autoSubmitted ? 'exam.autoSubmittedNotice' : 'exam.submittedNotice')}</div>${typeRows ? `<div class="table-wrap"><table><thead><tr><th>${i18n.html('practice.type')}</th><th>${i18n.html('practice.correct')}</th><th>${i18n.html('exam.score')}</th></tr></thead><tbody>${typeRows}</tbody></table></div>` : ''}`;
       examSession.current.items.forEach(/* 将成绩明细与原试题对齐以展示本轮选项、答案和解析。 */ (item, i) => {
         const q = examQuestionV113(item);
         const key = examItemKeyV113(item);
@@ -459,14 +466,14 @@
         if (!correct) {
           analysis = renderReviewAnalysis(item, ans, `exam:${rec.id}`);
         } else if (q.analysis) {
-          analysis = `<br>解析：${renderQuestionContent(q.analysis)}`;
+          analysis = `<br>${i18n.html('question.analysis')}${renderQuestionContent(q.analysis)}`;
         }
 
         html += `<div class="exam-q" data-result-qid="${esc(key)}">${questionHtml(examRenderQuestionV113(item), true, i + 1)}<div class="feedback ${correct ? 'ok' : 'bad'}">${feedbackAnswerHtmlV58914(q, ans)}${analysis}</div></div>`;
       });
 
       $('#exam-card').innerHTML = html;
-      $('#exam-card .exam-head-actions').insertAdjacentHTML('afterbegin', '<button type="button" class="ghost focus-mini-btn" id="exam-review-result">查看复盘</button>');
+      $('#exam-card .exam-head-actions').insertAdjacentHTML('afterbegin', `<button type="button" class="ghost focus-mini-btn" id="exam-review-result">${i18n.html('practice.review')}</button>`);
       $('#exam-review-result').onclick = () => openTrainingReview(rec.id, 'exam');
 
       updateReviewAnalysisPanels();

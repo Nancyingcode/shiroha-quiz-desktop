@@ -1,6 +1,7 @@
 // 协调导入整理、预览建议与 AI 设置间的页面操作。
 (() => {
   'use strict';
+  const i18n = globalThis.ShirohaI18n;
   // 将导入页的草稿、会话、界面及副作用绑定到同一面板。
   function create({
     draft: importDraft,
@@ -233,7 +234,7 @@
       const btn = $('#ai-organize-import-btn-v99');
       if (btn) {
         btn.disabled = busy;
-        btn.textContent = aiImportSessions.importRequest.running ? 'AI 整理中……' : 'AI 辅助整理';
+        btn.textContent = aiImportSessions.importRequest.running ? i18n.text('import.aiOrganizing') : i18n.text('import.aiOrganize');
       }
 
       if (!$('#ai-import-panel-v99')?.classList.contains('ai-hidden-v99')) {
@@ -317,13 +318,13 @@
     // 原文存在且没有二次编辑事务时，才允许进入 AI 整理面板。
     function openAiImportPanelV99() {
       if (isEditingBank()) {
-        showNotice('AI 辅助整理', '题库二次编辑期间不能使用 AI 替换当前编辑草稿。请先保存或退出二次编辑。', 'warn');
+        showNotice(i18n.text('import.aiOrganize'), i18n.text('import.aiEditBlock'), 'warn');
         return;
       }
 
       const text = String($('#import-text')?.value || '').trim();
       if (!text) {
-        showNotice('AI 辅助整理', '请先粘贴题库文本或上传文件。', 'warn');
+        showNotice(i18n.text('import.aiOrganize'), i18n.text('import.aiNeedText'), 'warn');
         return;
       }
 
@@ -347,18 +348,19 @@
       range,
       availability,
     }) {
+      const scope = i18n.text(range.scope === 'selection' ? 'import.aiSelectedText' : 'import.aiAllText');
       privacy.setAttribute?.('role', 'status'); privacy.setAttribute?.('aria-live', 'polite'); privacy.setAttribute?.('aria-busy', String(checking));
       if (!configured) {
         privacy.textContent = availability.reason;
         privacy.className = 'notice warn';
       } else if (isHarness) {
-        privacy.textContent = `${aiHarnessPrivacyV99(config, `本次${range.label}及相关核对上下文`)}只返回待核对结果，不发送本地题库文件或图片。`;
+        privacy.textContent = i18n.text('import.aiHarnessPrivacy', { detail: aiHarnessPrivacyV99(config, i18n.text('import.aiHarnessSubject', { scope })) });
         privacy.className = 'notice warn';
       } else if (isLocalAiEndpointV99(config.endpoint)) {
-        privacy.textContent = '当前使用本地 AI 服务。浏览器仍需获得跨域访问权限；整理结果只会在成功后替换当前预览。';
+        privacy.textContent = i18n.text('import.aiLocalPrivacy');
         privacy.className = 'notice';
       } else {
-        privacy.textContent = `本次${range.label}将发送到远程 AI 接口。请确认题库内容允许上传，并确保所用密钥和服务可信。`;
+        privacy.textContent = i18n.text('import.aiRemotePrivacy', { scope });
         privacy.className = 'notice warn';
       }
     }
@@ -386,7 +388,7 @@
       }
 
       if (selectedSize) {
-        selectedSize.textContent = selected ? `${selected.length.toLocaleString('zh-CN')} 字` : '未选择';
+        selectedSize.textContent = selected ? i18n.text('import.aiCharCount', { count: selected.length }) : i18n.text('import.aiNoSelection');
       }
 
       const range = aiImportRangeV992();
@@ -401,7 +403,7 @@
       const hint = $('#ai-import-range-hint-v992');
       const showsProvider = configured || isHarness;
       if (provider) {
-        provider.textContent = showsProvider ? aiExecutionLabelV99(config) : '未配置';
+        provider.textContent = showsProvider ? aiExecutionLabelV99(config) : i18n.text('ai.notConfigured');
       }
 
       if (model) {
@@ -409,30 +411,30 @@
       }
 
       if (size) {
-        size.textContent = `${range.text.length.toLocaleString('zh-CN')} 字`;
+        size.textContent = i18n.text('import.aiCharCount', { count: range.text.length });
       }
 
       if (previewCountElement) {
-        previewCountElement.textContent = `${importDraft.questions.length} 题`;
+        previewCountElement.textContent = i18n.text('import.aiPreviewCount', { count: importDraft.questions.length });
       }
 
       if (badge) {
-        badge.textContent = showsProvider ? aiExecutionLabelV99(config) : '未配置';
+        badge.textContent = showsProvider ? aiExecutionLabelV99(config) : i18n.text('ai.notConfigured');
       }
 
       if (hint) {
-        hint.textContent = range.scope === 'selection' ? `将只发送当前选中的 ${range.text.length.toLocaleString('zh-CN')} 字；成功后预览显示本次整理结果，导入框原文不变。` : '将整理导入框中的全部原始文本；成功后更新当前预览，导入框原文不变。';
+        hint.textContent = range.scope === 'selection' ? i18n.text('import.aiSelectionHint', { count: range.text.length }) : i18n.text('import.aiAllScopeHint');
       }
 
       if (start) {
         start.classList.toggle('ai-hidden-v99', !configured && !checking);
         start.disabled = checking || importOrPreviewBusy() || !range.text || range.text.length > AI_IMPORT_MAX_CHARS_V99;
-        start.textContent = aiImportSessions.importRequest.running ? '正在整理……' : '开始整理';
+        start.textContent = aiImportSessions.importRequest.running ? i18n.text('import.aiStarting') : i18n.text('import.aiStart');
       }
 
       if (settingsButton) {
         settingsButton.classList.toggle('ai-hidden-v99', configured || checking);
-        settingsButton.textContent = availability.retryable ? '重试检查' : '前往 AI 设置';
+        settingsButton.textContent = availability.retryable ? i18n.text('import.aiRetryCheck') : i18n.text('import.openAi');
       }
 
       if (privacy) {
@@ -459,7 +461,7 @@
     }
 
     function aiPreviewModeLabelV991(mode) {
-      return mode === 'analysis' ? 'AI 补解析' : 'AI 核对';
+      return mode === 'analysis' ? i18n.text('import.aiExplain') : i18n.text('import.aiCheck');
     }
 
     function importRowsForAiV991() {
@@ -487,8 +489,14 @@
       return rows.map((r) => r.i);
     }
 
+    // 核对支持只看异常题，补解析的范围仍沿用原来的题目集合。
     function aiPreviewScopeOptionsV991(mode) {
-      return mode === 'analysis' ? [['range', '自定义题号范围'], ['selected', '已选择题目'], ['visible', '当前筛选结果'], ['all', '全部题目']] : [['range', '自定义题号范围'], ['problem', '仅异常题'], ['selected', '已选择题目'], ['visible', '当前筛选结果'], ['all', '全部题目']];
+      const options = [['range', 'import.aiScopeRange']];
+      if (mode !== 'analysis') {
+        options.push(['problem', 'import.aiScopeProblem']);
+      }
+
+      return [...options, ['selected', 'import.aiScopeSelected'], ['visible', 'import.aiScopeFiltered'], ['all', 'practice.allQuestions']];
     }
 
     // 校验一基题号的闭区间，转换成预览数组索引。
@@ -499,19 +507,19 @@
       const first = Number(startInput?.value);
       const last = Number(endInput?.value);
       if (!Number.isInteger(first) || !Number.isInteger(last)) {
-        return { indexes: [], error: '请输入完整的开始题号和结束题号。', first, last };
+        return { indexes: [], error: i18n.text('import.aiRangeRequired'), first, last };
       }
 
       if (first < 1 || last < 1) {
-        return { indexes: [], error: '题号必须从 1 开始。', first, last };
+        return { indexes: [], error: i18n.text('import.aiRangeMinimum'), first, last };
       }
 
       if (first > last) {
-        return { indexes: [], error: '开始题号不能大于结束题号。', first, last };
+        return { indexes: [], error: i18n.text('import.aiRangeOrder'), first, last };
       }
 
       if (last > total) {
-        return { indexes: [], error: `结束题号不能超过当前识别结果的 ${total} 题。`, first, last };
+        return { indexes: [], error: i18n.text('import.aiRangeMax', { total }), first, last };
       }
 
       return { indexes: Array.from({ length: last - first + 1 }, (_, i) => first - 1 + i), error: '', first, last };
@@ -567,7 +575,7 @@
       }
 
       if (!importDraft.questions.length) {
-        showNotice(aiPreviewModeLabelV991(mode), '请先完成普通识别或 AI 辅助整理，再对识别结果进行处理。', 'warn');
+        showNotice(aiPreviewModeLabelV991(mode), i18n.text('import.aiPreviewFirst'), 'warn');
         return;
       }
 
@@ -600,7 +608,7 @@
         if (needsOptions) {
           const options = aiPreviewScopeOptionsV991(mode);
           const wanted = resetScope ? 'range' : (scope.value || '');
-          scope.innerHTML = options.map(([value, optionLabel]) => `<option value="${value}">${optionLabel}</option>`).join('');
+          scope.innerHTML = options.map(([value, key]) => `<option value="${value}" data-i18n="${key}">${i18n.text(key)}</option>`).join('');
 
           scope.value = options.some(([value]) => value === wanted) ? wanted : options[0][0];
 
@@ -686,10 +694,10 @@
         status.textContent = details.error;
         status.className = 'notice warn';
       } else if (!details.baseIndexes.length) {
-        status.textContent = '当前范围没有题目。';
+        status.textContent = i18n.text('import.aiNoScopeQuestions');
         status.className = 'notice';
       } else if (!details.indexes.length && mode === 'analysis') {
-        status.textContent = `范围内有 ${details.baseIndexes.length} 道题，但没有符合当前解析条件的题目。`;
+        status.textContent = i18n.text('import.aiNoMatchingExplanations', { count: details.baseIndexes.length });
         status.className = 'notice';
       } else if (details.indexes.length > AI_PREVIEW_MAX_ITEMS_V991) {
         status.textContent = `实际处理 ${details.indexes.length} 道题，超过单次任务 ${AI_PREVIEW_MAX_ITEMS_V991} 道上限。请缩小题号范围或改用勾选后处理，程序不会静默截断。`;
@@ -736,11 +744,11 @@
       }
 
       if (badge) {
-        badge.textContent = mode === 'analysis' ? '补充解析' : '结果核对';
+        badge.textContent = mode === 'analysis' ? i18n.text('import.aiExplainBadge') : i18n.text('import.aiReview');
       }
 
       if (desc) {
-        desc.textContent = mode === 'analysis' ? '选择题目范围后，再按解析条件筛选；AI 只生成解析建议，不修改题干、题型、选项和答案。' : '选择需要核对的题目范围；AI 只生成修改建议，不会自动改题。';
+        desc.textContent = mode === 'analysis' ? i18n.text('import.aiExplainInstructions') : i18n.text('import.aiReviewInstructions');
       }
 
       const activeScope = updatePreviewControls({
@@ -759,19 +767,19 @@
       const details = collectAiPreviewTargetDetailsV992(mode, activeScope, condition?.value || 'missing');
       const estimatedRequestCount = batchSize === null ? null : Math.ceil(details.indexes.length / batchSize);
       if (rangeCount) {
-        rangeCount.textContent = `${details.baseIndexes.length} 题`;
+        rangeCount.textContent = i18n.text('import.aiPreviewCount', { count: details.baseIndexes.length });
       }
 
       if (count) {
-        count.textContent = `${details.indexes.length} 题`;
+        count.textContent = i18n.text('import.aiPreviewCount', { count: details.indexes.length });
       }
 
       if (requestCount) {
-        requestCount.textContent = estimatedRequestCount === null ? '—' : `${estimatedRequestCount} 次`;
+        requestCount.textContent = estimatedRequestCount === null ? '—' : i18n.text('import.aiRequestCount', { count: estimatedRequestCount });
       }
 
       if (service) {
-        service.textContent = configured || isHarness ? aiExecutionLabelV99(config) : '未配置';
+        service.textContent = configured || isHarness ? aiExecutionLabelV99(config) : i18n.text('ai.notConfigured');
       }
 
       if (model) {
@@ -780,13 +788,13 @@
 
       if (settingsButton) {
         settingsButton.classList.toggle('ai-hidden-v99', configured || checking);
-        settingsButton.textContent = availability.retryable ? '重试检查' : '前往 AI 设置';
+        settingsButton.textContent = availability.retryable ? i18n.text('import.aiRetryCheck') : i18n.text('import.openAi');
       }
 
       if (start) {
         start.classList.toggle('ai-hidden-v99', !configured && !checking);
         start.disabled = checking || importOrPreviewBusy() || batchSize === null || !!details.error || !details.indexes.length || details.indexes.length > AI_PREVIEW_MAX_ITEMS_V991;
-        start.textContent = aiImportSessions.previewRequest.running ? '处理中……' : `开始${aiPreviewModeLabelV991(mode)}`;
+        start.textContent = aiImportSessions.previewRequest.running ? i18n.text('import.aiProcessing') : i18n.text(mode === 'analysis' ? 'import.aiStartAnalysis' : 'import.aiStartReview');
       }
 
       const status = $('#ai-preview-status-v991');
@@ -827,13 +835,13 @@
       const review = $('#ai-review-import-btn-v991');
       if (review) {
         review.disabled = busy || blocked;
-        review.textContent = aiImportSessions.previewRequest.running && aiImportSessions.previewRequest.mode === 'review' ? 'AI 核对中……' : 'AI 核对';
+        review.textContent = aiImportSessions.previewRequest.running && aiImportSessions.previewRequest.mode === 'review' ? i18n.text('import.aiReviewing') : i18n.text('import.aiCheck');
       }
 
       const analysis = $('#ai-analysis-import-btn-v991');
       if (analysis) {
         analysis.disabled = busy || blocked;
-        analysis.textContent = aiImportSessions.previewRequest.running && aiImportSessions.previewRequest.mode === 'analysis' ? 'AI 补解析中……' : 'AI 补解析';
+        analysis.textContent = aiImportSessions.previewRequest.running && aiImportSessions.previewRequest.mode === 'analysis' ? i18n.text('import.aiExplaining') : i18n.text('import.aiExplain');
       }
 
       if (!$('#ai-preview-panel-v991')?.classList.contains('ai-hidden-v99')) {
@@ -966,7 +974,7 @@
 
       const status = $('#edit-status');
       if (status) {
-        status.textContent = 'AI 解析建议已填入编辑框，尚未保存。请核对后点击“保存修改”。';
+        status.textContent = i18n.text('import.aiApplyDraft');
         status.className = 'notice warn';
       }
     }

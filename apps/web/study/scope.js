@@ -1,6 +1,7 @@
 // 题库、首页、练习和考试共享练习范围及本轮题目的来源规则。
 (() => {
   'use strict';
+  const i18n = globalThis.ShirohaI18n;
 
   const BANK = 'bank';
   const GROUP = 'group';
@@ -110,11 +111,15 @@
       return banksForScope(scope)[0]?.name || '当前题库';
     }
 
+    function questionCount(banks) {
+      return banks.reduce((count, bank) => count + (bank.questions || []).length, 0);
+    }
+
     // 分组范围同时显示题库数和题数，方便用户核对跨库选题范围。
     function summary(scopeOverride) {
       const scope = scopeOverride ? normalize(scopeOverride) : current();
       const banks = banksForScope(scope);
-      const total = banks.reduce((count, bank) => count + (bank.questions || []).length, 0);
+      const total = questionCount(banks);
       return scope.type === GROUP ? `${banks.length} 个题库 · ${total} 题` : `${total} 题`;
     }
 
@@ -171,7 +176,9 @@
     // 显示来源题库里的原题序号，原题已不可定位时明确显示未知。
     function sourceMeta(item) {
       const position = bankQuestionNumber(item);
-      const number = position === null ? '题库题号未知' : `题库第 ${position} 题`;
+      const number = position === null
+        ? i18n.html('question.bankPositionMissing')
+        : i18n.html('question.bankPosition', { number: position });
       return `<span class="pill practice-source-number">${number}</span>`
         + `<span class="practice-source-bank">${escape(itemBankName(item))}</span>`;
     }
@@ -180,28 +187,33 @@
     function render() {
       const scope = current();
       const name = label(scope);
-      const counts = summary(scope);
-      const markup = `<b>${escape(name)}</b><small>${escape(counts)}</small>`;
+      const banks = banksForScope(scope);
+      const groupMode = scope.type === GROUP;
+      const bankCount = groupMode ? `${i18n.html('scope.banks', { count: banks.length })} · ` : '';
+      const displayName = groupMode || banks[0]?.name ? escape(name) : i18n.html('scope.bank');
+      const localizedMarkup = `<b>${displayName}</b><small>${bankCount}${i18n.html('scope.questions', { count: questionCount(banks) })}</small>`;
       const home = select('#home-practice-scope-v8916');
       if (home) {
-        const title = scope.type === GROUP ? '当前练习范围' : '当前题库';
-        home.innerHTML = `<span>${title}</span>${markup}`;
+        const title = groupMode ? 'scope.current' : 'scope.bank';
+        home.innerHTML = `${i18n.html(title)}${localizedMarkup}`;
       }
 
       const bank = select('#bank-practice-scope-v8916');
       if (bank) {
-        const activeName = escape(activeBank().name || '暂无题库');
-        bank.innerHTML = `<div><span>当前题库</span><b>${activeName}</b></div><div><span>练习范围</span>${markup}</div>`;
+        const activeName = activeBank().name ? escape(activeBank().name) : i18n.html('scope.noBank');
+        bank.innerHTML = `<div><span>${i18n.html('scope.bank')}</span><b>${activeName}</b></div><div><span>${i18n.html('scope.practice')}</span>${localizedMarkup}</div>`;
       }
 
       const practice = select('#practice-scope-summary-v8916');
       if (practice) {
-        practice.innerHTML = `<span>题目来源</span>${markup}`;
+        practice.innerHTML = `${i18n.html('scope.source')}${localizedMarkup}`;
       }
 
       const exam = select('#exam-bank-summary-v8916');
       if (exam) {
-        exam.textContent = `考试范围：${name}（跟随当前练习范围 · ${counts}）`;
+        const questions = i18n.text('scope.questions', { count: questionCount(banks) });
+        const counts = groupMode ? `${i18n.text('scope.banks', { count: banks.length })} · ${questions}` : questions;
+        i18n.bindText(exam, 'exam.inheritsScope', { name: groupMode || banks[0]?.name ? name : i18n.text('scope.bank'), counts });
       }
     }
 

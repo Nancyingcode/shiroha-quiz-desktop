@@ -54,7 +54,20 @@ export interface BrowserFiles {
   readBuffer(file:Blob):Promise<ArrayBuffer>;
   readText(file:Blob):Promise<string>;
 }
-export interface BrowserPreferences { sidebar():boolean; setSidebar(collapsed:boolean):void }
+export interface BrowserPreferences {
+  sidebar():boolean;
+  setSidebar(collapsed:boolean):void;
+  locale():string|null;
+  setLocale(value:string):void;
+}
+export interface LocaleGlobals {
+  ShirohaI18n: {
+    locale(): 'zh-CN' | 'en';
+    text(key:string, values?:Record<string, string | number>):string;
+    bindText(element:Element, key:string, values?:Record<string, string | number>):void;
+    bindAttribute(element:Element, name:'aria-label'|'alt'|'placeholder'|'title', key:string, values?:Record<string, string | number>):void;
+  };
+}
 export interface BrowserMedia { display(resource:string):string }
 export type AiTaskKind = 'connection_test'|'import_organize'|'batch_review'|'batch_analysis'|'question_analysis'|'question_followup';
 export interface HarnessComponentTask {

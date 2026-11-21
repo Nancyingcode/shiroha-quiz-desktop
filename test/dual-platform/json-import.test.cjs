@@ -27,6 +27,7 @@ function setup(data, {
   const confirmations = []; const imports = []; const notices = []; const previews = [];
   let retry;
   const context = vm.createContext({ Blob });
+  runWebScripts(context, ['ui/i18n-messages.js', 'ui/i18n.js']);
   runWebScripts(context, ['import-preview.js', 'backup/restore.js', 'import/page.js']);
   const draft = context.ShirohaImportPreview.create({ readers: {}, ocr: {} });
   const backupRestore = context.ShirohaBackupRestore.create({

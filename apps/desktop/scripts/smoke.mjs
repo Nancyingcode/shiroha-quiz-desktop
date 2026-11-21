@@ -1053,6 +1053,69 @@ function readNativeSnapshot(page) {
   });
 }
 
+/** 在拒绝外网的测试窗口中切换语言，核对扩展界面与完成练习后的 SQLite 数据。
+ * @param {Page} page
+ */
+async function localizedUiSmoke(page) {
+  const before = await readNativeSnapshot(page);
+  const [bank] = before.banks;
+  const [question] = bank.questions;
+  const [answer] = question.answer;
+  assert(answer && /^[A-Z]$/.test(answer));
+  assert.equal(await page.locator('html').getAttribute('lang'), 'zh-CN');
+  await page.locator('.nav[data-view="settings"]').click();
+  const settingsLanguage = page.getByLabel('界面语言', { exact: true }).filter({ visible: true });
+  await settingsLanguage.focus();
+  await page.keyboard.press('Space');
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  assert.equal(await settingsLanguage.count(), 0);
+  assert.equal(await page.locator('html').getAttribute('lang'), 'en');
+  assert.equal(await page.locator('#desktop-window-close').getAttribute('aria-label'), 'Close window');
+  await page.getByRole('heading', { name: 'Backup and restore' }).waitFor();
+  await page.getByText('Remember the password in Windows Credential Manager', { exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Question banks', exact: true }).click();
+  await page.getByRole('heading', { name: 'Question bank preview' }).waitFor();
+  const bankRow = page.locator('#bank-preview tbody tr').first();
+  const bankDetail = bankRow.getByRole('button', { name: /View details/ });
+  await bankDetail.click();
+  await page.getByRole('heading', { name: 'Full question text' }).waitFor();
+  await page.locator('#bank-question-detail [data-close-detail]').click();
+  await page.getByRole('button', { name: 'Exam', exact: true }).click();
+  await page.getByRole('heading', { name: 'Exam setup' }).waitFor();
+  assert.deepEqual(await readNativeSnapshot(page), before);
+
+  await page.getByRole('button', { name: 'Home', exact: true }).click();
+  await page.locator('.dashboard-action-card.blue').click();
+  await page.locator('#practice-start-mode-v58916').selectOption('from_start');
+  await page.locator('#practice-submit-mode').selectOption('single');
+  await page.locator('#practice-limit').selectOption('custom');
+  await page.locator('#practice-custom-count').fill('1');
+  await page.getByRole('button', { name: 'Start practice', exact: true }).click();
+  const card = page.locator('#practice-card');
+  const stem = await card.locator('.question-title').innerText();
+  const choice = card.locator(`input[value="${answer}"]`);
+  await choice.check();
+  const practiceLanguage = page.locator('#practice-language');
+  await practiceLanguage.focus();
+  await practiceLanguage.selectOption('zh-CN');
+  assert.equal(await practiceLanguage.evaluate((element) => document.activeElement === element), true);
+  assert.equal(await choice.isChecked(), true);
+  assert.equal(await card.locator('.question-title').innerText(), stem);
+  await page.getByRole('button', { name: '提交答案', exact: true }).click();
+  await card.locator('#p-feedback .feedback.ok').waitFor();
+  await practiceLanguage.selectOption('en');
+  assert.match(await card.locator('#p-feedback').innerText(), /Correct/);
+  await page.getByRole('button', { name: 'Finish practice', exact: true }).click();
+  await page.getByRole('button', { name: 'Review this round', exact: true }).filter({ visible: true }).waitFor();
+  const after = await readNativeSnapshot(page);
+  assert.deepEqual(after.banks, before.banks);
+  assert.deepEqual(after.records.slice(1), before.records);
+  const [record] = after.records;
+  assert.deepEqual([record.mode, record.correct, record.wrong], ['练习', 1, 0]);
+  return { nativeScore: true, originalBank: true, keyboard: true, choiceRetained: true };
+}
+
 /** 比较恢复入口仍可见的日志，SQLite 启动检查可能已经移除了无效 WAL。
  * @param {string} file
  */
@@ -2276,6 +2339,24 @@ async function main() {
       assert.equal(await page.locator('#stat-total').textContent(), '393');
       assert.equal(await page.locator('#builtin-bank-panel-v252').getAttribute('hidden'), '');
       return { resource: 'data/c1-full.json', activeBankId: bank.id, questionCount: bank.questions.length };
+    });
+    await check('简中与英文界面在离线 WebView2 中切换、作答并重启', async () => {
+      assert(runtime);
+      const active = runtime;
+      const result = await localizedUiSmoke(active.page);
+      assert.deepEqual(active.errors, []);
+      assert.deepEqual(active.blocked, []);
+      const beforeRestart = await readNativeSnapshot(active.page);
+      await stop(active);
+      runtime = undefined;
+      runtime = await launchOwned(executable, migrationProfile, proxyPort);
+      const { page, errors, blocked } = runtime;
+      assert.equal(await page.locator('html').getAttribute('lang'), 'en');
+      assert.equal(await page.locator('.nav[data-view="dashboard"]').innerText(), 'Home');
+      assert.deepEqual(await readNativeSnapshot(page), beforeRestart);
+      assert.deepEqual(errors, []);
+      assert.deepEqual(blocked, []);
+      return { ...result, localeRetainedAfterRestart: true, remoteRequests: blocked.length };
     });
   } catch (error) {
     if (!(error instanceof SmokeCheckAborted)) { checks.push({ name: '启动或运行', ok: false, error: errorText(error) }); }

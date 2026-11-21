@@ -39,7 +39,7 @@ function dashboardFixture(time) {
       assert(timers.delete(id));
     },
   });
-  runWebScripts(context, ['practice-selection.js', 'study/dashboard.js']);
+  runWebScripts(context, ['ui/i18n-messages.js', 'ui/i18n.js', 'practice-selection.js', 'study/dashboard.js']);
   const state = {
     banks: [{ id: 'a', questions: [{ id: 'question', type: 'single' }] }],
     wrongBook: {},
@@ -65,8 +65,9 @@ function dashboardFixture(time) {
   const button = {
     onclick: null,
     setAttribute(name, value) {
-      assert.equal(name, 'aria-label');
-      this.label = value;
+      if (name === 'aria-label') {
+        this.label = value;
+      }
     },
   };
   const dashboard = context.ShirohaStudyDashboard.create({
@@ -159,14 +160,14 @@ test('首页午夜任务在实际夏令时切换日按 23 或 25 小时刷新到
     f.state.wrongBook.a = [{ id: 'question', status: '未掌握', nextReviewAt: midnight.toISOString() }];
     f.dashboard.bind();
     f.dashboard.renderStats();
-    assert.equal(f.stat('review-due'), 0);
+    assert.equal(f.stat('review-due'), '0');
     assert.equal(f.button.disabled, true);
     const [task] = f.timers.values();
     assert.equal(task.time - start.getTime(), hours * 60 * 60 * 1000);
     f.advanceTo(new Date(midnight.getTime() - 1));
-    assert.equal(f.stat('review-due'), 0);
+    assert.equal(f.stat('review-due'), '0');
     f.advanceTo(midnight);
-    assert.equal(f.stat('review-due'), 1);
+    assert.equal(f.stat('review-due'), '1');
     assert.equal(f.button.disabled, false);
     assert.equal(f.button.label, '待复习错题 1 道，开始复习');
     assert.equal(f.timers.size, 1);
@@ -198,13 +199,13 @@ test('首页区分全部记录和今日练习，保留旧日期及数字字符�
   f.dashboard.renderStats();
   assert.deepEqual(
     ['total', 'wrong', 'review-due', 'records', 'total-practice', 'today-count', 'today-rate'].map(f.stat),
-    [1, 1, 0, 8, 6, 7, '57%'],
+    ['1', '1', '0', '8', '6', '7', '57%'],
   );
   f.state.records = [previous, exam];
   f.state.banks = [];
   f.dashboard.renderStats();
   assert.deepEqual(
     ['total', 'wrong', 'review-due', 'records', 'total-practice', 'today-count', 'today-rate'].map(f.stat),
-    [0, 0, 0, 2, 1, 0, '—'],
+    ['0', '0', '0', '2', '1', '0', '—'],
   );
 });

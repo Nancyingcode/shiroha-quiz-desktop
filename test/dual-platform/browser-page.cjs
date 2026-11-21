@@ -56,6 +56,218 @@ async function pageFor(t, raw, injection = '', appTransform = null, sourceTransf
 }
 const saved = (page) => page.evaluate((key) => globalThis.localStorage.getItem(key), KEY);
 
+test('英文界面扩展：题库、错题筛选、考试及复盘保留原题和历史模式', async (t) => {
+  const initial = webState();
+  const bank = initial.banks[0];
+  const [question] = bank.questions;
+  initial.wrongBook[bank.id].push({
+    ...initial.wrongBook[bank.id][0], id: question.id, nativeQuestion: question, status: '已掌握',
+  });
+  const page = await pageFor(t, JSON.stringify(initial));
+  page.setDefaultTimeout(5000);
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.locator('.nav[data-view="settings"]').click();
+  await page.locator('#settings-language').selectOption('en');
+  await page.locator('.nav[data-view="banks"]').click();
+  await page.getByRole('heading', { name: 'Question bank preview' }).waitFor();
+  await page.getByRole('searchbox', { name: 'Search questions or choices' }).fill(question.question);
+  const row = page.locator('#bank-preview tbody tr').filter({ hasText: question.question });
+  await row.getByRole('button', { name: /View details/ }).click();
+  await page.locator('#bank-question-detail').getByText(question.question, { exact: true }).waitFor();
+  await page.locator('#bank-question-detail [data-close-detail]').click();
+
+  await page.locator('.nav[data-view="wrongbook"]').click();
+  await page.locator('#wrong-status-filter').selectOption({ label: 'Mastered' });
+  assert.equal(await page.locator('#wrong-status-filter').inputValue(), '已掌握');
+  await page.locator('#wrongbook-list').getByText(question.question, { exact: true }).waitFor();
+
+  await page.locator('.nav[data-view="exam"]').click();
+  await page.getByRole('heading', { name: 'Exam setup' }).waitFor();
+  await page.locator('#exam-order').selectOption('sequence');
+  await page.locator('#exam-count').fill('1');
+  await page.locator('#exam-minutes').fill('0');
+  await page.getByRole('button', { name: 'Start exam', exact: true }).click();
+  await page.locator('#exam-card .option[data-key="A"]').click();
+  const submit = page.getByRole('button', { name: 'Submit exam', exact: true }).and(page.locator('#exam-submit-focus'));
+  await submit.waitFor();
+  const submitBox = await submit.boundingBox();
+  const answerCard = await page.locator('#exam-answer-card-v30').boundingBox();
+  assert.ok(submitBox && answerCard && submitBox.x + submitBox.width <= answerCard.x);
+  await submit.click();
+  await page.locator('#exam-card .exam-focus-head').getByText('Exam results', { exact: true }).waitFor();
+  await page.locator('#exam-review-result').click();
+  await page.locator('#training-review').getByRole('button', { name: 'All questions 1', exact: true }).waitFor();
+  await page.locator('#training-question .question-title').getByText(question.question, { exact: false }).waitFor();
+  const result = JSON.parse(await saved(page));
+  assert.deepEqual(result.records.map((record) => record.mode), ['考试', '考试']);
+  assert.equal(result.records[0].correct, 1);
+  assert.equal(result.banks[0].questions[0].question, question.question);
+});
+
+test('英文界面扩展：导入诊断、AI 与 WebDAV 使用英文，原题可继续入库', async (t) => {
+  const page = await pageFor(t, JSON.stringify(webState()));
+  page.setDefaultTimeout(5000);
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.locator('.nav[data-view="settings"]').click();
+  const restoreMode = page.locator('#settings-backup-mode-v23');
+  await restoreMode.selectOption('merge');
+  await page.locator('#settings-language').selectOption('en');
+  await page.getByRole('heading', { name: 'Backup and restore' }).waitFor();
+  const restoreLabels = [
+    'Merge: keep current data and add banks from the backup',
+    'Replace current local data from the backup',
+  ];
+  assert.deepEqual(await restoreMode.locator('option').allTextContents(), restoreLabels);
+  assert.deepEqual(await page.locator('#webdav-restore-mode-v378 option').allTextContents(), restoreLabels);
+  assert.equal(await restoreMode.inputValue(), 'merge');
+  const beforeTests = await saved(page);
+  await page.evaluate(() => {
+    const { network } = globalThis.ShirohaPlatform;
+    network.webdav = async () => ({ status: 207 });
+    network.ai = async () => ({ ok: true, status: 200, text: async () => '{"ok":true}' });
+    globalThis.ShirohaPlatform.download = async () => {
+      throw new Error('Save canceled.');
+    };
+  });
+  await page.getByRole('button', { name: 'Export complete Web backup', exact: true }).click();
+  await page.locator('#platform-status').getByText('Export failed: Save canceled.', { exact: true }).waitFor();
+  await page.locator('#webdav-endpoint-v378').fill('https://dav.example.invalid');
+  await page.locator('#webdav-panel-v378').getByRole('button', { name: 'Test connection', exact: true }).click();
+  await page.locator('#webdav-status-v378').filter({ hasText: 'Connected (HTTP 207)' }).waitFor();
+  await page.locator('.nav[data-view="ai-settings"]').click();
+  await page.locator('#ai-provider-v99').selectOption('custom');
+  await page.locator('#ai-endpoint-v99').fill('https://ai.example.invalid/v1/chat/completions');
+  await page.locator('#ai-model-v99').fill('fixture');
+  await page.locator('#ai-settings').getByRole('button', { name: 'Test connection', exact: true }).click();
+  await page.locator('#ai-settings-status-v99').filter({ hasText: 'The connection test succeeded.' }).waitFor();
+  assert.equal(await saved(page), beforeTests);
+
+  await page.locator('.nav[data-view="import"]').click();
+  await page.getByRole('heading', { name: 'Import from one file' }).waitFor();
+  await page.locator('#import-mode').selectOption('json');
+  await page.locator('#import-bank-name').fill('中文导入试题');
+  const prompt = '哪一项是偶数？';
+  await page.locator('#import-text').fill(JSON.stringify([{
+    type: 'single', question: prompt, options: [{ key: 'A', text: '二' }, { key: 'B', text: '三' }], answer: [],
+  }]));
+  await page.locator('#parse-import-btn').click();
+  const row = page.locator('#import-preview tbody tr').filter({ hasText: prompt });
+  await row.getByText('Missing answer', { exact: true }).waitFor();
+  await page.locator('#confirm-import-btn').click();
+  await page.waitForFunction(() => globalThis.document.querySelector('#active-bank-select').selectedOptions[0]?.textContent.includes('中文导入试题'));
+  const result = JSON.parse(await saved(page));
+  const [imported] = result.banks.filter((bank) => bank.name === '中文导入试题');
+  assert.equal(imported.questions[0].question, prompt);
+  assert.deepEqual(imported.questions[0].answer, []);
+});
+
+test('界面语言试点：设置、首页、总提交草稿和结果可以在中英文间切换', async (t) => {
+  const initial = webState();
+  const bank = initial.banks[0];
+  bank.questions = [bank.questions[0], bank.questions[3]];
+  initial.records[0].mode = '练习';
+  initial.records[0].date = new Date().toISOString();
+  const page = await pageFor(t, JSON.stringify(initial));
+  page.setDefaultTimeout(5000);
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  assert.equal(await page.locator('html').getAttribute('lang'), 'zh-CN');
+  const before = await saved(page);
+  const todayCount = await page.locator('#stat-today-count').innerText();
+  const wrongCount = await page.locator('#stat-wrong').innerText();
+
+  await page.locator('.nav[data-view="settings"]').click();
+  const settingsLanguage = page.locator('#settings-language');
+  await settingsLanguage.selectOption('en');
+  assert.equal(await page.locator('html').getAttribute('lang'), 'en');
+  assert.equal(await saved(page), before);
+  assert.ok(await page.locator('#settings').getByLabel('Interface language', { exact: true }).isVisible());
+
+  await page.getByRole('button', { name: 'Home', exact: true }).click();
+  assert.equal(await page.locator('#stat-today-count').innerText(), todayCount);
+  assert.equal(await page.locator('#stat-wrong').innerText(), wrongCount);
+  await page.getByRole('button', { name: /Start practice/ }).first().click();
+  await page.setViewportSize({ width: 390, height: 844 });
+  assert.ok(await page.locator('#practice').evaluate((element) => element.scrollWidth <= element.clientWidth));
+  await page.locator('#practice-submit-mode').selectOption('total');
+  await page.locator('#practice-limit').selectOption('all');
+  await page.getByRole('button', { name: 'Start practice', exact: true }).click();
+  assert.match(await page.locator('#practice-card .question-title').innerText(), /一加一等于多少/);
+  await page.locator('#practice-card .option[data-key="A"]').click();
+  await page.locator('#p-next').click();
+  const blanks = page.locator('#practice-card .text-answer');
+  await blanks.nth(0).fill('北京市');
+  await blanks.nth(1).fill('沪');
+  const practiceLanguage = page.locator('#practice-language');
+  await practiceLanguage.focus();
+  await practiceLanguage.selectOption('zh-CN');
+  assert.equal(await page.locator('html').getAttribute('lang'), 'zh-CN');
+  assert.equal(await practiceLanguage.evaluate((node) => node === globalThis.document.activeElement), true);
+  assert.equal(await blanks.nth(0).inputValue(), '北京市');
+  assert.equal(await blanks.nth(1).inputValue(), '沪');
+  assert.equal(await page.locator('#p-submit-all').innerText(), '总提交');
+  assert.equal(await saved(page), before);
+  await practiceLanguage.selectOption('en');
+  assert.equal(await blanks.nth(0).getAttribute('placeholder'), 'Enter answer for blank 1');
+  assert.ok(await page.locator('#practice-card').evaluate((element) => element.scrollWidth <= element.clientWidth));
+
+  await page.locator('#p-submit-all').click();
+  await page.locator('#practice-review-result').filter({ hasText: 'Review this round' }).waitFor();
+  const result = JSON.parse(await saved(page));
+  const [latest, previous] = result.records;
+  assert.deepEqual([latest.mode, latest.total, latest.correct, latest.wrong, latest.accuracy], ['练习', 2, 1, 1, 50]);
+  assert.equal(previous.mode, '练习');
+  assert.deepEqual(latest.details[1].chosen, ['北京市', '沪']);
+  assert.equal(result.banks[0].questions[0].question, bank.questions[0].question);
+  assert.equal(await page.locator('#p-wrong-overview h3').innerText(), 'Incorrect answers (1)');
+  const pager = page.locator('#p-wrong-overview-list-pager');
+  assert.equal(await pager.getByLabel('Items per page', { exact: true }).inputValue(), '10');
+  await practiceLanguage.selectOption('zh-CN');
+  assert.equal(await page.locator('#p-wrong-overview h3').innerText(), '错题一览（1）');
+  assert.equal(await pager.getByLabel('本轮错题一览每页条数', { exact: true }).inputValue(), '10');
+  await practiceLanguage.selectOption('en');
+  assert.deepEqual(JSON.parse(await saved(page)), result);
+  await page.reload();
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  assert.equal(await page.locator('html').getAttribute('lang'), 'en');
+  assert.equal(await page.locator('#stat-total-practice').innerText(), '2');
+
+  await page.locator('.nav[data-view="settings"]').click();
+  await page.locator('#settings-backup-mode-v23').selectOption('overwrite');
+  await page.locator('#settings-import-backup-v23').click();
+  await page.locator('#backup-json-file-v23').setInputFiles({
+    name: 'legacy.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(androidBackup())),
+  });
+  await page.locator('#import-summary').filter({ hasText: 'Restore complete. Question banks: 1.' }).waitFor({ state: 'attached' });
+  const restored = JSON.parse(await saved(page));
+  assert.equal(restored.banks[0].questions[0].question, androidBackup().banks[0].questions[0].question);
+  assert.equal(restored.records[0].mode, '练习');
+  assert.equal(await settingsLanguage.inputValue(), 'en');
+});
+
+test('界面语言试点：无效偏好回退，保存失败保留语言和焦点', async (t) => {
+  const page = await pageFor(t, JSON.stringify(webState()), `
+    const writePreference = Storage.prototype.setItem;
+    writePreference.call(localStorage, 'shiroha-ui-locale', 'unsupported');
+    Storage.prototype.setItem = function(key, value) {
+      if (key === 'shiroha-ui-locale') { throw new DOMException('blocked', 'QuotaExceededError'); }
+      return writePreference.call(this, key, value);
+    };
+  `);
+  page.setDefaultTimeout(5000);
+  await page.locator('body[data-storage-state="ready"]').waitFor();
+  await page.locator('.nav[data-view="settings"]').click();
+  const control = page.locator('#settings-language');
+  assert.equal(await control.inputValue(), 'zh-CN');
+  await control.focus();
+  await control.selectOption('en');
+  await page.locator('#app-toast').getByText(/界面语言未能保存/).waitFor();
+  assert.equal(await page.locator('html').getAttribute('lang'), 'zh-CN');
+  assert.equal(await control.inputValue(), 'zh-CN');
+  assert.equal(await control.evaluate((node) => node === globalThis.document.activeElement), true);
+});
+
 // 保留真实桌面 Harness 与页面按钮，只替换原生调用和网络响应。
 function deferredAiConnection(mode) {
   const harnessSource = readFileSync(require.resolve('../../apps/desktop/frontend/harness.js'), 'utf8');

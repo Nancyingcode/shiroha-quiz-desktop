@@ -20,7 +20,7 @@ function editorFixture() {
   const draft = { questions, selected: new Set([10]), warnings: [], report: '样本报告', filter: 'priority', diagnostics: { profile: {}, expected: { total: 500 } } };
   let diagnostics = 0;
   const context = vm.createContext({});
-  runWebScripts(context, ['question-editor.js']);
+  runWebScripts(context, ['ui/i18n-messages.js', 'ui/i18n.js', 'question-editor.js']);
   const editor = context.ShirohaQuestionEditor.create({
     state: {},
     draft,
@@ -79,7 +79,7 @@ function targetFixture() {
   const nodes = { '#ai-preview-range-start-v992': { value: '17' }, '#ai-preview-range-end-v992': { value: '40' } };
   let diagnostics = 0;
   const context = vm.createContext({});
-  runWebScripts(context, ['ai-import-panel.js']);
+  runWebScripts(context, ['ui/i18n-messages.js', 'ui/i18n.js', 'ai-import-panel.js']);
   const panel = context.ShirohaAiImportPanel.create({
     draft,
     sessions: { importRequest: {}, previewRequest: {} },
@@ -235,7 +235,7 @@ function panelUiFixture() {
   let notification = () => {
     throw new Error('未绑定通知');
   };
-  const context = vm.createContext({});runWebScripts(context, ['ai-import-sessions.js', 'ai-import-panel.js']);
+  const context = vm.createContext({});runWebScripts(context, ['ui/i18n-messages.js', 'ui/i18n.js', 'ai-import-sessions.js', 'ai-import-panel.js']);
   const panel = context.ShirohaAiImportPanel.create({
     draft,
     sessions,

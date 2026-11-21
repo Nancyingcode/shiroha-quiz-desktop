@@ -1,6 +1,7 @@
 // 管理 AI 导入和预览分析的请求所有权，防止取消后的响应覆盖新草稿。
 (() => {
   'use strict';
+  const i18n = globalThis.ShirohaI18n;
 
   const PREVIEW_BATCH_ERROR = '单批提交题数须为 1～30 的整数。';
 
@@ -237,7 +238,7 @@
       syncAiImportActionV99();
 
       if (!silent) {
-        setAiImportStatusV99('已请求取消，停止接收本次整理结果；现有识别结果未被修改。', 'warn');
+        setAiImportStatusV99(i18n.text('ai.importCancelRequested'), 'warn');
       }
     }
 
@@ -245,7 +246,7 @@
       if (!aiImportRequestV99.running) { return; }
 
       cancelAiImportRequestV99(true);
-      setAiImportStatusV99('原文或识别预览已变化，本次整理结果已失效；已请求停止，请重新开始。', 'warn');
+      setAiImportStatusV99(i18n.text('ai.importSourceChanged'), 'warn');
     }
 
     // 停止预览批次并保留已生成建议，界面仍可在下一轮继续使用。
@@ -270,7 +271,7 @@
       syncAiImportActionV99();
 
       if (!silent) {
-        setAiPreviewStatusV991('已请求取消，停止接收本次结果；已生成的建议会保留。', 'warn');
+        setAiPreviewStatusV991(i18n.text('ai.previewCancelRequested'), 'warn');
       }
     }
 
@@ -332,17 +333,17 @@
       }
 
       if (!details.baseIndexes.length) {
-        setAiPreviewStatusV991('当前范围没有题目。', 'warn');
+        setAiPreviewStatusV991(i18n.text('import.aiNoScopeQuestions'), 'warn');
         return null;
       }
 
       if (!indexes.length) {
-        setAiPreviewStatusV991(mode === 'analysis' ? '当前范围没有符合解析条件的题目。' : '当前范围没有可处理的题目。', 'warn');
+        setAiPreviewStatusV991(mode === 'analysis' ? i18n.text('ai.previewNoExplanations') : i18n.text('ai.previewNothing'), 'warn');
         return null;
       }
 
       if (indexes.length > AI_PREVIEW_MAX_ITEMS_V991) {
-        setAiPreviewStatusV991(`实际处理题目超过单次 ${AI_PREVIEW_MAX_ITEMS_V991} 道上限，请缩小范围。`, 'warn');
+        setAiPreviewStatusV991(i18n.text('ai.previewQuota', { count: AI_PREVIEW_MAX_ITEMS_V991 }), 'warn');
         return null;
       }
 
@@ -362,7 +363,7 @@
       }
 
       if (isEditing()) {
-        setAiPreviewStatusV991('第一阶段不处理题库二次编辑草稿。', 'warn');
+        setAiPreviewStatusV991(i18n.text('ai.previewEditBlock'), 'warn');
         return;
       }
 
@@ -383,7 +384,7 @@
       const requestConfig = aiRequestConfigV99(config);
       const targets = indexes.map(capturePreviewTarget);
       if (targets.some((target) => !target.id || findIndex(target.id, -1) !== target.index)) {
-        setAiPreviewStatusV991('目标题目身份不唯一或缺失，请重新识别并选择后再试。', 'warn');
+        setAiPreviewStatusV991(i18n.text('ai.targetIdentity'), 'warn');
         return;
       }
 
@@ -406,7 +407,7 @@
             throw new Error('目标题目已变化或身份不唯一，请重新选择后再试。');
           }
 
-          setAiPreviewStatusV991(`正在${aiPreviewModeLabelV991(mode)}：第 ${Math.floor(offset / batchSize) + 1}/${Math.ceil(indexes.length / batchSize)} 批，已处理 ${processed}/${indexes.length} 题。`);
+          setAiPreviewStatusV991(i18n.text('ai.previewProgress', { task: aiPreviewModeLabelV991(mode), batch: Math.floor(offset / batchSize) + 1, batches: Math.ceil(indexes.length / batchSize), processed, total: indexes.length }));
 
           let result;
           try {
@@ -435,8 +436,8 @@
 
         if (!isCurrentPreviewRequest()) { return; }
 
-        setAiPreviewStatusV991(`${aiPreviewModeLabelV991(mode)}完成：处理 ${processed} 道题，生成 ${stored} 条建议。建议不会自动修改题目，请逐题采纳或忽略。`, 'ok');
-        showNotice(aiPreviewModeLabelV991(mode), `已生成 ${stored} 条建议，请在预览表中逐题核对。`, 'ok');
+        setAiPreviewStatusV991(i18n.text('ai.previewCompleted', { task: aiPreviewModeLabelV991(mode), processed, stored }), 'ok');
+        showNotice(aiPreviewModeLabelV991(mode), i18n.text('ai.suggestionsReady', { count: stored }), 'ok');
       } catch (error) {
         if (!isCurrentPreviewRequest()) {
           return;
@@ -520,10 +521,12 @@
       importDraft.filter = 'priority';
 
       renderImportPreview(importDraft.questions, { syncPreviewTools: false });
-      setAiImportStatusV99(`整理完成：${modeLabel}，得到 ${importDraft.questions.length} 道题。请核对题量、题干、选项、答案和解析后再确认导入。`, 'ok');
+      const parserResult = usedFallback ? 'ai.textFallback' : 'ai.cleanedParser';
+      const displayMode = payload.mode === 'direct_questions' ? i18n.text('ai.structuredOutput') : i18n.text(parserResult);
+      setAiImportStatusV99(i18n.text('ai.recognized', { mode: displayMode, count: importDraft.questions.length }), 'ok');
       {
         const risk = largeImportRiskMessageV376(importDraft.questions);
-        showNotice('AI 整理完成', `${modeLabel}得到 ${importDraft.questions.length} 道题，必须人工核对后再导入。${risk ? ` ${risk}` : ''}`, risk ? 'warn' : 'ok');
+        showNotice(i18n.text('ai.importCompleted'), i18n.text('ai.recognizedNotice', { mode: displayMode, count: importDraft.questions.length, risk: risk ? ` ${risk}` : '' }), risk ? 'warn' : 'ok');
       }
     }
 
@@ -550,12 +553,12 @@
       const { text } = range;
 
       if (range.scope === 'selection' && !text) {
-        setAiImportStatusV99('当前没有有效的选中文本。请先在导入文本框中选中需要整理的内容。', 'warn');
+        setAiImportStatusV99(i18n.text('ai.importNoSelection'), 'warn');
         return;
       }
 
       if (!text) {
-        setAiImportStatusV99('当前没有可整理的文本。', 'warn');
+        setAiImportStatusV99(i18n.text('ai.importNoText'), 'warn');
         return;
       }
 
@@ -585,7 +588,7 @@
       const owner = { running: true, controller: null, cancelled: false };
       aiImportRequestV99 = owner;
       syncAiImportActionV99();
-      setAiImportStatusV99('正在调用 AI 结构化整理题库。将优先生成 questions，结构校验失败时自动退回文本清洗。');
+      setAiImportStatusV99(i18n.text('ai.organizing'));
 
       const isCurrentImportRequest = () => aiImportRequestV99 === owner && !owner.cancelled;
 
@@ -676,10 +679,10 @@
         importDraft.restore(previous);
 
         const isCancelled = error?.name === 'AbortError';
-        const message = isCancelled ? 'AI 整理已取消，现有识别结果未被修改。' : (error.message || 'AI 整理失败，现有识别结果未被修改。');
+        const message = isCancelled ? i18n.text('ai.importCanceled') : (error.message || i18n.text('ai.importFailed'));
 
         setAiImportStatusV99(message, 'warn');
-        showNotice('AI 整理', message, isCancelled ? 'warn' : 'danger');
+        showNotice(i18n.text('ai.importHeading'), message, isCancelled ? 'warn' : 'danger');
       } finally {
         if (isCurrentImportRequest()) {
           aiImportRequestV99 = { running: false, controller: null };

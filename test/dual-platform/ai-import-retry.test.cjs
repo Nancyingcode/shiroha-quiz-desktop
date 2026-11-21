@@ -84,7 +84,7 @@ function setup(respond) {
       throw new Error('模型业务 JSON 无效');
     },
   });
-  runWebScripts(context, ['import-preview.js', 'ai-import-sessions.js']);
+  runWebScripts(context, ['ui/i18n-messages.js', 'ui/i18n.js', 'import-preview.js', 'ai-import-sessions.js']);
   context.importDraft = context.ShirohaImportPreview.create({ readers: {}, ocr: {} });
   context.importDraft.questions = original;
   context.importDraft.filter = '';
@@ -189,7 +189,7 @@ function cancellationFixture(overrides = {}) {
     $: (selector) => (selector === '#ai-preview-batch-v991' ? { value: '10' } : null),
     ...overrides,
   });
-  runWebScripts(context, ['import-preview.js', 'ai-import-sessions.js']);
+  runWebScripts(context, ['ui/i18n-messages.js', 'ui/i18n.js', 'import-preview.js', 'ai-import-sessions.js']);
   context.importDraft = context.ShirohaImportPreview.create({ readers: {}, ocr: {} });
   context.importDraft.questions = [{ id: 'original', question: '原草稿' }];
   const identity = context.useRealIdentity ? context.ShirohaAiImportSessions.createIdentity(context.importDraft) : {

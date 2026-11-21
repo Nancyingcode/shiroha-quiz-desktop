@@ -1,6 +1,7 @@
 // 装配题库管理、浏览和题目详情，保留来源身份与按需数据读取。
 (() => {
   'use strict';
+  const i18n = globalThis.ShirohaI18n;
   // 复用应用注入的分页、保存与导航能力，题库界面只管理自己的选中状态。
   function create({
     state,
@@ -88,7 +89,7 @@
       detail?.dispatchEvent(new Event('preview-close'));
       detail?.remove();
       document.querySelectorAll('[data-preview-question]').forEach((button) => {
-        button.textContent = '查看详情';
+        i18n.bindText(button, 'banks.viewDetails');
         button.setAttribute('aria-expanded', 'false');
       });
     }
@@ -101,20 +102,30 @@
       }
 
       const old = state.activeBankId;
-      sel.innerHTML = state.banks.map((b) => `<option value="${esc(b.id)}">${esc(bankPathLabelV58(b))}（${b.questions.length}题）</option>`).join('');
+      sel.innerHTML = state.banks.map(/* 仅翻译缺省标签，显式命名的分组仍使用用户文本。 */ (bank) => {
+        const group = normalizeBankGroupNameV58(bank.groupName) || i18n.text('scope.ungrouped');
+        const path = `${group} / ${bank.name || i18n.text('scope.untitledBank')}`;
+        const labelText = i18n.text('shell.bankOption', { path, count: bank.questions.length });
+        return `<option value="${esc(bank.id)}">${esc(labelText)}</option>`;
+      }).join('');
 
       sel.value = old || state.activeBankId;
     }
 
     // 刷新合并来源下拉列表，避免把当前题库作为来源。
-    function renderMergeSelect() {
+    function renderMergeSelect(preserveSelection = false) {
       const sel = $('#merge-bank-select');
       if (!sel) {
         return;
       }
 
-      const current = state.activeBankId;
-      sel.innerHTML = state.banks.filter((b) => b.id !== current).map((b) => `<option value="${esc(b.id)}">${esc(bankPathLabelV58(b))}（${b.questions.length}题）</option>`).join('') || '<option value="">暂无可合并题库</option>';
+      const previous = preserveSelection ? sel.value : '';
+      const banks = state.banks.filter((bank) => bank.id !== state.activeBankId);
+      sel.innerHTML = banks.map((b) => `<option value="${esc(b.id)}">${esc(i18n.text('import.bankOption', { bank: bankPathLabelV58(b), count: b.questions.length }))}</option>`).join('') || `<option value="">${i18n.text('banks.noneToMerge')}</option>`;
+
+      if (previous && banks.some((bank) => bank.id === previous)) {
+        sel.value = previous;
+      }
     }
 
     // 从活动题库恢复名称、分组和其他编辑字段，保持控件与库状态一致。
@@ -160,20 +171,20 @@
       }
 
       bankList.insertAdjacentHTML('beforebegin', `<div id="bank-bulk-export-panel-v23" class="data-tool-card-v23 bank-bulk-panel-v23 bank-manage-toolbar-v28">
-    <div class="section-head compact-head-v23"><div><h3>当前题库与批量管理</h3><p class="muted">在这里切换当前题库；勾选下方题库后，可以批量导出题库 JSON 或删除。</p></div></div>
+    <div class="section-head compact-head-v23"><div><h3>${i18n.html('banks.bulkTitle')}</h3><p class="muted">${i18n.html('banks.bulkHelp')}</p></div></div>
     <div class="bank-current-bar-v28">
-      <label>当前题库<select id="bank-current-select-v28"></select></label>
-      <button class="ghost" id="export-json-btn" type="button">导出当前题库 JSON</button>
-      <span class="muted">切换后更新题库预览和错题本。练习与考试沿用已选范围。</span>
+      <label>${i18n.html('scope.bank')}<select id="bank-current-select-v28"></select></label>
+      <button class="ghost" id="export-json-btn" type="button">${i18n.html('banks.exportCurrent')}</button>
+      <span class="muted">${i18n.html('banks.switchHelp')}</span>
     </div>
     <div class="actions wrap-v23 bank-toolbar-actions-v28">
-      <label class="check-line-v23"><input id="export-bank-all-v23" type="checkbox">全选</label>
-      <button class="ghost" id="export-bank-invert-v23" type="button">反选</button>
-      <button class="ghost" id="export-bank-current-v23" type="button">仅选当前题库</button>
-      <button class="primary" id="export-selected-banks-v23" type="button">导出选中题库 JSON</button>
-      <button class="ghost danger" id="delete-selected-banks-v32" type="button">删除选中题库</button>
+      <label class="check-line-v23"><input id="export-bank-all-v23" type="checkbox">${i18n.html('common.selectAll')}</label>
+      <button class="ghost" id="export-bank-invert-v23" type="button">${i18n.html('common.invert')}</button>
+      <button class="ghost" id="export-bank-current-v23" type="button">${i18n.html('banks.selectCurrent')}</button>
+      <button class="primary" id="export-selected-banks-v23" type="button">${i18n.html('banks.exportSelected')}</button>
+      <button class="ghost danger" id="delete-selected-banks-v32" type="button">${i18n.html('banks.deleteSelected')}</button>
     </div>
-    <div id="export-bank-summary-v23" class="notice warn">请选择需要管理的题库。</div>
+    <div id="export-bank-summary-v23" class="notice warn">${i18n.html('banks.chooseToManage')}</div>
   </div>`);
       bindBankManagementToolbar();
       renderBankToolbarV28();
@@ -225,7 +236,7 @@
 
       const summary = $('#export-bank-summary-v23');
       if (summary) {
-        summary.textContent = selected.length ? `已选择 ${selected.length} 个题库，共 ${qCount} 道题。` : '请至少选择一个题库。';
+        summary.textContent = selected.length ? i18n.text('banks.selectedSummary', { banks: selected.length, questions: qCount }) : i18n.text('banks.chooseFirst');
         summary.className = `notice ${selected.length ? 'ok' : 'warn'}`;
       }
 
@@ -260,7 +271,7 @@
       setExportSelection(new Set([...getExportSelection()].filter((id) => validIds.has(id))));
 
       if (!banks.length) {
-        box.innerHTML = '<p class="muted">暂无题库。</p>';
+        box.innerHTML = `<p class="muted">${i18n.html('banks.none')}</p>`;
         renderBankToolbarV28();
         renderBulkSelection();
         return;
@@ -286,12 +297,12 @@
           const bankScope = scope.type === PRACTICE_SCOPE_BANK_V8916 && scope.value === b.id;
           const checked = getExportSelection().has(b.id);
           return `<article class="bank-item bank-item-compact-v28 ${active ? 'active-bank' : ''} ${checked ? 'selected-bank-v28' : ''}">
-        <label class="bank-bulk-check-v23 bank-card-check-v28" title="选择题库"><input type="checkbox" data-bank-bulk-v23="${esc(b.id)}" ${checked ? 'checked' : ''}></label>
-        <div class="bank-card-main-v28"><div class="bank-card-title-v28"><b>${esc(b.name)}</b>${active ? '<span class="source-badge">当前题库</span>' : ''}${bankScope ? '<span class="practice-scope-badge-v8916">练习范围</span>' : ''}</div><p class="muted bank-card-meta-v28">${b.questions.length}题｜单选${stats.single}｜多选${stats.multiple + stats.multi}｜判断${stats.judge}｜填空${stats.blank}｜简答${stats.short}｜创建 ${fmt(b.createdAt || now())}</p></div>
-        <div class="bank-card-actions-v33"><button class="ghost mini-btn" data-openbank="${esc(b.id)}" type="button">${active && bankScope ? '当前' : '设为当前'}</button><details class="bank-more-menu-v28"><summary aria-label="更多题库操作">更多</summary><div class="bank-more-panel-v28"><button class="ghost" data-editbank-v45="${esc(b.id)}" type="button">编辑 / 移动分组</button><button class="ghost" data-copybank="${esc(b.id)}" type="button">复制</button><button class="ghost" data-exportbank="${esc(b.id)}" type="button">导出该题库 JSON</button></div></details><button class="ghost danger mini-btn bank-delete-quick-v32" data-delbank="${esc(b.id)}" type="button" title="删除该题库">删除</button></div>
+        <label class="bank-bulk-check-v23 bank-card-check-v28" ${i18n.attribute('title', 'banks.selectBank')}><input type="checkbox" data-bank-bulk-v23="${esc(b.id)}" ${checked ? 'checked' : ''}></label>
+        <div class="bank-card-main-v28"><div class="bank-card-title-v28"><b>${esc(b.name)}</b>${active ? `<span class="source-badge">${i18n.html('scope.bank')}</span>` : ''}${bankScope ? `<span class="practice-scope-badge-v8916">${i18n.html('scope.practice')}</span>` : ''}</div><p class="muted bank-card-meta-v28">${i18n.html('banks.bankStats', { total: b.questions.length, single: stats.single, multiple: stats.multiple + stats.multi, judge: stats.judge, blank: stats.blank, short: stats.short, created: fmt(b.createdAt || now()) })}</p></div>
+        <div class="bank-card-actions-v33"><button class="ghost mini-btn" data-openbank="${esc(b.id)}" type="button">${i18n.html(active && bankScope ? 'banks.active' : 'banks.activate')}</button><details class="bank-more-menu-v28"><summary ${i18n.attribute('aria-label', 'banks.moreActions')}>${i18n.html('common.more')}</summary><div class="bank-more-panel-v28"><button class="ghost" data-editbank-v45="${esc(b.id)}" type="button">${i18n.html('banks.moveGroup')}</button><button class="ghost" data-copybank="${esc(b.id)}" type="button">${i18n.html('common.copy')}</button><button class="ghost" data-exportbank="${esc(b.id)}" type="button">${i18n.html('banks.exportSingle')}</button></div></details><button class="ghost danger mini-btn bank-delete-quick-v32" data-delbank="${esc(b.id)}" type="button" ${i18n.attribute('title', 'banks.deleteSingle')}>${i18n.html('common.delete')}</button></div>
       </article>`;
         }).join('');
-        return `<section class="bank-group-section-v58 ${groupActive ? 'practice-group-active-v8916' : ''}"><div class="bank-group-head-v58"><div><b>${esc(groupName)}</b><span class="bank-group-badge-v58">一级分组</span>${groupActive ? '<span class="practice-scope-badge-v8916">当前练习范围</span>' : ''}</div><div class="bank-group-actions-v8916"><span class="muted">${groupBanks.length} 个题库｜${total} 题</span><button class="ghost mini-btn" data-practice-group-v8916="${esc(groupName)}" type="button">${groupActive ? '已设为练习范围' : '设为练习范围'}</button></div></div><div class="bank-group-list-v58">${body}</div></section>`;
+        return `<section class="bank-group-section-v58 ${groupActive ? 'practice-group-active-v8916' : ''}"><div class="bank-group-head-v58"><div><b>${esc(groupName)}</b><span class="bank-group-badge-v58">${i18n.html('banks.firstLevelGroup')}</span>${groupActive ? `<span class="practice-scope-badge-v8916">${i18n.html('scope.current')}</span>` : ''}</div><div class="bank-group-actions-v8916"><span class="muted">${i18n.html('banks.groupCounts', { banks: groupBanks.length, count: total })}</span><button class="ghost mini-btn" data-practice-group-v8916="${esc(groupName)}" type="button">${i18n.html(groupActive ? 'banks.groupCurrent' : 'banks.useGroup')}</button></div></div><div class="bank-group-list-v58">${body}</div></section>`;
       }).join('');
 
       $$('[data-bank-bulk-v23]').forEach(/* 给每个选库控件绑定对应的题库标识。 */ (x) => x.onchange = /* 只接受仍在当前列表的选择事件，避免重绘后旧控件污染选中集。 */ () => {
@@ -321,7 +332,7 @@
         if (setPracticeGroupScopeV8916(x.dataset.practiceGroupV8916)) {
           await saveSilent();
           renderAll();
-          toast(`已将“${x.dataset.practiceGroupV8916}”设为当前练习范围。`, 'ok');
+          toast(i18n.text('banks.groupActivated', { name: x.dataset.practiceGroupV8916 }), 'ok');
         }
       }));
 
@@ -345,7 +356,7 @@
       }
 
       const old = state.activeBankId;
-      sel.innerHTML = state.banks.map((b) => `<option value="${esc(b.id)}">${esc(bankPathLabelV58(b))}（${b.questions.length}题）</option>`).join('') || '<option value="">暂无题库</option>';
+      sel.innerHTML = state.banks.map((b) => `<option value="${esc(b.id)}">${esc(i18n.text('import.bankOption', { bank: bankPathLabelV58(b), count: b.questions.length }))}</option>`).join('') || `<option value="">${i18n.text('scope.noBank')}</option>`;
 
       sel.value = old || state.activeBankId || '';
       $('#export-json-btn').disabled = state.banks.length === 0;
@@ -381,7 +392,7 @@
         && searchInput.value === rawSearch && typeSelect.value === selectedType && !isBusy() && nativeViewVisible('banks')
         && (!startedVisible || (owner === bankPreviewOwner && $('#banks')?.classList.contains('active')));
 
-      $('#bank-preview tbody').innerHTML = '<tr data-bank-preview-loading><td colspan="8" role="status">正在加载题目……</td></tr>';
+      $('#bank-preview tbody').innerHTML = `<tr data-bank-preview-loading><td colspan="8" role="status">${i18n.html('question.loading')}</td></tr>`;
       for (const id of ['select-bank-question-page', 'clear-bank-question-selection', 'delete-selected-questions']) {
         document.getElementById(id).disabled = true;
       }
@@ -394,7 +405,7 @@
           const batch = candidates.slice(offset, offset + BANK_SEARCH_BATCH_SIZE);
           if (!await loadNativeItems(practiceSessionItemsForBanksV8916([{ ...bank, questions: batch }]), isCurrentRead)) {
             if (isCurrentRead()) {
-              $('#bank-preview tbody').innerHTML = '<tr><td colspan="8" role="status">题目加载失败，请重试。 <button type="button" id="retry-bank-preview">重试</button></td></tr>';
+              $('#bank-preview tbody').innerHTML = `<tr><td colspan="8" role="status">${i18n.html('question.loadFailed')} <button type="button" id="retry-bank-preview">${i18n.html('common.retry')}</button></td></tr>`;
               $('#retry-bank-preview').onclick = renderBankPreview;
             }
 
@@ -426,7 +437,7 @@
           return;
         }
 
-        $('#bank-preview tbody').innerHTML = '<tr><td colspan="8" role="status">题目加载失败，请重试。 <button type="button" id="retry-bank-preview">重试</button></td></tr>';
+        $('#bank-preview tbody').innerHTML = `<tr><td colspan="8" role="status">${i18n.html('question.loadFailed')} <button type="button" id="retry-bank-preview">${i18n.html('common.retry')}</button></td></tr>`;
         $('#retry-bank-preview').onclick = renderBankPreview;
         return;
       }
@@ -438,8 +449,8 @@
       const { selected } = bankQuestionSelection;
       $('#bank-preview tbody').innerHTML = qs.map((q) => {
         const number = bank.questions.indexOf(q) + 1; const preview = bankQuestionCopyText(q);
-        return `<tr><td><input type="checkbox" data-select-bank-question="${esc(q.id)}" aria-label="选择第 ${number} 道试题" ${selected.has(q.id) ? 'checked' : ''}></td><td>${number}</td><td>${label(q.type)}</td><td>${esc(short(preview.text, 80))}${preview.text.length > 80 ? ` <button class="ghost mini-btn" type="button" data-preview-full="${esc(q.id)}" aria-label="查看第 ${number} 道试题全文">查看全文</button>` : ''}${preview.hasImages ? ' <span class="muted">含图片</span>' : ''}</td><td>${esc((q.answer || q.answerKeys || []).join(''))}</td><td>${esc(q.category || q.topic || '')}</td><td>${esc(q.score || '默认')}</td><td><button class="ghost mini-btn" type="button" data-preview-question="${esc(q.id)}" aria-expanded="false" aria-controls="bank-question-detail" aria-label="查看第 ${number} 道试题详情">查看详情</button> <button class="ghost danger mini-btn" type="button" data-delete-bank-question="${esc(q.id)}" aria-label="删除第 ${number} 道试题">删除</button></td></tr>`;
-      }).join('') || `<tr><td colspan="8" class="empty">${bank.questions.length ? '没有符合条件的试题。' : '当前题库暂无试题。'}</td></tr>`;
+        return `<tr><td><input type="checkbox" data-select-bank-question="${esc(q.id)}" ${i18n.attribute('aria-label', 'banks.selectQuestion', { number })} ${selected.has(q.id) ? 'checked' : ''}></td><td>${number}</td><td>${label(q.type)}</td><td>${esc(short(preview.text, 80))}${preview.text.length > 80 ? ` <button class="ghost mini-btn" type="button" data-preview-full="${esc(q.id)}" ${i18n.attribute('aria-label', 'banks.fullQuestionLabel', { number })}>${i18n.html('banks.viewFull')}</button>` : ''}${preview.hasImages ? ` <span class="muted">${i18n.html('banks.hasImages')}</span>` : ''}</td><td>${esc((q.answer || q.answerKeys || []).join(''))}</td><td>${esc(q.category || q.topic || '')}</td><td>${esc(q.score || '默认')}</td><td><button class="ghost mini-btn" type="button" data-preview-question="${esc(q.id)}" aria-expanded="false" aria-controls="bank-question-detail" ${i18n.attribute('aria-label', 'banks.detailLabel', { number })}>${i18n.html('banks.viewDetails')}</button> <button class="ghost danger mini-btn" type="button" data-delete-bank-question="${esc(q.id)}" ${i18n.attribute('aria-label', 'banks.deleteQuestionLabel', { number })}>${i18n.html('common.delete')}</button></td></tr>`;
+      }).join('') || `<tr><td colspan="8" class="empty">${i18n.html(bank.questions.length ? 'banks.noMatches' : 'banks.empty')}</td></tr>`;
 
       $('#bank-preview').querySelectorAll('[data-preview-question]').forEach((button) => button.onclick = () => openBankQuestionDetail(bank, qs.find((q) => q.id === button.dataset.previewQuestion), button, false));
 
@@ -452,7 +463,7 @@
     function bindBankQuestionSelection(bank, qs, selected) {
       // 题目选择变化时局部同步数量、批量操作和全选状态。
       const updateSelection = () => {
-        $('#bank-question-selection').textContent = `已选择 ${selected.size} 道试题`;
+        i18n.bindText($('#bank-question-selection'), 'banks.selectedQuestions', { count: selected.size });
         $('#bank-question-selection').hidden = selected.size === 0;
         $('#delete-selected-questions').disabled = !selected.size;
         $('#clear-bank-question-selection').disabled = !selected.size;
@@ -585,31 +596,31 @@
       closeBankQuestionDetail();
       const preview = bankQuestionPreview(q); const copy = bankQuestionCopyText(q); const answers = q.answer || q.answerKeys || []; const { options } = preview;
       const type = normalizeWebQuestionType(q.type);
-      let empty = '该题暂无选项，请检查题库内容';
+      let empty = i18n.text('banks.noChoices');
       if (type === 'judge') {
-        empty = '该判断题未提供独立选项';
+        empty = i18n.text('banks.noJudgeChoices');
       }
 
       if (type === 'blank' || type === 'short') {
-        empty = '该题型无需选项';
+        empty = i18n.text('banks.choicesNotNeeded');
       }
 
       const detail = document.createElement('tr');
       detail.id = 'bank-question-detail';
-      detail.innerHTML = `<td colspan="${table.tHead.rows[0].cells.length}"><section class="bank-detail" aria-labelledby="bank-detail-title"><div class="bank-detail-toolbar"><h3 id="bank-detail-title" tabindex="-1">完整题干${favorite ? ` <span class="pill">题库第 ${bank.questions.indexOf(q) + 1} 题</span>` : ''}</h3><div><button type="button" class="ghost mini-btn" data-copy-question>复制题干</button> <button type="button" class="ghost mini-btn" data-close-detail>收起详情</button></div></div><div class="bank-detail-status" role="status" aria-live="polite"></div><div class="bank-detail-body">${copy.text.trim() ? renderQuestionBodyV83(preview) : '暂无题干'}</div><h4>选项</h4>${options.map((o) => {
+      detail.innerHTML = `<td colspan="${table.tHead.rows[0].cells.length}"><section class="bank-detail" aria-labelledby="bank-detail-title"><div class="bank-detail-toolbar"><h3 id="bank-detail-title" tabindex="-1">${i18n.html('banks.fullText')}${favorite ? ` <span class="pill">${i18n.html('question.bankPosition', { number: bank.questions.indexOf(q) + 1 })}</span>` : ''}</h3><div><button type="button" class="ghost mini-btn" data-copy-question>${i18n.html('banks.copyStem')}</button> <button type="button" class="ghost mini-btn" data-close-detail>${i18n.html('banks.closeDetail')}</button></div></div><div class="bank-detail-status" role="status" aria-live="polite"></div><div class="bank-detail-body">${copy.text.trim() ? renderQuestionBodyV83(preview) : i18n.text('banks.noText')}</div><h4>${i18n.html('question.options')}</h4>${options.map((o) => {
         const matches = answers.includes(o.key) && options.filter((item) => item.key === o.key).length === 1;
-        return `<div class="bank-detail-option${matches ? ' is-answer' : ''}"><b>${esc(o.key)}</b><div>${o.text ? renderQuestionContent(o.text) : '选项内容为空'}</div>${matches ? '<span>已存答案</span>' : ''}</div>`;
-      }).join('')}${!options.length ? `<p class="muted">${empty}</p>` : ''}<p><b>已存答案：</b>${esc(answers.length ? answerDisplay(answers) : '未提供答案')}</p>${favorite && q.analysis ? `<div class="bank-detail-analysis"><b>解析：</b>${renderQuestionContent(q.analysis)}</div>` : ''}<div class="bank-manual-copy" hidden><label for="bank-question-manual-copy">完整题干纯文本</label><textarea id="bank-question-manual-copy" readonly></textarea><button type="button" class="ghost mini-btn" data-select-copy>全选文本</button> <button type="button" class="ghost mini-btn" data-hide-copy>收起手动复制区</button></div></section></td>`;
+        return `<div class="bank-detail-option${matches ? ' is-answer' : ''}"><b>${esc(o.key)}</b><div>${o.text ? renderQuestionContent(o.text) : i18n.text('banks.emptyChoice')}</div>${matches ? `<span>${i18n.html('banks.savedAnswer')}</span>` : ''}</div>`;
+      }).join('')}${!options.length ? `<p class="muted">${empty}</p>` : ''}<p><b>${i18n.html('banks.savedAnswerLabel')}</b>${esc(answers.length ? answerDisplay(answers) : i18n.text('banks.noAnswer'))}</p>${favorite && q.analysis ? `<div class="bank-detail-analysis"><b>${i18n.html('question.analysis')}</b>${renderQuestionContent(q.analysis)}</div>` : ''}<div class="bank-manual-copy" hidden><label for="bank-question-manual-copy">${i18n.html('banks.stemPlainText')}</label><textarea id="bank-question-manual-copy" readonly></textarea><button type="button" class="ghost mini-btn" data-select-copy>${i18n.html('banks.selectText')}</button> <button type="button" class="ghost mini-btn" data-hide-copy>${i18n.html('banks.hideCopy')}</button></div></section></td>`;
 
       row.after(detail);
       bindBankQuestionDetailToolbar(detail, table);
-      button.textContent = '收起';
+      i18n.bindText(button, 'banks.collapseDetail');
       button.setAttribute('aria-expanded', 'true');
       bindBankQuestionDetailCopy(detail, copy, button);
 
       detail.querySelectorAll('img').forEach(/* 给加载失败的图片提供可读文字，保留其题目上下文和已知描述。 */ (img) => img.addEventListener('error', () => {
         const fallback = document.createElement('span');
-        fallback.textContent = `图片加载失败：${img.alt || '题目图片'}`;
+        fallback.textContent = i18n.text('banks.imageLoadFailed', { description: img.alt || i18n.text('banks.questionImage') });
         img.replaceWith(fallback);
       }, { once: true }));
 
@@ -650,7 +661,7 @@
       field.value = copy.text;
       copyButton.disabled = !copy.text.trim();
       if (copy.hasImages) {
-        status.textContent = '复制文字，图片以占位说明保留';
+        status.textContent = i18n.text('banks.copyImagesHint');
       }
 
       detail.querySelector('[data-close-detail]').onclick = () => {
@@ -676,11 +687,11 @@
             return;
           }
 
-          status.textContent = copy.hasImages ? '已复制题干文字（图片为占位说明）' : '已复制完整题干';
-          copyButton.textContent = '已复制';
+          status.textContent = copy.hasImages ? i18n.text('banks.copiedImages') : i18n.text('banks.copiedText');
+          copyButton.textContent = i18n.text('banks.copied');
           setTimeout(() => {
             if (detail.isConnected) {
-              copyButton.textContent = '复制题干';
+              i18n.bindText(copyButton, 'banks.copyStem');
             }
           }, 1800);
         } catch {
@@ -688,7 +699,7 @@
             return;
           }
 
-          status.textContent = '自动复制失败，请选中文本后按 Ctrl+C，或使用系统复制菜单';
+          status.textContent = i18n.text('banks.copyManually');
           manual.hidden = false;
           field.focus();
           field.select();

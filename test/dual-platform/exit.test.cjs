@@ -33,6 +33,7 @@ function fixture(overrides = {}) {
   context.practiceSession = { current: context.practice };
   context.examSession = { current: context.exam };
   const settings = installAiSettings(context);
+  context.i18n = context.ShirohaI18n;
   vm.runInContext(source.functionSource('aiTasksBusyV99'), context);
   vm.runInContext(source.closeHookSource(), context);
   return {

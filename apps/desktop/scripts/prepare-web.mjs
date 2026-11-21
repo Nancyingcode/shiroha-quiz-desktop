@@ -7,7 +7,7 @@ import { html as htmlStandard, parse } from 'parse5';
 const desktopRoot = fileURLToPath(new URL('..', import.meta.url));
 const businessScripts = [
   'app.js', 'training.js', 'quiz-core.js', 'text-answers.js', 'text-parser.js',
-  'ui/pagination.js', 'ui/shell.js',
+  'ui/i18n-messages.js', 'ui/i18n.js', 'ui/pagination.js', 'ui/shell.js',
   'backup-core.js', 'zip.js', 'backup-archive.js', 'backup-data.js', 'backup/export.js', 'backup/restore.js', 'webdav-panel.js',
   'docx-import.js', 'pdf-import.js', 'ocr-import.js', 'table-import.js', 'import-preview.js',
   'ai-results.js', 'ai-import-sessions.js', 'ai-question-sessions.js', 'ai-settings.js', 'ai-transport.js',
@@ -79,7 +79,10 @@ export function optimizeDesktopHtml(html) {
   if (/class="app-splash"/.test(withoutSplash)) { throw new Error('Unsupported Web splash structure'); }
   return withoutSplash
     .replace('在本机浏览器中记住 API Key', '使用 Windows 凭据管理器记住 API Key')
+    .replace('data-i18n="ai.browserRemember"', 'data-i18n="ai.desktopRemember"')
+    .replace('data-i18n="ai.browserInitialStatus"', 'data-i18n="ai.desktopInitialStatus"')
     .replace('API Key 默认只保留在当前标签页；勾选“在本机浏览器中记住”后也不会进入 Web 完整备份。', 'API Key 默认只保留在当前进程；选择记住后保存在 Windows 凭据管理器，不会进入备份。')
+    .replace('data-i18n="settings.webStorage"', 'data-i18n="settings.desktopStorage"')
     .replace(/(<aside class="side">)\s*<div class="brand">\s*<img\b[^>]*>\s*<div>[\s\S]*?<\/div>\s*<\/div>/, '$1')
     .replace(/<link\b[^>]*rel="preload"[^>]*href="\.\/media\/(?:home_welcome_avatar|import_question_bank_folder)\.webp"[^>]*>\s*/g, '')
     .replace(/<img\b(?![^>]*\bloading=)(?=[^>]*src="\.\/media\/(?!splash_mascot\.webp|peeking\.webp)[^"]+")/g, '<img loading="lazy" decoding="async"');

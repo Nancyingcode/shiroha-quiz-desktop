@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
+const { runWebScripts } = require('./source-tools.cjs');
 
 test('实际 Web 七处内联事件生成桌面六个 click 并保留导航和折叠', async () => {
   const { externalizeEvents, optimizeDesktopHtml } = await import('../../apps/desktop/scripts/prepare-web.mjs');
@@ -36,6 +37,9 @@ test('实际 Web 七处内联事件生成桌面六个 click 并保留导航和�
   toggle.setAttribute = (name, value) => {
     toggle[name] = value;
   };
+  toggle.removeAttribute = (name) => {
+    delete toggle[name];
+  };
   const document = {
     querySelector(selector) {
       const event = selector.match(/data-desktop-event-(\d+)/);
@@ -51,7 +55,9 @@ test('实际 Web 七处内联事件生成桌面六个 click 并保留导航和�
       return null;
     },
   };
-  vm.runInNewContext(generated.script, { document });
+  const context = vm.createContext({ document });
+  runWebScripts(context, ['ui/i18n-messages.js', 'ui/i18n.js']);
+  vm.runInContext(generated.script, context);
   for (const node of nodes.slice(0, 5)) { node.handler.call(node, { type: 'click' }); }
   assert.deepEqual(targets, ['practice', 'import', 'banks', 'settings', 'settings']);
   toggle.handler.call(toggle, { type: 'click' });

@@ -4,11 +4,13 @@
   /** @typedef {import('../../web/platform/runtime').HarnessStatus} HarnessStatus */
   /** @typedef {import('../../web/platform/runtime').NativeHarnessStatus} NativeHarnessStatus */
   /** @typedef {import('../../web/platform/runtime').HarnessApi} HarnessApi */
-  const scope = /** @type {typeof globalThis & import('../../web/platform/runtime').BrowserGlobals & {ShirohaDesktopHost?:{invoke<T>(command:string,args?:Record<string,unknown>):Promise<T>}}} */ (globalThis);
+  const scope = /** @type {typeof globalThis & import('../../web/platform/runtime').BrowserGlobals & Partial<import('../../web/platform/runtime').LocaleGlobals> & {ShirohaDesktopHost?:{invoke<T>(command:string,args?:Record<string,unknown>):Promise<T>}}} */ (globalThis);
   if (!scope.ShirohaDesktopHost || !scope.ShirohaPlatform) { return; }
+  /** @param {string} key @param {string} fallback @param {Record<string, string | number>} [values] */
+  const text = (key, fallback, values) => scope.ShirohaI18n?.text(key, values) ?? fallback;
   // 配置和在途请求归当前窗口，修订与 generation 共同阻止取消或恢复后的迟到结果。
   /** @type {HarnessStatus} */
-  let current = { mode: 'api', adapter: 'codex', model: '', timeoutSeconds: 120, credentialStatus: 'missing', runtimePath: '', runtimeVersion: '', runtimeSource: 'managed', runtimeState: 'unprepared', runtimeReceivedBytes: 0, runtimeTotalBytes: 0, ready: false, reason: '尚未准备', revision: 0, busy: false };
+  let current = { mode: 'api', adapter: 'codex', model: '', timeoutSeconds: 120, credentialStatus: 'missing', runtimePath: '', runtimeVersion: '', runtimeSource: 'managed', runtimeState: 'unprepared', runtimeReceivedBytes: 0, runtimeTotalBytes: 0, ready: false, reason: text('harness.notPrepared', '尚未准备'), revision: 0, busy: false };
   let generation = 0;
   // 查询序号处理同修订的 busy 变化；变更屏障使跨越配置操作的查询失效。
   let requestSequence = 0;
@@ -114,14 +116,14 @@
     return current.adapter === 'codebuddy' ? 'CodeBuddy' : 'Codex';
   }
   function selectionReason() {
-    return selectionFailure || '正在保存 Harness 提供方选择，请等待完成。';
+    return selectionFailure || text('harness.selectionSaving', '正在保存 Harness 提供方选择，请等待完成。');
   }
   function modelSelectionReason() {
-    return modelSelectionFailure || '正在保存 CodeBuddy 模型选择，请等待完成。';
+    return modelSelectionFailure || text('harness.modelSaving', '正在保存 CodeBuddy 模型选择，请等待完成。');
   }
   /** @param {string} adapter */
   function unavailableReason(adapter) {
-    return adapter === 'codebuddy' ? '请准备 CodeBuddy 组件并完成个人账户登录，再使用连接测试、单题解析和追问。' : 'DeepSeek 订阅尚未接入，模型执行尚未开放。';
+    return adapter === 'codebuddy' ? text('harness.codebuddyReadiness', '请准备 CodeBuddy 组件并完成个人账户登录，再使用连接测试、单题解析和追问。') : text('harness.deepseekNotReady', 'DeepSeek 订阅尚未接入，模型执行尚未开放。');
   }
   function assertSupported() {
     if (modelSelectionPending()) { throw failure({ code: 'harness_unavailable', message: modelSelectionReason() }); }
@@ -134,7 +136,7 @@
   function failure(error) {
     const source = error && typeof error === 'object' ? /** @type {{code?:string;message?:string}} */ (error) : {};
     const code = typeof source.code === 'string' && source.code ? source.code : 'harness_unavailable';
-    let message = typeof source.message === 'string' && source.message ? source.message : 'Harness 操作失败，请检查配置后重试。';
+    let message = typeof source.message === 'string' && source.message ? source.message : text('harness.failed', 'Harness 操作失败，请检查配置后重试。');
     if (codebuddyDiagnosticCodes.has(code)) {
       const diagnostic = `（诊断码：${code}）`;
       if (!message.endsWith(diagnostic)) { message += diagnostic; }
@@ -540,7 +542,7 @@
   async function selectModel(model) {
     if (!codebuddyModels.includes(model)) { throw new Error('请选择支持的 CodeBuddy 模型。'); }
     if (current.adapter !== 'codebuddy' || selectedAdapter() !== 'codebuddy' || draftAdapter !== undefined || api.formMode() !== 'harness') { throw new Error('请先选择 CodeBuddy Harness，再修改模型。'); }
-    if (current.mode !== 'harness') { throw new Error('请先保存“使用 Harness”执行方式，再选择 CodeBuddy 模型。'); }
+    if (current.mode !== 'harness') { throw new Error(text('harness.saveBeforeModel', '请先保存“使用 Harness”执行方式，再选择 CodeBuddy 模型。')); }
     assertIdle();
     if (selectingAdapter || selectingModel || loginInProgress || preparation || current.credentialStatus === 'authenticating' || current.runtimeState === 'preparing') { throw failure({ code: 'busy', message: '请等待当前任务或订阅设置操作结束后切换模型。' }); }
     const retrying = !!modelSelectionFailure;
@@ -581,7 +583,7 @@
     if (!section) { return; }
     section.hidden = false;
     const loading = element('ai-harness-loading');
-    if (loading) { loading.hidden = !settingsLoading && !settingsFailure; loading.textContent = settingsFailure || '正在读取 AI 设置…'; }
+    if (loading) { loading.hidden = !settingsLoading && !settingsFailure; loading.textContent = settingsFailure || text('ai.loading', '正在读取 AI 设置…'); }
     const retryLoading = element('ai-harness-load-retry'); if (retryLoading) { retryLoading.hidden = !settingsFailure; }
     const loadingSettings = settingsLoading || !!settingsFailure;
     const settingsStatus = element('ai-settings-status-v99'); if (settingsStatus) { settingsStatus.hidden = !!loadingSettings; }
@@ -609,7 +611,7 @@
     const showSave = !unavailableProvider || retrySelection || mode !== current.mode;
     const actions = element('ai-settings-actions'); if (actions) { actions.hidden = mode === 'harness' && adapter === 'deepseek' && !showSave; }
     const save = input('ai-save-settings-v99');
-    if (save) { save.hidden = !showSave; save.textContent = retrySelection ? '重试保存选择' : '保存设置'; }
+    if (save) { save.hidden = !showSave; save.textContent = retrySelection ? text('harness.retrySelection', '重试保存选择') : text('ai.save', '保存设置'); }
     const test = input('ai-test-connection-v99'); if (test) { test.hidden = mode === 'harness' && adapter === 'deepseek'; test.disabled = test.getAttribute?.('aria-busy') === 'true' || (mode === 'harness' && !api.snapshot().ready); }
     const clear = input('ai-clear-settings-v99'); if (clear) { clear.hidden = unavailableProvider; }
     const diagnostic = element('ai-toggle-diagnostics-v375'); if (diagnostic) { diagnostic.hidden = mode === 'harness'; }
@@ -619,14 +621,14 @@
     const backgroundTask = current.componentTasks?.find((task) => task.adapter !== adapter);
     const background = element('ai-harness-background'); if (background) { background.hidden = !backgroundTask; }
     const backgroundStatus = element('ai-harness-background-status'); if (backgroundStatus && backgroundTask) { backgroundStatus.textContent = `${backgroundTask.adapter === 'codex' ? 'Codex' : 'CodeBuddy'} · ${componentPhaseLabel(backgroundTask)}（后台继续）`; }
-    const runtimeLabels = { unprepared: '尚未准备', preparing: '组件准备中', ready: '组件已就绪 · 使用本地组件', failed: '组件准备失败', cancelled: '组件准备已取消' };
+    const runtimeLabels = { unprepared: text('harness.notPrepared', '尚未准备'), preparing: text('harness.preparing', '组件准备中'), ready: text('harness.prepared', '组件已就绪 · 使用本地组件'), failed: text('harness.prepareFailed', '组件准备失败'), cancelled: text('harness.prepareCanceled', '组件准备已取消') };
     const showingManaged = current.runtimeSource === 'managed' || preparationKind === 'use_managed_runtime';
-    const runtimeStatus = element('ai-harness-runtime-status'); if (runtimeStatus) { runtimeStatus.textContent = (showingManaged ? '自动管理 · ' : '自定义程序 · ') + (componentTask ? componentPhaseLabel(componentTask) : runtimeLabels[preparing ? 'preparing' : current.runtimeState]); }
+    const runtimeStatus = element('ai-harness-runtime-status'); if (runtimeStatus) { runtimeStatus.textContent = (showingManaged ? text('harness.automatic', '自动管理 · ') : text('harness.custom', '自定义程序 · ')) + (componentTask ? componentPhaseLabel(componentTask) : runtimeLabels[preparing ? 'preparing' : current.runtimeState]); }
     const progress = element('ai-harness-runtime-progress');
     if (progress) {
-      const received = Math.max(0, current.runtimeReceivedBytes || 0).toLocaleString('zh-CN');
-      const total = Math.max(0, current.runtimeTotalBytes || 0).toLocaleString('zh-CN');
-      progress.textContent = current.runtimeTotalBytes > 0 ? `${received} / ${total} 字节` : `已接收 ${received} 字节`;
+      const received = Math.max(0, current.runtimeReceivedBytes || 0).toLocaleString(scope.ShirohaI18n?.locale() ?? 'zh-CN');
+      const total = Math.max(0, current.runtimeTotalBytes || 0).toLocaleString(scope.ShirohaI18n?.locale() ?? 'zh-CN');
+      progress.textContent = current.runtimeTotalBytes > 0 ? text('harness.byteProgress', `${received} / ${total} 字节`, { received, total }) : text('harness.receivedBytes', `已接收 ${received} 字节`, { received });
       progress.hidden = !preparing || (componentTask ? componentTask.phase !== 'downloading' : !current.runtimeTotalBytes);
     }
     for (const id of ['ai-harness-prepare', 'ai-harness-use-managed', 'ai-harness-choose', 'ai-harness-inspect']) { const button = input(id); if (button) { button.disabled = preparing || current.busy || loginInProgress; } }
@@ -634,33 +636,33 @@
     const cancelPrepare = input('ai-harness-prepare-cancel'); if (cancelPrepare) { cancelPrepare.hidden = !preparing; }
     const loginButton = input('ai-harness-login'); if (loginButton) { loginButton.disabled = codexReading || !!codexReadFailure || loginInProgress || current.credentialStatus === 'authenticating'; }
     for (const id of ['ai-harness-model', 'ai-harness-timeout', 'ai-save-settings-v99']) { const field = input(id); if (field) { field.disabled = loginInProgress || preparing || selectingAdapter || selectingModel; } }
-    const path = element('ai-harness-runtime'); if (path) { path.textContent = current.runtimePath || '组件准备后由应用管理'; }
-    const version = element('ai-harness-version'); if (version) { version.textContent = current.runtimeVersion || '未检测'; }
+    const path = element('ai-harness-runtime'); if (path) { path.textContent = current.runtimePath || text('ai.managed', '组件准备后由应用管理'); }
+    const version = element('ai-harness-version'); if (version) { version.textContent = current.runtimeVersion || text('ai.notDetected', '未检测'); }
     const authorization = element('ai-harness-auth-status');
     if (authorization) {
-      let label = '尚未登录订阅';
-      if (current.credentialStatus === 'subscription') { label = '订阅已登录，请测试模型访问'; } else if (current.credentialStatus === 'authenticating') { label = '等待完成订阅登录，状态自动刷新中'; }
-      if (!codexAccountConfirmed && current.credentialStatus === 'missing') { label = current.runtimeState === 'ready' || preparing ? '正在读取登录状态…' : '组件准备完成后读取登录状态'; }
+      let label = text('harness.signedOut', '尚未登录订阅');
+      if (current.credentialStatus === 'subscription') { label = text('harness.signedIn', '订阅已登录，请测试模型访问'); } else if (current.credentialStatus === 'authenticating') { label = text('harness.signInPending', '等待完成订阅登录，状态自动刷新中'); }
+      if (!codexAccountConfirmed && current.credentialStatus === 'missing') { label = current.runtimeState === 'ready' || preparing ? text('ai.loadingLogin', '正在读取登录状态…') : text('harness.waitForPreparation', '组件准备完成后读取登录状态'); }
       if (codexReadFailure) { label = codexReadFailure; }
-      if (codexReading) { label = '正在读取登录状态…'; }
+      if (codexReading) { label = text('ai.loadingLogin', '正在读取登录状态…'); }
       authorization.textContent = label; authorization.setAttribute?.('aria-busy', String(codexReading));
     }
-    const refreshAuth = input('ai-harness-auth-refresh'); if (refreshAuth) { refreshAuth.disabled = codexReading; refreshAuth.textContent = codexReadFailure ? '重新读取' : '刷新状态'; }
+    const refreshAuth = input('ai-harness-auth-refresh'); if (refreshAuth) { refreshAuth.disabled = codexReading; refreshAuth.textContent = codexReadFailure ? text('harness.readAgain', '重新读取') : text('ai.refresh', '刷新状态'); }
     const logoutAuth = input('ai-harness-logout'); if (logoutAuth) { logoutAuth.disabled = codexReading || !!codexReadFailure; }
     const login = element('ai-harness-login-details'); if (login) { login.hidden = !current.loginUrl; }
     const url = element('ai-harness-login-url'); if (url) { url.textContent = current.loginUrl || ''; }
-    const code = element('ai-harness-login-code'); if (code) { code.textContent = current.userCode || '此流程无需输入验证码'; }
+    const code = element('ai-harness-login-code'); if (code) { code.textContent = current.userCode || text('harness.noCode', '此流程无需输入验证码'); }
     const description = element('ai-settings-status-v99');
-    let descriptionText = '直接 API 设置与 Harness 分别保存，切换执行方式须点击“保存设置”。';
-    if (mode === 'harness') { descriptionText = adapter === 'codex' ? 'Codex 组件由应用准备。点击“登录订阅”会自动保存 Harness 设置，再启动官方授权；模型测试由你主动执行。' : unavailableReason(adapter); }
+    let descriptionText = text('harness.separateSettings', '直接 API 设置与 Harness 分别保存，切换执行方式须点击“保存设置”。');
+    if (mode === 'harness') { descriptionText = adapter === 'codex' ? text('harness.codexAccountHint', 'Codex 组件由应用准备。点击“登录订阅”会自动保存 Harness 设置，再启动官方授权；模型测试由你主动执行。') : unavailableReason(adapter); }
     if (draftAdapter !== undefined) { descriptionText = selectionReason(); } else if (modelSelectionPending()) { descriptionText = modelSelectionReason(); }
     if (description) { description.textContent = descriptionText; }
-    let reason = current.ready ? `${providerLabel()} 已就绪。` : current.reason || '完成组件准备后，请登录账户。';
+    let reason = current.ready ? text('harness.ready', `${providerLabel()} 已就绪。`, { provider: providerLabel() }) : current.reason || text('harness.prepareBeforeLogin', '完成组件准备后，请登录账户。');
     if (adapter === 'deepseek') { reason = unavailableReason(adapter); }
     if (draftAdapter !== undefined) { reason = selectionReason(); } else if (modelSelectionPending()) { reason = modelSelectionReason(); }
-    if (adapter === 'codebuddy' && current.runtimeState === 'ready' && !current.ready && !current.busy && !selectionFailure && !modelSelectionFailure) { reason = '组件与账户就绪后可测试连接。'; }
-    if (readiness === 'checking') { reason = '正在检查 AI 状态…'; } else if (readinessFailed()) { reason = readinessReason; }
-    notice(reason + (mode !== current.mode && draftAdapter === undefined ? ' 执行方式尚未保存。' : ''));
+    if (adapter === 'codebuddy' && current.runtimeState === 'ready' && !current.ready && !current.busy && !selectionFailure && !modelSelectionFailure) { reason = text('harness.useAfterReady', '组件与账户就绪后可测试连接。'); }
+    if (readiness === 'checking') { reason = text('harness.checkingStatus', '正在检查 AI 状态…'); } else if (readinessFailed()) { reason = readinessReason; }
+    notice(reason + (mode !== current.mode && draftAdapter === undefined ? text('harness.modeUnsaved', ' 执行方式尚未保存。') : ''));
     if (adapter === 'codebuddy') {
       const modelModeUnsaved = current.mode !== 'harness';
       const modelBusy = modelModeUnsaved || current.busy || active.size > 0 || pendingMutations > 0 || preparing || loginInProgress || selectingAdapter || selectingModel || businessBusy();
@@ -668,12 +670,12 @@
       if (model) { model.value = draftModel ?? (current.adapter === 'codebuddy' ? current.model : codebuddyModels[0]); model.disabled = modelBusy; }
       const modelStatus = element('ai-codebuddy-model-status');
       if (modelStatus) {
-        if (modelModeUnsaved) { modelStatus.textContent = '请先保存“使用 Harness”执行方式，再选择 CodeBuddy 模型。'; } else { modelStatus.textContent = modelSelectionPending() ? modelSelectionReason() : '模型选择已保存，后续请求将使用此模型。'; }
+        if (modelModeUnsaved) { modelStatus.textContent = text('harness.saveBeforeModel', '请先保存“使用 Harness”执行方式，再选择 CodeBuddy 模型。'); } else { modelStatus.textContent = modelSelectionPending() ? modelSelectionReason() : text('harness.modelSaved', '模型选择已保存，后续请求将使用此模型。'); }
       }
       const retryModel = input('ai-codebuddy-model-retry'); if (retryModel) { retryModel.hidden = !modelSelectionFailure; retryModel.disabled = modelBusy; }
       const runtime = element('ai-codebuddy-runtime-status'); if (runtime) { runtime.textContent = (componentTask ? componentPhaseLabel(componentTask) : runtimeLabels[preparing ? 'preparing' : current.runtimeState]); }
       const bytes = element('ai-codebuddy-runtime-progress');
-      if (bytes) { bytes.textContent = `${Math.max(0, current.runtimeReceivedBytes || 0).toLocaleString('zh-CN')} / ${Math.max(0, current.runtimeTotalBytes || 0).toLocaleString('zh-CN')} 字节`; bytes.hidden = !preparing || (componentTask ? componentTask.phase !== 'downloading' : !current.runtimeTotalBytes); }
+      if (bytes) { bytes.textContent = `${Math.max(0, current.runtimeReceivedBytes || 0).toLocaleString(scope.ShirohaI18n?.locale() ?? 'zh-CN')} / ${Math.max(0, current.runtimeTotalBytes || 0).toLocaleString(scope.ShirohaI18n?.locale() ?? 'zh-CN')} 字节`; bytes.hidden = !preparing || (componentTask ? componentTask.phase !== 'downloading' : !current.runtimeTotalBytes); }
       const prepare = input('ai-codebuddy-prepare'); if (prepare) { prepare.hidden = preparing || current.runtimeState === 'ready'; prepare.disabled = current.busy || selectingAdapter; }
       const cancel = input('ai-codebuddy-prepare-cancel'); if (cancel) { cancel.hidden = !preparing; }
       const stop = input('ai-codebuddy-stop'); if (stop) { stop.hidden = !current.busy && !active.size; }
@@ -713,14 +715,14 @@
       const isSelectingRoute = selectingAdapter || selectingModel;
       const isHarnessBusy = operationBusy() || hasActiveWork || isSelectingRoute;
       const result = { ...current, busy: isHarnessBusy };
-      if (settingsLoading) { return { ...result, mode: 'harness', ready: false, readiness: 'checking', reason: '正在读取 AI 设置…' }; }
+      if (settingsLoading) { return { ...result, mode: 'harness', ready: false, readiness: 'checking', reason: text('ai.loading', '正在读取 AI 设置…') }; }
       if (settingsFailure) { return { ...result, mode: 'harness', ready: false, readiness: 'error', readinessRetryable: true, reason: current.reason || settingsFailure }; }
       if (current.mode === 'harness' && current.adapter === 'codex' && authorizationBlock) {
         return { ...result, ready: false, readiness: 'blocked', readinessRetryable: false, reason: authorizationBlock };
       }
       if (current.mode === 'harness' && ['codex', 'codebuddy'].includes(current.adapter) && readiness !== 'idle') {
         const canRetry = readinessRetryable && !(readiness === 'blocked' && current.adapter === 'codebuddy');
-        return { ...result, ready: false, readiness, readinessRetryable: canRetry, reason: readiness === 'checking' ? '正在检查 AI 状态…' : readinessReason };
+        return { ...result, ready: false, readiness, readinessRetryable: canRetry, reason: readiness === 'checking' ? text('harness.checkingStatus', '正在检查 AI 状态…') : readinessReason };
       }
       if (current.mode === 'harness' && ['codex', 'codebuddy'].includes(current.adapter) && readinessDeferred && readinessRequested) {
         return { ...result, ready: false, readiness: 'checking', reason: '正在等待当前任务结束后检查 AI 状态…' };
@@ -992,7 +994,7 @@
       const choose = element('ai-harness-choose'); if (choose) {
         choose.onclick = () => {
           void uiAction(async () => {
-            assertIdle();await control({ kind: 'choose_runtime' });
+            assertIdle();await control({ kind: 'choose_runtime', locale: scope.ShirohaI18n?.locale() });
           });
         };
       }

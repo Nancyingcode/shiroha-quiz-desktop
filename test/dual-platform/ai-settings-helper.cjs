@@ -3,7 +3,7 @@
 const { runWebScripts } = require('./source-tools.cjs');
 
 function installAiSettings(context) {
-  runWebScripts(context, ['ai-settings.js']);
+  runWebScripts(context, ['ui/i18n-messages.js', 'ui/i18n.js', 'ai-settings.js']);
   const settings = context.ShirohaAiSettings.create({
     presets: context.AI_PROVIDER_PRESETS_V99,
     platform: context.ShirohaPlatform,
@@ -23,6 +23,7 @@ function installAiSettings(context) {
 }
 
 function installAiSettingsActions(context, { settings = installAiSettings(context), ...overrides } = {}) {
+  if (!context.ShirohaI18n) { runWebScripts(context, ['ui/i18n-messages.js', 'ui/i18n.js']); }
   runWebScripts(context, ['ai/settings-actions.js']);
   return context.ShirohaAiSettingsActions.create({
     platform: context.ShirohaPlatform,

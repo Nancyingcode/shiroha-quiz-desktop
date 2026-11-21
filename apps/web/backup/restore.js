@@ -1,6 +1,7 @@
 // 统一应用已校验的备份，文件和云端面板各自控制确认与结果反馈。
 (() => {
   'use strict';
+  const i18n = globalThis.ShirohaI18n;
 
   // 在导入和未就绪修复间共享附件解析，显示预览由各自入口决定。
   async function readBackupContents(file, archive, setPreview) {
@@ -102,12 +103,12 @@
     async function applyLocalBackup(normalized, mode, unresolvedImageCount = 0) {
       assertAvailableImages(unresolvedImageCount);
       if (!normalized.banks.length) {
-        toast('没有在 JSON 中找到可导入的题库。', 'warn');
+        toast(i18n.text('backup.noBanks'), 'warn');
         return false;
       }
 
       if (mode === 'overwrite') {
-        const accepted = await confirm(`覆盖恢复会清空当前本地数据，并导入 ${normalized.banks.length} 个题库。确定继续？`);
+        const accepted = await confirm(i18n.text('backup.confirmOverwrite', { count: normalized.banks.length }));
         if (!accepted) {
           return false;
         }
@@ -126,9 +127,9 @@
       refresh();
       const total = normalized.banks.reduce((count, bank) => count + (bank.questions || []).length, 0);
       const missing = unresolvedImageCount
-        ? ` 另有 ${unresolvedImageCount} 张图片未包含在备份文件中，Web 端无法显示。`
+        ? i18n.text('backup.missingImages', { count: unresolvedImageCount })
         : '';
-      toast(`导入完成：${normalized.banks.length} 个题库，${total} 道题。${missing}`, unresolvedImageCount ? 'warn' : 'ok');
+      toast(i18n.text('backup.restored', { banks: normalized.banks.length, questions: total, missing }), unresolvedImageCount ? 'warn' : 'ok');
       return true;
     }
 
@@ -148,8 +149,8 @@
     }
 
     function reportFileError(error) {
-      // eslint-disable-next-line prefer-template -- 异常信息可能是对象，保留 + 的默认转换；统一异常类型后移除此例外。
-      toast('导入备份失败：' + error.message, 'danger');
+      // 文件读取失败的详情可能是对象，仍按原有方式转换为显示文本。
+      toast(i18n.text('backup.restoreFailed', { detail: String(error.message) }), 'danger');
     }
 
     // 无效文件仍保留原始预览，清空选择后可重新选择同一文件。
@@ -202,7 +203,7 @@
         const samePage = select('.view.active') === page;
         const sameMode = fileImportMode === mode && modeInput?.value === selectedMode;
         if (!sameFile || !samePage || !sameMode) {
-          toast('恢复来源或方式已变化，请重新选择备份。', 'warn');
+          toast(i18n.text('backup.sourceChanged'), 'warn');
           return false;
         }
 
@@ -248,19 +249,19 @@
       }
 
       settingsCard.insertAdjacentHTML('beforeend', `<div id="settings-backup-panel-v23" class="data-tools-v23">
-    <h2>备份与恢复</h2>
-    <p class="muted">设置页只处理完整数据备份：包含题库、错题本、收藏夹、练习记录和设置。单个题库或选中题库 JSON 请到“题库管理”页导出。</p>
+    <h2>${i18n.html('backup.title')}</h2>
+    <p class="muted">${i18n.html('backup.scopeHint')}</p>
     <div class="form-grid">
-      <label>恢复方式<select id="settings-backup-mode-v23"><option value="merge">合并导入：保留当前数据，新增备份中的题库</option><option value="overwrite" selected>覆盖恢复：用备份替换当前本地数据</option></select></label>
-      <label>备份范围<input disabled value="全部题库、错题本、收藏夹、记录、设置" /></label>
+      <label>${i18n.html('backup.mode')}<select id="settings-backup-mode-v23"><option value="merge" data-i18n="backup.merge">${i18n.text('backup.merge')}</option><option value="overwrite" selected data-i18n="backup.overwrite">${i18n.text('backup.overwrite')}</option></select></label>
+      <label>${i18n.html('backup.contents')}<input disabled ${i18n.attribute('placeholder', 'backup.scopeValue')} /></label>
     </div>
     <div class="actions wrap-v23">
-      <button class="ghost" id="settings-export-native-backup-v611" type="button">导出含图片备份 ZIP</button>
-      <button class="ghost" id="settings-import-backup-v23" type="button">导入备份 JSON/ZIP</button>
-      <button class="ghost" id="settings-copy-all-backup-v23" type="button">复制 Web 备份文本</button>
+      <button class="ghost" id="settings-export-native-backup-v611" type="button">${i18n.html('backup.exportZip')}</button>
+      <button class="ghost" id="settings-import-backup-v23" type="button">${i18n.html('backup.import')}</button>
+      <button class="ghost" id="settings-copy-all-backup-v23" type="button">${i18n.html('backup.copy')}</button>
     </div>
-    <p class="muted">提示：顶部“导出 Web 完整备份”用于 Web 端完整恢复；“含图片备份 ZIP”保存题库、图片及现有可交换学习数据，兼容旧版备份格式，不包含所有平台专属设置；复制文本只作为浏览器下载失败时的兜底。覆盖恢复会替换本机数据；合并导入遇到同名题库会自动追加“_导入”。</p>
-    <details class="asset-reference-details"><summary>角色基准素材预览</summary><img src="./media/mascot_character_sheet.webp" alt="角色基准素材" /></details>
+    <p class="muted">${i18n.html('backup.usage')}</p>
+    <details class="asset-reference-details"><summary>${i18n.html('backup.artPreview')}</summary><img src="./media/mascot_character_sheet.webp" ${i18n.attribute('alt', 'backup.art')} /></details>
   </div>`);
       select('#settings-export-native-backup-v611').onclick = exportZip;
       select('#settings-copy-all-backup-v23').onclick = copyBackup;

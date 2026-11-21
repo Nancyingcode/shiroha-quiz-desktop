@@ -86,7 +86,7 @@ function ocrFixture({ recognize, viewport = { width: 1000, height: 1000 } }) {
       },
     }),
   };
-  runWebScripts(context, ['ocr-import.js']);
+  runWebScripts(context, ['ui/i18n-messages.js', 'ui/i18n.js', 'ocr-import.js']);
   const session = context.ShirohaOcrImport.create({
     pdf, readBuffer: async () => new ArrayBuffer(0), toast() {}, warnDev() {},
   });

@@ -1,6 +1,7 @@
 // 首页按当前学习范围展示统计与到期队列，通过现有练习入口开启复习。
 (() => {
   'use strict';
+  const i18n = globalThis.ShirohaI18n;
 
   // 日统计按本地日历日期归类，避免 UTC 跨日偏移。
   function localDateKey(value) {
@@ -81,22 +82,22 @@
       const activeWrongEntries = banks.flatMap((bank) => wrongEntries(bank.id)
         .filter((entry) => entry.status !== '已掌握'));
       const currentRecords = records();
-      $('#stat-total').textContent = totalQuestions;
-      $('#stat-wrong').textContent = activeWrongEntries.length;
-      $('#stat-records').textContent = currentRecords.length;
+      $('#stat-total').textContent = i18n.number(totalQuestions);
+      $('#stat-wrong').textContent = i18n.number(activeWrongEntries.length);
+      $('#stat-records').textContent = i18n.number(currentRecords.length);
       const { todayAnswered, todayCorrect, practiceCount } = todayPracticeStats(currentRecords, current);
 
-      setText('#stat-today-count', todayAnswered);
-      setText('#stat-today-rate', todayAnswered ? `${Math.round(todayCorrect / todayAnswered * 100)}%` : '—');
+      setText('#stat-today-count', i18n.number(todayAnswered));
+      setText('#stat-today-rate', todayAnswered ? i18n.percent(todayCorrect / todayAnswered * 100) : '—');
       const dueCount = dueReviewItems(undefined, current).length;
-      setText('#stat-review-due', dueCount);
+      setText('#stat-review-due', i18n.number(dueCount));
       const dueButton = $('#start-due-review');
       if (dueButton) {
         dueButton.disabled = dueCount === 0;
-        dueButton.setAttribute('aria-label', `待复习错题 ${dueCount} 道，开始复习`);
+        i18n.bindAttribute(dueButton, 'aria-label', 'home.dueReviewLabel', { count: dueCount });
       }
 
-      setText('#stat-total-practice', practiceCount);
+      setText('#stat-total-practice', i18n.number(practiceCount));
       if (bound) {
         scheduleDueReviewRefresh(current);
       }
@@ -136,13 +137,18 @@
 
       if (!dueReviewItems().length) {
         renderStats();
-        toast('当前范围暂无待复习错题。', 'warn');
+        toast(i18n.text('home.noDueReview'), 'warn', i18n.text('shell.done'));
         return;
       }
 
       const previous = practice.current();
       if (hasUnfinishedPractice(previous)) {
-        const accepted = await confirm('当前练习尚未保存为记录，开始今日错题复习会放弃本轮进度。是否继续？');
+        const accepted = await confirm(i18n.text('home.leaveForReview'), {
+          title: i18n.text('dialog.confirm'),
+          acceptLabel: i18n.text('dialog.accept'),
+          cancelLabel: i18n.text('dialog.cancel'),
+          closeLabel: i18n.text('dialog.close'),
+        });
         if (!accepted || practice.current() !== previous || !canStartFrom('dashboard')) {
           return;
         }

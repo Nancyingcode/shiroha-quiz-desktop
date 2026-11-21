@@ -1,6 +1,7 @@
 // 将 PDF 页面渲染成 OCR 输入，并把可核对的结果交给导入界面。
 (() => {
   'use strict';
+  const i18n = globalThis.ShirohaI18n;
 
   // 为当前导入页面绑定 PDF 读取、状态提示和工作器日志。
   function create({
@@ -28,7 +29,7 @@
       const result = $('#ocr-result');if (result) { result.value = ''; }
 
       setOcrButtonsEnabled(false);
-      setOcrStatus(`已选择 PDF：${file.name || '未命名'}。如果文字层提取失败，可点击“尝试 OCR 识别”。`, 'warn');
+      setOcrStatus(i18n.text('ocr.selected', { name: file.name || i18n.text('ocr.unnamed') }), 'warn');
     }
 
     // 清空 OCR 来源和本次草稿，并隐藏依赖该来源的界面。
@@ -60,7 +61,7 @@
       const cannotUseText = running || !hasText;
       const cancel = $('#ocr-cancel-btn');if (cancel) {
         cancel.disabled = !running;cancel.onclick = () => {
-          ocrImportState.cancel?.();setOcrStatus('OCR 已取消，已识别内容仍可核对。', 'warn');
+          ocrImportState.cancel?.();setOcrStatus(i18n.text('ocr.canceled'), 'warn');
         };
       }
 
@@ -130,7 +131,7 @@
     // 一次识别负责 PDF 与工作器资源的整个生命周期，取消后丢弃迟到结果。
     async function startPdfOcrImport() {
       const { file } = ocrImportState;
-      if (!file) { setOcrStatus('请先选择一个 PDF 文件。', 'warn');return; }
+      if (!file) { setOcrStatus(i18n.text('ocr.choosePdf'), 'warn');return; }
 
       if (ocrImportState.running) { return; }
 
@@ -164,7 +165,7 @@
       try {
         const lang = $('#ocr-language')?.value || 'chi_sim+eng';
         const pageLimit = Math.max(1, Math.min(200, Number($('#ocr-page-limit')?.value || 20) || 20));
-        setOcrStatus('正在加载 PDF 与 OCR 扩展资源……', 'warn');
+        setOcrStatus(i18n.text('ocr.loading'), 'warn');
         const loaded = await loadLocalPdfJs();
         if (cancelled()) { return; }
 
@@ -184,7 +185,7 @@
 
         const pages = [];
         for (let pageNo = 1;pageNo <= maxPages;pageNo += 1) {
-          setOcrStatus(`正在识别第 ${pageNo} / ${maxPages} 页（${created.mode}）……`, 'warn');
+          setOcrStatus(i18n.text('ocr.pageProgress', { page: pageNo, total: maxPages, mode: created.mode }), 'warn');
           canvas = await renderPdfPageToCanvas(pdf, pageNo, 2);
           if (cancelled()) { return; }
 
@@ -202,15 +203,15 @@
         if (pdf.numPages > maxPages) { pages.push({ page: maxPages + 1, text: `已按页数限制停止。原 PDF 共 ${pdf.numPages} 页，如需继续请调高识别页数。`, confidence: 0, notice: true }); }
 
         publishOcrPages(pages, resultEl);
-        setOcrStatus(`OCR 完成：识别 ${maxPages} 页。请先核对文本，再填入导入文本或下载 DOCX。`, 'ok');
-        toast('OCR 识别完成，可核对后继续导入或下载 DOCX。', 'ok', 'OCR 完成');
+        setOcrStatus(i18n.text('ocr.pagesDone', { count: maxPages }), 'ok');
+        toast(i18n.text('ocr.ready'), 'ok', i18n.text('ocr.complete'));
       } catch (err) {
         if (cancelled()) { return; }
 
-        // eslint-disable-next-line prefer-template -- 异常信息可能是对象，保留 + 的默认转换；统一异常类型后移除此例外。
-        setOcrStatus('OCR 失败：' + err.message, 'danger');
-        // eslint-disable-next-line prefer-template -- 异常信息可能是对象，保留 + 的默认转换；统一异常类型后移除此例外。
-        toast('OCR 失败：' + err.message, 'danger', 'OCR 失败');
+        // 识别失败详情可能来自扩展组件，按原有字符串格式显示。
+        setOcrStatus(i18n.text('ocr.failedDetail', { detail: String(err.message) }), 'danger');
+        // 识别失败详情可能来自扩展组件，按原有字符串格式显示。
+        toast(i18n.text('ocr.failedDetail', { detail: String(err.message) }), 'danger', i18n.text('ocr.failed'));
       } finally {
         if (canvas) { canvas.width = 1;canvas.height = 1; }
 
@@ -230,7 +231,7 @@
       // 单页 RGBA 像素预算为 64 MiB，防止异常页面尺寸在分配 Canvas 前耗尽内存。
       const maxPixels = 16 * 1024 * 1024;
       const width = Math.ceil(viewport.width); const height = Math.ceil(viewport.height);
-      if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0 || width * height > maxPixels) { page.cleanup();throw new Error('PDF 页面像素超限，请缩小扫描尺寸后重试。'); }
+      if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0 || width * height > maxPixels) { page.cleanup();throw new Error(i18n.text('ocr.sizeExceeded')); }
 
       const canvas = document.createElement('canvas');
       canvas.width = width;

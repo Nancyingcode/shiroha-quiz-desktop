@@ -1,6 +1,7 @@
 // 内置题库的启动数据和手动加载入口共用题库形状，写入由应用事务负责。
 (() => {
   'use strict';
+  const i18n = globalThis.ShirohaI18n;
 
   const BUILT_IN_BANK_ID = 'default-c1';
   // 兼容按显示名称保存的旧内置题库，即使历史版本未使用固定 ID。
@@ -112,8 +113,8 @@
       bankList.insertAdjacentHTML('beforebegin', `
         <div id="builtin-bank-panel-v252" class="builtin-bank-card-v252 compact-built-in-v33">
           <div class="section-head compact-head-v23">
-            <div><h3>内置 C1 题库</h3><p class="muted">本地没有 C1 题库时，可重新加入。</p></div>
-            <button id="load-built-in-bank-btn-panel" class="primary" type="button">加载内置 C1 题库</button>
+            <div><h3>${i18n.html('banks.builtIn')}</h3><p class="muted">${i18n.html('banks.builtInInfo')}</p></div>
+            <button id="load-built-in-bank-btn-panel" class="primary" type="button">${i18n.html('banks.loadBuiltIn')}</button>
           </div>
           <div id="builtin-bank-status-v252" class="muted"></div>
         </div>`);
@@ -144,7 +145,7 @@
         panel.hidden = hasLoadedBank;
       }
 
-      status.textContent = hasLoadedBank ? '已加载，可直接使用。' : '当前未加入 C1 题库。';
+      status.textContent = i18n.text(hasLoadedBank ? 'banks.builtInReady' : 'banks.builtInMissing');
     }
 
     return { defaultBank, bind, render };

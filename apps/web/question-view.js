@@ -1,6 +1,7 @@
 // 装配练习、考试和预览共用的题目渲染与作答控件。
 (() => {
   'use strict';
+  const i18n = globalThis.ShirohaI18n;
 
   const RICH_QUESTION_STYLES = `
     .q-table-wrap{width:100%;max-width:100%;overflow-x:auto;margin:12px 0;border:1px solid var(--line,rgba(79,124,255,.16));border-radius:16px;background:var(--card,#fff);box-shadow:0 8px 22px rgba(15,23,42,.05);}
@@ -38,7 +39,6 @@
     questionImageDataUriRegexV83,
     questionTextContainsDataUriV83,
     practiceSourceMeta,
-    label,
     scoreOf,
     hasAnswerValueV58914,
     isMultiBlankQuestionV58914,
@@ -475,17 +475,37 @@
       return renderQuestionContent(question && question.question) + renderStructuredQuestionImagesV83(question && question.question, question && question.images);
     }
 
+    // 历史题型别名只用于查显示词条，未知的题型名称按记录原文显示。
+    function practiceTypeLabel(type) {
+      const key = normalizeWebQuestionType(type);
+      if (key) {
+        return i18n.html(`question.${key}`);
+      }
+
+      return type ? esc(type) : i18n.html('question.unknown');
+    }
+
     // 将题干、选项及答案输入统一构造成页面片段，模式只决定操作和元数据。
     function questionHtml(q, examMode, idx = 0, practiceItem = null) {
-      const meta = `<div class="qmeta">${practiceItem ? practiceSourceMeta(practiceItem) : ''}<span class="pill">${label(q.type)}</span><span class="pill">${esc(q.category || '未分类')}</span>${examMode ? `<span class="pill">${scoreOf(q)}分</span>` : ''}</div><div class="question-title">${examMode ? `${idx}. ` : ''}${renderQuestionBodyV83(q)}</div>`;
+      const copy = i18n;
+      const source = practiceItem ? practiceSourceMeta(practiceItem) : '';
+      const typeLabel = practiceTypeLabel(q.type);
+      const category = q.category ? esc(q.category) : copy.html('question.uncategorized');
+      const meta = `<div class="qmeta">${source}<span class="pill">${typeLabel}</span><span class="pill">${category}</span>${examMode ? `<span class="pill">${i18n.html('question.pointsValue', { count: scoreOf(q) })}</span>` : ''}</div><div class="question-title">${examMode ? `${idx}. ` : ''}${renderQuestionBodyV83(q)}</div>`;
       if (isMultiBlankQuestionV58914(q)) {
-        const inputs = q.blankAnswers.map((_, index) => `<label class="multi-blank-answer-item-v58914"><span>第${index + 1}空</span><input class="text-answer multi-blank-answer-input-v58914" data-qid="${esc(q.id)}" data-blank-index-v58914="${index}" placeholder="请输入第${index + 1}空答案" /></label>`).join('');
+        const inputs = q.blankAnswers.map(/* 每个空保留自己的序号及输入控件。 */ (_, index) => {
+          const values = { number: index + 1 };
+          const placeholder = copy.attribute('placeholder', 'question.blankPlaceholder', values);
+          return `<label class="multi-blank-answer-item-v58914"><span>${copy.html('question.blankIndex', values)}</span>
+            <input class="text-answer multi-blank-answer-input-v58914" data-qid="${esc(q.id)}" data-blank-index-v58914="${index}" ${placeholder} /></label>`;
+        }).join('');
         return `${meta}<div class="answer-input-wrap multi-blank-answer-list-v58914">${inputs}</div>`;
       }
 
       if (isTextType(q.type)) {
-        const placeholder = q.type === 'short' ? '请输入你的简答内容；提交后可对照参考答案。' : '请输入答案。';
-        const input = q.type === 'short' ? `<textarea class="text-answer" data-qid="${esc(q.id)}" placeholder="${placeholder}"></textarea>` : `<input class="text-answer" data-qid="${esc(q.id)}" placeholder="${placeholder}" />`;
+        const key = q.type === 'short' ? 'question.shortPlaceholder' : 'question.answerPlaceholder';
+        const attributes = `class="text-answer" data-qid="${esc(q.id)}" ${copy.attribute('placeholder', key)} ${copy.attribute('aria-label', 'question.answerName')}`;
+        const input = q.type === 'short' ? `<textarea ${attributes}></textarea>` : `<input ${attributes} />`;
         return `${meta}<div class="answer-input-wrap">${input}</div>`;
       }
 
@@ -537,7 +557,10 @@
         return;
       }
 
-      options.insertAdjacentHTML('beforebegin', `<div class="answer-options-tools"><b>选项</b><button type="button" class="ghost mini-btn" data-clear-answer-options aria-label="清空第 ${number} 题选项" disabled>清空选项</button></div>`);
+      const copy = i18n;
+      const label = copy.attribute('aria-label', 'question.clearLabel', { number });
+      options.insertAdjacentHTML('beforebegin', `<div class="answer-options-tools"><b>${copy.html('question.options')}</b>
+        <button type="button" class="ghost mini-btn" data-clear-answer-options ${label} disabled>${copy.html('question.clear')}</button></div>`);
       options.insertAdjacentHTML('afterend', '<p class="answer-options-status" data-answer-options-status role="status" aria-live="polite"></p>');
       const button = box.querySelector('[data-clear-answer-options]'); const status = box.querySelector('[data-answer-options-status]');
       // 根据题目可写性和作答状态同步选项动作可用性。
@@ -571,7 +594,7 @@
 
         applyAnswerStateV26(root, q, []);
         changed();
-        status.textContent = '已清空本题选项';
+        status.innerHTML = copy.html('question.cleared');
         options.querySelector('input:not(:disabled)')?.focus({ preventScroll: true });
       };
 
@@ -670,23 +693,38 @@
       return Array.isArray(detail && detail.chosen) ? detail.chosen.map((value) => String(value ?? '')) : [];
     }
 
-    function renderMultiBlankComparisonV58914(groups, userAnswers, showUser = true) {
-      return `<div class="multi-blank-comparison-v58914">${normalizeBlankAnswersV58914(groups).map((accepted, index) => `<div class="multi-blank-comparison-row-v58914"><b>第${index + 1}空</b>${showUser ? `<span>你的答案：${esc(String((userAnswers || [])[index] || '未填写'))}</span>` : ''}<span>标准答案：${esc(accepted.join(' / ') || '未提供')}</span></div>`).join('')}</div>`;
+    // 展开空位时分别显示原作答与可接受答案，固定中文页面也使用相同词条。
+    function renderMultiBlankComparisonV58914(groups, userAnswers, showUser = true, localized = true) {
+      const copy = localized ? i18n : i18n.chinese;
+      const rows = normalizeBlankAnswersV58914(groups).map(/* 空文字使用提示词条，已填写的答案仍按原文显示。 */ (accepted, index) => {
+        const input = userAnswers?.[index];
+        const user = input ? esc(input) : copy.html('question.notFilled');
+        const reference = accepted.length ? esc(accepted.join(' / ')) : copy.html('question.notProvided');
+        return `<div class="multi-blank-comparison-row-v58914"><b>${copy.html('question.blankIndex', { number: index + 1 })}</b>
+          ${showUser ? `<span>${copy.html('question.userAnswer')}${user}</span>` : ''}
+          <span>${copy.html('question.modelAnswer')}${reference}</span></div>`;
+      });
+      return `<div class="multi-blank-comparison-v58914">${rows.join('')}</div>`;
     }
 
     // 生成试题答题反馈，多空题逐组显示而不合并评分边界。
-    function feedbackAnswerHtmlV58914(q, chosen) {
+    function feedbackAnswerHtmlV58914(q, chosen, localized = true) {
       if (isMultiBlankQuestionV58914(q)) {
-        return renderMultiBlankComparisonV58914(q.blankAnswers, chosen, true);
+        return renderMultiBlankComparisonV58914(q.blankAnswers, chosen, true, localized);
       }
 
+      const copy = localized ? i18n : i18n.chinese;
+      const user = (chosen || []).join('；');
+      const reference = (q.answer || []).join('；');
       if (normalizeWebQuestionType(q.type) === 'short') {
-        const user = (chosen || []).join('；') || '未作答';
-        const reference = (q.answer || []).join('；') || '未提供';
-        return `<div class="q-multiline-text"><b>你的答案：</b>${renderQuestionContent(user)}<br><b>参考答案：</b>${renderQuestionContent(reference)}</div>`;
+        const response = user ? renderQuestionContent(user) : copy.html('question.notAnswered');
+        const answer = reference ? renderQuestionContent(reference) : copy.html('question.notProvided');
+        return `<div class="q-multiline-text"><b>${copy.html('question.userAnswer')}</b>${response}<br>
+          <b>${copy.html('question.referenceAnswer')}</b>${answer}</div>`;
       }
 
-      return `你的答案：${esc((chosen || []).join('；') || '未作答')}｜参考答案：${esc((q.answer || []).join('；'))}`;
+      const response = user ? esc(user) : copy.html('question.notAnswered');
+      return `${copy.html('question.userAnswer')}${response}｜${copy.html('question.referenceAnswer')}${esc(reference)}`;
     }
 
     // 已判题的选择项同时标记标准答案和用户误选，文本题走独立反馈。
@@ -706,9 +744,9 @@
     }
 
     // 在复盘中明确区分未作答与空位，并以该题实际保存的答案形态显示。
-    function practiceReviewAnswerHtml(question, answers) {
+    function practiceReviewAnswerHtml(question, answers, localized = true) {
       if (!hasAnswerValueV58914(answers)) {
-        return '未作答';
+        return localized ? i18n.html('question.notAnswered') : '未作答';
       }
 
       if (isTextType(question.type)) {
@@ -722,34 +760,46 @@
       }).join('');
     }
 
-    function renderReviewAnswerSummary(q, chosen = [], missingChoice = '未记录') {
+    // 展示历史选项摘要，保留调用者区分未作答与缺少历史记录的语义。
+    function renderReviewAnswerSummary(q, chosen = [], missingChoice = '未记录', localized = true) {
       if (isTextType(q.type)) {
         return '';
       }
 
-      return `<div class="review-answer-summary"><div class="review-answer-correct"><b class="review-answer-value">${esc((q.answer || []).join('、') || '未提供')}</b><span>正确答案</span></div><div class="review-answer-wrong"><b class="review-answer-value">${esc(chosen.join('、') || missingChoice)}</b><span>当时错误答案</span></div></div>`;
+      const copy = localized ? i18n : i18n.chinese;
+      const answer = (q.answer || []).join('、');
+      const correct = answer ? esc(answer) : copy.html('question.notProvided');
+      const user = chosen.join('、');
+      const missingKeys = { 未作答: 'question.notAnswered', 未记录: 'question.notRecorded' };
+      const missingKey = Object.hasOwn(missingKeys, missingChoice) && missingKeys[missingChoice];
+      const missing = missingKey ? copy.html(missingKey) : esc(missingChoice);
+      return `<div class="review-answer-summary">
+        <div class="review-answer-correct"><b class="review-answer-value">${correct}</b><span>${copy.html('question.correctAnswer')}</span></div>
+        <div class="review-answer-wrong"><b class="review-answer-value">${user ? esc(user) : missing}</b><span>${copy.html('question.wrongAnswer')}</span></div></div>`;
     }
 
     // 按原顺序保留全部选项，并分别标示作答选择与标准答案。
-    function renderReviewOptions(q, chosen = []) {
+    function renderReviewOptions(q, chosen = [], localized = true) {
       if (isTextType(q.type)) {
         return '';
       }
 
-      return `<div class="options review-options" aria-label="全部选项">${(q.options || []).map(/* 逐选项计算可见标签和样式，区分选中正确、选中错误及未选择。 */ (option) => {
+      const copy = localized ? i18n : i18n.chinese;
+      return `<div class="options review-options" ${copy.attribute('aria-label', 'question.allOptions')}>${(q.options || []).map(/* 逐选项计算可见标签和样式，区分选中正确、选中错误及未选择。 */ (option) => {
         const correct = (q.answer || []).includes(option.key); const selected = chosen.includes(option.key);
-        let status = chosen.length ? '未选择' : ''; let className = selected ? 'wrong' : '';
+        let status = chosen.length ? 'question.notSelected' : '';
+        let className = selected ? 'wrong' : '';
         if (selected) {
-          status = '✕ 当时选择';
+          status = 'question.selected';
         }
 
         if (correct) {
-          status = selected ? '✓ 正确答案 · 当时选择' : '✓ 正确答案';
+          status = selected ? 'question.rightSelected' : 'question.rightChoice';
           className = 'correct';
         }
 
         const text = displayOptionTextV589(q, option);
-        return `<div class="option ${className}" data-key="${esc(option.key)}"><span class="option-key">${esc(option.key)}</span><span class="option-text">${renderQuestionContent(text)}</span><span class="review-option-status">${status}</span></div>`;
+        return `<div class="option ${className}" data-key="${esc(option.key)}"><span class="option-key">${esc(option.key)}</span><span class="option-text">${renderQuestionContent(text)}</span><span class="review-option-status">${status ? copy.html(status) : ''}</span></div>`;
       }).join('')}</div>`;
     }
 
@@ -785,6 +835,7 @@
       scheduleMathJaxTypesetV56,
       parseDocxMarkdownTableBlockV55,
       renderQuestionBodyV83,
+      practiceTypeLabel,
       questionHtml,
       bindAnswerOptionControls,
       refreshAnswerOptionControls,

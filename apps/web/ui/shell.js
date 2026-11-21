@@ -1,6 +1,7 @@
 // 管理 Web 与桌面共用的外壳布局，视图切换与练习、考试状态由调用方协调。
 (() => {
   'use strict';
+  const i18n = globalThis.ShirohaI18n;
 
   /* SHIROHA_WEB_V28_2_LAYOUT_AND_IMMERSIVE_FIX_START */
   // 切换页面时复位内容滚动，兼容不提供窗口滚动能力的宿主。
@@ -39,8 +40,8 @@
     }
 
     const collapsed = document.body.classList.contains('side-collapsed');
-    button.textContent = collapsed ? '展开导航' : '收起导航';
-    button.setAttribute('aria-label', collapsed ? '展开左侧导航' : '收起左侧导航');
+    i18n.bindText(button, collapsed ? 'nav.expand' : 'nav.collapse');
+    i18n.bindAttribute(button, 'aria-label', collapsed ? 'nav.expandLabel' : 'nav.collapseLabel');
     button.setAttribute('aria-pressed', String(collapsed));
   }
 

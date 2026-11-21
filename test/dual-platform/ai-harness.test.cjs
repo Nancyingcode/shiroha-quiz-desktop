@@ -203,7 +203,11 @@ test('等待检查期间选择未接入的提供方后停止等待轮询', async
 });
 
 function installApplicationStartup(context) {
-  runWebScripts(context, ['study/dashboard.js']);
+  Object.assign(context.document, { documentElement: {}, querySelectorAll: () => [] });
+  context.ShirohaPlatform.preferences = { locale: () => null };
+  runWebScripts(context, ['ui/i18n-messages.js', 'ui/i18n.js', 'study/dashboard.js']);
+  context.i18n = context.ShirohaI18n;
+  context.refreshLocale = () => {};
   context.studyDashboard = context.ShirohaStudyDashboard.create({ data: {} });
   vm.runInContext(loadWebSource().functionSource('startApplication'), context);
 }

@@ -1,6 +1,7 @@
 // 作为经典脚本登记面板工厂，供在线、本地文件和桌面入口共同加载。
 (() => {
   'use strict';
+  const i18n = globalThis.ShirohaI18n;
 
   // 按需创建查找替换面板，由调用方处理原文修改后的导入状态。
   function create({ select, escapeRegExp, onTextEdited }) {
@@ -31,7 +32,7 @@
     function buildFindRegExpV51(pattern, { useRegex = true, caseSensitive = true, global = true } = {}) {
       const searchPattern = String(pattern || '');
       if (!searchPattern) {
-        throw new Error('请先输入查找内容');
+        throw new Error(i18n.text('find.queryRequired'));
       }
 
       let source = searchPattern;
@@ -83,26 +84,26 @@
       panel.id = 'import-find-replace-panel-v51';
       panel.className = 'import-find-replace-panel-v51 hidden';
       panel.innerHTML = `
-    <div class="import-find-replace-card-v51" role="dialog" aria-modal="false" aria-label="查找替换">
+    <div class="import-find-replace-card-v51" role="dialog" aria-modal="false" ${i18n.attribute('aria-label', 'import.findReplace')}>
       <div class="import-find-replace-head-v51">
-        <strong>查找替换</strong>
-        <button type="button" class="ghost import-find-close-v51" aria-label="关闭">×</button>
+        <strong>${i18n.html('import.findReplace')}</strong>
+        <button type="button" class="ghost import-find-close-v51" ${i18n.attribute('aria-label', 'dialog.close')}>×</button>
       </div>
       <div class="import-find-replace-grid-v51">
-        <label>查找内容<input id="import-find-pattern-v51" placeholder="支持正则，例如：答案[：:]\\s*([A-G])" /></label>
-        <label>替换为<input id="import-replace-value-v51" placeholder="留空则删除匹配内容，可用 $1" /></label>
+        <label>${i18n.html('find.query')}<input id="import-find-pattern-v51" ${i18n.attribute('placeholder', 'find.regexPlaceholder')} /></label>
+        <label>${i18n.html('find.replacement')}<input id="import-replace-value-v51" ${i18n.attribute('placeholder', 'find.replacementPlaceholder')} /></label>
       </div>
       <div class="import-find-replace-options-v51">
-        <label><input id="import-find-regex-v51" type="checkbox" checked /> 正则</label>
-        <label><input id="import-find-case-v51" type="checkbox" checked /> 区分大小写</label>
+        <label><input id="import-find-regex-v51" type="checkbox" checked /> ${i18n.html('find.regex')}</label>
+        <label><input id="import-find-case-v51" type="checkbox" checked /> ${i18n.html('find.caseSensitive')}</label>
       </div>
       <div class="import-find-replace-actions-v51">
-        <button type="button" class="ghost" id="import-find-next-v51">查找下一个</button>
-        <button type="button" class="ghost" id="import-replace-current-v51">替换当前</button>
-        <button type="button" class="primary" id="import-replace-all-v51">全部替换</button>
+        <button type="button" class="ghost" id="import-find-next-v51">${i18n.html('find.next')}</button>
+        <button type="button" class="ghost" id="import-replace-current-v51">${i18n.html('find.replaceOne')}</button>
+        <button type="button" class="primary" id="import-replace-all-v51">${i18n.html('find.replaceAll')}</button>
       </div>
-      <p class="muted import-find-replace-tip-v51">替换内容留空时等同于删除；正则替换支持 $1、$2 等分组引用。</p>
-      <div class="notice import-find-status-v51" id="import-find-status-v51">请输入查找内容。</div>
+      <p class="muted import-find-replace-tip-v51">${i18n.html('find.hint')}</p>
+      <div class="notice import-find-status-v51" id="import-find-status-v51">${i18n.html('find.enterQuery')}</div>
     </div>`;
       document.body.appendChild(panel);
       panel.querySelector('.import-find-close-v51').onclick = closeImportFindReplaceV51;
@@ -175,7 +176,7 @@
     function findNextImportTextV51() {
       const textEl = select('#import-text');
       if (!textEl) {
-        setFindStatusV51('没有找到原始文本框。', 'danger');
+        setFindStatusV51(i18n.text('find.missingSource'), 'danger');
         return false;
       }
 
@@ -194,13 +195,13 @@
         }
 
         if (!match) {
-          setFindStatusV51('没有找到匹配内容。', 'warn');
+          setFindStatusV51(i18n.text('find.noMatch'), 'warn');
           return false;
         }
 
         textEl.focus();
         textEl.setSelectionRange(match.index, match.index + match[0].length);
-        setFindStatusV51(`${wrapped ? '已从头查找，' : ''}找到 1 处：第 ${match.index + 1} 个字符。`, 'ok');
+        setFindStatusV51(i18n.text(wrapped ? 'find.wrappedMatch' : 'find.match', { index: match.index + 1 }), 'ok');
         return true;
       } catch (err) {
         setFindStatusV51(err.message || String(err), 'danger');
@@ -212,7 +213,7 @@
     function replaceCurrentImportTextV51() {
       const textEl = select('#import-text');
       if (!textEl) {
-        setFindStatusV51('没有找到原始文本框。', 'danger');
+        setFindStatusV51(i18n.text('find.missingSource'), 'danger');
         return;
       }
 
@@ -235,7 +236,7 @@
         const next = selected.replace(re, cfg.replacement);
         textEl.setRangeText(next, start, end, 'select');
         onTextEdited(textEl);
-        setFindStatusV51(next ? '已替换当前匹配。' : '已删除当前匹配。', 'ok');
+        setFindStatusV51(i18n.text(next ? 'find.replacedCurrent' : 'find.deletedCurrent'), 'ok');
       } catch (err) {
         setFindStatusV51(err.message || String(err), 'danger');
       }
@@ -245,7 +246,7 @@
     function replaceAllImportTextV51() {
       const textEl = select('#import-text');
       if (!textEl) {
-        setFindStatusV51('没有找到原始文本框。', 'danger');
+        setFindStatusV51(i18n.text('find.missingSource'), 'danger');
         return;
       }
 
@@ -260,13 +261,13 @@
         });
 
         if (!count) {
-          setFindStatusV51('没有找到匹配内容。', 'warn');
+          setFindStatusV51(i18n.text('find.noMatch'), 'warn');
           return;
         }
 
         textEl.value = text.replace(re, cfg.replacement);
         onTextEdited(textEl);
-        setFindStatusV51(cfg.replacement ? `已替换 ${count} 处。` : `已删除 ${count} 处。`, 'ok');
+        setFindStatusV51(i18n.text(cfg.replacement ? 'find.replacedAll' : 'find.deletedAll', { count }), 'ok');
       } catch (err) {
         setFindStatusV51(err.message || String(err), 'danger');
       }

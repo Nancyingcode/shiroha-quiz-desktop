@@ -1,6 +1,7 @@
 // 管理收藏和错题页的列表、正文按需加载与练习入口。
 (() => {
   'use strict';
+  const i18n = globalThis.ShirohaI18n;
   // 为收藏与错题页绑定同一题库、分页、持久化和练习入口。
   function create({
     select: $,
@@ -84,8 +85,8 @@
     function renderFavoriteRows(body, bank, rows) {
       body.innerHTML = rows.length ? rows.map((q) => {
         const number = bank.questions.indexOf(q) + 1; const preview = bankQuestionCopyText(q);
-        return `<tr class="favorite-question-row"><td class="favorite-question-number">${number}</td><td>${label(q.type)}</td><td>${esc(short(preview.text, 80))}${preview.text.length > 80 ? ` <button class="ghost mini-btn" type="button" data-preview-full="${esc(q.id)}" aria-label="查看第 ${number} 道收藏题全文">查看全文</button>` : ''}${preview.hasImages ? ' <span class="muted">含图片</span>' : ''}</td><td>${esc((q.answer || q.answerKeys || []).join('') || '未提供')}</td><td>${esc(q.category || q.topic || '未分类')}</td><td>${esc(q.score || '默认')}</td><td><div class="favorite-question-actions"><button class="ghost mini-btn" type="button" data-preview-question="${esc(q.id)}" aria-expanded="false" aria-controls="bank-question-detail" aria-label="查看第 ${number} 道收藏题详情">查看详情</button><button class="ghost mini-btn" data-practice-one-fav-v596="${esc(q.id)}" type="button">练习本题</button><button class="ghost danger mini-btn" data-unfav-v27="${esc(q.id)}" type="button">取消收藏</button></div></td></tr>`;
-      }).join('') : '<tr><td colspan="7" class="empty">当前题库暂无收藏题。刷题时点击“收藏题目”，这里会集中显示。</td></tr>';
+        return `<tr class="favorite-question-row"><td class="favorite-question-number">${number}</td><td>${label(q.type)}</td><td>${esc(short(preview.text, 80))}${preview.text.length > 80 ? ` <button class="ghost mini-btn" type="button" data-preview-full="${esc(q.id)}" ${i18n.attribute('aria-label', 'saved.favoriteFull', { number })}>${i18n.html('banks.viewFull')}</button>` : ''}${preview.hasImages ? ` <span class="muted">${i18n.html('banks.hasImages')}</span>` : ''}</td><td>${esc((q.answer || q.answerKeys || []).join('') || '未提供')}</td><td>${esc(q.category || q.topic || '未分类')}</td><td>${esc(q.score || '默认')}</td><td><div class="favorite-question-actions"><button class="ghost mini-btn" type="button" data-preview-question="${esc(q.id)}" aria-expanded="false" aria-controls="bank-question-detail" ${i18n.attribute('aria-label', 'saved.favoriteDetails', { number })}>${i18n.html('banks.viewDetails')}</button><button class="ghost mini-btn" data-practice-one-fav-v596="${esc(q.id)}" type="button">${i18n.html('saved.practiceOne')}</button><button class="ghost danger mini-btn" data-unfav-v27="${esc(q.id)}" type="button">${i18n.html('practice.unfavorite')}</button></div></td></tr>`;
+      }).join('') : `<tr><td colspan="7" class="empty">${i18n.html('saved.noFavorites')}</td></tr>`;
     }
 
     // 将详情及练习按钮绑定到本次加载的题库和分页行。
@@ -126,10 +127,10 @@
       // eslint-disable-next-line prefer-template -- 外部值可能是对象，保留 + 的默认转换；输入类型受约束后移除此例外。
       const rows = nativePage(allRows, 'favorites:' + bank.id, box, renderFavoritesPageV596);
       const body = box.tBodies[0];
-      body.innerHTML = '<tr><td colspan="7" role="status">正在加载收藏题……</td></tr>';
+      body.innerHTML = `<tr><td colspan="7" role="status">${i18n.html('saved.loading')}</td></tr>`;
       const countEl = $('#favorites-count-v596');
       if (countEl) {
-        countEl.textContent = `${allRows.length} 道`;
+        i18n.bindText(countEl, 'saved.questionCount', { count: allRows.length });
       }
 
       const practiceBtn = $('#practice-favorites-btn-v596');
@@ -147,7 +148,7 @@
           return;
         }
 
-        body.innerHTML = '<tr><td colspan="7" role="status">收藏题加载失败，请重试。 <button type="button" class="ghost mini-btn" id="retry-favorites">重试</button></td></tr>';
+        body.innerHTML = `<tr><td colspan="7" role="status">${i18n.html('saved.loadFailed')} <button type="button" class="ghost mini-btn" id="retry-favorites">${i18n.html('common.retry')}</button></td></tr>`;
         $('#retry-favorites').onclick = renderFavoritesPageV596;
         return;
       }
@@ -192,7 +193,7 @@
 
       const q = bank.questions.find((x) => x.id === id);
       if (!q) {
-        toast('未找到这道收藏题。', 'warn');
+        toast(i18n.text('saved.missingFavorite'), 'warn');
         return;
       }
 
@@ -204,14 +205,14 @@
       $$('.view').forEach((v) => v.classList.remove('active'));
 
       $('#practice').classList.add('active');
-      $('#page-title').textContent = '刷题练习';
+      $('#page-title').textContent = i18n.text('nav.practice');
       $('#practice-source').value = 'favorite';
       $('#practice-type').value = 'all';
       $('#practice-order').value = 'sequence';
       openQuickPracticeSetup();
       const index = practiceBaseItemsV58916('favorite', 'all').findIndex((item) => practiceQuestionV8916(item).id === id);
       if (index < 0) {
-        toast('这道题已不在收藏中，请重新选择。', 'warn');
+        toast(i18n.text('saved.favoriteRemoved'), 'warn');
         return;
       }
 
@@ -282,7 +283,11 @@
         return;
       }
 
-      $('#wrongbook-list').innerHTML = rows.length ? rows.map(({ e, q }) => `<div class="wrong-item"><div class="section-head"><div><b>${label(q.type)}</b><p class="muted">${isTextType(q.type) ? `答案：${esc(q.answer.join(''))}｜` : ''}状态：${esc(e.status)}｜错误 ${e.wrongCount} 次｜做对 ${e.rightCount} 次${e.lastWrongAt ? `｜最近错：${fmt(e.lastWrongAt)}` : ''}</p></div><div class="row-actions"><button class="ghost mini-btn" data-toggle-master-wrong="${esc(q.id)}">${e.status === '已掌握' ? '取消掌握' : '标记已掌握'}</button><button class="ghost mini-btn" data-fav-wrong="${esc(q.id)}">${isFavoriteV27(q.id) ? '取消收藏' : '收藏'}</button><button class="ghost danger mini-btn" data-remove-wrong="${esc(q.id)}">移出</button></div></div><div class="question-title">${renderQuestionBodyV83(q)}</div>${renderReviewOptions(q, e.lastAnswer)}${renderReviewAnswerSummary(q, e.lastAnswer)}${renderReviewAnalysis({ bankId: bid, question: q }, e.lastAnswer, 'wrongbook')}</div>`).join('') : '<p class="muted">当前条件下暂无错题。</p>';
+      const statusKeys = { 未掌握: 'saved.notMastered', 复习中: 'saved.reviewing', 已掌握: 'saved.mastered' };
+      $('#wrongbook-list').innerHTML = rows.length ? rows.map(({ e, q }) => {
+        const status = Object.hasOwn(statusKeys, e.status) ? i18n.text(statusKeys[e.status]) : e.status;
+        return `<div class="wrong-item"><div class="section-head"><div><b>${label(q.type)}</b><p class="muted">${isTextType(q.type) ? i18n.html('saved.answerMeta', { answer: q.answer.join('') }) : ''}${i18n.html('saved.masteryMeta', { status, wrong: e.wrongCount, right: e.rightCount })}${e.lastWrongAt ? i18n.html('saved.lastWrong', { time: fmt(e.lastWrongAt) }) : ''}</p></div><div class="row-actions"><button class="ghost mini-btn" data-toggle-master-wrong="${esc(q.id)}">${i18n.html(e.status === '已掌握' ? 'saved.undoMastery' : 'saved.markMastered')}</button><button class="ghost mini-btn" data-fav-wrong="${esc(q.id)}">${i18n.html(isFavoriteV27(q.id) ? 'saved.unfavorite' : 'saved.favorite')}</button><button class="ghost danger mini-btn" data-remove-wrong="${esc(q.id)}">${i18n.html('saved.removeWrong')}</button></div></div><div class="question-title">${renderQuestionBodyV83(q)}</div>${renderReviewOptions(q, e.lastAnswer)}${renderReviewAnswerSummary(q, e.lastAnswer)}${renderReviewAnalysis({ bankId: bid, question: q }, e.lastAnswer, 'wrongbook')}</div>`;
+      }).join('') : `<p class="muted">${i18n.html('saved.noWrong')}</p>`;
 
       bindWrongActions();
     }

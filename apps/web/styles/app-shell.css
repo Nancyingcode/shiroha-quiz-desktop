@@ -286,7 +286,7 @@ body.exam-focus #exam-card{
   font-size:18px !important;
   color:#10233f !important;
 }
-.exam-focus-head span{
+.exam-focus-head > :where(div:first-child) > span{
   display:block !important;
   margin-top:4px !important;
   color:#2f6fed !important;

@@ -1,6 +1,7 @@
 // 装配训练记录列表和复盘界面，保留跨页返回位置及按需数据读取。
 (() => {
   'use strict';
+  const i18n = globalThis.ShirohaI18n;
   // 通过应用提供的存储、导航和渲染能力连接历史记录、复盘和错题重练。
   function create({
     state,
@@ -105,18 +106,18 @@
     // 验证待删除记录的 ID 与当前索引，拒绝缺失或有冲突的历史标识。
     function recordDeletionTarget(id) {
       if (typeof id !== 'string' || !id.trim()) {
-        toast('记录 ID 缺失，无法安全删除。请先导出备份并检查记录。', 'warn');
+        toast(i18n.text('record.missingId'), 'warn');
         return null;
       }
 
       const matches = state.records.filter((record) => record && record.id === id);
       if (matches.length > 1) {
-        toast('记录 ID 重复，无法安全删除。请先导出备份并检查记录。', 'warn');
+        toast(i18n.text('record.duplicateId'), 'warn');
         return null;
       }
 
       if (!matches.length) {
-        toast('记录不存在，请刷新后重试。', 'warn');
+        toast(i18n.text('record.missingRecord'), 'warn');
         return null;
       }
 
@@ -130,7 +131,7 @@
     // 此入口清空全部练习和考试记录。
     function clearRecords() {
       return runMutation(/* 确认、清理和保存属于同一次数据变更。 */ async () => {
-        if (await globalThis.ShirohaDialogs.confirm('确定清空全部练习与考试记录？')) {
+        if (await globalThis.ShirohaDialogs.confirm(i18n.text('record.clearConfirm'))) {
           state.records = [];
           await saveSilent();
           renderAll();
@@ -153,8 +154,8 @@
       recordDeletionPending = true;
       try {
         const confirmed = await globalThis.ShirohaDialogs.confirm(
-          '确定删除这条训练记录吗？删除后将无法查看该次训练复盘。\n\n题库、错题本和收藏不会被删除。',
-          { title: '删除训练记录？', acceptLabel: '删除记录', context, danger: true },
+          i18n.text('record.deleteConfirm'),
+          { title: i18n.text('record.deleteTitle'), acceptLabel: i18n.text('record.deleteAction'), context, danger: true },
         );
         if (!confirmed) {
           return;
@@ -167,7 +168,7 @@
           }
 
           if (recordDeletionContext(current) !== context) {
-            toast('记录已发生变化，请重新确认后删除。', 'warn');
+            toast(i18n.text('record.changedRecord'), 'warn');
             return false;
           }
 
@@ -176,7 +177,7 @@
           await saveSilent();
           nativeOpenRecords.delete(id);
           renderAll();
-          toast('训练记录已删除。', 'ok');
+          toast(i18n.text('record.deleted'), 'ok');
           window.requestAnimationFrame(() => {
             if ($('.view.active')?.id === 'records') {
               $('#record-mode-filter')?.focus({ preventScroll: true });
@@ -193,7 +194,7 @@
       const groups = blankAnswersFromDetailV58914(detail);
       if (groups.length) {
         const users = blankUserAnswersFromDetailV58914(detail);
-        return kind === 'user' ? `<div class="multi-blank-record-v58914">${groups.map((_, i) => `<span><b>第${i + 1}空：</b>${esc(users[i] || '未答')}</span>`).join('')}</div>` : `<div class="multi-blank-record-v58914">${groups.map((accepted, i) => `<span><b>第${i + 1}空：</b>${esc(accepted.join(' / ') || '未提供')}</span>`).join('')}</div>`;
+        return kind === 'user' ? `<div class="multi-blank-record-v58914">${groups.map((_, i) => `<span><b>${i18n.html('record.blankLabel', { number: i + 1 })}</b>${esc(users[i] || '未答')}</span>`).join('')}</div>` : `<div class="multi-blank-record-v58914">${groups.map((accepted, i) => `<span><b>${i18n.html('record.blankLabel', { number: i + 1 })}</b>${esc(accepted.join(' / ') || '未提供')}</span>`).join('')}</div>`;
       }
 
       const value = kind === 'user' ? ((detail.chosen || []).join('；') || '未答') : ((detail.answer || []).join('；') || '未提供');
@@ -241,22 +242,38 @@
         return;
       }
 
-      const emptyMessage = wrongOnly ? '<p class="muted">当前筛选范围内暂无含错题的练习或考试记录。</p>' : '<p class="muted">暂无练习或考试记录。</p>';
+      const emptyMessage = wrongOnly ? `<p class="muted">${i18n.html('record.noWrong')}</p>` : `<p class="muted">${i18n.html('record.empty')}</p>`;
       list.innerHTML = rows.length ? rows.map(/* 生成每条训练记录的摘要和详情，分组训练保留跨库来源。 */ (r) => {
         const showSource = r.scopeType === 'GROUP';
         const allDetails = r.details || [];
         const filteredDetails = wrongOnly ? allDetails.filter((d) => d && d.correct === false) : allDetails;
-        const detail = filteredDetails.slice(0, 8).map((d, i) => `<tr><td>${i + 1}</td><td>${esc(short(d.question, 42))}${showSource && d.sourceBankName ? `<small class="record-source-v8916">来源：${esc(d.sourceBankName)}</small>` : ''}</td><td>${renderRecordAnswerCellV58914(d, 'user')}</td><td>${renderRecordAnswerCellV58914(d, 'answer')}</td><td>${d.correct ? '正确' : '错误'}</td></tr>`).join('');
-        const summary = `题数${r.total}｜已答${r.answered}｜正确${r.correct}｜错误${r.wrong}｜正确率${r.accuracy}%${r.score != null ? `｜得分${r.score}/${r.totalScore}${r.passScore != null ? `｜及格线${r.passScore}｜${r.passed ? '合格' : '未合格'}` : ''}` : ''}｜用时${r.duration}秒`;
-        const needsDetailLoad = ShirohaPlatform.storage.lazy && !nativeOpenRecords.has(r.id);
-        let detailSummary = `查看作答明细（前8题 / 共${allDetails.length}题）`;
-        if (needsDetailLoad) {
-          detailSummary = '查看作答明细';
-        } else if (wrongOnly) {
-          detailSummary = `查看错题明细（前8题 / 共${filteredDetails.length}道错题）`;
+        const detail = filteredDetails.slice(0, 8).map((d, i) => `<tr><td>${i + 1}</td><td>${esc(short(d.question, 42))}${showSource && d.sourceBankName ? `<small class="record-source-v8916">${i18n.html('record.sourceBank', { name: d.sourceBankName })}</small>` : ''}</td><td>${renderRecordAnswerCellV58914(d, 'user')}</td><td>${renderRecordAnswerCellV58914(d, 'answer')}</td><td>${i18n.html(d.correct ? 'practice.correct' : 'practice.incorrect')}</td></tr>`).join('');
+        let summary = i18n.html('record.historySummary', {
+          total: r.total,
+          answered: r.answered,
+          correct: r.correct,
+          wrong: r.wrong,
+          accuracy: i18n.percent(r.accuracy),
+        });
+        if (r.score != null) {
+          summary += i18n.html('record.historyScore', { score: r.score, total: r.totalScore });
         }
 
-        return `<div class="record-item"><div class="training-history-row"><b>${esc(trainingTitle(r))}｜${esc(r.bankName)}｜${fmt(r.date)}</b><span>${trainingCompletion(r)}</span><span class="training-record-actions"><button type="button" class="ghost mini-btn" data-training-review="${esc(r.id)}">查看复盘</button><button type="button" class="ghost danger mini-btn" data-training-delete="${esc(r.id)}" aria-label="删除训练记录：${esc(recordDeletionContext(r))}">删除</button></span></div><p class="muted">${summary}</p>${detail || ShirohaPlatform.storage.lazy ? `<details data-native-record="${esc(r.id)}" ${nativeOpenRecords.has(r.id) ? 'open' : ''}><summary>${detailSummary}</summary><div class="table-wrap"><table><thead><tr><th>#</th><th>题干</th><th>你的答案</th><th>正确答案</th><th>结果</th></tr></thead><tbody>${detail}</tbody></table></div></details>` : ''}</div>`;
+        if (r.score != null && r.passScore != null) {
+          const result = i18n.text(r.passed ? 'exam.passed' : 'exam.notPassed');
+          summary += i18n.html('record.historyPass', { score: r.passScore, result });
+        }
+
+        summary += i18n.html('record.historyDuration', { duration: r.duration });
+        const needsDetailLoad = ShirohaPlatform.storage.lazy && !nativeOpenRecords.has(r.id);
+        let detailSummary = i18n.html('record.detailsCount', { count: allDetails.length });
+        if (needsDetailLoad) {
+          detailSummary = i18n.html('record.details');
+        } else if (wrongOnly) {
+          detailSummary = i18n.html('record.detailsWrongCount', { count: filteredDetails.length });
+        }
+
+        return `<div class="record-item"><div class="training-history-row"><b>${esc(trainingTitle(r))}｜${esc(r.bankName)}｜${fmt(r.date)}</b><span>${trainingCompletion(r)}</span><span class="training-record-actions"><button type="button" class="ghost mini-btn" data-training-review="${esc(r.id)}">${i18n.html('practice.review')}</button><button type="button" class="ghost danger mini-btn" data-training-delete="${esc(r.id)}" ${i18n.attribute('aria-label', 'record.deleteLabel', { context: recordDeletionContext(r) })}>${i18n.html('common.delete')}</button></span></div><p class="muted">${summary}</p>${detail || ShirohaPlatform.storage.lazy ? `<details data-native-record="${esc(r.id)}" ${nativeOpenRecords.has(r.id) ? 'open' : ''}><summary>${detailSummary}</summary><div class="table-wrap"><table><thead><tr><th>#</th><th>${i18n.html('question.stem')}</th><th>${i18n.html('record.yourAnswer')}</th><th>${i18n.html('question.correctAnswer')}</th><th>${i18n.html('common.result')}</th></tr></thead><tbody>${detail}</tbody></table></div></details>` : ''}</div>`;
       }).join('') : emptyMessage;
 
       if (ShirohaPlatform.storage.lazy) {
@@ -281,18 +298,39 @@
     function trainingCompletion(record) {
       const completion = record.reviewSummary?.completion || record.review?.completion;
       if (completion === 'completed') {
-        return '已完成';
+        return i18n.text('practice.completed');
       }
 
       if (completion === 'ended_early') {
-        return '提前结束';
+        return i18n.text('practice.endedEarly');
       }
 
-      return '历史记录';
+      return i18n.text('practice.historical');
+    }
+
+    // 记录原有的 mode 字段参与筛选，只在展示时转换两种已知模式。
+    function trainingMode(mode) {
+      const labels = { 练习: 'record.practice', 考试: 'record.exam' };
+      return Object.hasOwn(labels, mode) ? i18n.text(labels[mode]) : mode;
     }
 
     function trainingTitle(record) {
-      return record.name || record.scopeName || record.bankName || record.mode || '训练';
+      return record.name || record.scopeName || record.bankName || trainingMode(record.mode) || i18n.text('record.training');
+    }
+
+    // 首页只需要训练摘要，打开复盘时再读取历史题目。
+    function recentTrainingCard(record) {
+      const summary = i18n.text('home.recentSummary', {
+        answered: record.answered,
+        total: record.total,
+        accuracy: i18n.percent(record.accuracy),
+        duration: ShirohaTraining.formatDuration(record.duration),
+      });
+      return `<article class="training-history-row"><div><b>${esc(trainingTitle(record))}</b>
+        <p class="muted">${esc(trainingMode(record.mode))} · ${esc(i18n.date(record.date))} · ${esc(trainingCompletion(record))}</p>
+        <p>${esc(summary)}</p></div>
+        <button type="button" class="ghost mini-btn" data-training-review="${esc(record.id)}">${i18n.html('practice.review')}</button>
+      </article>`;
     }
 
     // 首页只展示最近训练摘要，让对应记录可进入复盘。
@@ -306,7 +344,9 @@
       }
 
       const records = [...state.records].sort((a, b) => Date.parse(b.date) - Date.parse(a.date)).slice(0, 3);
-      box.innerHTML = `<div class="section-head"><h3>最近训练</h3><button type="button" class="ghost mini-btn" id="all-training-records">全部记录 →</button></div>${records.length ? records.map((record) => `<article class="training-history-row"><div><b>${esc(trainingTitle(record))}</b><p class="muted">${esc(record.mode)} · ${esc(fmt(record.date))} · ${trainingCompletion(record)}</p><p>已答 ${record.answered}/${record.total} · 正确率 ${record.accuracy}% · 用时 ${ShirohaTraining.formatDuration(record.duration)}</p></div><button type="button" class="ghost mini-btn" data-training-review="${esc(record.id)}">查看复盘</button></article>`).join('') : '<p class="muted">还没有训练记录。开始练习后，可在这里查看每轮答题情况。</p>'}`;
+      const entries = records.length ? records.map(recentTrainingCard).join('') : `<p class="muted">${i18n.html('home.noRecords')}</p>`;
+      box.innerHTML = `<div class="section-head"><h3>${i18n.html('home.recent')}</h3>
+        <button type="button" class="ghost mini-btn" id="all-training-records">${i18n.html('home.allRecords')}</button></div>${entries}`;
 
       $('#all-training-records').onclick = () => switchViewV45('records');
     }
@@ -324,7 +364,7 @@
 
       if (ShirohaPlatform.storage.ensureRecords && !await readNative(() => ShirohaPlatform.storage.ensureRecords(state, [id]), isCurrentRequest)) {
         if (isCurrentRequest()) {
-          platformStatus('复盘加载失败，请再次点击查看复盘重试。', true);
+          platformStatus(i18n.text('record.reviewLoadFailed'), true);
         }
 
         return;
@@ -396,16 +436,21 @@
     // 从记录中保存的题目快照还原历史题目，缺少快照时明确提示。
     function renderTrainingQuestion(row, recordId = '') {
       if (!row?.question) {
-        return '<p class="notice">未记录原题快照，无法还原这道题。</p>';
+        return `<p class="notice">${i18n.html('record.missingSnapshot')}</p>`;
       }
 
       const q = { ...row.question, type: normalizeWebQuestionType(row.question.type || row.detail?.type) }; const chosen = row.chosen || []; const answer = q.answer || row.detail?.answer || [];
-      const title = row.roundNumber ? `本轮第 ${row.roundNumber} 题` : `历史明细第 ${row.index + 1} 条（原题序未记录）`;
-      const bankNumber = row.bankQuestionNumber ? `题库第 ${row.bankQuestionNumber} 题` : '题库题号未记录';
-      const status = { correct: '✓ 正确', wrong: '× 错误', unanswered: '— 未作答', unrecorded: '未记录' }[row.status];
-      const comparison = isMultiBlankQuestionV58914(q) ? renderMultiBlankComparisonV58914(q.blankAnswers, chosen, true) : `<div><b>你的答案：</b>${practiceReviewAnswerHtml(q, chosen)}</div><div class="training-reference-answer"><b>${q.type === 'short' ? '参考答案（人工自评）' : '正确答案'}：</b>${hasAnswerValueV58914(answer) ? practiceReviewAnswerHtml(q, answer) : '题库未提供答案'}</div>`;
+      const title = row.roundNumber
+        ? i18n.html('record.roundQuestion', { number: row.roundNumber })
+        : i18n.html('record.legacyQuestion', { number: row.index + 1 });
+      const bankNumber = row.bankQuestionNumber
+        ? i18n.html('question.bankPosition', { number: row.bankQuestionNumber })
+        : i18n.html('record.bankNumberMissing');
+      const stateLabels = { correct: 'record.rightMark', wrong: 'record.wrongMark', unanswered: 'record.unansweredMark', unrecorded: 'question.notRecorded' };
+      const status = i18n.html(stateLabels[row.status]);
+      const comparison = isMultiBlankQuestionV58914(q) ? renderMultiBlankComparisonV58914(q.blankAnswers, chosen, true) : `<div><b>${i18n.html('question.userAnswer')}</b>${practiceReviewAnswerHtml(q, chosen)}</div><div class="training-reference-answer"><b>${i18n.html(q.type === 'short' ? 'record.selfAssessAnswer' : 'question.correctAnswerLabel')}</b>${hasAnswerValueV58914(answer) ? practiceReviewAnswerHtml(q, answer) : i18n.html('question.noBankAnswer')}</div>`;
       // eslint-disable-next-line prefer-template -- 历史数据字段可能是对象，保留 + 的默认转换；字段类型受约束后移除此例外。
-      return `<article class="training-question-content"><div class="qmeta"><b>${title}</b><span class="pill">${bankNumber}</span><span>${esc(label(q.type))}</span><span>${esc(row.bankName)}</span><b class="training-status-${row.status}">${status}</b></div>${row.partial ? '<p class="notice">旧记录未保存完整原题，以下仅为当时保存的摘要与答案。</p>' : ''}<div class="question-title">${renderQuestionBodyV83(q)}</div>${renderReviewOptions({ ...q, answer }, chosen)}<div class="training-answer-comparison training-status-${row.status}">${comparison}</div>${row.revealed ? '<p class="muted">本题曾查看答案，未正式提交。</p>' : ''}${hasAnswerValueV58914(row.draft) ? `<div class="notice"><b>曾填写但未提交（不计成绩）：</b>${practiceReviewAnswerHtml(q, row.draft)}</div>` : ''}<div class="training-analysis">${renderReviewAnalysis({ bankId: row.bankId, question: { ...q, answer } }, chosen, 'training:' + recordId + ':' + row.index)}</div></article>`;
+      return `<article class="training-question-content"><div class="qmeta"><b>${title}</b><span class="pill">${bankNumber}</span><span>${esc(label(q.type))}</span><span>${esc(row.bankName)}</span><b class="training-status-${row.status}">${status}</b></div>${row.partial ? `<p class="notice">${i18n.html('record.partialSnapshot')}</p>` : ''}<div class="question-title">${renderQuestionBodyV83(q)}</div>${renderReviewOptions({ ...q, answer }, chosen)}<div class="training-answer-comparison training-status-${row.status}">${comparison}</div>${row.revealed ? `<p class="muted">${i18n.html('record.revealed')}</p>` : ''}${hasAnswerValueV58914(row.draft) ? `<div class="notice"><b>${i18n.html('record.unsubmitted')}</b>${practiceReviewAnswerHtml(q, row.draft)}</div>` : ''}<div class="training-analysis">${renderReviewAnalysis({ bankId: row.bankId, question: { ...q, answer } }, chosen, 'training:' + recordId + ':' + row.index)}</div></article>`;
     }
 
     // 各导航控件共享当前复盘视图，重绘后继续使用对应条目和分页位置。
@@ -491,14 +536,26 @@
       box.dataset.recordId = record.id;
       const active = box.contains(document.activeElement) ? document.activeElement : null;
       const focused = active?.getAttribute('data-training-filter'); const focusedQuestion = active?.getAttribute('data-training-question'); const focusedPage = active?.dataset.pageControl;
-      let backLabel = '训练记录';
+      let backLabel = i18n.text('nav.records');
       if (view.origin === 'dashboard') {
-        backLabel = '首页';
+        backLabel = i18n.text('nav.home');
       } else if (view.origin === 'practice' || view.origin === 'exam') {
-        backLabel = '训练结果';
+        backLabel = i18n.text('record.roundResults');
       }
 
-      box.innerHTML = `<button type="button" class="ghost mini-btn" id="training-review-back">← 返回${backLabel}</button><div class="section-head"><div><h2>${esc(trainingTitle(record))}</h2><p class="muted">${esc(fmt(record.date))} · ${esc(record.mode)} · ${meta ? { single: '单题提交', total: '总提交', exam: '考试交卷' }[meta.submitMode] || '' : ''} · ${trainingCompletion(record)}</p></div></div><div class="score-card"><div class="metric"><span>正确</span><b>${counts.correct}</b></div><div class="metric"><span>错误（已作答）</span><b>${counts.wrong}</b></div><div class="metric"><span>未作答</span><b>${counts.unanswered}</b></div><div class="metric"><span>用时</span><b>${ShirohaTraining.formatDuration(record.duration)}</b></div></div><p class="muted">正确率 ${record.accuracy}%${meta ? ` · ${record.correct}/${denominator} 道${meta.submitMode === 'single' ? '已判定题' : '本轮题目'}` : '（沿用历史统计）'} · ${meta?.timing === 'active' ? '已扣除暂停' : '原记录用时，可能包含停留时间'}</p>${missing ? `<p class="notice">另有 ${missing} 道题未记录原题快照，无法还原；旧明细顺序不代表本轮题序。</p>` : ''}${meta && meta.submitMode !== 'single' && counts.unanswered ? '<p class="notice">未作答题已按本轮原规则计错；上方“错误（已作答）”只统计实际作答错误。</p>' : ''}<div class="training-filters" aria-label="复盘题目筛选">${[['all', '全部题目', rows.length], ['correct', '正确', counts.correct], ['wrong', '错误', counts.wrong], ['unanswered', '未作答', counts.unanswered]].map(([key, text, count]) => `<button type="button" class="ghost mini-btn" data-training-filter="${key}" aria-pressed="${view.filter === key}">${text} ${count}</button>`).join('')}</div><div id="training-answer-card" class="training-answer-card" aria-label="本轮答题卡"></div><p class="muted">✓ 正确\u3000× 错误\u3000— 未作答</p><section id="training-question" aria-label="选中题目复盘">${selected ? renderTrainingQuestion(selected, record.id) : '<p class="empty" role="status">当前筛选没有题目。</p>'}</section><div class="actions"><button type="button" class="ghost" id="training-prev" ${position <= 0 ? 'disabled' : ''}>上一题</button><button type="button" class="ghost" id="training-next" ${position < 0 || position === filtered.length - 1 ? 'disabled' : ''}>下一题</button><button type="button" class="primary" id="training-retry" ${counts.wrong ? '' : 'disabled'}>重练错题（${counts.wrong}）</button></div>`;
+      const submissionKeys = { single: 'record.singleSubmission', total: 'record.totalSubmission', exam: 'record.examSubmission' };
+      const submission = meta && submissionKeys[meta.submitMode];
+      const detailCount = meta
+        ? i18n.html(meta.submitMode === 'single' ? 'record.judgedRatio' : 'record.roundRatio', { correct: record.correct, total: denominator })
+        : i18n.html('record.legacyAccuracy');
+      const timing = i18n.html(meta?.timing === 'active' ? 'record.pauseExcluded' : 'record.legacyDuration');
+      const filterButtons = [
+        ['all', 'practice.allQuestions', rows.length],
+        ['correct', 'practice.correct', counts.correct],
+        ['wrong', 'practice.incorrect', counts.wrong],
+        ['unanswered', 'question.notAnswered', counts.unanswered],
+      ].map(([key, message, count]) => `<button type="button" class="ghost mini-btn" data-training-filter="${key}" aria-pressed="${view.filter === key}">${i18n.html(message)} ${i18n.number(count)}</button>`).join('');
+      box.innerHTML = `<button type="button" class="ghost mini-btn" id="training-review-back">${i18n.html('record.back', { view: backLabel })}</button><div class="section-head"><div><h2>${esc(trainingTitle(record))}</h2><p class="muted">${esc(fmt(record.date))} · ${esc(trainingMode(record.mode))} · ${submission ? i18n.html(submission) : ''} · ${trainingCompletion(record)}</p></div></div><div class="score-card"><div class="metric"><span>${i18n.html('practice.correct')}</span><b>${counts.correct}</b></div><div class="metric"><span>${i18n.html('record.answeredWrong')}</span><b>${counts.wrong}</b></div><div class="metric"><span>${i18n.html('question.notAnswered')}</span><b>${counts.unanswered}</b></div><div class="metric"><span>${i18n.html('practice.elapsed')}</span><b>${ShirohaTraining.formatDuration(record.duration)}</b></div></div><p class="muted">${i18n.html('record.reviewAccuracy', { accuracy: i18n.percent(record.accuracy) })}${detailCount} · ${timing}</p>${missing ? `<p class="notice">${i18n.html('record.legacyMissing', { count: missing })}</p>` : ''}${meta && meta.submitMode !== 'single' && counts.unanswered ? `<p class="notice">${i18n.html('record.unansweredScoring')}</p>` : ''}<div class="training-filters" ${i18n.attribute('aria-label', 'record.filters')}>${filterButtons}</div><div id="training-answer-card" class="training-answer-card" ${i18n.attribute('aria-label', 'record.answerSheet')}></div><p class="muted">${i18n.html('record.legend')}</p><section id="training-question" ${i18n.attribute('aria-label', 'record.selectedQuestion')}>${selected ? renderTrainingQuestion(selected, record.id) : `<p class="empty" role="status">${i18n.html('record.noMatch')}</p>`}</section><div class="actions"><button type="button" class="ghost" id="training-prev" ${position <= 0 ? 'disabled' : ''}>${i18n.html('practice.prev')}</button><button type="button" class="ghost" id="training-next" ${position < 0 || position === filtered.length - 1 ? 'disabled' : ''}>${i18n.html('practice.next')}</button><button type="button" class="primary" id="training-retry" ${counts.wrong ? '' : 'disabled'}>${i18n.html('record.retryWrong', { count: counts.wrong })}</button></div>`;
 
       updateReviewAnalysisPanels();
       // eslint-disable-next-line prefer-template -- 历史数据字段可能是对象，保留 + 的默认转换；字段类型受约束后移除此例外。
@@ -510,7 +567,7 @@
         const wrongRows = rows.filter((row) => row.status === 'wrong');
         const available = wrongRows.every((row) => state.banks.find((bank) => bank.id === row.bankId)?.questions.some((q) => q.id === row.question.id));
         if (!available) {
-          toast('部分原题已删除，历史复盘保留；请先重新导入原题库后重练。', 'warn');
+          toast(i18n.text('record.retryMissing'), 'warn');
           return;
         }
 
@@ -521,7 +578,7 @@
 
         const banks = state.banks.filter((bank) => wrongRows.some((row) => row.bankId === bank.id)); const groups = new Set(banks.map(bankGroupNameV58));
         if (banks.length > 1 && groups.size !== 1) {
-          toast('原题现已分散到不同分组，请分别选择题库重练；历史复盘仍保留。', 'warn');
+          toast(i18n.text('record.retryAcrossGroups'), 'warn');
           return;
         }
 

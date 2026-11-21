@@ -1,5 +1,5 @@
 use crate::{
-    commands::authorize,
+    commands::{authorize, UiLocale},
     error::{Error, Result},
     harness_codebuddy_execute as codebuddy,
     harness_codebuddy_login::Login,
@@ -152,7 +152,10 @@ pub enum Control {
         model: String,
         revision: u64,
     },
-    ChooseRuntime,
+    ChooseRuntime {
+        #[serde(default)]
+        locale: UiLocale,
+    },
     PrepareRuntime {},
     CancelPreparation {
         adapter: String,
@@ -798,17 +801,23 @@ impl Harness {
             Control::UseManagedRuntime {} => self.start_preparation(true),
             Control::CancelAll => self.cancel(None, false),
             Control::Cancel { id } => self.cancel(Some(&id), false),
-            Control::ChooseRuntime => {
+            Control::ChooseRuntime { locale } => {
                 self.with(|state| {
                     state.require_codex()?;
                     state.ensure_idle()
                 })?;
                 #[cfg(any(test, feature = "native-test"))]
-                let selected = Some(PathBuf::from("isolated-fake-codex.exe"));
+                let selected = {
+                    let _ = locale;
+                    Some(PathBuf::from("isolated-fake-codex.exe"))
+                };
                 #[cfg(not(any(test, feature = "native-test")))]
                 let selected = rfd::FileDialog::new()
-                    .set_title("选择 Codex 0.163.0 Windows x64 程序")
-                    .add_filter("Codex 程序", &["exe"])
+                    .set_title(locale.text(
+                        "选择 Codex 0.163.0 Windows x64 程序",
+                        "Choose the Codex 0.163.0 Windows x64 executable",
+                    ))
+                    .add_filter(locale.text("Codex 程序", "Codex executable"), &["exe"])
                     .pick_file();
                 if let Some(path) = selected {
                     self.with(|state| {
@@ -1890,7 +1899,11 @@ mod tests {
             let root = std::env::temp_dir()
                 .join(format!("shiroha-native-harness-{}", uuid::Uuid::new_v4()));
             let service = Arc::new(Harness::open(&root));
-            service.control(Control::ChooseRuntime).unwrap();
+            service
+                .control(Control::ChooseRuntime {
+                    locale: UiLocale::default(),
+                })
+                .unwrap();
             service
                 .control(Control::Save {
                     mode: "harness".into(),
@@ -2432,7 +2445,9 @@ mod tests {
                 }
             );
             for control in [
-                Control::ChooseRuntime,
+                Control::ChooseRuntime {
+                    locale: UiLocale::default(),
+                },
                 Control::Inspect,
                 Control::Login,
                 Control::Logout,
@@ -2733,7 +2748,11 @@ mod tests {
     #[test]
     fn restore_cancels_preparation_and_discards_unsaved_candidate() {
         let f = Fixture::new();
-        f.service.control(Control::ChooseRuntime).unwrap();
+        f.service
+            .control(Control::ChooseRuntime {
+                locale: UiLocale::default(),
+            })
+            .unwrap();
         std::fs::write(f.root.join("ai-execution/fake-prepare-wait"), b"fixture").unwrap();
         f.service.control(Control::UseManagedRuntime {}).unwrap();
         let guard = f.service.begin_restore().unwrap();
@@ -3310,7 +3329,9 @@ mod tests {
             Control::Inspect,
             Control::Login,
             Control::Logout,
-            Control::ChooseRuntime,
+            Control::ChooseRuntime {
+                locale: UiLocale::default(),
+            },
             Control::PrepareRuntime {},
             Control::UseManagedRuntime {},
         ] {
