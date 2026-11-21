@@ -2,6 +2,11 @@
 (() => {
   'use strict';
   const i18n = globalThis.ShirohaI18n;
+
+  function isPracticeAnswerLocked(answerState) {
+    return Boolean(answerState.answered || answerState.revealed);
+  }
+
   // 从应用接入练习范围、会话、评分和保存能力，让单题与总提交共享作答状态。
   function create({
     state,
@@ -149,7 +154,7 @@
       }
 
       const key = practiceItemKeyV8916(item); const st = getPracticeAnswerStateV26(key);
-      if (!st.answered && !st.revealed && !practiceSession.current.totalLocked && $('#practice-card .question-title')) {
+      if (!isPracticeAnswerLocked(st) && !practiceSession.current.totalLocked && $('#practice-card .question-title')) {
         setPracticeAnswerStateV26(key, { chosen: collectAnswer('#practice-card', practiceQuestionV8916(item)) });
       }
     }
@@ -916,7 +921,7 @@
       const key = practiceItemKeyV8916(item);
       const bid = practiceItemBankIdV8916(item);
       const st = getPracticeAnswerStateV26(key);
-      const answerLocked = () => st.answered || st.revealed;
+      const answerLocked = isPracticeAnswerLocked(st);
 
       const fav = isFavoriteV27(q.id, bid);
       const next = idx >= items.length - 1 ? 'practice.finish' : 'practice.next';
@@ -924,13 +929,13 @@
         <div class="actions practice-actions-v44">
           <button class="ghost" id="p-prev" ${idx === 0 ? 'disabled' : ''}>${i18n.html('practice.prev')}</button>
           <button class="ghost" id="p-next">${i18n.html(next)}</button>
-          <button class="primary" id="p-submit" ${answerLocked() ? 'disabled' : ''}>${i18n.html('practice.submit')}</button>
-          <button class="ghost" id="p-reveal" ${answerLocked() ? 'disabled' : ''}>${i18n.html('practice.reveal')}</button>
+          <button class="primary" id="p-submit" ${answerLocked ? 'disabled' : ''}>${i18n.html('practice.submit')}</button>
+          <button class="ghost" id="p-reveal" ${answerLocked ? 'disabled' : ''}>${i18n.html('practice.reveal')}</button>
         </div><div id="p-feedback" role="status"></div><div id="p-ai-v613"></div>${renderPracticeNavV26()}
         <aside class="practice-side-v31">${renderPracticeStatsV30()}</aside>`;
       applyAnswerStateV26('#practice-card', q, st.chosen || []);
       bindPracticeAnswerDraft(q, key, st);
-      if (answerLocked()) {
+      if (answerLocked) {
         showAnsweredStateV26(q, st);
       } else {
         renderPracticeAiPanelV613();
@@ -1126,7 +1131,7 @@
       };
 
       bindAnswerOptionControls('#practice-card', q, practiceSession.current.idx + 1, canEdit, capture);
-      if (stateValue.answered || stateValue.revealed) {
+      if (isPracticeAnswerLocked(stateValue)) {
         return;
       }
 
@@ -1269,7 +1274,7 @@
         renderPracticeAiPanelV613();
       } else if (q.type === 'short' && !st.answered && $('#p-self-right')) {
         showSubjectiveFeedback(item, st.chosen || [], !!st.revealed);
-      } else if (st.answered || st.revealed) {
+      } else if (isPracticeAnswerLocked(st)) {
         showAnsweredStateV26(q, st);
       } else {
         renderPracticeAiPanelV613();
